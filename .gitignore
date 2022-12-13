@@ -1,2 +1,7 @@
+*
 !.gitignore
 !README.md
+!build.sbt
+!build.sc
+!src/
+!project/
