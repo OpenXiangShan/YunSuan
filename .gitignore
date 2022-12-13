@@ -3,5 +3,7 @@
 !README.md
 !build.sbt
 !build.sc
-!src/
-!project/
+!/src/
+!/src/*
+!/project/
+!/project/*
