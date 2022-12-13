@@ -4,6 +4,6 @@
 !build.sbt
 !build.sc
 !/src/
-!/src/*
+!/src/**
 !/project/
-!/project/*
+!/project/build.properties
