@@ -1,8 +1,8 @@
 package yunsuan.vector
 
 import chisel3._
-import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 import chisel3.util._
+import yunsuan.{OpType, VipuType, VectorElementFormat}
 
 /**
  * 8/16/32/64 bits vector integer add/sub/add with carry/sub with borrow
@@ -14,8 +14,8 @@ class VectorIntAdder() extends Module {
   val io = IO(new Bundle {
     val in_0 = Input(UInt(n.W))
     val in_1 = Input(UInt(n.W))
-    val int_format = Input(UInt(3.W)) // 0->int8,1->int16,2->int32,3->int64
-    val op_code = Input(UInt(2.W)) // 0->add,1->sub,2->carry,3->borrow
+    val int_format = Input(VectorElementFormat()) // 0->int8,1->int16,2->int32,3->int64
+    val op_code = Input(OpType()) // 0->add,1->sub,2->carry,3->borrow
     val carry_or_borrow_in = Input(UInt(8.W))
     val carry_or_borrow_out = Output(UInt(8.W))
     val out = Output(UInt(n.W))
@@ -26,10 +26,10 @@ class VectorIntAdder() extends Module {
   val is_int32 = io.int_format === 2.U
   val is_int64 = io.int_format === 3.U
 
-  val is_add = io.op_code === 0.U
-  val is_sub = io.op_code === 1.U
-  val is_add_carry = io.op_code === 2.U
-  val is_sub_borrow = io.op_code === 3.U
+  val is_add = io.op_code === VipuType.add
+  val is_sub = io.op_code === VipuType.sub
+  val is_add_carry = io.op_code === VipuType.addCarry
+  val is_sub_borrow = io.op_code === VipuType.subBorrow
 
   val temp7 = !is_int8
   val temp6 = is_int32 | is_int64
