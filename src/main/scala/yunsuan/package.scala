@@ -2,21 +2,23 @@
 import chisel3._
 
 package object yunsuan {
+  def OpTypeWidth: Int = 8
+
   object OpType {
-    def apply() = UInt(7.W)
+    def apply() = UInt(OpTypeWidth.W)
   }
 
   object VipuType {
-    def dummy         = "b1111".U(7.W) // exu not implemented
-    def add           = "b0000".U(7.W) // src1 + src2
-    def sub           = "b0010".U(7.W) // src1 - src2
-    def addCarry      = "b0001".U(7.W) // src1 + src2 + carry
-    def subBorrow = "b0011".U(7.W) // src1 + borrow - src2
+    def dummy         = "b1111".U(OpTypeWidth.W) // exu not implemented
+    def add           = "b0000".U(OpTypeWidth.W) // src1 + src2
+    def sub           = "b0010".U(OpTypeWidth.W) // src1 - src2
+    def addCarry      = "b0001".U(OpTypeWidth.W) // src1 + src2 + carry
+    def subBorrow     = "b0011".U(OpTypeWidth.W) // src1 + borrow - src2
     // TODO: other op and method
   }
 
   object VfpuType {
-    def dummy = "b1111".U(7.W) // exu not implemented
+    def dummy         = "b1111".U(OpTypeWidth.W) // exu not implemented
   }
 
   object VectorElementFormat {
