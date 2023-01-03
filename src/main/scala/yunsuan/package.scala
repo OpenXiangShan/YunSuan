@@ -22,7 +22,7 @@ package object yunsuan {
   object VectorElementFormat {
     def width = 2
     def b = "b00".U(width.W)
-    def h = "b00".U(width.W)
+    def h = "b01".U(width.W)
     def w = "b10".U(width.W)
     def d = "b11".U(width.W)
 
