@@ -9,11 +9,33 @@ package object yunsuan {
   }
 
   object VipuType {
-    def dummy         = "b1111".U(OpTypeWidth.W) // exu not implemented
-    def add           = "b0000".U(OpTypeWidth.W) // src1 + src2
-    def sub           = "b0010".U(OpTypeWidth.W) // src1 - src2
-    def addCarry      = "b0001".U(OpTypeWidth.W) // src1 + src2 + carry
-    def subBorrow     = "b0011".U(OpTypeWidth.W) // src1 + borrow - src2
+    def dummy                          = "b00001111".U(OpTypeWidth.W) // exu not implemented
+    def add                            = "b00000000".U(OpTypeWidth.W) // src1 + src2 //vadd vmadc
+    def sub                            = "b00000010".U(OpTypeWidth.W) // src1 - src2 //vsub vrsub vmsbc
+    def addCarry                       = "b00000001".U(OpTypeWidth.W) // src1 + src2 + carry //vadc vmadc
+    def subBorrow                      = "b00000011".U(OpTypeWidth.W) // src1 + borrow - src2 //vsbc vmsbc
+    val unsignedWideningAdd            = "b00000100".U(OpTypeWidth.W) //vwaddu
+    val unsignedWideningsub            = "b00000101".U(OpTypeWidth.W) //vwsubu
+    val signedWideningAdd              = "b00000110".U(OpTypeWidth.W) //vwadd
+    val signedWideningSub              = "b00000111".U(OpTypeWidth.W) //vwsub
+    val unsignedWideningAddIn0Widening = "b00001000".U(OpTypeWidth.W) //vwaddu
+    val unsignedWideningSubIn0Widening = "b00001001".U(OpTypeWidth.W) //vwsubu
+    val signedWideningAddIn0Widening   = "b00001010".U(OpTypeWidth.W) //vwadd
+    val signedWideningSubIn0Widening   = "b00001011".U(OpTypeWidth.W) //vwsub
+    val maxUnsigned                    = "b00001100".U(OpTypeWidth.W) //vmaxu
+    val minUnsigned                    = "b00001101".U(OpTypeWidth.W) //vminu
+    val maxSigned                      = "b00001110".U(OpTypeWidth.W) //vmax
+    val minSigned                      = "b00001111".U(OpTypeWidth.W) //vmin
+    val equal                          = "b00010000".U(OpTypeWidth.W) //vmseq
+    val notEqual                       = "b00010001".U(OpTypeWidth.W) //vmsne
+    val lessThanUnsigned               = "b00010010".U(OpTypeWidth.W) //vmsltu
+    val lessThanSigned                 = "b00010011".U(OpTypeWidth.W) //vmslt
+    val lessThanOrEqualUnsigned        = "b00010100".U(OpTypeWidth.W) //vmsleu
+    val lessThanOrEqualSigned          = "b00010101".U(OpTypeWidth.W) //vmsle
+    val greaterThanUnsigned            = "b00010110".U(OpTypeWidth.W) //vmsgtu
+    val greaterThanSigned              = "b00010111".U(OpTypeWidth.W) //vmsgt
+    val greaterThanOrEqualUnsigned     = "b00011000".U(OpTypeWidth.W) //vmsgeu
+    val greaterThanOrEqualSigned       = "b00011001".U(OpTypeWidth.W) //vmsge
     // TODO: other op and method
   }
 
