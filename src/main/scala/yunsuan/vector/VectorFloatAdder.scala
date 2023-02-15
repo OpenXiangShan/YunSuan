@@ -25,7 +25,7 @@ class VectorFloatAdder() extends Module {
     val fp_f64_result = Output(UInt(floatWidth.W))
     val fp_f32_result = Output(UInt(floatWidth.W))
     val fp_f16_result = Output(UInt(floatWidth.W))
-    val fflags        = Output(UInt(5.W))
+    val fflags        = Output(UInt(20.W))
   })
   // TODO change fp_format is_vec logic
   assert(io.fp_format=/=0.U)
@@ -105,15 +105,25 @@ class VectorFloatAdder() extends Module {
   io.fp_f64_result := U_F64_Widen_0_result
   io.fp_f32_result := Cat(U_F32_1_result,U_F32_0_result)
   io.fp_f16_result := Cat(U_F16_3_result,U_F16_2_result,U_F16_1_result,U_F16_0_result)
-  io.fflags := Mux(
-    RegNext(res_is_f64),
-    U_F64_Widen_0_fflags,
+  io.fflags := Cat(
+    U_F16_3_fflags,
+    U_F16_2_fflags,
+    Mux(RegNext(res_is_f32),U_F32_1_fflags,U_F16_1_fflags),
     Mux(
-      RegNext(res_is_f32),
-      U_F32_0_fflags | (Fill(5,RegNext(io.is_vec)) & U_F32_1_fflags),
-      U_F16_0_fflags | (Fill(5,RegNext(io.is_vec)) & (U_F16_1_fflags | U_F16_2_fflags | U_F16_3_fflags))
+      RegNext(res_is_f64),
+      U_F64_Widen_0_fflags,
+      Mux(RegNext(res_is_f32),U_F32_0_fflags,U_F16_0_fflags)
     )
   )
+//    Mux(
+//    RegNext(res_is_f64),
+//    U_F64_Widen_0_fflags,
+//    Mux(
+//      RegNext(res_is_f32),
+//      U_F32_0_fflags | (Fill(5,RegNext(io.is_vec)) & U_F32_1_fflags),
+//      U_F16_0_fflags | (Fill(5,RegNext(io.is_vec)) & (U_F16_1_fflags | U_F16_2_fflags | U_F16_3_fflags))
+//    )
+//  )
 }
 
 private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = false,val hasMinMaxCompare:Boolean = false) extends Module {
@@ -2032,7 +2042,7 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN))
     val fflags_stage0 = Cat(fflags_NV_stage0,0.U(4.W))
     io.fp_c := Mux(RegNext(is_add),float_adder_result,RegNext(result_stage0))
-    io.fflags := Mux(RegNext(is_add),float_adder_result,RegNext(fflags_stage0))
+    io.fflags := Mux(RegNext(is_add),float_adder_fflags,RegNext(fflags_stage0))
   }
   else {
     io.fp_c := float_adder_result
