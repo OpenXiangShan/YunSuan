@@ -1,4 +1,3 @@
-
 import chisel3._
 
 package object yunsuan {
@@ -36,6 +35,20 @@ package object yunsuan {
     val greaterThanSigned              = "b00010111".U(OpTypeWidth.W) //vmsgt
     val greaterThanOrEqualUnsigned     = "b00011000".U(OpTypeWidth.W) //vmsgeu
     val greaterThanOrEqualSigned       = "b00011001".U(OpTypeWidth.W) //vmsge
+    val bitwiseLogicalAnd              = "b00011010".U(OpTypeWidth.W) //vand
+    val bitwiseLogicalNand             = "b00011011".U(OpTypeWidth.W) //vnand
+    val bitwiseLogicalAndn             = "b00011100".U(OpTypeWidth.W) //vandn
+    val bitwiseLogicalOr               = "b00011101".U(OpTypeWidth.W) //vor
+    val bitwiseLogicalNor              = "b00011110".U(OpTypeWidth.W) //vnor
+    val bitwiseLogicalOrn              = "b00011111".U(OpTypeWidth.W) //vorn
+    val bitwiseLogicalXor              = "b00100000".U(OpTypeWidth.W) //vxor
+    val bitwiseLogicalXnor             = "b00100001".U(OpTypeWidth.W) //vxnor
+    val shiftLeftLogical               = "b00100010".U(OpTypeWidth.W) //vsll
+    val shiftRightLogical              = "b00100011".U(OpTypeWidth.W) //vsrl
+    val shiftRightArithmetic           = "b00100100".U(OpTypeWidth.W) //vsra
+    val scalingShiftRightLogical       = "b00100101".U(OpTypeWidth.W) //vssrl
+    val scalingShiftRightArithmetic    = "b00100110".U(OpTypeWidth.W) //vssra
+    // TODO: other op and method
     // TODO: other op and method
   }
 
