@@ -15,6 +15,7 @@ import yunsuan.{OpType, VipuType, VectorElementFormat}
  * support vmin/vminu/vmax/vmaxu instruction
  * support vmseq/vmsne/vmsltu/vmslt/vmsleu/vmsle/vmsgtu/vmsgt/vmsgeu/vmsge instruction
  **/
+
 class VectorIntAdder() extends Module {
   val n: Int = 64
   val io = IO(new Bundle {
@@ -301,8 +302,8 @@ class VectorIntAdder() extends Module {
   val bitwise_logical_orn_out = io.in_0 | (~io.in_1).asUInt
   val bitwise_logical_xor_out = io.in_0 ^ io.in_1
   val bitwise_logical_xnor_out = ~(io.in_0 ^ io.in_1)
-  val shift_left_logical_out = io.in_0 << io.in_1
-  val shift_right_logical_out = io.in_0 >> io.in_1
+  val shift_left_logical_out = io.in_0 << io.in_1(5,0)
+  val shift_right_logical_out = io.in_0 >> io.in_1(5,0)
   val shift_right_arithmetic_out = Cat(io.in_0(63), shift_right_logical_out(62, 0))
 
   val in_1_scaling_temp_8 = Cat(Fill(56, temp_0), io.in_1(2, 0))

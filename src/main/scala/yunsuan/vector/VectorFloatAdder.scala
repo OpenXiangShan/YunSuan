@@ -28,7 +28,7 @@ class VectorFloatAdder() extends Module {
     val fflags        = Output(UInt(20.W))
   })
   // TODO change fp_format is_vec logic
-  assert(io.fp_format=/=0.U)
+  // assert(io.fp_format=/=0.U) // TODO: add valid to enable assert
   val fp_format = Cat(io.fp_format===3.U,io.fp_format(1))
   val is_sub = io.op_code(3) & io.op_code(0)
 
@@ -693,16 +693,16 @@ private[this] class ClosePathF32WidenF16MixedPipeline(
   val res_is_f32 = io.res_is_f32
   val fp_a_sign = io.fp_a.head(1).asBool
   val fp_b_sign = io.fp_b.head(1).asBool
-  val RNE = io.round_mode === "b000".U 
-  val RTZ = io.round_mode === "b001".U 
-  val RDN = io.round_mode === "b010".U 
-  val RUP = io.round_mode === "b011".U 
-  val RMM = io.round_mode === "b100".U 
-  val NV = WireInit(false.B) 
-  val DZ = WireInit(false.B) 
-  val OF = WireInit(false.B) 
-  val UF = WireInit(false.B) 
-  val NX_reg = WireInit(false.B) 
+  val RNE = io.round_mode === "b000".U
+  val RTZ = io.round_mode === "b001".U
+  val RDN = io.round_mode === "b010".U
+  val RUP = io.round_mode === "b011".U
+  val RMM = io.round_mode === "b100".U
+  val NV = WireInit(false.B)
+  val DZ = WireInit(false.B)
+  val OF = WireInit(false.B)
+  val UF = WireInit(false.B)
+  val NX_reg = WireInit(false.B)
   io.fflags := Cat(NV,DZ,OF,UF,NX_reg)
   val fp_a_mantissa = io.fp_a.tail(1 + exponentWidth)
   val fp_b_mantissa = io.fp_b.tail(1 + exponentWidth)
@@ -945,16 +945,16 @@ private[this] class FarPathFloatAdderF64WidenPipeline(
   val fp_b_sign = io.fp_b.head(1).asBool
   val efficient_fp_b_sign = (fp_b_sign ^ io.is_sub).asBool
   val EOP = ( fp_a_sign ^ efficient_fp_b_sign ).asBool
-  val RNE_reg = RegNext(io.round_mode === "b000".U)  
-  val RTZ_reg = RegNext(io.round_mode === "b001".U)  
-  val RDN_reg = RegNext(io.round_mode === "b010".U)  
-  val RUP_reg = RegNext(io.round_mode === "b011".U)  
-  val RMM_reg = RegNext(io.round_mode === "b100".U)  
-  val NV  = WireInit(false.B)  
-  val DZ  = WireInit(false.B)  
-  val OF  = WireInit(false.B)  
-  val UF  = WireInit(false.B)  
-  val NX  = WireInit(false.B)  
+  val RNE_reg = RegNext(io.round_mode === "b000".U)
+  val RTZ_reg = RegNext(io.round_mode === "b001".U)
+  val RDN_reg = RegNext(io.round_mode === "b010".U)
+  val RUP_reg = RegNext(io.round_mode === "b011".U)
+  val RMM_reg = RegNext(io.round_mode === "b100".U)
+  val NV  = WireInit(false.B)
+  val DZ  = WireInit(false.B)
+  val OF  = WireInit(false.B)
+  val UF  = WireInit(false.B)
+  val NX  = WireInit(false.B)
   io.fflags := Cat(NV,DZ,OF,UF,NX)
   val fp_a_mantissa            = io.fp_a.tail(1 + exponentWidth)
   val fp_b_mantissa            = io.fp_b.tail(1 + exponentWidth)
@@ -1041,7 +1041,7 @@ private[this] class FarPathFloatAdderF64WidenPipeline(
   U_FS1.io.A := A_wire_FS1
   U_FS1.io.B := B_wire
   val FS1 = U_FS1.io.result
-  val far_case_normal   = !FS0.head(1).asBool 
+  val far_case_normal   = !FS0.head(1).asBool
   val far_case_overflow = FS0.head(1).asBool
   val lgs_normal_reg = Cat(FS0(0),Mux(RegNext(EOP),(~Cat(B_guard_normal_reg,B_rsticky_normal_reg)).asUInt+1.U,Cat(B_guard_normal_reg,B_rsticky_normal_reg)))
 
@@ -1127,16 +1127,16 @@ private[this] class ClosePathFloatAdderF64WidenPipeline(
   })
   val fp_a_sign = io.fp_a.head(1).asBool
   val fp_b_sign = io.fp_b.head(1).asBool
-  val RNE = io.round_mode === "b000".U 
-  val RTZ = io.round_mode === "b001".U 
-  val RDN = io.round_mode === "b010".U 
-  val RUP = io.round_mode === "b011".U 
-  val RMM = io.round_mode === "b100".U 
-  val NV = WireInit(false.B) 
-  val DZ = WireInit(false.B) 
-  val OF = WireInit(false.B) 
-  val UF = WireInit(false.B) 
-  val NX = WireInit(false.B) 
+  val RNE = io.round_mode === "b000".U
+  val RTZ = io.round_mode === "b001".U
+  val RDN = io.round_mode === "b010".U
+  val RUP = io.round_mode === "b011".U
+  val RMM = io.round_mode === "b100".U
+  val NV = WireInit(false.B)
+  val DZ = WireInit(false.B)
+  val OF = WireInit(false.B)
+  val UF = WireInit(false.B)
+  val NX = WireInit(false.B)
   io.fflags := Cat(NV,DZ,OF,UF,NX)
   val fp_a_mantissa = io.fp_a.tail(1 + exponentWidth)
   val fp_b_mantissa = io.fp_b.tail(1 + exponentWidth)
@@ -1305,7 +1305,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     val is_sub      = Input (Bool())
     val round_mode  = Input (UInt(3.W))
     val fflags      = Output(UInt(5.W))
-    val opb_widening = Input (Bool()) 
+    val opb_widening = Input (Bool())
     val res_widening = Input (Bool())
     val op_code = if (hasMinMaxCompare) Input(UInt(4.W)) else Input(UInt(0.W))
   })
@@ -1539,16 +1539,16 @@ private[this] class FarPathF16Pipeline(
   val fp_b_sign = io.fp_b.head(1).asBool
   val efficient_fp_b_sign = (fp_b_sign ^ io.is_sub).asBool
   val EOP = ( fp_a_sign ^ efficient_fp_b_sign ).asBool
-  val RNE_reg = RegNext(io.round_mode === "b000".U)  
-  val RTZ_reg = RegNext(io.round_mode === "b001".U)  
-  val RDN_reg = RegNext(io.round_mode === "b010".U)  
-  val RUP_reg = RegNext(io.round_mode === "b011".U)  
-  val RMM_reg = RegNext(io.round_mode === "b100".U)  
-  val NV  = WireInit(false.B)  
-  val DZ  = WireInit(false.B)  
-  val OF  = WireInit(false.B)  
-  val UF  = WireInit(false.B)  
-  val NX  = WireInit(false.B)  
+  val RNE_reg = RegNext(io.round_mode === "b000".U)
+  val RTZ_reg = RegNext(io.round_mode === "b001".U)
+  val RDN_reg = RegNext(io.round_mode === "b010".U)
+  val RUP_reg = RegNext(io.round_mode === "b011".U)
+  val RMM_reg = RegNext(io.round_mode === "b100".U)
+  val NV  = WireInit(false.B)
+  val DZ  = WireInit(false.B)
+  val OF  = WireInit(false.B)
+  val UF  = WireInit(false.B)
+  val NX  = WireInit(false.B)
   io.fflags := Cat(NV,DZ,OF,UF,NX)
   val fp_a_mantissa            = io.fp_a.tail(1 + exponentWidth)
   val fp_b_mantissa            = io.fp_b.tail(1 + exponentWidth)
@@ -1635,8 +1635,8 @@ private[this] class FarPathF16Pipeline(
   U_FS1.io.A := A_wire_FS1
   U_FS1.io.B := B_wire
   val FS1 = U_FS1.io.result
-  val far_case_normal   = !FS0.head(1).asBool 
-  val far_case_overflow = FS0.head(1).asBool  
+  val far_case_normal   = !FS0.head(1).asBool
+  val far_case_overflow = FS0.head(1).asBool
   val lgs_normal_reg = Cat(FS0(0),Mux(RegNext(EOP),(~Cat(B_guard_normal_reg,B_rsticky_normal_reg)).asUInt+1.U,Cat(B_guard_normal_reg,B_rsticky_normal_reg)))
 
   val far_sign_result_reg = RegNext(Mux(isEfp_bGreater, efficient_fp_b_sign, fp_a_sign))
@@ -1720,16 +1720,16 @@ private[this] class ClosePathF16Pipeline(
   })
   val fp_a_sign = io.fp_a.head(1).asBool
   val fp_b_sign = io.fp_b.head(1).asBool
-  val RNE = io.round_mode === "b000".U 
-  val RTZ = io.round_mode === "b001".U 
-  val RDN = io.round_mode === "b010".U 
-  val RUP = io.round_mode === "b011".U 
-  val RMM = io.round_mode === "b100".U 
-  val NV = WireInit(false.B) 
-  val DZ = WireInit(false.B) 
-  val OF = WireInit(false.B) 
-  val UF = WireInit(false.B) 
-  val NX = WireInit(false.B) 
+  val RNE = io.round_mode === "b000".U
+  val RTZ = io.round_mode === "b001".U
+  val RDN = io.round_mode === "b010".U
+  val RUP = io.round_mode === "b011".U
+  val RMM = io.round_mode === "b100".U
+  val NV = WireInit(false.B)
+  val DZ = WireInit(false.B)
+  val OF = WireInit(false.B)
+  val UF = WireInit(false.B)
+  val NX = WireInit(false.B)
   io.fflags := Cat(NV,DZ,OF,UF,NX)
   val fp_a_mantissa = io.fp_a.tail(1 + exponentWidth)
   val fp_b_mantissa = io.fp_b.tail(1 + exponentWidth)
@@ -1772,7 +1772,7 @@ private[this] class ClosePathF16Pipeline(
   U_CS1.io.adder_op1 := significand_fp_a
   val CS1 = U_CS1.io.result(significandWidth-1,0)
   val priority_lshift_1 = CS1 | mask_Efp_b_onehot
-  
+
   val U_CS2 = Module(new ClosePathAdderF16Pipeline(adderWidth = significandWidth, adderType = "CS2"))
   U_CS2.io.adder_op0 := Cat(1.U,fp_a_mantissa)
   U_CS2.io.adder_op1 := Cat(1.U,fp_b_mantissa)
@@ -1836,11 +1836,11 @@ private[this] class ClosePathF16Pipeline(
     )
   )
   val priority_mask = CS_0123_result | mask_onehot
-  
-  
-  
-  
-  
+
+
+
+
+
   val lzd_0123 = LZD(priority_mask)
   val U_Lshift = Module(new CloseShiftLeftWithMux(CS_0123_result.getWidth,priority_mask.getWidth.U.getWidth))
   U_Lshift.io.src := RegNext(CS_0123_result)
@@ -1853,7 +1853,7 @@ private[this] class ClosePathF16Pipeline(
     0.U
   ))
   close_fraction_result := Mux(RegNext(sel_CS4),CS4_reg.tail(1),CS_0123_lshift_result_reg.tail(1))
-  
+
   val lshift_result_head_is_one = ((RegNext(EA-1.U) > RegNext(lzd_0123)) & RegNext(CS_0123_result).orR) | RegNext(mask_onehot & CS_0123_result).orR
   val EA_sub_value = Mux(
     RegNext(sel_CS4),
@@ -1894,7 +1894,7 @@ private[this] class ClosePathF16Pipeline(
 }
 
 private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:Boolean = false) extends Module {
-  
+
   val exponentWidth = 5
   val significandWidth = 11
   val floatWidth = exponentWidth + significandWidth
@@ -1945,7 +1945,7 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
     float_adder_fflags := Mux(RegNext(is_far_path),U_far_path.io.fflags,U_close_path.io.fflags)
   }
   when(RegNext(fp_a_is_NAN | fp_b_is_NAN | (EOP & fp_a_is_infinite & fp_b_is_infinite))){
-    
+
     float_adder_result := Cat(0.U,Fill(exponentWidth,1.U),1.U,Fill(significandWidth-2,0.U))
   }.elsewhen(RegNext(fp_a_is_infinite | fp_b_is_infinite)) {
     float_adder_result := Cat(RegNext(Mux(fp_a_is_infinite,io.fp_a.head(1),io.is_sub^io.fp_b.head(1))),Fill(exponentWidth,1.U),Fill(significandWidth-1,0.U))
