@@ -2,6 +2,7 @@ package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
+import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 import yunsuan.{OpType, VipuType, VectorElementFormat}
 
 /**
@@ -78,6 +79,13 @@ class VectorIntAdder() extends Module {
   val is_widening_sub = is_unsigned_widening_sub | is_unsigned_widening_sub_in0widening | is_signed_widening_sub_in0widening | is_signed_widening_sub
   val is_basic = is_bitwise_logical_and | is_bitwise_logical_nand | is_bitwise_logical_andn | is_bitwise_logical_or | is_bitwise_logical_nor | is_bitwise_logical_orn |
   is_bitwise_logical_xor | is_bitwise_logical_xnor | is_shift_left_logical | is_shift_right_logical | is_shift_right_arithmetic | is_scaling_shift_right_logical | is_scaling_shift_right_arithmetic
+
+  //8 expend 8
+  //8 expend 4
+  //8 expand 2
+  //16 expend 4
+  //16 expend 2
+  //32 expand 2
 
   val temp7 = !is_int8
   val temp6 = is_int32 | is_int64
@@ -302,8 +310,12 @@ class VectorIntAdder() extends Module {
   val bitwise_logical_orn_out = io.in_0 | (~io.in_1).asUInt
   val bitwise_logical_xor_out = io.in_0 ^ io.in_1
   val bitwise_logical_xnor_out = ~(io.in_0 ^ io.in_1)
-  val shift_left_logical_out = io.in_0 << io.in_1(5,0)
-  val shift_right_logical_out = io.in_0 >> io.in_1(5,0)
+
+  val is_in1_less_than_64 = io.in_1(63,7) === 0.U
+  val shift_left_logical_out_temp1 = Cat(Fill(64, temp_0))
+  val shift_left_logical_out_temp2 = io.in_0 << io.in_1(7, 0)
+  val shift_left_logical_out = Mux(is_in1_less_than_64, shift_left_logical_out_temp2, shift_left_logical_out_temp1)
+  val shift_right_logical_out = io.in_0 >> io.in_1
   val shift_right_arithmetic_out = Cat(io.in_0(63), shift_right_logical_out(62, 0))
 
   val in_1_scaling_temp_8 = Cat(Fill(56, temp_0), io.in_1(2, 0))
@@ -345,4 +357,11 @@ class VectorIntAdder() extends Module {
       is_greater_than_unsigned_out,is_greater_than_signed_out,is_greater_than_or_equal_unsigned_out, is_greater_than_or_equal_signed_out)
   )
 
+}
+
+object MainAdderTest extends App {
+  println(ChiselStage.emitVerilog(new VectorIntAdder()))
+
+  (new ChiselStage).execute(Array("--emission-options=disableMemRandomization,disableRegisterRandomization",
+    "--target-dir", "./generated/Adder"), Seq(ChiselGeneratorAnnotation(() => new VectorIntAdder())))
 }
