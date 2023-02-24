@@ -52,6 +52,7 @@ package object yunsuan {
     def fge           = "b10001000".U(OpTypeWidth.W) // fge(src1,src2)
     def fsub          = "b10001001".U(OpTypeWidth.W) // src1 - src2
     def fmacc         = "b00001010".U(OpTypeWidth.W) // vd = +(src1 * src2) + vd
+    def fdiv          = "b00001011".U(OpTypeWidth.W) // vd = src2 / src1
     
     def isVfalu(vfpuType: UInt) = vfpuType(7) & !vfpuType(6)
   }
