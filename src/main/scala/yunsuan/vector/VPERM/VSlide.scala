@@ -385,9 +385,9 @@ class SlideDownLookupFsmModule(implicit p: Parameters) extends XSModule {
 // slidedown_assign_single_data
 class SlideDownAssignSingle(n: Int)(implicit p: Parameters) extends XSModule {
     val io = IO(new Bundle() {
+        val base_vd     = Input(UInt((log2Up(VLEN)+1).W))
         val vl          = Input(UInt((log2Up(VLEN)+1).W))
         val vl_valid    = Input(Bool())
-        val dest        = Input(UInt(4.U))
         val mask        = Input(UInt((VLEN/8).W))
         val src_data_rs = Input(UInt(XLEN.W))
         val prev_data   = Input(UInt(VLEN.W))
@@ -402,7 +402,7 @@ class SlideDownAssignSingle(n: Int)(implicit p: Parameters) extends XSModule {
     }
 
     for(i <- 0 until n) {
-        when( io.mask(i).asBool && (i.U === io.dest) && io.vl_valid ) {
+        when( io.mask(i).asBool && ((i+1).U +& io.base_vd === io.vl) && io.vl_valid ) {
             res_data_vec(i) := io.src_data_rs(VLEN/n-1, 0)
         }.otherwise {
             res_data_vec(i) := prev_data_vec(i)
@@ -427,13 +427,6 @@ class SlideDownAssignSingleModule(implicit p: Parameters) extends XSModule {
 
     val base_vd = io.vd_idx << elem_num_pow
     val vl_valid = (io.vl <= io.vlmax)
-    val vl_1 = io.vl - 1.U
-    val dest = LookupTree(io.format, List(
-        "b00".U -> vl_1(3, 0),
-        "b01".U -> ZeroExt(vl_1(2, 0), 4),
-        "b10".U -> ZeroExt(vl_1(1, 0), 4),
-        "b11".U -> ZeroExt(vl_1(0), 4)
-    ))
 
     val slide_down_assign_single_module_0 = Module(new SlideDownAssignSingle(16))
     val slide_down_assign_single_module_1 = Module(new SlideDownAssignSingle(8))
@@ -442,9 +435,9 @@ class SlideDownAssignSingleModule(implicit p: Parameters) extends XSModule {
 
     val slide_down_assign_single_module = VecInit(Seq(slide_down_assign_single_module_0.io, slide_down_assign_single_module_1.io, slide_down_assign_single_module_2.io, slide_down_assign_single_module_3.io))
     for(i <- 0 until 4) {
+        slide_down_assign_single_module(i).base_vd     := base_vd
         slide_down_assign_single_module(i).vl          := io.vl
         slide_down_assign_single_module(i).vl_valid    := vl_valid
-        slide_down_assign_single_module(i).dest        := dest
         slide_down_assign_single_module(i).mask        := io.src(3)(base_vd + 15.U, base_vd)
         slide_down_assign_single_module(i).src_data_rs := io.src(0)(XLEN-1, 0)
         slide_down_assign_single_module(i).prev_data   := io.src(1)
