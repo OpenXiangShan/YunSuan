@@ -19,7 +19,7 @@ class VectorFloatDivider() extends Module {
     val finish_valid_o = Output(Bool())
     val finish_ready_i = Input(Bool())
     val fpdiv_res_o = Output(UInt(64.W))
-    val fflags_o = Output(UInt(5.W))
+    val fflags_o = Output(UInt(20.W))
 
   })
 

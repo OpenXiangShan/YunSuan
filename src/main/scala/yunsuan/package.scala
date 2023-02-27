@@ -64,6 +64,16 @@ package object yunsuan {
     def fgt           = "b10000111".U(OpTypeWidth.W) // fgt(src1,src2)
     def fge           = "b10001000".U(OpTypeWidth.W) // fge(src1,src2)
     def fsub          = "b10001001".U(OpTypeWidth.W) // src1 - src2
+    def fmacc         = "b00001010".U(OpTypeWidth.W) // vd = +(src1 * src2) + vd
+    def fdiv          = "b00001011".U(OpTypeWidth.W) // vd = src2 / src1
+    
+    def isVfalu(vfpuType: UInt) = vfpuType(7) & !vfpuType(6)
+  }
+
+  object VppuType {
+    def dummy = "b11111111".U(OpTypeWidth.W) // exu not implemented
+    def f2s   = "b10000000".U(OpTypeWidth.W) // vd[0] = f[rs1] (vs2=0)
+    def vslide1up = "b10000001".U(OpTypeWidth.W) // vd[0]=f[rs1], vd[i+1] = vs2[i]
   }
 
   object VectorElementFormat {
