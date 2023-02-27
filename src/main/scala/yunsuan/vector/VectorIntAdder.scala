@@ -35,8 +35,8 @@ class VectorIntAdder() extends Module {
   val is_int32 = io.int_format === 2.U
   val is_int64 = io.int_format === 3.U
 
-  val is_add = io.op_code === VipuType.add  //vadd vmadc
-  val is_sub = io.op_code === VipuType.sub  //vsub vrsub vmsbc
+  val is_add = io.op_code === VipuType.add  //vadd 
+  val is_sub = io.op_code === VipuType.sub || io.op_code === VipuType.rsub  //vsub vrsub 
   val is_add_carry = io.op_code === VipuType.addCarry  //vadc vmadc
   val is_sub_borrow = io.op_code === VipuType.subBorrow  //vsbc vmsbc
   val is_unsigned_widening_add = io.op_code === VipuType.unsignedWideningAdd  //vwaddu

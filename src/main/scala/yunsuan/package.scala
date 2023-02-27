@@ -9,47 +9,49 @@ package object yunsuan {
 
   object VipuType {
     def dummy                          = "b00001111".U(OpTypeWidth.W) // exu not implemented
-    def add                            = "b00000000".U(OpTypeWidth.W) // src1 + src2 //vadd vmadc
-    def sub                            = "b00000010".U(OpTypeWidth.W) // src1 - src2 //vsub vrsub vmsbc
+    def add                            = "b00000000".U(OpTypeWidth.W) // src1 + src2 //vadd
+    def sub                            = "b00000010".U(OpTypeWidth.W) // src1 - src2 //vsub
     def addCarry                       = "b00000001".U(OpTypeWidth.W) // src1 + src2 + carry //vadc vmadc
     def subBorrow                      = "b00000011".U(OpTypeWidth.W) // src1 + borrow - src2 //vsbc vmsbc
-    val unsignedWideningAdd            = "b00000100".U(OpTypeWidth.W) //vwaddu
-    val unsignedWideningsub            = "b00000101".U(OpTypeWidth.W) //vwsubu
-    val signedWideningAdd              = "b00000110".U(OpTypeWidth.W) //vwadd
-    val signedWideningSub              = "b00000111".U(OpTypeWidth.W) //vwsub
-    val unsignedWideningAddIn0Widening = "b00001000".U(OpTypeWidth.W) //vwaddu
-    val unsignedWideningSubIn0Widening = "b00001001".U(OpTypeWidth.W) //vwsubu
-    val signedWideningAddIn0Widening   = "b00001010".U(OpTypeWidth.W) //vwadd
-    val signedWideningSubIn0Widening   = "b00001011".U(OpTypeWidth.W) //vwsub
-    val maxUnsigned                    = "b00001100".U(OpTypeWidth.W) //vmaxu
-    val minUnsigned                    = "b00001101".U(OpTypeWidth.W) //vminu
-    val maxSigned                      = "b00001110".U(OpTypeWidth.W) //vmax
-    val minSigned                      = "b00001111".U(OpTypeWidth.W) //vmin
-    val equal                          = "b00010000".U(OpTypeWidth.W) //vmseq
-    val notEqual                       = "b00010001".U(OpTypeWidth.W) //vmsne
-    val lessThanUnsigned               = "b00010010".U(OpTypeWidth.W) //vmsltu
-    val lessThanSigned                 = "b00010011".U(OpTypeWidth.W) //vmslt
-    val lessThanOrEqualUnsigned        = "b00010100".U(OpTypeWidth.W) //vmsleu
-    val lessThanOrEqualSigned          = "b00010101".U(OpTypeWidth.W) //vmsle
-    val greaterThanUnsigned            = "b00010110".U(OpTypeWidth.W) //vmsgtu
-    val greaterThanSigned              = "b00010111".U(OpTypeWidth.W) //vmsgt
-    val greaterThanOrEqualUnsigned     = "b00011000".U(OpTypeWidth.W) //vmsgeu
-    val greaterThanOrEqualSigned       = "b00011001".U(OpTypeWidth.W) //vmsge
-    val bitwiseLogicalAnd              = "b00011010".U(OpTypeWidth.W) //vand
-    val bitwiseLogicalNand             = "b00011011".U(OpTypeWidth.W) //vnand
-    val bitwiseLogicalAndn             = "b00011100".U(OpTypeWidth.W) //vandn
-    val bitwiseLogicalOr               = "b00011101".U(OpTypeWidth.W) //vor
-    val bitwiseLogicalNor              = "b00011110".U(OpTypeWidth.W) //vnor
-    val bitwiseLogicalOrn              = "b00011111".U(OpTypeWidth.W) //vorn
-    val bitwiseLogicalXor              = "b00100000".U(OpTypeWidth.W) //vxor
-    val bitwiseLogicalXnor             = "b00100001".U(OpTypeWidth.W) //vxnor
-    val shiftLeftLogical               = "b00100010".U(OpTypeWidth.W) //vsll
-    val shiftRightLogical              = "b00100011".U(OpTypeWidth.W) //vsrl
-    val shiftRightArithmetic           = "b00100100".U(OpTypeWidth.W) //vsra
-    val scalingShiftRightLogical       = "b00100101".U(OpTypeWidth.W) //vssrl
-    val scalingShiftRightArithmetic    = "b00100110".U(OpTypeWidth.W) //vssra
+    def unsignedWideningAdd            = "b00000100".U(OpTypeWidth.W) //vwaddu
+    def unsignedWideningsub            = "b00000101".U(OpTypeWidth.W) //vwsubu
+    def signedWideningAdd              = "b00000110".U(OpTypeWidth.W) //vwadd
+    def signedWideningSub              = "b00000111".U(OpTypeWidth.W) //vwsub
+    def unsignedWideningAddIn0Widening = "b00001000".U(OpTypeWidth.W) //vwaddu
+    def unsignedWideningSubIn0Widening = "b00001001".U(OpTypeWidth.W) //vwsubu
+    def signedWideningAddIn0Widening   = "b00001010".U(OpTypeWidth.W) //vwadd
+    def signedWideningSubIn0Widening   = "b00001011".U(OpTypeWidth.W) //vwsub
+    def maxUnsigned                    = "b00001100".U(OpTypeWidth.W) //vmaxu
+    def minUnsigned                    = "b00001101".U(OpTypeWidth.W) //vminu
+    def maxSigned                      = "b00001110".U(OpTypeWidth.W) //vmax
+    def minSigned                      = "b00001111".U(OpTypeWidth.W) //vmin
+    def equal                          = "b00010000".U(OpTypeWidth.W) //vmseq
+    def notEqual                       = "b00010001".U(OpTypeWidth.W) //vmsne
+    def lessThanUnsigned               = "b00010010".U(OpTypeWidth.W) //vmsltu
+    def lessThanSigned                 = "b00010011".U(OpTypeWidth.W) //vmslt
+    def lessThanOrEqualUnsigned        = "b00010100".U(OpTypeWidth.W) //vmsleu
+    def lessThanOrEqualSigned          = "b00010101".U(OpTypeWidth.W) //vmsle
+    def greaterThanUnsigned            = "b00010110".U(OpTypeWidth.W) //vmsgtu
+    def greaterThanSigned              = "b00010111".U(OpTypeWidth.W) //vmsgt
+    def greaterThanOrEqualUnsigned     = "b00011000".U(OpTypeWidth.W) //vmsgeu
+    def greaterThanOrEqualSigned       = "b00011001".U(OpTypeWidth.W) //vmsge
+    def bitwiseLogicalAnd              = "b00011010".U(OpTypeWidth.W) //vand
+    def bitwiseLogicalNand             = "b00011011".U(OpTypeWidth.W) //vnand
+    def bitwiseLogicalAndn             = "b00011100".U(OpTypeWidth.W) //vandn
+    def bitwiseLogicalOr               = "b00011101".U(OpTypeWidth.W) //vor
+    def bitwiseLogicalNor              = "b00011110".U(OpTypeWidth.W) //vnor
+    def bitwiseLogicalOrn              = "b00011111".U(OpTypeWidth.W) //vorn
+    def bitwiseLogicalXor              = "b00100000".U(OpTypeWidth.W) //vxor
+    def bitwiseLogicalXnor             = "b00100001".U(OpTypeWidth.W) //vxnor
+    def shiftLeftLogical               = "b00100010".U(OpTypeWidth.W) //vsll
+    def shiftRightLogical              = "b00100011".U(OpTypeWidth.W) //vsrl
+    def shiftRightArithmetic           = "b00100100".U(OpTypeWidth.W) //vsra
+    def scalingShiftRightLogical       = "b00100101".U(OpTypeWidth.W) //vssrl
+    def scalingShiftRightArithmetic    = "b00100110".U(OpTypeWidth.W) //vssra
+    def rsub                           = "b00100111".U(OpTypeWidth.W) // src2 - src1 //vrsub
     // TODO: other op and method
     // TODO: other op and method
+    def needReverse(vipuType: UInt) = vipuType === sub // TODO : Modify the internal logic of VectorIntAdder to deal with this dirty code
   }
 
   object VfpuType {
