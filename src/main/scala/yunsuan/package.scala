@@ -11,7 +11,7 @@ package object yunsuan {
     def dummy                          = "b00001111".U(OpTypeWidth.W) // exu not implemented
     def add                            = "b00000000".U(OpTypeWidth.W) // src1 + src2 //vadd
     def sub                            = "b00000010".U(OpTypeWidth.W) // src1 - src2 //vsub
-    def addCarry                       = "b00000001".U(OpTypeWidth.W) // src1 + src2 + carry //vadc vmadc
+    def adc                            = "b00000001".U(OpTypeWidth.W) // src1 + src2 + carry //vadc
     def subBorrow                      = "b00000011".U(OpTypeWidth.W) // src1 + borrow - src2 //vsbc vmsbc
     def unsignedWideningAdd            = "b00000100".U(OpTypeWidth.W) //vwaddu
     def unsignedWideningsub            = "b00000101".U(OpTypeWidth.W) //vwsubu
@@ -49,9 +49,12 @@ package object yunsuan {
     def scalingShiftRightLogical       = "b00100101".U(OpTypeWidth.W) //vssrl
     def scalingShiftRightArithmetic    = "b00100110".U(OpTypeWidth.W) //vssra
     def rsub                           = "b00100111".U(OpTypeWidth.W) // src2 - src1 //vrsub
+    def madc                           = "b00101000".U(OpTypeWidth.W) // src1 + src2 + carry // vmadc.vvm
+    def madc0                          = "b00101001".U(OpTypeWidth.W) // src1 + src2 + carry // vmadc.vv
     // TODO: other op and method
     // TODO: other op and method
     def needReverse(vipuType: UInt) = vipuType === sub // TODO : Modify the internal logic of VectorIntAdder to deal with this dirty code
+    def outIsCarry(vipuType: UInt) = vipuType === madc || vipuType === madc0
   }
 
   object VfpuType {
