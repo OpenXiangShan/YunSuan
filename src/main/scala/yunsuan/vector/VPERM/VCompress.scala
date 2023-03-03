@@ -5,65 +5,47 @@ import utils._
 import utility._
 
 
-// global io
-class VCompIO extends Bundle {
-    //val src_0 = Input(UInt(VLEN.W))
-    //val src_1 = Input(UInt(VLEN.W))
-    //val src_2 = Input(UInt(VLEN.W))
-    //val src_3 = Input(UInt(VLEN.W))
-    val src      = Vec(4, Input(UInt(VLEN.W)))
+// vialu io
+class VIALUIO extends Bundle {
+    val vs1       = Input(UInt(VLEN.W))
+    val vs1_type  = Input(UInt(4.W))
+    val vs2       = Input(UInt(VLEN.W))
+    val vs2_type  = Input(UInt(4.W))
+    val old_vd    = Input(UInt(VLEN.W))
+    val vd_type   = Input(UInt(4.W))
 
-    val format   = Input(UInt(2.W)) // 0->int8,1->int16,2->int32,3->int64
-    val lmul     = Input(UInt(4.W)) // if LMUL>=1, lmul=LMUL, else lmul=1
-    //val elem_num = Input(UInt((log2Up(VLEN/8)+1).W)) // = VLEN/SEW
-    val vl       = Input(UInt((log2Up(VLEN)+1).W))
-    val vlmax    = Input(UInt((log2Up(VLEN)+1).W))
+    val opcode    = Input(UInt(6.W))
+    val uop_idx   = Input(UInt(6.W))
 
-    val vd_idx   = Input(UInt(4.W))
-    val uop_idx  = Input(UInt(4.W))
+    val mask      = Input(UInt(VLEN.W))
+    val vm        = Input(Bool())         // 0: masked, 1: unmasked
+    val ta        = Input(Bool())         // 0: undisturbed, 1: agnostic
+    val ma        = Input(Bool())         // 0: undisturbed, 1: agnostic
 
-    val res_data = Output(UInt(VLEN.W))
+    val vstart    = Input(UInt(7.W))      // 0-127
+    val vl        = Input(UInt(8.W))      // 0-128
+    val vxrm      = Input(UInt(2.W))
+    val vlmul     = Input(UInt(3.W))
+
+    val is_vector = Input(Bool())
+
+    val res_vd    = Output(UInt(VLEN.W))
 }
 
-// vcpop
-class CPopModule(implicit p: Parameters) extends XSModule {
-    val io = IO(new VCompIO)
-
-    val VFormatTable = List(
-        "b00".U -> (8.U,  16.U, 4.U),
-        "b01".U -> (16.U, 8.U,  3.U),
-        "b10".U -> (32.U, 4.U,  2.U),
-        "b11".U -> (64.U, 2.U,  1.U)
-    )
-    //val sew          = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._1)))
-    //val elem_num     = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._2)))
-    val elem_num_pow = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._3)))
-
-    val base = io.vd_idx << elem_num_pow
-    val mask = LookupTree(io.format, List(
-        "b00".U -> io.src(0)(base + 15.U, base),
-        "b01".U -> ZeroExt(io.src(0)(base + 7.U, base), 16),
-        "b10".U -> ZeroExt(io.src(0)(base + 3.U, base), 16),
-        "b11".U -> ZeroExt(io.src(0)(base + 1.U, base), 16)
-    ))
-
-    val pop = PopCount(mask)
-    val res = io.src(1)(7,0) + pop
-
-    io.res_data := ZeroExt(res(7,0), VLEN)
-}
-
-// vcompress
+// vcompress.vm
 class CompressIO extends Bundle {
-    val base = Input(UInt((log2Up(VLEN)+1).W))
-    val vl   = Input(UInt((log2Up(VLEN)+1).W))
-    val pmos = Input(UInt((log2Up(VLEN)+1).W))
+    val os_base   = Input(UInt(8.W)) // ones_sum_base
+    val pmos      = Input(UInt(8.W)) // previous_mask_ones_sum
+
+    val vl_valid  = Input(UInt(8.W))
+    val ta        = Input(Bool())
 
     val mask      = Input(UInt((VLEN/8).W))
     val src_data  = Input(UInt(VLEN.W))
     val prev_data = Input(UInt(VLEN.W))
 
     val res_data  = Output(UInt(VLEN.W))
+    val cmos_last = Output(UInt(8.W)) // current_mask_ones_sum
 }
 
 class Compress(n: Int)(implicit p: Parameters) extends XSModule {
@@ -72,33 +54,46 @@ class Compress(n: Int)(implicit p: Parameters) extends XSModule {
     val src_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
     val prev_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
     val res_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
-    val cmos_vec      = Wire(Vec(n, UInt((log2Up(VLEN)+1).W)))
+    val cmos_vec      = Wire(Vec(n, UInt(8.W)))
 
     for(i <- 0 until n) {
         src_data_vec(i)  := io.src_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
         prev_data_vec(i) := io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-        res_data_vec(i)  := prev_data_vec(i)
+
+        val elements_idx = io.os_base +& i.U
+        val res_keep_old_vd = (elements_idx >= io.vl_valid) && !io.ta
+        val res_agnostic = (elements_idx >= io.vl_valid) && io.ta
+
+        when (res_keep_old_vd) {
+            res_data_vec(i) := prev_data_vec(i)
+        }.elsewhen (res_agnostic) {
+            res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
+        }.otherwise {
+            res_data_vec(i) := prev_data_vec(i)
+        }
     }
 
     for(i <- 0 until n) {
-        if (i == 0) {
+        if (i == 0)
             cmos_vec(i) := io.pmos + io.mask(i)
-        }
-        else {
+        else
             cmos_vec(i) := cmos_vec(i-1) + io.mask(i)
-        }
-        val res_idx = cmos_vec(i) + ~io.base // = cmos_vec(i) - base - 1
+    }
+
+    for(i <- 0 until n) {
+        val res_idx = cmos_vec(i) + ~io.os_base // = cmos_vec(i) - base - 1
     
-        when( io.mask(i).asBool && (io.base < cmos_vec(i)) && (cmos_vec(i) < (io.base +& (n+1).U)) && (cmos_vec(i) <= io.vl) ) {
+        when( io.mask(i).asBool && (io.os_base < cmos_vec(i)) && (cmos_vec(i) < (io.os_base +& (n+1).U)) && (cmos_vec(i) <= io.vl_valid) ) {
             res_data_vec(res_idx) := src_data_vec(i)
         }
     }
 
-    io.res_data := res_data_vec.reduce{ (a, b) => Cat(b, a) }
+    io.res_data  := res_data_vec.reduce{ (a, b) => Cat(b, a) }
+    io.cmos_last := cmos_vec(n-1)
 }
 
 class CompressModule(implicit p: Parameters) extends XSModule {
-    val io = IO(new VCompIO)
+    val io = IO(new VIALUIO)
 
     val VFormatTable = List(
         "b00".U -> (8.U,  16.U, 4.U),
@@ -106,39 +101,99 @@ class CompressModule(implicit p: Parameters) extends XSModule {
         "b10".U -> (32.U, 4.U,  2.U),
         "b11".U -> (64.U, 2.U,  1.U)
     )
-    //val sew          = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._1)))
-    //val elem_num     = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._2)))
-    val elem_num_pow = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._3)))
+    val vformat = io.vd_type(1,0)
+    //val sew          = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._1)))
+    val elem_num     = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._2)))
+    val elem_num_pow = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._3)))
 
-    val base = io.vd_idx << elem_num_pow
-    val vl_final = Mux(io.vl <= io.vlmax, io.vl, io.vlmax)
-    val base_uop = io.uop_idx << elem_num_pow
-    val mask = LookupTree(io.format, List(
-        "b00".U -> io.src(0)(base_uop + 15.U, base_uop),
-        "b01".U -> ZeroExt(io.src(0)(base_uop + 7.U, base_uop), 16),
-        "b10".U -> ZeroExt(io.src(0)(base_uop + 3.U, base_uop), 16),
-        "b11".U -> ZeroExt(io.src(0)(base_uop + 1.U, base_uop), 16)
+    val vs1_idx = Wire(UInt(3.W))
+    when ( io.uop_idx === 0.U || io.uop_idx === 1.U ) {
+        vs1_idx := 0.U
+    }.elsewhen ( (2.U <= io.uop_idx) && (io.uop_idx <= 4.U) ) {
+        vs1_idx := 1.U
+    }.elsewhen ( (5.U <= io.uop_idx) && (io.uop_idx <= 8.U) ) {
+        vs1_idx := 2.U
+    }.elsewhen ( (9.U <= io.uop_idx) && (io.uop_idx <= 13.U) ) {
+        vs1_idx := 3.U
+    }.elsewhen ( (14.U <= io.uop_idx) && (io.uop_idx <= 19.U) ) {
+        vs1_idx := 4.U
+    }.elsewhen ( (20.U <= io.uop_idx) && (io.uop_idx <= 26.U) ) {
+        vs1_idx := 5.U
+    }.elsewhen ( (27.U <= io.uop_idx) && (io.uop_idx <= 34.U) ) {
+        vs1_idx := 6.U
+    }.otherwise {
+        vs1_idx := 7.U
+    }
+    val mask_start_idx = vs1_idx << elem_num_pow
+
+    val vd_idx = Wire(UInt(3.W))
+    when ( io.uop_idx === 42.U ) {
+        vd_idx := 7.U
+    }.elsewhen ( (io.uop_idx === 33.U) || (io.uop_idx === 41.U) ) {
+        vd_idx := 6.U
+    }.elsewhen ( (io.uop_idx === 25.U) || (io.uop_idx === 32.U) || (io.uop_idx === 40.U) ) {
+        vd_idx := 5.U
+    }.elsewhen ( (io.uop_idx === 18.U) || (io.uop_idx === 24.U) || (io.uop_idx === 31.U) || (io.uop_idx === 39.U) ) {
+        vd_idx := 4.U
+    }.elsewhen ( (io.uop_idx === 12.U) || (io.uop_idx === 17.U) || (io.uop_idx === 23.U) || (io.uop_idx === 30.U) || (io.uop_idx === 38.U) ) {
+        vd_idx := 3.U
+    }.elsewhen ( (io.uop_idx === 7.U) || (io.uop_idx === 11.U) || (io.uop_idx === 16.U) || (io.uop_idx === 22.U) || (io.uop_idx === 29.U) || (io.uop_idx === 37.U) ) {
+        vd_idx := 2.U
+    }.elsewhen ( (io.uop_idx === 3.U) || (io.uop_idx === 6.U) || (io.uop_idx === 10.U) || (io.uop_idx === 15.U) || (io.uop_idx === 21.U) || (io.uop_idx === 28.U) || (io.uop_idx === 36.U) ) {
+        vd_idx := 1.U
+    }.otherwise {
+        vd_idx := 0.U
+    }
+    val ones_sum_base = vd_idx << elem_num_pow
+
+    val vs1_mask = LookupTree(vformat, List(
+        "b00".U -> io.vs1(mask_start_idx + 15.U, mask_start_idx),
+        "b01".U -> ZeroExt(io.vs1(mask_start_idx + 7.U, mask_start_idx), 16),
+        "b10".U -> ZeroExt(io.vs1(mask_start_idx + 3.U, mask_start_idx), 16),
+        "b11".U -> ZeroExt(io.vs1(mask_start_idx + 1.U, mask_start_idx), 16)
     ))
 
-    val compress_module_0 = Module(new Compress(16))
-    val compress_module_1 = Module(new Compress(8))
-    val compress_module_2 = Module(new Compress(4))
-    val compress_module_3 = Module(new Compress(2))
+    val vlmax := LookupTree(io.vlmul, List(
+        "b000".U -> elem_num,          //lmul=1
+        "b001".U -> (elem_num << 1),   //lmul=2
+        "b010".U -> (elem_num << 2),   //lmul=4
+        "b011".U -> (elem_num << 3),   //lmul=8
+        "b101".U -> (elem_num >> 3),   //lmul=1/8
+        "b110".U -> (elem_num >> 2),   //lmul=1/4
+        "b111".U -> (elem_num >> 1)    //lmul=1/2
+    ))
+    val vl_valid = Mux(io.vl <= vlmax, io.vl, vlmax)
+
+    val compress_module_0 = Module(new Compress(16)) //sew=8
+    val compress_module_1 = Module(new Compress(8))  //sew=16
+    val compress_module_2 = Module(new Compress(4))  //sew=32
+    val compress_module_3 = Module(new Compress(2))  //sew=64
 
     val compress_module = VecInit(Seq(compress_module_0.io, compress_module_1.io, compress_module_2.io, compress_module_3.io))
     for(i <- 0 until 4) {
-        compress_module(i).base      := base
-        compress_module(i).vl        := vl_final
-        compress_module(i).pmos      := io.src(3)(7,0)
-        compress_module(i).mask      := mask
-        compress_module(i).src_data  := io.src(1)
-        compress_module(i).prev_data := io.src(2)
+        compress_module(i).os_base   := ones_sum_base
+        compress_module(i).pmos      := io.mask(7,0)
+        compress_module(i).vl_valid  := vl_valid
+        compress_module(i).ta        := io.ta
+        compress_module(i).mask      := vs1_mask
+        compress_module(i).src_data  := io.vs2
+        compress_module(i).prev_data := io.old_vd
     }
 
-    io.res_data := LookupTree(io.format, List(
+    compress_res_data := LookupTree(vformat, List(
         "b00".U -> compress_module_0.io.res_data,
         "b01".U -> compress_module_1.io.res_data,
         "b10".U -> compress_module_2.io.res_data,
         "b11".U -> compress_module_3.io.res_data
     ))
+    ones_sum_res_data := LookupTree(vformat, List(
+        "b00".U -> compress_module_0.io.cmos_last,
+        "b01".U -> compress_module_1.io.cmos_last,
+        "b10".U -> compress_module_2.io.cmos_last,
+        "b11".U -> compress_module_3.io.cmos_last
+    ))
+
+    val output_mask_ones_sum = (io.uop_idx === 1.U)
+
+    io.res_data := Mux(io.vstart >= io.vl, io.old_vd, Mux(output_mask_ones_sum, ZeroExt(ones_sum_res_data, VLEN), compress_res_data))
 }

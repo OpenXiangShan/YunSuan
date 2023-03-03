@@ -5,49 +5,57 @@ import utils._
 import utility._
 
 
-// global io
-class VRGatherIO extends Bundle {
-    //val src_0 = Input(UInt(VLEN.W))
-    //val src_1 = Input(UInt(VLEN.W))
-    //val src_2 = Input(UInt(VLEN.W))
-    //val src_3 = Input(UInt(VLEN.W))
-    val src      = Vec(4, Input(UInt(VLEN.W)))
-    val uimm     = Input(UInt(5.W))
+// vialu io
+class VIALUIO extends Bundle {
+    val vs1       = Input(UInt(VLEN.W))
+    val vs1_type  = Input(UInt(4.W))
+    val vs2       = Input(UInt(VLEN.W))
+    val vs2_type  = Input(UInt(4.W))
+    val old_vd    = Input(UInt(VLEN.W))
+    val vd_type   = Input(UInt(4.W))
 
-    val format   = Input(UInt(2.W)) // 0->int8,1->int16,2->int32,3->int64
-    val lmul     = Input(UInt(4.W)) // if LMUL>=1, lmul=LMUL, else lmul=1
-    //val elem_num = Input(UInt((log2Up(VLEN/8)+1).W)) // = VLEN/SEW
-    val vstart   = Input(UInt(log2Up(VLEN).W))
-    val vl       = Input(UInt((log2Up(VLEN)+1).W))
-    val vlmax    = Input(UInt((log2Up(VLEN)+1).W))
+    val opcode    = Input(UInt(6.W))
+    val uop_idx   = Input(UInt(6.W))
 
-    val vd_idx   = Input(UInt(4.W))
-    val uop_idx  = Input(UInt(4.W))
+    val mask      = Input(UInt(VLEN.W))
+    val vm        = Input(Bool())         // 0: masked, 1: unmasked
+    val ta        = Input(Bool())         // 0: undisturbed, 1: agnostic
+    val ma        = Input(Bool())         // 0: undisturbed, 1: agnostic
 
-    val res_data = Output(UInt(VLEN.W))
+    val vstart    = Input(UInt(7.W))      // 0-127
+    val vl        = Input(UInt(8.W))      // 0-128
+    val vxrm      = Input(UInt(2.W))
+    val vlmul     = Input(UInt(3.W))
+
+    val is_vector = Input(Bool())
+
+    val res_vd    = Output(UInt(VLEN.W))
 }
 
-// table_lookup
-class TableLookupIO extends Bundle {
-    val base_vd  = Input(UInt((log2Up(VLEN)+1).W))
-    val min      = Input(UInt((log2Up(VLEN)+1).W))
-    val max      = Input(UInt((log2Up(VLEN)+1).W))
+// vrgather.vv vd, vs2, vs1, vm
+// vrgather.vi vd, vs2, uimm, vm
+class VRGatherLookupIO extends Bundle {
+    val table_range_min = Input(UInt(7.W))
+    val table_range_max = Input(UInt(8.W))
+    val mask_start_idx  = Input(UInt(7.W))
+    val first_gather    = Input(Bool())
 
-    val vstart   = Input(UInt(log2Up(VLEN).W))
-    val vl       = Input(UInt((log2Up(VLEN)+1).W))
-    val first_op = Input(Bool())
-    val half     = Input(UInt(1.W))
+    val vstart   = Input(UInt(7.W))
+    val vl_valid = Input(UInt(8.W))
+    val vm       = Input(Bool())
+    val ta       = Input(Bool())
+    val ma       = Input(Bool())
 
     val mask       = Input(UInt((VLEN/8).W))
-    val index_data = Input(UInt(VLEN.W))
-    val table_data = Input(UInt(VLEN.W))
+    val index_data = Input(UInt(VLEN.W))    //vs1
+    val table_data = Input(UInt(VLEN.W))    //vs2
     val prev_data  = Input(UInt(VLEN.W))
 
     val res_data   = Output(UInt(VLEN.W))
 }
 
-class TableLookup(n: Int)(implicit p: Parameters) extends XSModule {
-    val io = IO(new TableLookupIO)
+class VRGatherLookup(n: Int)(implicit p: Parameters) extends XSModule {
+    val io = IO(new VRGatherLookupIO)
 
     val index_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
     val table_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
@@ -61,13 +69,19 @@ class TableLookup(n: Int)(implicit p: Parameters) extends XSModule {
     }
 
     for(i <- 0 until n) {
-        val index = index_data_vec(i) + ~io.min + 1.U
-        when( !io.mask(i).asBool || ((io.base_vd +& i.U) < io.vstart) || ((io.base_vd +& i.U) >= io.vl) ) {
+        val index = index_data_vec(i) + ~io.table_range_min + 1.U
+        val elements_idx = io.mask_start_idx +& i.U
+        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl_valid) && !io.ta)
+        val res_agnostic = ((elements_idx >= io.vl_valid) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
+
+        when (res_keep_old_vd) {
             res_data_vec(i) := prev_data_vec(i)
-        }.elsewhen( (io.min <= index_data_vec(i)) && (index_data_vec(i) < io.max) ) {
+        }.elsewhen (res_agnostic) {
+            res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
+        }.elsewhen ( (io.table_range_min <= index_data_vec(i)) & (index_data_vec(i) < io.table_range_max) ) {
             res_data_vec(i) := table_data_vec(index)
-        }.elsewhen( io.first_op ) {
-            res_data_vec(i) := 0.U
+        }.elsewhen ( io.first_gather ) {
+            res_data_vec(i) := 0.U((VLEN/n).W)
         }.otherwise {
             res_data_vec(i) := prev_data_vec(i)
         }
@@ -76,179 +90,29 @@ class TableLookup(n: Int)(implicit p: Parameters) extends XSModule {
     io.res_data := res_data_vec.reduce{ (a, b) => Cat(b, a) }
 }
 
-class TableLookupModule(implicit p: Parameters) extends XSModule {
-    val io = IO(new VRGatherIO)
+// vrgather.vx vd, vs2, rs1, vm
+class VRGatherLookupVXIO extends Bundle {
+    val table_range_min = Input(UInt(7.W))
+    val table_range_max = Input(UInt(8.W))
+    val mask_start_idx  = Input(UInt(7.W))
+    val first_gather    = Input(Bool())
 
-    val VFormatTable = List(
-        "b00".U -> (8.U,  16.U, 4.U),
-        "b01".U -> (16.U, 8.U,  3.U),
-        "b10".U -> (32.U, 4.U,  2.U),
-        "b11".U -> (64.U, 2.U,  1.U)
-    )
-    //val sew          = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._1)))
-    //val elem_num     = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._2)))
-    val elem_num_pow = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._3)))
+    val vstart   = Input(UInt(7.W))
+    val vl_valid = Input(UInt(8.W))
+    val vm       = Input(Bool())
+    val ta       = Input(Bool())
+    val ma       = Input(Bool())
 
-    val base_vd = io.vd_idx << elem_num_pow
-    val min = io.uop_idx << elem_num_pow
-    val max = (io.uop_idx + 1.U) << elem_num_pow
-    val vl_final = Mux(io.vl <= io.vlmax, io.vl, io.vlmax)
-    val first_op = (io.uop_idx === 0.U)
+    val mask       = Input(UInt((VLEN/8).W))
+    val index_data = Input(UInt(XLEN.W))    //vs1[63:0]
+    val table_data = Input(UInt(VLEN.W))    //vs2
+    val prev_data  = Input(UInt(VLEN.W))
 
-    val table_module_0 = Module(new TableLookup(16))
-    val table_module_1 = Module(new TableLookup(8))
-    val table_module_2 = Module(new TableLookup(4))
-    val table_module_3 = Module(new TableLookup(2))
-
-    val table_module = VecInit(Seq(table_module_0.io, table_module_1.io, table_module_2.io, table_module_3.io))
-    for(i <- 0 until 4) {
-        table_module(i).base_vd    := base_vd
-        table_module(i).min        := min
-        table_module(i).max        := max
-        table_module(i).vstart     := io.vstart
-        table_module(i).vl         := vl_final
-        table_module(i).first_op   := first_op
-        table_module(i).half       := 0.U
-        table_module(i).mask       := io.src(3)(base_vd + 15.U, base_vd)
-        table_module(i).index_data := io.src(0)
-        table_module(i).table_data := io.src(1)
-        table_module(i).prev_data  := io.src(2)
-    }
-
-    io.res_data := LookupTree(io.format, List(
-        "b00".U -> table_module_0.io.res_data,
-        "b01".U -> table_module_1.io.res_data,
-        "b10".U -> table_module_2.io.res_data,
-        "b11".U -> table_module_3.io.res_data
-    ))
+    val res_data   = Output(UInt(VLEN.W))
 }
 
-// table_lookup_16
-class TableLookup16Type1(n: Int)(implicit p: Parameters) extends XSModule {
-    val io = IO(new TableLookupIO)
-
-    val index_data_vec = Wire(Vec(8, UInt((VLEN/8).W)))
-    val table_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
-    val prev_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
-    val res_data_vec   = Wire(Vec(n, UInt((VLEN/n).W)))
-
-    for(i <- 0 until n) {
-        index_data_vec(i) := io.index_data((VLEN/8)*(i+1)-1, (VLEN/8)*i)
-        table_data_vec(i) := io.table_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-        prev_data_vec(i)  := io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-    }
-
-    for(i <- 0 until n) {
-        val idx_i = (i.U + io.base_vd)(2, 0)
-        val index = index_data_vec(idx_i) + ~io.min + 1.U
-        when( !io.mask(i).asBool || ((io.base_vd +& i.U) < io.vstart) || ((io.base_vd +& i.U) >= io.vl) ) {
-            res_data_vec(i) := prev_data_vec(i)
-        }.elsewhen( (io.min <= index_data_vec(idx_i)) && (index_data_vec(idx_i) < io.max) ) {
-            res_data_vec(i) := table_data_vec(index)
-        }.elsewhen( io.first_op ) {
-            res_data_vec(i) := 0.U
-        }.otherwise {
-            res_data_vec(i) := prev_data_vec(i)
-        }
-    }
-
-    io.res_data := res_data_vec.reduce{ (a, b) => Cat(b, a) }
-}
-
-class TableLookup16Type2(implicit p: Parameters) extends XSModule {
-    val io = IO(new TableLookupIO)
-
-    val index_data_vec = Wire(Vec(8, UInt((VLEN/8).W)))
-    val table_data_vec = Wire(Vec(16, UInt((VLEN/16).W)))
-    val prev_data_vec  = Wire(Vec(16, UInt((VLEN/16).W)))
-    val res_data_vec   = Wire(Vec(16, UInt((VLEN/16).W)))
-
-    for(i <- 0 until 16) {
-        index_data_vec(i) := io.index_data((VLEN/8)*(i+1)-1, (VLEN/8)*i)
-        table_data_vec(i) := io.table_data((VLEN/16)*(i+1)-1, (VLEN/16)*i)
-        prev_data_vec(i)  := io.prev_data((VLEN/16)*(i+1)-1, (VLEN/16)*i)
-    }
-
-    for(i <- 0 until 16) {
-        val idx_i = (i.U(4.W))(2, 0)
-        val index = index_data_vec(idx_i) + ~io.min + 1.U
-        when( !io.mask(i).asBool || ((io.base_vd +& i.U) < io.vstart) || ((io.base_vd +& i.U) >= io.vl) || (i.U < (io.half << 3) || (i.U >= ((io.half +& 1.U) << 3)) ) {
-            res_data_vec(i) := prev_data_vec(i)
-        }.elsewhen( (io.min <= index_data_vec(idx_i)) && (index_data_vec(idx_i) < io.max) ) {
-            res_data_vec(i) := table_data_vec(index)
-        }.elsewhen( io.first_op ) {
-            res_data_vec(i) := 0.U
-        }.otherwise {
-            res_data_vec(i) := prev_data_vec(i)
-        }
-    }
-
-    io.res_data := res_data_vec.reduce{ (a, b) => Cat(b, a) }
-}
-
-class TableLookup16Module(implicit p: Parameters) extends XSModule {
-    val io = IO(new VRGatherIO)
-
-    val VFormatTable = List(
-        "b00".U -> (8.U,  16.U, 4.U),
-        "b01".U -> (16.U, 8.U,  3.U),
-        "b10".U -> (32.U, 4.U,  2.U),
-        "b11".U -> (64.U, 2.U,  1.U)
-    )
-    //val sew          = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._1)))
-    //val elem_num     = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._2)))
-    val elem_num_pow = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._3)))
-    val is_8bit = (io.format === 0.U)
-    val uop_idx = Mux(is_8bit, Cat(0.U(1.W), io.uop_idx(3,1)), io.uop_idx)
-
-    val base_vd = io.vd_idx << elem_num_pow
-    val min = uop_idx << elem_num_pow
-    val max = (uop_idx + 1.U) << elem_num_pow
-    val vl_final = Mux(io.vl <= io.vlmax, io.vl, io.vlmax)
-    val first_op = (uop_idx === 0.U)
-    val half = Mux(is_8bit, io.uop_idx(0), 0.U)
-
-    val table_16_module_0 = Module(new TableLookup16Type2)
-    val table_16_module_1 = Module(new TableLookup(8))
-    val table_16_module_2 = Module(new TableLookup16Type1(4))
-    val table_16_module_3 = Module(new TableLookup16Type1(2))
-
-    val table_16_module = VecInit(Seq(table_16_module_0.io, table_16_module_1.io, table_16_module_2.io, table_16_module_3.io))
-    for(i <- 0 until 4) {
-        table_16_module(i).base_vd    := base_vd
-        table_16_module(i).min        := min
-        table_16_module(i).max        := max
-        table_16_module(i).vstart     := io.vstart
-        table_16_module(i).vl         := vl_final
-        table_16_module(i).first_op   := first_op
-        table_16_module(i).half       := half
-        table_16_module(i).mask       := io.src(3)(base_vd + 15.U, base_vd)
-        table_16_module(i).index_data := io.src(0)
-        table_16_module(i).table_data := io.src(1)
-        table_16_module(i).prev_data  := io.src(2)
-    }
-
-    io.res_data := LookupTree(io.format, List(
-        "b00".U -> table_16_module_0.io.res_data,
-        "b01".U -> table_16_module_1.io.res_data,
-        "b10".U -> table_16_module_2.io.res_data,
-        "b11".U -> table_16_module_3.io.res_data
-    ))
-}
-
-// single lookup
-class SingleLookup(n: Int)(implicit p: Parameters) extends XSModule {
-    val io = IO(new Bundle() {
-        val min      = Input(UInt((log2Up(VLEN)+1).W))
-        val max      = Input(UInt((log2Up(VLEN)+1).W))
-        val first_op = Input(Bool())
-
-        val rs_data    = Input(UInt(VLEN.W))
-        val table_data = Input(UInt(VLEN.W))
-        val prev_data  = Input(UInt(VLEN.W))
-
-        val res_data   = Output(UInt(VLEN.W))
-    })
+class VRGatherLookupVX(n: Int)(implicit p: Parameters) extends XSModule {
+    val io = IO(new VRGatherLookupVXIO)
 
     val table_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
     val prev_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
@@ -260,11 +124,19 @@ class SingleLookup(n: Int)(implicit p: Parameters) extends XSModule {
     }
 
     for(i <- 0 until n) {
-        val index = io.rs_data + ~io.min + 1.U
-        when( (io.min <= io.rs_data) && (io.rs_data < io.max) ) {
+        val index = io.index_data + ~io.table_range_min + 1.U
+        val elements_idx = io.mask_start_idx +& i.U
+        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl_valid) && !io.ta)
+        val res_agnostic = ((elements_idx >= io.vl_valid) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
+
+        when (res_keep_old_vd) {
+            res_data_vec(i) := prev_data_vec(i)
+        }.elsewhen (res_agnostic) {
+            res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
+        }.elsewhen ( (io.table_range_min <= io.index_data) & (io.index_data < io.table_range_max) ) {
             res_data_vec(i) := table_data_vec(index)
-        }.elsewhen( io.first_op ) {
-            res_data_vec(i) := 0.U
+        }.elsewhen ( io.first_gather ) {
+            res_data_vec(i) := 0.U((VLEN/n).W)
         }.otherwise {
             res_data_vec(i) := prev_data_vec(i)
         }
@@ -273,8 +145,8 @@ class SingleLookup(n: Int)(implicit p: Parameters) extends XSModule {
     io.res_data := res_data_vec.reduce{ (a, b) => Cat(b, a) }
 }
 
-class SingleLookupModule(implicit p: Parameters) extends XSModule {
-    val io = IO(new VRGatherIO)
+class VRGatherLookupModule(implicit p: Parameters) extends XSModule {
+    val io = IO(new VIALUIO)
 
     val VFormatTable = List(
         "b00".U -> (8.U,  16.U, 4.U),
@@ -282,106 +154,127 @@ class SingleLookupModule(implicit p: Parameters) extends XSModule {
         "b10".U -> (32.U, 4.U,  2.U),
         "b11".U -> (64.U, 2.U,  1.U)
     )
-    //val sew          = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._1)))
-    //val elem_num     = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._2)))
-    val elem_num_pow = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._3)))
+    val vformat = io.vd_type(1,0)
+    //val sew          = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._1)))
+    val elem_num     = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._2)))
+    val elem_num_pow = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._3)))
 
-    val min = io.vd_idx << elem_num_pow
-    val max = (io.vd_idx + 1.U) << elem_num_pow
-    val first_op = (io.uop_idx === 0.U)
-
-    val single_lookup_module_0 = Module(new SingleLookup(16))
-    val single_lookup_module_1 = Module(new SingleLookup(8))
-    val single_lookup_module_2 = Module(new SingleLookup(4))
-    val single_lookup_module_3 = Module(new SingleLookup(2))
-
-    val single_lookup_module = VecInit(Seq(single_lookup_module_0.io, single_lookup_module_1.io, single_lookup_module_2.io, single_lookup_module_3.io))
-    for(i <- 0 until 4) {
-        single_lookup_module(i).min        := min
-        single_lookup_module(i).max        := max
-        single_lookup_module(i).first_op   := first_op
-        single_lookup_module(i).rs_data    := io.src(1)(XLEN-1, 0)
-        single_lookup_module(i).table_data := io.src(0)
-        single_lookup_module(i).prev_data  := io.src(2)
+    val vd_idx = Wire(UInt(3.W))
+    when ( (56.U <= io.uop_idx) && (io.uop_idx <= 63.U) ) {
+        vd_idx := 7.U
+    }.elsewhen ( (48.U <= io.uop_idx) && (io.uop_idx <= 55.U) ) {
+        vd_idx := 6.U
+    }.elsewhen ( (40.U <= io.uop_idx) && (io.uop_idx <= 47.U) ) {
+        vd_idx := 5.U
+    }.elsewhen ( (32.U <= io.uop_idx) && (io.uop_idx <= 39.U) ) {
+        vd_idx := 4.U
+    }.elsewhen ( ((io.vlmul === "b010".U) && (12.U <= io.uop_idx) && (io.uop_idx <= 15.U)) || ((io.vlmul === "b011".U) && (24.U <= io.uop_idx) && (io.uop_idx <= 31.U)) ) {
+        vd_idx := 3.U
+    }.elsewhen ( ((io.vlmul === "b010".U) && (8.U <= io.uop_idx) && (io.uop_idx <= 11.U)) || ((io.vlmul === "b011".U) && (16.U <= io.uop_idx) && (io.uop_idx <= 23.U)) ) {
+        vd_idx := 2.U
+    }.elsewhen ( ((io.vlmul === "b001".U) && (2.U <= io.uop_idx) && (io.uop_idx <= 3.U)) || ((io.vlmul === "b010".U) && (4.U <= io.uop_idx) && (io.uop_idx <= 7.U)) || ((io.vlmul === "b011".U) && (8.U <= io.uop_idx) && (io.uop_idx <= 15.U)) ) {
+        vd_idx := 1.U
+    }.otherwise {
+        vd_idx := 0.U
     }
+    val mask_start_idx = vd_idx << elem_num_pow
 
-    io.res_data := LookupTree(io.format, List(
-        "b00".U -> single_lookup_module_0.io.res_data,
-        "b01".U -> single_lookup_module_1.io.res_data,
-        "b10".U -> single_lookup_module_2.io.res_data,
-        "b11".U -> single_lookup_module_3.io.res_data
+    val first_gather = (io.vlmul(2) === 1.U || io.vlmul === "b000".U) || 
+                       ((io.vlmul === "b001".U) && (io.uop_idx(0) === 0.U)) || 
+                       ((io.vlmul === "b010".U) && (io.uop_idx(1,0) === 0.U)) || 
+                       ((io.vlmul === "b011".U) && (io.uop_idx(2,0) === 0.U))
+
+    val table_idx = Wire(UInt(3.W))
+    when ( (io.vlmul === "b011".U) && (io.uop_idx(2,0) === "b111".U) ) {
+        table_idx := 7.U
+    }.elsewhen ( (io.vlmul === "b011".U) && (io.uop_idx(2,0) === "b110".U) ) {
+        table_idx := 6.U
+    }.elsewhen ( (io.vlmul === "b011".U) && (io.uop_idx(2,0) === "b101".U) ) {
+        table_idx := 5.U
+    }.elsewhen ( (io.vlmul === "b011".U) && (io.uop_idx(2,0) === "b100".U) ) {
+        table_idx := 4.U
+    }.elsewhen ( ((io.vlmul === "b011".U) && (io.uop_idx(2,0) === "b011".U)) || ((io.vlmul === "b010".U) && (io.uop_idx(1,0) === "b11".U)) ) {
+        table_idx := 3.U
+    }.elsewhen ( ((io.vlmul === "b011".U) && (io.uop_idx(2,0) === "b010".U)) || ((io.vlmul === "b010".U) && (io.uop_idx(1,0) === "b10".U)) ) {
+        table_idx := 2.U
+    }.elsewhen ( ((io.vlmul === "b011".U) && (io.uop_idx(2,0) === "b001".U)) || ((io.vlmul === "b010".U) && (io.uop_idx(1,0) === "b01".U)) || ((io.vlmul === "b001".U) && (io.uop_idx(0) === "b1".U)) ) {
+        table_idx := 1.U
+    }.otherwise {
+        table_idx := 0.U
+    }
+    val table_range_min = table_idx << elem_num_pow
+    val table_range_max = (table_idx +& 1.U) << elem_num_pow
+
+    val vlmax := LookupTree(io.vlmul, List(
+        "b000".U -> elem_num,          //lmul=1
+        "b001".U -> (elem_num << 1),   //lmul=2
+        "b010".U -> (elem_num << 2),   //lmul=4
+        "b011".U -> (elem_num << 3),   //lmul=8
+        "b101".U -> (elem_num >> 3),   //lmul=1/8
+        "b110".U -> (elem_num >> 2),   //lmul=1/4
+        "b111".U -> (elem_num >> 1)    //lmul=1/2
     ))
-}
+    val vl_valid = Mux(io.vl <= vlmax, io.vl, vlmax)
 
-// single assign
-class SingleAssign(n: Int)(implicit p: Parameters) extends XSModule {
-    val io = IO(new Bundle() {
-        val base_vd  = Input(UInt((log2Up(VLEN)+1).W))
-        val vstart   = Input(UInt(log2Up(VLEN).W))
-        val vl       = Input(UInt((log2Up(VLEN)+1).W))
+    val mask_selected = io.mask(mask_start_idx + 15.U, mask_start_idx)
 
-        val mask        = Input(UInt((VLEN/8).W))
-        val lookup_data = Input(UInt(VLEN.W))
-        val prev_data   = Input(UInt(VLEN.W))
+    // vrgather.vv/vi
+    val gather_lookup_module_0 = Module(new VRGatherLookup(16)) //sew=8
+    val gather_lookup_module_1 = Module(new VRGatherLookup(8))  //sew=16
+    val gather_lookup_module_2 = Module(new VRGatherLookup(4))  //sew=32
+    val gather_lookup_module_3 = Module(new VRGatherLookup(2))  //sew=64
 
-        val res_data    = Output(UInt(VLEN.W))
-    })
-
-    val lookup_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
-    val prev_data_vec   = Wire(Vec(n, UInt((VLEN/n).W)))
-    val res_data_vec    = Wire(Vec(n, UInt((VLEN/n).W)))
-
-    for(i <- 0 until n) {
-        lookup_data_vec(i) := io.lookup_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-        prev_data_vec(i)   := io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-    }
-
-    for(i <- 0 until n) {
-        when( !io.mask(i).asBool || ((io.base_vd +& i.U) < io.vstart) || ((io.base_vd +& i.U) >= io.vl) ) {
-            res_data_vec(i) := prev_data_vec(i)
-        }.otherwise {
-            res_data_vec(i) := lookup_data_vec(i)
-        }
-    }
-
-    io.res_data := res_data_vec.reduce{ (a, b) => Cat(b, a) }
-}
-
-class SingleAssignModule(implicit p: Parameters) extends XSModule {
-    val io = IO(new VRGatherIO)
-
-    val VFormatTable = List(
-        "b00".U -> (8.U,  16.U, 4.U),
-        "b01".U -> (16.U, 8.U,  3.U),
-        "b10".U -> (32.U, 4.U,  2.U),
-        "b11".U -> (64.U, 2.U,  1.U)
-    )
-    //val sew          = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._1)))
-    //val elem_num     = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._2)))
-    val elem_num_pow = LookupTreeDefault(io.format, 0.U, VFormatTable.map(p => (p._1, p._2._3)))
-
-    val base_vd = io.vd_idx << elem_num_pow
-    val vl_final = Mux(io.vl <= io.vlmax, io.vl, io.vlmax)
-
-    val single_assign_module_0 = Module(new SingleAssign(16))
-    val single_assign_module_1 = Module(new SingleAssign(8))
-    val single_assign_module_2 = Module(new SingleAssign(4))
-    val single_assign_module_3 = Module(new SingleAssign(2))
-
-    val single_assign_module = VecInit(Seq(single_assign_module_0.io, single_assign_module_1.io, single_assign_module_2.io, single_assign_module_3.io))
+    val gather_lookup_module = VecInit(Seq(gather_lookup_module_0.io, gather_lookup_module_1.io, gather_lookup_module_2.io, gather_lookup_module_3.io))
     for(i <- 0 until 4) {
-        single_assign_module(i).base_vd     := base_vd
-        single_assign_module(i).vstart      := io.vstart
-        single_assign_module(i).vl          := vl_final
-        single_assign_module(i).mask        := io.src(3)(base_vd + 15.U, base_vd)
-        single_assign_module(i).lookup_data := io.src(0)
-        single_assign_module(i).prev_data   := io.src(1)
+        gather_lookup_module(i).table_range_min  := table_range_min
+        gather_lookup_module(i).table_range_max  := table_range_max
+        gather_lookup_module(i).mask_start_idx   := mask_start_idx
+        gather_lookup_module(i).first_gather     := first_gather
+        gather_lookup_module(i).vstart           := io.vstart
+        gather_lookup_module(i).vl_valid         := vl_valid
+        gather_lookup_module(i).vm               := io.vm
+        gather_lookup_module(i).ta               := io.ta
+        gather_lookup_module(i).ma               := io.ma
+        gather_lookup_module(i).mask             := mask_selected
+        gather_lookup_module(i).index_data       := io.vs1
+        gather_lookup_module(i).table_data       := io.vs2
+        gather_lookup_module(i).prev_data        := io.old_vd
     }
-
-    io.res_data := LookupTree(io.format, List(
-        "b00".U -> single_assign_module_0.io.res_data,
-        "b01".U -> single_assign_module_1.io.res_data,
-        "b10".U -> single_assign_module_2.io.res_data,
-        "b11".U -> single_assign_module_3.io.res_data
+    val gather_res_data = LookupTree(vformat, List(
+        "b00".U -> gather_lookup_module_0.io.res_data,
+        "b01".U -> gather_lookup_module_1.io.res_data,
+        "b10".U -> gather_lookup_module_2.io.res_data,
+        "b11".U -> gather_lookup_module_3.io.res_data
     ))
+
+    // vrgather.vx
+    val gather_vx_lookup_module_0 = Module(new VRGatherLookupVX(16)) //sew=8
+    val gather_vx_lookup_module_1 = Module(new VRGatherLookupVX(8))  //sew=16
+    val gather_vx_lookup_module_2 = Module(new VRGatherLookupVX(4))  //sew=32
+    val gather_vx_lookup_module_3 = Module(new VRGatherLookupVX(2))  //sew=64
+
+    val gather_vx_lookup_module = VecInit(Seq(gather_vx_lookup_module_0.io, gather_vx_lookup_module_1.io, gather_vx_lookup_module_2.io, gather_vx_lookup_module_3.io))
+    for(i <- 0 until 4) {
+        gather_vx_lookup_module(i).table_range_min  := table_range_min
+        gather_vx_lookup_module(i).table_range_max  := table_range_max
+        gather_vx_lookup_module(i).mask_start_idx   := mask_start_idx
+        gather_vx_lookup_module(i).first_gather     := first_gather
+        gather_vx_lookup_module(i).vstart           := io.vstart
+        gather_vx_lookup_module(i).vl_valid         := vl_valid
+        gather_vx_lookup_module(i).vm               := io.vm
+        gather_vx_lookup_module(i).ta               := io.ta
+        gather_vx_lookup_module(i).ma               := io.ma
+        gather_vx_lookup_module(i).mask             := mask_selected
+        gather_vx_lookup_module(i).index_data       := io.vs1(XLEN-1, 0)
+        gather_vx_lookup_module(i).table_data       := io.vs2
+        gather_vx_lookup_module(i).prev_data        := io.old_vd
+    }
+    val gather_vx_res_data = LookupTree(vformat, List(
+        "b00".U -> gather_vx_lookup_module_0.io.res_data,
+        "b01".U -> gather_vx_lookup_module_1.io.res_data,
+        "b10".U -> gather_vx_lookup_module_2.io.res_data,
+        "b11".U -> gather_vx_lookup_module_3.io.res_data
+    ))
+
+    io.res_data := Mux(io.vstart >= io.vl, io.old_vd, Mux(io.opcode === 50.U, gather_res_data, gather_vx_res_data))
 }
