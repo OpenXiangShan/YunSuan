@@ -55,6 +55,9 @@ public:
   void display_ref_output();
   void display_dut();
   void display();
+
+  bool verbose;
+  void verbose_exec() { verbose = true; }
 };
 
 #endif

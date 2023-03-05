@@ -1,4 +1,9 @@
 #include "../include/gm_common.h"
+#include <typeinfo>
+
+VPUGoldenModel::VPUGoldenModel():
+  verbose(false)
+{}
 
 VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
   int sew = input.sew;
@@ -9,16 +14,15 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
   if (sew == 0) { fflags_shift_len = 5; }
   else { fflags_shift_len = 5 << (sew - 1); }
 
-  // printf("sew:%d num:%d half_num:%d result_shamt:%d fflags_shamt:%d\n", sew, number, half_number, result_shift_len, fflags_shift_len);
-
   VecOutput output;
   ElementOutput output_part[number];
   for(int i = 0; i < number; i++) {
+    ElementInput element = select_element(input, i);
     switch (sew) {
-      case 0: output_part[i] = calculation_e8(select_element(input, i)); break;
-      case 1: output_part[i] = calculation_e16(select_element(input, i)); break;
-      case 2: output_part[i] = calculation_e32(select_element(input, i)); break;
-      case 3: output_part[i] = calculation_e64(select_element(input, i)); break;
+      case 0: output_part[i] = calculation_e8(element); break;
+      case 1: output_part[i] = calculation_e16(element); break;
+      case 2: output_part[i] = calculation_e32(element); break;
+      case 3: output_part[i] = calculation_e64(element); break;
       default:
         printf("VPU Golden Modle, bad sew %d\n", input.sew);
         exit(1);
@@ -34,7 +38,9 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
     for (int j = 0; j < half_number; j++) {
       output.result[i] += (uint64_t)output_part[i*half_number+j].result << (j*result_shift_len);
       output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << (j*fflags_shift_len);
-      // printf("i:%d j:%d result:%lx fflags:%x\n", i,j,output.result[i], output.fflags[i]);
+      if (verbose) {
+        printf("%s::%s ResultJoint i:%d j:%d result:%lx fflags:%x\n", typeid(this).name(), __func__,i,j,output.result[i], output.fflags[i]);
+      }
     }
     if (output.fflags[i] > 0xfffff) {
       printf("Bad fflags %d: result %lx fflags %x\n", i, output.result[i], output.fflags[i]);
@@ -84,4 +90,8 @@ ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
   element.widen = input.widen;
   element.rm = input.rm;
   return element;
+}
+
+void VPUGoldenModel::display_calculation(const char *objType, const char *func, ElementInput input, ElementOutput output) {
+  printf("%s::%s src1:%lx src2:%lx result:%lx fflags:%x\n", objType, func, input.src1, input.src2, output.result, output.fflags);
 }

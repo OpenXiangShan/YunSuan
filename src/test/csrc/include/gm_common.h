@@ -12,6 +12,7 @@ class VPUGoldenModel {
     // bool bad_fuType(VecInput input);
     // bool bad_fuOpType(VecInput input);
   public:
+    VPUGoldenModel();
     VecOutput get_expected_output(VecInput input);
     ElementInput select_element(VecInput input, int idx);
 
@@ -19,6 +20,10 @@ class VPUGoldenModel {
     virtual ElementOutput calculation_e16(ElementInput input) = 0;
     virtual ElementOutput calculation_e32(ElementInput input) = 0;
     virtual ElementOutput calculation_e64(ElementInput input) = 0;
+
+    bool verbose;
+    void verbose_exec() { verbose = true; }
+    void display_calculation(const char *, const char *, ElementInput, ElementOutput);
 };
 
 class VGMFloatBase : public VPUGoldenModel {

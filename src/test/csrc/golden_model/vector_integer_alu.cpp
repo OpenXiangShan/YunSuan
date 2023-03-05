@@ -12,7 +12,7 @@ ElementOutput VGMIntegerALU::calculation_e8(ElementInput input) {
   ElementOutput output;
   output.result = (uint64_t)((uint8_t)input.src1 + (uint8_t)input.src2);
   output.fflags = 0;
-  // printf("ALU E8: src1:%lx src2:%lx result:%lx fflags:%x\n", input.src1, input.src2, output.result, output.fflags);
+  if (verbose) { display_calculation(typeid(this).name(), __func__, input, output); }
   return output;
 }
 
@@ -20,7 +20,7 @@ ElementOutput VGMIntegerALU::calculation_e16(ElementInput input) {
   ElementOutput output;
   output.result = (uint64_t)((uint16_t)input.src1 + (uint16_t)input.src2);
   output.fflags = 0;
-  // printf("ALU E16: src1:%lx src2:%lx result:%lx fflags:%x\n", input.src1, input.src2, output.result, output.fflags);
+  if (verbose) { display_calculation(typeid(this).name(), __func__, input, output); }
   return output;
 }
 
@@ -28,7 +28,7 @@ ElementOutput VGMIntegerALU::calculation_e32(ElementInput input) {
   ElementOutput output;
   output.result = (uint64_t)((uint32_t)input.src1 + (uint32_t)input.src2);
   output.fflags = 0;
-  // printf("ALU E32: src1:%lx src2:%lx result:%lx fflags:%x\n", input.src1, input.src2, output.result, output.fflags);
+  if (verbose) { display_calculation(typeid(this).name(), __func__, input, output); }
   return output;
 }
 
@@ -36,6 +36,6 @@ ElementOutput VGMIntegerALU::calculation_e64(ElementInput input) {
   ElementOutput output;
   output.result = (uint64_t)(input.src1 + input.src2);
   output.fflags = 0;
-  // printf("ALU E64: src1:%lx src2:%lx result:%lx fflags:%x\n", input.src1, input.src2, output.result, output.fflags);
+  if (verbose) { display_calculation(typeid(this).name(), __func__, input, output); }
   return output;
 }

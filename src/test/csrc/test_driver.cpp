@@ -10,7 +10,7 @@ extern "C" {
 #include "include/test_driver.h"
 
 TestDriver::TestDriver():
-  issued(false)
+  issued(false), verbose(false)
 {
   // aviod random value
   set_test_type();
@@ -34,11 +34,10 @@ void TestDriver::set_test_type() {
 }
 void TestDriver::gen_next_test_case(/*type wanted*/) {
   issued = false;
-  // printf("Get next case: fuType:%d fuOpType:%d\n", input.fuType, input.fuOpType);
   get_random_input();
-  // display_ref_input();
+  if (verbose) { display_ref_input(); }
   get_expected_output();
-  // display_ref_output();
+  if (verbose) { display_ref_output(); }
 }
 
 void TestDriver::get_random_input() {
@@ -48,7 +47,7 @@ void TestDriver::get_random_input() {
   input.src2[1] = rand64();
   input.src3[0] = rand64();
   input.src3[1] = rand64();
-  if (!test_type.pick_fuType) { printf("randFu\n"); input.fuType = rand(); }
+  if (!test_type.pick_fuType) { input.fuType = rand(); }
   else { input.fuType = test_type.fuType; }
   if (!test_type.pick_fuOpType) { input.fuOpType = rand(); }
   else { input.fuOpType = test_type.fuOpType; }
@@ -61,10 +60,10 @@ void TestDriver::get_random_input() {
 void TestDriver::get_expected_output() {
   switch (input.fuType) {
     case VIntegerALU:
-      // printf("FuType:%d, choose VIntegerALU %d\n", input.fuType, VIntegerALU);
+      if (verbose) { printf("FuType:%d, choose VIntegerALU %d\n", input.fuType, VIntegerALU); }
       expect_output = valu.get_expected_output(input); return;
     case VFloatDivider:
-      // printf("FuType:%d, choose VFloatDivider %d\n", input.fuType, VFloatDivider);
+      if (verbose) { printf("FuType:%d, choose VFloatDivider %d\n", input.fuType, VFloatDivider); }
       expect_output = vfd.get_expected_output(input); return;
     default:
       printf("Unsupported FuType %d\n", input.fuType);
