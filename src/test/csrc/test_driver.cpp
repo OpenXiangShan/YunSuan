@@ -10,7 +10,7 @@ extern "C" {
 #include "include/test_driver.h"
 
 TestDriver::TestDriver():
-  issued(false), verbose(false)
+  issued(false), verbose(false), keepinput(false)
 {
   // aviod random value
   set_test_type();
@@ -41,6 +41,7 @@ void TestDriver::gen_next_test_case(/*type wanted*/) {
 }
 
 void TestDriver::get_random_input() {
+  if (keepinput) { return; }
   input.src1[0] = rand64();
   input.src1[1] = rand64();
   input.src2[0] = rand64();

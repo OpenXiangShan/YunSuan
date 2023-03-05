@@ -127,7 +127,7 @@ int Emulator::single_cycle () {
   if (trap_code == STATE_FINISH_OPERATION || trap_code == STATE_BADTRAP) {
     operations += 1;
   }
-  return (trap_code == STATE_FINISH_OPERATION) ? STATE_RUNNING : trap_code;
+  return trap_code;
 }
 
 void Emulator::reset_ncycles(size_t cycle) {
@@ -141,14 +141,35 @@ void Emulator::reset_ncycles(size_t cycle) {
   }
 }
 
+int Emulator::execute_operations(uint64_t ops) {
+  int trap_code;
+  for (int op = 0; op < ops; ) {
+    trap_code = single_cycle();
+    if ((trap_code == STATE_FINISH_OPERATION) || (trap_code == STATE_BADTRAP)) op ++;
+    if ((trap_code != STATE_RUNNING) && (trap_code != STATE_FINISH_OPERATION)) return op;
+  }
+  return ops;
+}
+
 bool Emulator::execute() {
   int trap_code;
-  while (cycles <= args.max_cycles && operations <= args.max_operations) {
-    if ((trap_code = single_cycle()) != STATE_RUNNING) break;
+  while ((cycles <= args.max_cycles) && (operations <= args.max_operations)) {
+    trap_code = single_cycle();
+    if ((trap_code != STATE_RUNNING) && (trap_code != STATE_FINISH_OPERATION)) break;
   }
-  bool good_trap = trap_code == STATE_RUNNING;
+  bool good_trap = ((trap_code == STATE_RUNNING) || (trap_code == STATE_FINISH_OPERATION));
+
   printf("EMU %s\n", good_trap ? "EXCEEDED LIMIT" : "BADTRAP");
   printf("HAS Executed Cycles:%ld Operations:%ld\n", cycles, operations);
+
+  if (!good_trap) {
+    printf("=========Re-Execute and Print Golden Model Trace===========\n");
+    test_driver.verbose_exec();
+    test_driver.keep_input();
+    execute_operations(1);
+    test_driver.display_dut();
+  }
+
   // single_cycle(); // one more cycle to print result
   return good_trap;
 }

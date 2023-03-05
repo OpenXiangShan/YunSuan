@@ -57,7 +57,12 @@ public:
   void display();
 
   bool verbose;
-  void verbose_exec() { verbose = true; }
+  bool keepinput;
+  void verbose_exec() {
+    verbose = true;
+    vfd.verbose_exec(); valu.verbose_exec();
+  }
+  void keep_input() { keepinput = true; }
 };
 
 #endif

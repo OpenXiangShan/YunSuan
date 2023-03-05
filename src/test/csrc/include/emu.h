@@ -32,7 +32,9 @@ class Emulator {
 
 private:
   VSimTop *dut_ptr;
+#if VM_TRACE == 1
   VerilatedVcdC* tfp;
+#endif
   TestDriver test_driver;
 
   EmuArgs args;
@@ -49,6 +51,7 @@ public:
   int single_cycle ();
   void reset_ncycles(size_t cycles);
   bool execute();
+  int execute_operations(uint64_t ops);
 };
 
 #endif
