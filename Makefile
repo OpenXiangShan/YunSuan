@@ -37,7 +37,7 @@ EMU_CXXFLAGS += -DEMU_THREAD=$(EMU_THREADS)
 endif
 
 EMU_CXXFLAGS += -O3 -static -Wall
-EMU_LDFLAGS  += -lpthread -lSDL2 -ldl
+EMU_LDFLAGS  += -lpthread -ldl
 
 EMU_LDFLAGS  += $(SOFTFLOAT)
 
