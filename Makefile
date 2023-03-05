@@ -56,7 +56,6 @@ EMU_MK := $(BUILD_DIR)/emu-compile/V$(TOP).mk
 EMU = $(BUILD_DIR)/emu
 
 $(EMU_MK): $(TOP_V) | $(EMU_DEPS)
-	@echo $(EMU_DEPS)
 	@mkdir -p $(@D)
 	verilator --cc --exe $(VERILATOR_FLAGS)  \
 		-o $(abspath $(EMU)) -Mdir $(@D) $^ $(EMU_DEPS)
