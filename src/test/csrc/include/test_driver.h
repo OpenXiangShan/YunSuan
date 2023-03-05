@@ -38,6 +38,7 @@ private:
   VGMFloatDivider vfd;
   VGMIntegerALU valu;
 
+
 public:
   TestDriver();
   ~TestDriver();
@@ -55,6 +56,9 @@ public:
   void display_ref_output();
   void display_dut();
   void display();
+
+  uint64_t stuck_count;
+  const uint64_t stuck_limit = 100;
 
   bool verbose;
   bool keepinput;

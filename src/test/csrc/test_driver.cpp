@@ -83,6 +83,7 @@ bool TestDriver::assign_input_raising(VSimTop *dut_ptr) {
     dut_ptr->io_in_valid = true;
     if (dut_ptr->io_in_ready) {
       issued = true;
+      stuck_count = 0;
     }
   } else {
     dut_ptr->io_in_valid = false;
@@ -119,8 +120,16 @@ int TestDriver::diff_output_falling(VSimTop *dut_ptr) {
     } else {
       gen_next_test_case();
     }
+    return STATE_FINISH_OPERATION;
+  } else {
+    stuck_count ++;
+    if (stuck_count >= stuck_limit) {
+      printf("DUT stucked. Not finished in %lu cycles\n", stuck_limit);
+      stuck_count = 0;
+      return STATE_BADTRAP;
+    }
+    return STATE_RUNNING;
   }
-  return finish ? STATE_FINISH_OPERATION : STATE_RUNNING;
 }
 
 void TestDriver::display_ref_input() {
