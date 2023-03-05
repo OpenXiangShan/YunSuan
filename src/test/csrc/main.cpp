@@ -15,7 +15,7 @@ int main(int argc, const char** argv) {
 
   auto emu = new Emulator(argc, argv);
 
-  emu->execute();
+  bool good_trap = emu->execute();
   delete emu;
 
   gettimeofday(&end, NULL);
@@ -25,5 +25,5 @@ int main(int argc, const char** argv) {
 
   printf("EMU has executed %d ms.\n", s * 1000 + (us + 500) / 1000);
 
-  return 0;
+  return !good_trap;
 }

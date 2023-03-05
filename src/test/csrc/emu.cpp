@@ -141,15 +141,16 @@ void Emulator::reset_ncycles(size_t cycle) {
   }
 }
 
-void Emulator::execute() {
+bool Emulator::execute() {
   int trap_code;
   while (cycles <= args.max_cycles && operations <= args.max_operations) {
     if ((trap_code = single_cycle()) != STATE_RUNNING) break;
   }
-  printf("EMU %s\n", trap_code == STATE_RUNNING ? "EXCEEDED LIMIT" : "BADTRAP");
+  bool good_trap = trap_code == STATE_RUNNING;
+  printf("EMU %s\n", good_trap ? "EXCEEDED LIMIT" : "BADTRAP");
   printf("HAS Executed Cycles:%ld Operations:%ld\n", cycles, operations);
   // single_cycle(); // one more cycle to print result
-  return;
+  return good_trap;
 }
 
 inline char* Emulator::timestamp_filename(time_t t, char *buf) {

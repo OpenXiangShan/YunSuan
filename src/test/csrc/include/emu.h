@@ -45,7 +45,7 @@ public:
 
   int single_cycle ();
   void reset_ncycles(size_t cycles);
-  void execute();
+  bool execute();
 };
 
 #endif
