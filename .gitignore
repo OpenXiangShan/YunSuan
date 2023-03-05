@@ -362,5 +362,6 @@ stack.info*
 *.vcd
 *.bin
 
+resource/*
 !ready-to-run/*
 

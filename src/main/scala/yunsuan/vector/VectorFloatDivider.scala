@@ -61,6 +61,7 @@ class VectorFloatDivider() extends Module {
   val R_SHIFT_NUM_LIMIT_f32_1 = 25.U(5.W)
   val R_SHIFT_NUM_LIMIT_f16_2 = 13.U(4.W)
   val R_SHIFT_NUM_LIMIT_f16_3 = 13.U(4.W)
+  // TODO: use outside's rm coding
   val RM_RNE = "b000".U(3.W)
   val RM_RTZ = "b001".U(3.W)
   val RM_RDN = "b010".U(3.W)
@@ -2440,8 +2441,8 @@ private[vector] class fpdiv_r64_block_vector(
                               val QUO_DIG_W:Int =5
                             ) extends Module {
 
-  val remainderVectorWidth = (3+11+3+1)*4 
-  val divisorVectorWidth = (11+4)*4 
+  val remainderVectorWidth = (3+11+3+1)*4
+  val divisorVectorWidth = (11+4)*4
   val io = IO(new Bundle {
     val fp_format_onehot = Input(UInt(3.W))
     val is_vec  = Input(Bool())
@@ -2459,31 +2460,31 @@ private[vector] class fpdiv_r64_block_vector(
     val nxt_f_r_c_o = Output(Vec(3,UInt(remainderVectorWidth.W)))
     val adder_6b_res_for_nxt_cycle_s0_qds_o = Output(Vec(4,UInt(6.W)))
     val adder_7b_res_for_nxt_cycle_s1_qds_o = Output(Vec(4,UInt(7.W)))
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   })
   val is_fp64 = io.fp_format_onehot(2)
   val is_fp32 = io.fp_format_onehot(1)
@@ -2495,12 +2496,12 @@ private[vector] class fpdiv_r64_block_vector(
   val remainderWidthF64 = 60
   val remainderWidthF32 = 31
   val remainderWidthF16 = 18
-  
-  
-  
-  
 
-  
+
+
+
+
+
   val divisor_f64_0 = io.divisor_i.head(divisorWidthF64)
   val divisor_ext_f64_0 = Cat(0.U(2.W), divisor_f64_0, 0.U(1.W))
   val divisor_mul_neg_2_f64_0 = (~Cat(divisor_ext_f64_0((remainderWidthF64-1)-1,0), 0.U(1.W))).asUInt
@@ -2549,7 +2550,7 @@ private[vector] class fpdiv_r64_block_vector(
   val divisor_mul_neg_1_f16_3 = (~divisor_ext_f16_3).asUInt
   val divisor_mul_pos_1_f16_3 = divisor_ext_f16_3
   val divisor_mul_pos_2_f16_3 = Cat(divisor_ext_f16_3((remainderWidthF16-1)-1,0), 0.U(1.W))
-  
+
   val divisor_mul_neg_2 = Mux1H(
     Seq(
       is_fp64 | !io.is_vec,
@@ -2617,73 +2618,73 @@ private[vector] class fpdiv_r64_block_vector(
     Fill(17,0.U(1.W)),is_fp16 & io.is_vec,
     Fill(5,0.U(1.W)),is_fp64 | !io.is_vec,Fill(6,0.U(1.W)),is_fp32 & io.is_vec,Fill(4,0.U(1.W)),is_fp16 & io.is_vec
   )
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  val U_CSA_0_4 = Module(new CSA3to2(width = 60+1+31*2+2+18*4+3)) 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  val U_CSA_0_4 = Module(new CSA3to2(width = 60+1+31*2+2+18*4+3))
   val U_CSA_0_in_a = Cat(
     io.f_r_s_i.head(60).tail(2),0.U(3.W),
     io.f_r_s_i.head(31).tail(2),0.U(3.W),io.f_r_s_i(35,5).tail(2),0.U(3.W),
@@ -2942,7 +2943,7 @@ private[vector] class fpdiv_r64_block_vector(
   val adder_7b_for_s2_qds_in_s0_spec_f16_3_1 = U_CSA_0_1.io.out_sum.tail(125).tail(4).head(7) + U_CSA_0_1.io.out_car.tail(125).tail(4).head(7)
   val adder_7b_for_s2_qds_in_s0_spec_f16_3_0 = U_CSA_0_0.io.out_sum.tail(125).tail(4).head(7) + U_CSA_0_0.io.out_car.tail(125).tail(4).head(7)
 
-  
+
   adder_7b_for_s2_qds_in_s0_spec_f64_0(4) := Mux1H(
     Seq(
       is_fp64 | !is_vec,
@@ -3003,28 +3004,28 @@ private[vector] class fpdiv_r64_block_vector(
       adder_7b_for_s2_qds_in_s0_spec_f16_0_0
     )
   )
-  
+
   adder_7b_for_s2_qds_in_s0_spec_f32_1(4) := Mux(is_fp32 & is_vec, adder_7b_for_s2_qds_in_s0_spec_f32_1_4,adder_7b_for_s2_qds_in_s0_spec_f16_1_4)
   adder_7b_for_s2_qds_in_s0_spec_f32_1(3) := Mux(is_fp32 & is_vec, adder_7b_for_s2_qds_in_s0_spec_f32_1_3,adder_7b_for_s2_qds_in_s0_spec_f16_1_3)
   adder_7b_for_s2_qds_in_s0_spec_f32_1(2) := Mux(is_fp32 & is_vec, adder_7b_for_s2_qds_in_s0_spec_f32_1_2,adder_7b_for_s2_qds_in_s0_spec_f16_1_2)
   adder_7b_for_s2_qds_in_s0_spec_f32_1(1) := Mux(is_fp32 & is_vec, adder_7b_for_s2_qds_in_s0_spec_f32_1_1,adder_7b_for_s2_qds_in_s0_spec_f16_1_1)
   adder_7b_for_s2_qds_in_s0_spec_f32_1(0) := Mux(is_fp32 & is_vec, adder_7b_for_s2_qds_in_s0_spec_f32_1_0,adder_7b_for_s2_qds_in_s0_spec_f16_1_0)
-  
+
   adder_7b_for_s2_qds_in_s0_spec_f16_2(4) := adder_7b_for_s2_qds_in_s0_spec_f16_2_4
   adder_7b_for_s2_qds_in_s0_spec_f16_2(3) := adder_7b_for_s2_qds_in_s0_spec_f16_2_3
   adder_7b_for_s2_qds_in_s0_spec_f16_2(2) := adder_7b_for_s2_qds_in_s0_spec_f16_2_2
   adder_7b_for_s2_qds_in_s0_spec_f16_2(1) := adder_7b_for_s2_qds_in_s0_spec_f16_2_1
   adder_7b_for_s2_qds_in_s0_spec_f16_2(0) := adder_7b_for_s2_qds_in_s0_spec_f16_2_0
-  
+
   adder_7b_for_s2_qds_in_s0_spec_f16_3(4) := adder_7b_for_s2_qds_in_s0_spec_f16_3_4
   adder_7b_for_s2_qds_in_s0_spec_f16_3(3) := adder_7b_for_s2_qds_in_s0_spec_f16_3_3
   adder_7b_for_s2_qds_in_s0_spec_f16_3(2) := adder_7b_for_s2_qds_in_s0_spec_f16_3_2
   adder_7b_for_s2_qds_in_s0_spec_f16_3(1) := adder_7b_for_s2_qds_in_s0_spec_f16_3_1
   adder_7b_for_s2_qds_in_s0_spec_f16_3(0) := adder_7b_for_s2_qds_in_s0_spec_f16_3_0
-  
-  
-  
-  
+
+
+
+
   val nxt_quo_dig_0 = Wire(Vec(3,UInt(QUO_DIG_W.W)))
   val nxt_quo_dig_1 = Wire(Vec(3,UInt(QUO_DIG_W.W)))
   val nxt_quo_dig_2 = Wire(Vec(3,UInt(QUO_DIG_W.W)))
@@ -3042,7 +3043,7 @@ private[vector] class fpdiv_r64_block_vector(
   u_r4_qds_s0_3.io.rem_i := io.nr_f_r_6b_for_nxt_cycle_s0_qds_i(3)
   nxt_quo_dig_3(0) := u_r4_qds_s0_3.io.quo_dig_o
 
-  
+
   val nxt_f_r_s_s0_dig0 = Mux1H(
     Seq(
       nxt_quo_dig_0(0)(4),
@@ -3411,7 +3412,7 @@ private[vector] class fpdiv_r64_block_vector(
   val divisor_mul_neg_1_qds_1 = Mux(is_fp32 & io.is_vec,divisor_mul_neg_1_f32_1.tail(2).head(7),divisor_mul_neg_1_f16_1.tail(2).head(7))
   val divisor_mul_neg_2_qds_1 = Mux(is_fp32 & io.is_vec,divisor_mul_neg_2_f32_1.tail(2).head(7),divisor_mul_neg_2_f16_1.tail(2).head(7))
   if (S1_SPECULATIVE_QDS == 1) {
-    
+
     val u_r4_qds_s1_0 = Module(new r4_qds_v2_spec(QDS_ARCH = QDS_ARCH))
     u_r4_qds_s1_0.io.rem_i := io.nr_f_r_7b_for_nxt_cycle_s1_qds_i(0)
     u_r4_qds_s1_0.io.divisor_mul_pos_2_i := divisor_mul_pos_2_f16_0.tail(2).head(7)
@@ -3419,7 +3420,7 @@ private[vector] class fpdiv_r64_block_vector(
     u_r4_qds_s1_0.io.divisor_mul_neg_1_i := divisor_mul_neg_1_f16_0.tail(2).head(7)
     u_r4_qds_s1_0.io.divisor_mul_neg_2_i := divisor_mul_neg_2_f16_0.tail(2).head(7)
     u_r4_qds_s1_0.io.prev_quo_dig_i := nxt_quo_dig_0(0)
-    
+
     val u_r4_qds_s1_1 = Module(new r4_qds_v2_spec(QDS_ARCH = QDS_ARCH))
     u_r4_qds_s1_1.io.rem_i := io.nr_f_r_7b_for_nxt_cycle_s1_qds_i(1)
     u_r4_qds_s1_1.io.divisor_mul_pos_2_i := divisor_mul_pos_2_f16_1.tail(2).head(7)
@@ -3427,7 +3428,7 @@ private[vector] class fpdiv_r64_block_vector(
     u_r4_qds_s1_1.io.divisor_mul_neg_1_i := divisor_mul_neg_1_f16_1.tail(2).head(7)
     u_r4_qds_s1_1.io.divisor_mul_neg_2_i := divisor_mul_neg_2_f16_1.tail(2).head(7)
     u_r4_qds_s1_1.io.prev_quo_dig_i := nxt_quo_dig_1(0)
-    
+
     val u_r4_qds_s1_2 = Module(new r4_qds_v2_spec(QDS_ARCH = QDS_ARCH))
     u_r4_qds_s1_2.io.rem_i := io.nr_f_r_7b_for_nxt_cycle_s1_qds_i(2)
     u_r4_qds_s1_2.io.divisor_mul_pos_2_i := divisor_mul_pos_2_f16_2.tail(2).head(7)
@@ -3435,7 +3436,7 @@ private[vector] class fpdiv_r64_block_vector(
     u_r4_qds_s1_2.io.divisor_mul_neg_1_i := divisor_mul_neg_1_f16_2.tail(2).head(7)
     u_r4_qds_s1_2.io.divisor_mul_neg_2_i := divisor_mul_neg_2_f16_2.tail(2).head(7)
     u_r4_qds_s1_2.io.prev_quo_dig_i := nxt_quo_dig_2(0)
-    
+
     val u_r4_qds_s1_3 = Module(new r4_qds_v2_spec(QDS_ARCH = QDS_ARCH))
     u_r4_qds_s1_3.io.rem_i := io.nr_f_r_7b_for_nxt_cycle_s1_qds_i(3)
     u_r4_qds_s1_3.io.divisor_mul_pos_2_i := divisor_mul_pos_2_f16_3.tail(2).head(7)
@@ -3443,7 +3444,7 @@ private[vector] class fpdiv_r64_block_vector(
     u_r4_qds_s1_3.io.divisor_mul_neg_1_i := divisor_mul_neg_1_f16_3.tail(2).head(7)
     u_r4_qds_s1_3.io.divisor_mul_neg_2_i := divisor_mul_neg_2_f16_3.tail(2).head(7)
     u_r4_qds_s1_3.io.prev_quo_dig_i := nxt_quo_dig_3(0)
-    
+
     val u_r4_qds_s1_4 = Module(new r4_qds_v2_spec(QDS_ARCH = QDS_ARCH))
     u_r4_qds_s1_4.io.rem_i := io.nr_f_r_7b_for_nxt_cycle_s1_qds_i(0)
     u_r4_qds_s1_4.io.divisor_mul_pos_2_i := divisor_mul_pos_2_f16_1.tail(2).head(7)
@@ -3451,7 +3452,7 @@ private[vector] class fpdiv_r64_block_vector(
     u_r4_qds_s1_4.io.divisor_mul_neg_1_i := divisor_mul_neg_1_f16_1.tail(2).head(7)
     u_r4_qds_s1_4.io.divisor_mul_neg_2_i := divisor_mul_neg_2_f16_1.tail(2).head(7)
     u_r4_qds_s1_4.io.prev_quo_dig_i := nxt_quo_dig_0(0)
-    
+
     val u_r4_qds_s1_5 = Module(new r4_qds_v2_spec(QDS_ARCH = QDS_ARCH))
     u_r4_qds_s1_5.io.rem_i := io.nr_f_r_7b_for_nxt_cycle_s1_qds_i(1)
     u_r4_qds_s1_5.io.divisor_mul_pos_2_i := divisor_mul_pos_2_f16_3.tail(2).head(7)
@@ -3459,7 +3460,7 @@ private[vector] class fpdiv_r64_block_vector(
     u_r4_qds_s1_5.io.divisor_mul_neg_1_i := divisor_mul_neg_1_f16_3.tail(2).head(7)
     u_r4_qds_s1_5.io.divisor_mul_neg_2_i := divisor_mul_neg_2_f16_3.tail(2).head(7)
     u_r4_qds_s1_5.io.prev_quo_dig_i := nxt_quo_dig_1(0)
-    
+
     val u_r4_qds_s1_6 = Module(new r4_qds_v2_spec(QDS_ARCH = QDS_ARCH))
     u_r4_qds_s1_6.io.rem_i := io.nr_f_r_7b_for_nxt_cycle_s1_qds_i(0)
     u_r4_qds_s1_6.io.divisor_mul_pos_2_i := divisor_mul_pos_2_f16_3.tail(2).head(7)
@@ -3485,7 +3486,7 @@ private[vector] class fpdiv_r64_block_vector(
     nxt_quo_dig_3(1) := u_r4_qds_s1_3.io.quo_dig_o
   }
 
-  
+
   val nxt_f_r_s_s1_dig0 = Mux1H(
     Seq(
       nxt_quo_dig_0(1)(4),
@@ -3922,7 +3923,7 @@ private[vector] class fpdiv_r64_block_vector(
   adder_8b_for_nxt_cycle_s1_qds_spec_f16_3(0) := nxt_f_r_s_f16_3(1).tail(6).head(8) + nxt_f_r_c_f16_3(1).tail(6).head(8) + divisor_mul_neg_2_f16_3.tail(4).head(8)
 
   if (S2_SPECULATIVE_QDS) {
-    
+
     val u_r4_qds_s2_0 = Module(new r4_qds_v2_spec(QDS_ARCH = QDS_ARCH))
     u_r4_qds_s2_0.io.rem_i := adder_7b_res_for_s2_qds_in_s0(0)
     u_r4_qds_s2_0.io.divisor_mul_pos_2_i := divisor_mul_pos_2_qds_0
@@ -3931,7 +3932,7 @@ private[vector] class fpdiv_r64_block_vector(
     u_r4_qds_s2_0.io.divisor_mul_neg_2_i := divisor_mul_neg_2_qds_0
     u_r4_qds_s2_0.io.prev_quo_dig_i := nxt_quo_dig_0(1)
     nxt_quo_dig_0(2) := u_r4_qds_s2_0.io.quo_dig_o
-    
+
     val u_r4_qds_s2_1 = Module(new r4_qds_v2_spec(QDS_ARCH = QDS_ARCH))
     u_r4_qds_s2_1.io.rem_i := adder_7b_res_for_s2_qds_in_s0(1)
     u_r4_qds_s2_1.io.divisor_mul_pos_2_i := divisor_mul_pos_2_qds_1
@@ -3940,7 +3941,7 @@ private[vector] class fpdiv_r64_block_vector(
     u_r4_qds_s2_1.io.divisor_mul_neg_2_i := divisor_mul_neg_2_qds_1
     u_r4_qds_s2_1.io.prev_quo_dig_i := nxt_quo_dig_1(1)
     nxt_quo_dig_1(2) := u_r4_qds_s2_1.io.quo_dig_o
-    
+
     val u_r4_qds_s2_2 = Module(new r4_qds_v2_spec(QDS_ARCH = QDS_ARCH))
     u_r4_qds_s2_2.io.rem_i := adder_7b_res_for_s2_qds_in_s0(2)
     u_r4_qds_s2_2.io.divisor_mul_pos_2_i := divisor_mul_pos_2_f16_2.tail(2).head(7)
@@ -3949,7 +3950,7 @@ private[vector] class fpdiv_r64_block_vector(
     u_r4_qds_s2_2.io.divisor_mul_neg_2_i := divisor_mul_neg_2_f16_2.tail(2).head(7)
     u_r4_qds_s2_2.io.prev_quo_dig_i := nxt_quo_dig_2(1)
     nxt_quo_dig_2(2) := u_r4_qds_s2_2.io.quo_dig_o
-    
+
     val u_r4_qds_s2_3 = Module(new r4_qds_v2_spec(QDS_ARCH = QDS_ARCH))
     u_r4_qds_s2_3.io.rem_i := adder_7b_res_for_s2_qds_in_s0(3)
     u_r4_qds_s2_3.io.divisor_mul_pos_2_i := divisor_mul_pos_2_f16_3.tail(2).head(7)
@@ -3961,7 +3962,7 @@ private[vector] class fpdiv_r64_block_vector(
   }
 
 
-  
+
   val nxt_f_r_s_s2_dig0 = Mux1H(
     Seq(
       nxt_quo_dig_0(2)(4),
@@ -4280,31 +4281,31 @@ private[vector] class fpdiv_r64_block_vector(
   io.nxt_f_r_c_o(1) := nxt_f_r_c(1)
   io.nxt_f_r_c_o(2) := nxt_f_r_c(2)
 
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }
 
 private[vector] class r4_qds_v2(
