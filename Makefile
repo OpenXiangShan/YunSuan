@@ -41,11 +41,8 @@ EMU_LDFLAGS  += -lpthread -ldl
 
 EMU_LDFLAGS  += $(SOFTFLOAT)
 
-# To solve: undefined reference to sc_time_stamp with verilator 4.2 and later.
-OTHER_CFLAGS += -DVL_TIME_CONTEXT
-
 VEXTRA_FLAGS += -LDFLAGS "$(EMU_LDFLAGS)"
-VEXTRA_FLAGS += -CFLAGS "-I$(EMU_CSRC_DIR) $(SOFTFLOAT_HEADER) $(EMU_CXXFLAGS) $(OTHER_CFLAGS)"
+VEXTRA_FLAGS += -CFLAGS "-I$(EMU_CSRC_DIR) $(SOFTFLOAT_HEADER) $(EMU_CXXFLAGS)"
 
 VERILATOR_FLAGS = --top-module $(TOP) \
 	--assert \
