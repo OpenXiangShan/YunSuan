@@ -92,3 +92,4 @@ class VIntAdderTest extends AnyFlatSpec with ChiselScalatestTester with Matchers
     }
   }
 }
+

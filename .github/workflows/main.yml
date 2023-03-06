@@ -34,3 +34,9 @@ jobs:
       - name: builtin-chiseltest
         run: |
           make test
+
+      - name: Random Unit-Test
+        run: |
+          make clean
+          make emu
+          ./build/emu -O 10000

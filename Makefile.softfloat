@@ -1,0 +1,14 @@
+SOFTFLOAT_REPO_PATH = $(abspath resource/softfloat/repo)
+ifeq ($(wildcard $(SOFTFLOAT_REPO_PATH)/COPYING.txt),)
+  $(shell git clone --depth=1 https://github.com/ucb-bar/berkeley-softfloat-3 $(SOFTFLOAT_REPO_PATH))
+endif
+SOFTFLOAT_BUILD_PATH = $(abspath $(SOFTFLOAT_REPO_PATH)/build/Linux-x86_64-GCC)
+SOFTFLOAT = $(SOFTFLOAT_BUILD_PATH)/softfloat.a
+
+SPECIALIZE_TYPE = RISCV
+SOFTFLOAT_TYPE_PATH = $(SOFTFLOAT_REPO_PATH)/source/$(SPECIALIZE_TYPE)
+
+SOFTFLOAT_HEADER = -I$(SOFTFLOAT_REPO_PATH)/source/include -I$(SOFTFLOAT_BUILD_PATH) -I$(SOFTFLOAT_TYPE_PATH)
+
+$(SOFTFLOAT):
+	SPECIALIZE_TYPE=$(SPECIALIZE_TYPE) $(SOFTFLOAT_OPTS_OVERRIDE) $(MAKE) -s -C $(SOFTFLOAT_BUILD_PATH) all
