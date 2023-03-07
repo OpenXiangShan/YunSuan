@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branched: [ master ]
+
+jobs:
+  builtin-test:
+    runs-on: ubuntu-20.04
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Setup Scala
+        uses: olafurpg/setup-scala@v10
+
+      - name: Cache
+        id: cache
+        uses: coursier/cache-action@v5
+
+      - name: Verilator
+        run: sudo apt install verilator
+
+      - name: Setup Mill
+        uses: jodersky/setup-mill@v0.2.3
+        with:
+          mill-version: 0.9.8
+
+      - name: builtin-chiseltest
+        run: |
+          make test
+
+      - name: Random Unit-Test
+        run: |
+          make clean
+          make emu
+          ./build/emu -O 10000
