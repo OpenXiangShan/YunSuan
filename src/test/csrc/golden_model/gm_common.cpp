@@ -27,7 +27,7 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
         printf("VPU Golden Modle, bad sew %d\n", input.sew);
         exit(1);
     }
-    if (output_part[i].fflags != 0) {
+    if (output_part[i].fflags > 0x1f) {
       printf("Bad fflags of %x, check golden model e8 %d\n", output_part[i].fflags, i);
       exit(1);
     }
