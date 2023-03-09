@@ -10,6 +10,7 @@ class VIFuInfo extends Bundle {
   val ta = Bool()
   val vlmul = UInt(3.W)
   val vl = UInt(8.W)
+  val vstart = UInt(7.W)
   val uopIdx = UInt(6.W)
   val vxrm = UInt(2.W)
 }

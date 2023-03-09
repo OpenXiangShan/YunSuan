@@ -27,6 +27,7 @@ class VIntMisc64b extends Module {
     val vs1 = Input(UInt(64.W))
     val vs2 = Input(UInt(64.W))
     val vmask = Input(UInt(8.W))
+    val narrow = Input(Bool())
 
     val vd = Output(UInt(64.W))
     val narrowVd = Output(UInt(32.W))
@@ -44,38 +45,40 @@ class VIntMisc64b extends Module {
   val vm = io.info.vm
   val signed = srcTypeVs2(3, 2) === 1.U
   val vd_sub_srcType = io.vdType(1, 0) - srcTypeVs2(1, 0)
-  val expdIdx = io.info.uopIdx
+  val expdIdx = io.info.uopIdx(2, 0)
 
   //---- Extension instructions ----
   val extSign = signed  // 0: z   1: s
   val vf2 = vd_sub_srcType === 1.U
   val vf4 = vd_sub_srcType === 2.U
-  val expdIdxOH = Seq.tabulate(8)(i => expdIdx === i.U)
+  val expdIdxOH_vf2 = Seq.tabulate(2)(i => expdIdx(0) === i.U)
+  val expdIdxOH_vf4 = Seq.tabulate(4)(i => expdIdx(1,0) === i.U)
+  val expdIdxOH_vf8 = Seq.tabulate(8)(i => expdIdx === i.U)
   val extResult = Wire(UInt(64.W))
   when (vf2) {  // sew = 16/32/64
-    extResult := Mux(eewVd.is16, BitsExtend.vector(Mux1H(expdIdxOH.take(2), UIntSplit(vs2, 32)), 64, extSign, 8),
-                 Mux(eewVd.is32, BitsExtend.vector(Mux1H(expdIdxOH.take(2), UIntSplit(vs2, 32)), 64, extSign, 16),
-                               BitsExtend.vector(Mux1H(expdIdxOH.take(2), UIntSplit(vs2, 32)), 64, extSign, 32)))
+    extResult := Mux(eewVd.is16, BitsExtend.vector(Mux1H(expdIdxOH_vf2.take(2), UIntSplit(vs2, 32)), 64, extSign, 8),
+                 Mux(eewVd.is32, BitsExtend.vector(Mux1H(expdIdxOH_vf2.take(2), UIntSplit(vs2, 32)), 64, extSign, 16),
+                               BitsExtend.vector(Mux1H(expdIdxOH_vf2.take(2), UIntSplit(vs2, 32)), 64, extSign, 32)))
   }.elsewhen (vf4) {  // sew = 32/64
-    extResult := Mux(eewVd.is32, BitsExtend.vector(Mux1H(expdIdxOH.take(4), UIntSplit(vs2, 16)), 64, extSign, 8),
-                               BitsExtend.vector(Mux1H(expdIdxOH.take(4), UIntSplit(vs2, 16)), 64, extSign, 16))
+    extResult := Mux(eewVd.is32, BitsExtend.vector(Mux1H(expdIdxOH_vf4.take(4), UIntSplit(vs2, 16)), 64, extSign, 8),
+                               BitsExtend.vector(Mux1H(expdIdxOH_vf4.take(4), UIntSplit(vs2, 16)), 64, extSign, 16))
   }.otherwise {  //vf8  sew = 64
-    extResult := BitsExtend(Mux1H(expdIdxOH, UIntSplit(vs2, 8)), 64, extSign)
+    extResult := BitsExtend(Mux1H(expdIdxOH_vf8, UIntSplit(vs2, 8)), 64, extSign)
   }
 
   //---- Bitwise Logical instructions ----
-  val bitLogicalType = Seq.tabulate(8)(i => opcode === (i + 7).U)
   val bitLogical = Mux1H(Seq(
-    bitLogicalType(0) -> (vs2 & vs1),
-    bitLogicalType(1) -> ~(vs2 & vs1),
-    bitLogicalType(2) -> (vs2 ^ ~vs1),
-    bitLogicalType(3) -> (vs2 ^ vs1),
-    bitLogicalType(4) -> (vs2 | vs1),
-    bitLogicalType(5) -> ~(vs2 | vs1),
-    bitLogicalType(6) -> (vs2 | ~vs1),
-    bitLogicalType(7) -> ~(vs2 ^ vs1),
+    (opcode === vand) -> (vs2 & vs1),
+    (opcode === vnand) -> ~(vs2 & vs1),
+    (opcode === vandn) -> (vs2 & ~vs1),
+    (opcode === vxor) -> (vs2 ^ vs1),
+    (opcode === vor) -> (vs2 | vs1),
+    (opcode === vnor) -> ~(vs2 | vs1),
+    (opcode === vorn) -> (vs2 | ~vs1),
+    (opcode === vxnor) -> ~(vs2 ^ vs1),
   ))
-  val is_bitLogical = bitLogicalType.reduce(_ || _)
+  val is_bitLogical = opcode === vand || opcode === vnand || opcode === vandn || opcode === vxor || 
+                      opcode === vor || opcode === vnor || opcode === vorn || opcode === vxnor
 
   /**
     * Shift: vsll, vsrl, vsra, vnsrl, vnsra (vssrl, vssra and vnclipu/vnclip)
@@ -133,7 +136,8 @@ class VIntMisc64b extends Module {
   // Handle narrow instruction
   val vs1Split = UIntSplit(vs1_revsByElem, 8)
   val vs1_adjust = Wire(UInt(64.W))
-  val narrow = is_shift && srcTypeVs2(1, 0) =/= io.vdType(1, 0)
+  // val narrow = is_shift && srcTypeVs2(1, 0) =/= io.vdType(1, 0)
+  val narrow = io.narrow
   when (narrow && !expdIdx(0)) {
     vs1_adjust := Cat(0.U(8.W), vs1Split(3), 0.U(8.W), vs1Split(2), 0.U(8.W), vs1Split(1), 0.U(8.W), vs1Split(0))
   }.elsewhen (narrow && expdIdx(0)) {
@@ -185,13 +189,13 @@ class VIntMisc64b extends Module {
     */
   // Adjust vmask. E.g., if sew==32: 000000ab -> aaaabbbb   
   val vmask_adjust = Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(k => 
-    Cat(Seq.tabulate(8/k)(i => Fill(k, io.vmask(k*i))))
+    Cat(Seq.tabulate(8/k)(i => Fill(k, io.vmask(k*i))).reverse)
   ))
   val mergeResult = Wire(Vec(8, UInt(8.W)))
   for (i <- 0 until 8) {
     mergeResult(i) := Mux(vmask_adjust(i), vs1(8*i+7, 8*i), vs2(8*i+7, 8*i))
   }
-  val mergeMove = Mux(vm, vs1, Cat(mergeResult.reverse))
+  val mergeMove = Mux(vm, vs1, mergeResult.asUInt)
 
   // Output arbiter
   io.vd := Mux(is_shift, shiftResult,

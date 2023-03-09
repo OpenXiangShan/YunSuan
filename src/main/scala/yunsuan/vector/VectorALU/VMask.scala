@@ -1,4 +1,3 @@
-
 package yunsuan.vector.alu
 
 import chisel3._
@@ -13,59 +12,73 @@ class VMask extends Module {
   val LaneWidth = 64
   val NLanes = VLEN/64
   val vlenb = VLEN/8
-  val io = IO(new Bundle() {
-    val vs1           = Input (UInt(VLEN.W))
-    val vs2           = Input (UInt(VLEN.W))
-    val vmask         = Input (UInt(VLEN.W))
-    val old_vd        = Input (UInt(VLEN.W))
-    val srcType       = Input (Vec(2, UInt(4.W)))  
-    val vdType        = Input (UInt(4.W))  
-    val op_code       = Input (UInt(6.W))       
-    val info          = Input(new VIFuInfo)
-    val valid         = Input(Bool())
-    val vd            = Output(UInt(VLEN.W))
+  val io = IO(new Bundle {
+    val in = Flipped(ValidIO(new VIFuInput))
+    val out = Output(new VIFuOutput)
   })
 
+val vs1 = io.in.bits.vs1
+val vs2 = VecInit(Seq.tabulate(NLanes)(i => (io.in.bits.vs2)((i+1)*LaneWidth-1, i*LaneWidth)))  
+val old_vd = VecInit(Seq.tabulate(NLanes)(i => (io.in.bits.old_vd)((i+1)*LaneWidth-1, i*LaneWidth))) 
+val vmask = VecInit(Seq.tabulate(NLanes)(i => (io.in.bits.mask)((i+1)*LaneWidth-1, i*LaneWidth)))  
+val opcode = io.in.bits.opcode
+val srcTypeVs2 = io.in.bits.srcType(0)
+val srcTypeVs1 = io.in.bits.srcType(1)
+val vdType = io.in.bits.vdType
+val vm     = io.in.bits.info.vm     
+val ma     = io.in.bits.info.ma     
+val ta     = io.in.bits.info.ta     
+val vlmul  = io.in.bits.info.vlmul   
+val vl     = io.in.bits.info.vl     
+val uopIdx = io.in.bits.info.uopIdx 
+val fire   = io.in.valid
 
-val vs2 = VecInit(Seq.tabulate(NLanes)(i => (io.vs2)((i+1)*LaneWidth-1, i*LaneWidth)))  
-val vmask = VecInit(Seq.tabulate(NLanes)(i => (io.vmask)((i+1)*LaneWidth-1, i*LaneWidth)))  
-val old_vd = VecInit(Seq.tabulate(NLanes)(i => (io.old_vd)((i+1)*LaneWidth-1, i*LaneWidth))) 
-val vm     = io.info.vm     
-val ma     = io.info.ma     
-val ta     = io.info.ta     
-val lmul   = io.info.vlmul   
-val vl     = io.info.vl     
-val uopIdx = io.info.uopIdx 
-val fire   = io.valid
+val vsew   = vdType(1,0)
+val signed = srcTypeVs2(3,2) === 1.U
+val widen  = vdType(1,0) === (srcTypeVs2(1,0) + 1.U) 
+val vsew_bytes = 1.U << vsew;
+val vsew_bits = 8.U << vsew;
+val ele_cnt = vlenb.U/vsew_bytes
+val vlRemain = Wire(UInt(8.W)) 
+val vlRemainBytes = vlRemain << vsew
+val eewVs1 = SewOH(srcTypeVs1(1, 0))
+val eewVs2 = SewOH(srcTypeVs2(1, 0))
+val eewVd = SewOH(vdType(1, 0))
+val vd_mask = (~0.U(VLEN.W))
 
-val vcpop_m  = io.op_code === VAluOpcode.vcpop 
-val vfirst_m = io.op_code === VAluOpcode.vfirst
-val vmsbf_m  = io.op_code === VAluOpcode.vmsbf 
-val vmsif_m  = io.op_code === VAluOpcode.vmsif 
-val vmsof_m  = io.op_code === VAluOpcode.vmsof 
-val viota_m  = io.op_code === VAluOpcode.viota 
-val vid_v    = io.op_code === VAluOpcode.vid   
+val vcpop_m  = opcode === VAluOpcode.vcpop 
+val vfirst_m = opcode === VAluOpcode.vfirst
+val vmsbf_m  = opcode === VAluOpcode.vmsbf 
+val vmsif_m  = opcode === VAluOpcode.vmsif 
+val vmsof_m  = opcode === VAluOpcode.vmsof 
+val viota_m  = opcode === VAluOpcode.viota 
+val vid_v    = opcode === VAluOpcode.vid   
 
 val first = Wire(Vec(NLanes, SInt(xLen.W)))
 val vmfirst = Wire(SInt(xLen.W))
 val vmsbf   = Wire(Vec(NLanes, UInt(LaneWidth.W)))
 val vmsif   = VecInit(Seq.tabulate(NLanes)(i => Cat(Cat(vmsbf.reverse) (VLEN-2, 0), 1.U)((i+1)*LaneWidth-1, i*LaneWidth)))
 val vmsof   = Wire(Vec(NLanes, UInt(LaneWidth.W)))
-
 val vd_vmsbf   = Wire(Vec(NLanes, UInt(LaneWidth.W)))
 val vd_vmsif   = Wire(Vec(NLanes, UInt(LaneWidth.W)))
 val vd_vmsof   = Wire(Vec(NLanes, UInt(LaneWidth.W)))
-
 val ohasone    = Wire(Vec(NLanes, Bool())) 
 val ihasone    = Wire(Vec(NLanes, Bool())) 
-
 val nmask    = Wire(Vec(NLanes, UInt(LaneWidth.W))) 
 val vd_nmask = Wire(Vec(NLanes, UInt(LaneWidth.W))) 
 val sbf_mask = Wire(Vec(NLanes, UInt(LaneWidth.W))) 
 val sif_mask = Wire(Vec(NLanes, UInt(LaneWidth.W))) 
 val sof_mask = Wire(Vec(NLanes, UInt(LaneWidth.W)))
-
 val vs2m = Wire(Vec(VLEN, UInt(1.W)))
+
+vlRemain := Mux((vl >= (ele_cnt * Mux(vcpop_m, uopIdx, uopIdx(5,1)))), (vl - (ele_cnt * Mux(vcpop_m, uopIdx, uopIdx(5,1)))), 0.U) 
+
+for (i<-0 until VLEN) {
+  vs2m(i) := 0.U 
+  when (fire) {
+    vs2m(i) := Cat(vs2.reverse)(i) & (Cat(vmask.reverse)(i) | vm) & (i.U < vl)
+  }
+}
 
 for (i<-0 until NLanes) {
   vmsof(i) := (~vmsbf(i)) & vmsif(i)
@@ -77,13 +90,6 @@ for (i<-0 until NLanes) {
   vd_vmsbf(i)  := vd_nmask(i) | sbf_mask(i) 
   vd_vmsif(i)  := vd_nmask(i) | sif_mask(i) 
   vd_vmsof(i)  := vd_nmask(i) | sof_mask(i) 
-}
-
-for (i<-0 until VLEN) {
-  vs2m(i) := 0.U 
-  when (fire) {
-    vs2m(i) := Cat(vs2.reverse)(i) & (Cat(vmask.reverse)(i) | vm)
-  }
 }
 
 ihasone(0) := false.B
@@ -107,36 +113,43 @@ for (i <- 0 until NLanes reverse) {
   }
 }
 
+// viota/vid/vcpop
+val vs2m_uop = Cat(vs2m.reverse) >> (ele_cnt * Mux(vcpop_m, uopIdx, uopIdx(5,1))) 
+val one_sum = vs1 
+val one_cnt = Wire(Vec(vlenb+1, UInt(64.W)))
+val vid_vd = Wire(Vec(vlenb, UInt(8.W))) 
 
-// vid
-val vsew = io.vdType(1,0)
-val vsew_bytes = 1.U << vsew
-val ele_cnt = vlenb.U/vsew_bytes
-val vid_vd = gen_index(uopIdx) 
-
-def gen_index(cnt: UInt) = {
-  val ele64 = Wire(Vec(vlenb, UInt(64.W)))
-  val vmask_index = Wire(Vec(vlenb, UInt(8.W)))
-
-  for (i<-0 until vlenb) {
-    ele64(i)  := 0.U 
-    ele64(i)  := ele_cnt * cnt + i.U/vsew_bytes
-    vmask_index(i) := 0.U
-    when (vsew === 0.U) {
-      vmask_index(i) := ele64(i)(7, 0) 
-    } .elsewhen (vsew === 1.U) {
-      vmask_index(i) := ele64(i)((i%2+1)*8-1, (i%2)*8) 
-    } .elsewhen (vsew === 2.U) {
-      vmask_index(i) := ele64(i)((i%4+1)*8-1, (i%4)*8) 
-    } .elsewhen (vsew === 3.U) {
-      vmask_index(i) := ele64(i)((i%8+1)*8-1, (i%8)*8) 
-    } 
-  }
-  vmask_index
+for (i<-0 until vlenb+1) {
+  one_cnt(i) := one_sum 
 }
 
-val vd_mask = (~0.U(VLEN.W))
-val vmask_bits = Cat(vmask.reverse) >> (ele_cnt * uopIdx)
+for (i<-0 until vlenb) {
+  vid_vd(i) := 0.U
+}
+
+for (i<-0 until vlenb) {
+  when (i.U < ele_cnt) {
+    when (vs2m_uop(i).asBool || vid_v) {
+       one_cnt(i+1) := one_cnt(i) +1.U
+    } .otherwise {
+       one_cnt(i+1) := one_cnt(i)
+    }
+  }
+}
+
+for (i<-0 until vlenb) {
+  when (vsew === 0.U) {
+    vid_vd(i) := one_cnt(i.U/vsew_bytes)(7, 0)
+  } .elsewhen (vsew === 1.U) {
+    vid_vd(i) := one_cnt(i.U/vsew_bytes)((i%2+1)*8-1, (i%2)*8)
+  } .elsewhen (vsew === 2.U) {
+    vid_vd(i) := one_cnt(i.U/vsew_bytes)((i%4+1)*8-1, (i%4)*8)
+  } .elsewhen (vsew === 3.U) {
+    vid_vd(i) := one_cnt(i.U/vsew_bytes)((i%8+1)*8-1, (i%8)*8)
+  }
+}
+
+val vmask_bits = Wire(UInt(VLEN.W)) 
 val vmask_vd_bytes = Wire(Vec(vlenb, UInt(8.W)))
 val vmask_vd_bits = Cat(vmask_vd_bytes.reverse)
 
@@ -144,8 +157,7 @@ val vmask_old_vd = Cat(old_vd.reverse) & (~vmask_vd_bits)
 val vmask_ones_vd = vd_mask & (~vmask_vd_bits)
 val vmask_vd = Mux(ma, vmask_ones_vd, vmask_old_vd)
 
-val vlRemain = Mux((vl >= (ele_cnt * uopIdx)), (vl - (ele_cnt * uopIdx)), 0.U) 
-val vlRemainBytes = vlRemain << vsew
+vmask_bits := Cat(vmask.reverse) >> (ele_cnt * uopIdx(5,1)) 
 
 for (i<-0 until vlenb) {
   vmask_vd_bytes(i) := "hff".U
@@ -165,8 +177,10 @@ val vid_tail_vd = Mux(ta, tail_ones_vd, tail_old_vd)
 val vid_tail_mask_vd = Wire(UInt(VLEN.W))
 
 vid_tail_mask_vd := 0.U 
-when (vid_v && fire) {
+when ((vid_v || viota_m) && fire && !uopIdx(0)) {
   vid_tail_mask_vd := (vid_mask_vd & vmask_tail_bits) | vid_tail_vd
+} .elsewhen ((((vid_v || viota_m) && uopIdx(0)) || vcpop_m) && fire) {
+  vid_tail_mask_vd := one_cnt(vlenb) 
 }
 
 val vd      = Wire(UInt(VLEN.W)) 
@@ -191,21 +205,19 @@ tail_vd := old_vd_vl_mask | (vd & vd_vl_mask)
 
 when ((vmsbf_m || vmsif_m || vmsof_m) && fire) {
   vd_reg := tail_vd
-} .elsewhen((vcpop_m || vfirst_m) && fire) {
+} .elsewhen (vfirst_m && fire) {
   vd_reg := Cat(0.U((VLEN-xLen).W), rd)
-} .elsewhen (vid_v && fire) {
+} .elsewhen ((vid_v || viota_m || vcpop_m) && fire) {
   vd_reg := vid_tail_mask_vd 
 }
 
 rd := 0.U
-when (vcpop_m && fire) {
-  rd := PopCount(Cat(vs2m.reverse)) 
-} .elsewhen (vfirst_m && fire) {
+when (vfirst_m && fire) {
   rd := vmfirst.asUInt 
 }
 
-io.vd := vd_reg 
-
+io.out.vd := vd_reg
+io.out.vxsat := false.B 
 }
 
 object VerilogMask extends App {
