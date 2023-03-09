@@ -1,55 +1,28 @@
+package yunsuan.vector
+
 import chisel3._
 import chisel3.util._
-import xiangshan._
-import utils._
-import utility._
+import yunsuan.util._
+import yunsuan.VectorElementFormat
+import yunsuan.vector.vpermutil._
 
-
-// vialu io
-class VIALUIO extends Bundle {
-    val vs1       = Input(UInt(VLEN.W))
-    val vs1_type  = Input(UInt(4.W))
-    val vs2       = Input(UInt(VLEN.W))
-    val vs2_type  = Input(UInt(4.W))
-    val old_vd    = Input(UInt(VLEN.W))
-    val vd_type   = Input(UInt(4.W))
-
-    val opcode    = Input(UInt(6.W))
-    val uop_idx   = Input(UInt(6.W))
-
-    val mask      = Input(UInt(VLEN.W))
-    val vm        = Input(Bool())         // 0: masked, 1: unmasked
-    val ta        = Input(Bool())         // 0: undisturbed, 1: agnostic
-    val ma        = Input(Bool())         // 0: undisturbed, 1: agnostic
-
-    val vstart    = Input(UInt(7.W))      // 0-127
-    val vl        = Input(UInt(8.W))      // 0-128
-    val vxrm      = Input(UInt(2.W))
-    val vlmul     = Input(UInt(3.W))
-
-    val is_vector = Input(Bool())
-
-    val res_vd    = Output(UInt(VLEN.W))
-}
 
 // vcompress.vm
-class CompressIO extends Bundle {
-    val os_base   = Input(UInt(8.W)) // ones_sum_base
-    val pmos      = Input(UInt(8.W)) // previous_mask_ones_sum
+class Compress(n: Int) extends VPermModule {
+    val io = IO(new VPermBundle() {
+        val os_base   = Input(UInt(8.W)) // ones_sum_base
+        val pmos      = Input(UInt(8.W)) // previous_mask_ones_sum
 
-    val vl_valid  = Input(UInt(8.W))
-    val ta        = Input(Bool())
+        val vl_valid  = Input(UInt(8.W))
+        val ta        = Input(Bool())
 
-    val mask      = Input(UInt((VLEN/8).W))
-    val src_data  = Input(UInt(VLEN.W))
-    val prev_data = Input(UInt(VLEN.W))
+        val mask      = Input(UInt((VLEN/8).W))
+        val src_data  = Input(UInt(VLEN.W))
+        val prev_data = Input(UInt(VLEN.W))
 
-    val res_data  = Output(UInt(VLEN.W))
-    val cmos_last = Output(UInt(8.W)) // current_mask_ones_sum
-}
-
-class Compress(n: Int)(implicit p: Parameters) extends XSModule {
-    val io = IO(new CompressIO)
+        val res_data  = Output(UInt(VLEN.W))
+        val cmos_last = Output(UInt(8.W)) // current_mask_ones_sum
+    })
 
     val src_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
     val prev_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
@@ -92,19 +65,13 @@ class Compress(n: Int)(implicit p: Parameters) extends XSModule {
     io.cmos_last := cmos_vec(n-1)
 }
 
-class CompressModule(implicit p: Parameters) extends XSModule {
+class CompressModule extends VPermModule {
     val io = IO(new VIALUIO)
 
-    val VFormatTable = List(
-        "b00".U -> (8.U,  16.U, 4.U),
-        "b01".U -> (16.U, 8.U,  3.U),
-        "b10".U -> (32.U, 4.U,  2.U),
-        "b11".U -> (64.U, 2.U,  1.U)
-    )
     val vformat = io.vd_type(1,0)
-    //val sew          = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._1)))
-    val elem_num     = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._2)))
-    val elem_num_pow = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._3)))
+    //val sew          = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._1)))
+    val elem_num     = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._2)))
+    val elem_num_pow = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._3)))
 
     val vs1_idx = Wire(UInt(3.W))
     when ( io.uop_idx === 0.U || io.uop_idx === 1.U ) {
@@ -146,14 +113,15 @@ class CompressModule(implicit p: Parameters) extends XSModule {
     }
     val ones_sum_base = vd_idx << elem_num_pow
 
+    val select_mask = SelectMaskN(io.vs1, 16, mask_start_idx)
     val vs1_mask = LookupTree(vformat, List(
-        "b00".U -> io.vs1(mask_start_idx + 15.U, mask_start_idx),
-        "b01".U -> ZeroExt(io.vs1(mask_start_idx + 7.U, mask_start_idx), 16),
-        "b10".U -> ZeroExt(io.vs1(mask_start_idx + 3.U, mask_start_idx), 16),
-        "b11".U -> ZeroExt(io.vs1(mask_start_idx + 1.U, mask_start_idx), 16)
+        VectorElementFormat.b -> select_mask,
+        VectorElementFormat.h -> ZeroExt(select_mask(7,0), 16),
+        VectorElementFormat.w -> ZeroExt(select_mask(3,0), 16),
+        VectorElementFormat.d -> ZeroExt(select_mask(1,0), 16)
     ))
 
-    val vlmax := LookupTree(io.vlmul, List(
+    val vlmax = LookupTree(io.vlmul, List(
         "b000".U -> elem_num,          //lmul=1
         "b001".U -> (elem_num << 1),   //lmul=2
         "b010".U -> (elem_num << 2),   //lmul=4
@@ -180,20 +148,20 @@ class CompressModule(implicit p: Parameters) extends XSModule {
         compress_module(i).prev_data := io.old_vd
     }
 
-    compress_res_data := LookupTree(vformat, List(
-        "b00".U -> compress_module_0.io.res_data,
-        "b01".U -> compress_module_1.io.res_data,
-        "b10".U -> compress_module_2.io.res_data,
-        "b11".U -> compress_module_3.io.res_data
+    val compress_res_data = LookupTree(vformat, List(
+        VectorElementFormat.b -> compress_module_0.io.res_data,
+        VectorElementFormat.h -> compress_module_1.io.res_data,
+        VectorElementFormat.w -> compress_module_2.io.res_data,
+        VectorElementFormat.d -> compress_module_3.io.res_data
     ))
-    ones_sum_res_data := LookupTree(vformat, List(
-        "b00".U -> compress_module_0.io.cmos_last,
-        "b01".U -> compress_module_1.io.cmos_last,
-        "b10".U -> compress_module_2.io.cmos_last,
-        "b11".U -> compress_module_3.io.cmos_last
+    val ones_sum_res_data = LookupTree(vformat, List(
+        VectorElementFormat.b -> compress_module_0.io.cmos_last,
+        VectorElementFormat.h -> compress_module_1.io.cmos_last,
+        VectorElementFormat.w -> compress_module_2.io.cmos_last,
+        VectorElementFormat.d -> compress_module_3.io.cmos_last
     ))
 
     val output_mask_ones_sum = (io.uop_idx === 1.U)
 
-    io.res_data := Mux(io.vstart >= io.vl, io.old_vd, Mux(output_mask_ones_sum, ZeroExt(ones_sum_res_data, VLEN), compress_res_data))
+    io.res_vd := Mux(io.vstart >= io.vl, io.old_vd, Mux(output_mask_ones_sum, ZeroExt(ones_sum_res_data, VLEN), compress_res_data))
 }

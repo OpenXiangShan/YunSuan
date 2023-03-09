@@ -1,58 +1,31 @@
+package yunsuan.vector
+
 import chisel3._
 import chisel3.util._
-import xiangshan._
-import utils._
-import utility._
+import yunsuan.util._
+import yunsuan.VectorElementFormat
+import yunsuan.vector.vpermutil._
 
-
-// vialu io
-class VIALUIO extends Bundle {
-    val vs1       = Input(UInt(VLEN.W))
-    val vs1_type  = Input(UInt(4.W))
-    val vs2       = Input(UInt(VLEN.W))
-    val vs2_type  = Input(UInt(4.W))
-    val old_vd    = Input(UInt(VLEN.W))
-    val vd_type   = Input(UInt(4.W))
-
-    val opcode    = Input(UInt(6.W))
-    val uop_idx   = Input(UInt(6.W))
-
-    val mask      = Input(UInt(VLEN.W))
-    val vm        = Input(Bool())         // 0: masked, 1: unmasked
-    val ta        = Input(Bool())         // 0: undisturbed, 1: agnostic
-    val ma        = Input(Bool())         // 0: undisturbed, 1: agnostic
-
-    val vstart    = Input(UInt(7.W))      // 0-127
-    val vl        = Input(UInt(8.W))      // 0-128
-    val vxrm      = Input(UInt(2.W))
-    val vlmul     = Input(UInt(3.W))
-
-    val is_vector = Input(Bool())
-
-    val res_vd    = Output(UInt(VLEN.W))
-}
 
 // vslideup.vx/vi
-class SlideUpLookupIO extends Bundle {
-    val slide_base     = Input(UInt(7.W))
-    val mask_start_idx = Input(UInt(7.W))
+class SlideUpLookup(n: Int) extends VPermModule {
+    val io = IO(new VPermBundle() {
+        val slide_base     = Input(UInt(7.W))
+        val mask_start_idx = Input(UInt(7.W))
 
-    val slide    = Input(UInt(XLEN.W))
-    val vstart   = Input(UInt(7.W))
-    val vl_valid = Input(UInt(8.W))
-    val vm       = Input(Bool())
-    val ta       = Input(Bool())
-    val ma       = Input(Bool())
+        val slide    = Input(UInt(XLEN.W))
+        val vstart   = Input(UInt(7.W))
+        val vl_valid = Input(UInt(8.W))
+        val vm       = Input(Bool())
+        val ta       = Input(Bool())
+        val ma       = Input(Bool())
 
-    val mask      = Input(UInt((VLEN/8).W))
-    val src_data  = Input(UInt(VLEN.W))
-    val prev_data = Input(UInt(VLEN.W))
+        val mask      = Input(UInt((VLEN/8).W))
+        val src_data  = Input(UInt(VLEN.W))
+        val prev_data = Input(UInt(VLEN.W))
 
-    val res_data  = Output(UInt(VLEN.W))
-}
-
-class SlideUpLookup(n: Int)(implicit p: Parameters) extends XSModule {
-    val io = IO(new SlideUpLookupIO)
+        val res_data  = Output(UInt(VLEN.W))
+    })
 
     val src_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
     val prev_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
@@ -83,19 +56,13 @@ class SlideUpLookup(n: Int)(implicit p: Parameters) extends XSModule {
     io.res_data := res_data_vec.reduce{ (a, b) => Cat(b, a) }
 }
 
-class SlideUpLookupModule(implicit p: Parameters) extends XSModule {
+class SlideUpLookupModule extends VPermModule {
     val io = IO(new VIALUIO)
 
-    val VFormatTable = List(
-        "b00".U -> (8.U,  16.U, 4.U),
-        "b01".U -> (16.U, 8.U,  3.U),
-        "b10".U -> (32.U, 4.U,  2.U),
-        "b11".U -> (64.U, 2.U,  1.U)
-    )
     val vformat = io.vd_type(1,0)
-    //val sew          = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._1)))
-    val elem_num     = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._2)))
-    val elem_num_pow = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._3)))
+    //val sew          = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._1)))
+    val elem_num     = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._2)))
+    val elem_num_pow = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._3)))
 
     val vd_idx = Wire(UInt(3.W))
     when ( io.uop_idx === 0.U ) {
@@ -136,7 +103,7 @@ class SlideUpLookupModule(implicit p: Parameters) extends XSModule {
         slide_base := 0.U << elem_num_pow
     }
 
-    val vlmax := LookupTree(io.vlmul, List(
+    val vlmax = LookupTree(io.vlmul, List(
         "b000".U -> elem_num,          //lmul=1
         "b001".U -> (elem_num << 1),   //lmul=2
         "b010".U -> (elem_num << 2),   //lmul=4
@@ -147,7 +114,7 @@ class SlideUpLookupModule(implicit p: Parameters) extends XSModule {
     ))
     val vl_valid = Mux(io.vl <= vlmax, io.vl, vlmax)
 
-    val mask_selected = io.mask(mask_start_idx + 15.U, mask_start_idx)
+    val mask_selected = SelectMaskN(io.mask, 16, mask_start_idx)
 
     val slide_up_module_0 = Module(new SlideUpLookup(16)) //sew=8
     val slide_up_module_1 = Module(new SlideUpLookup(8))  //sew=16
@@ -169,35 +136,33 @@ class SlideUpLookupModule(implicit p: Parameters) extends XSModule {
         slide_up_module(i).prev_data      := io.old_vd
     }
 
-    io.res_data := Mux(io.vstart >= io.vl, io.old_vd, LookupTree(vformat, List(
-        "b00".U -> slide_up_module_0.io.res_data,
-        "b01".U -> slide_up_module_1.io.res_data,
-        "b10".U -> slide_up_module_2.io.res_data,
-        "b11".U -> slide_up_module_3.io.res_data
+    io.res_vd := Mux(io.vstart >= io.vl, io.old_vd, LookupTree(vformat, List(
+        VectorElementFormat.b -> slide_up_module_0.io.res_data,
+        VectorElementFormat.h -> slide_up_module_1.io.res_data,
+        VectorElementFormat.w -> slide_up_module_2.io.res_data,
+        VectorElementFormat.d -> slide_up_module_3.io.res_data
     )))
 }
 
 // vslide1up.vx
-class Slide1UpIntIO extends Bundle {
-    val mask_start_idx = Input(UInt(7.W))
+class Slide1UpInt(n: Int) extends VPermModule {
+    val io = IO(new VPermBundle() {
+        val mask_start_idx = Input(UInt(7.W))
 
-    val slide    = Input(UInt(5.W))
-    val vstart   = Input(UInt(7.W))
-    val vl_valid = Input(UInt(8.W))
-    val vm       = Input(Bool())
-    val ta       = Input(Bool())
-    val ma       = Input(Bool())
+        val slide    = Input(UInt(5.W))
+        val vstart   = Input(UInt(7.W))
+        val vl_valid = Input(UInt(8.W))
+        val vm       = Input(Bool())
+        val ta       = Input(Bool())
+        val ma       = Input(Bool())
 
-    val mask        = Input(UInt((VLEN/8).W))
-    val src_data_lo = Input(UInt(VLEN.W))     //vs2[i-1] / rs1
-    val src_data_hi = Input(UInt(VLEN.W))     //vs2[i]
-    val prev_data   = Input(UInt(VLEN.W))
+        val mask        = Input(UInt((VLEN/8).W))
+        val src_data_lo = Input(UInt(VLEN.W))     //vs2[i-1] / rs1
+        val src_data_hi = Input(UInt(VLEN.W))     //vs2[i]
+        val prev_data   = Input(UInt(VLEN.W))
 
-    val res_data    = Output(UInt(VLEN.W))
-}
-
-class Slide1UpInt(n: Int)(implicit p: Parameters) extends XSModule {
-    val io = IO(new Slide1UpIntIO)
+        val res_data    = Output(UInt(VLEN.W))
+    })
 
     val src_data_hi_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
     val src_data_lo_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
@@ -231,23 +196,17 @@ class Slide1UpInt(n: Int)(implicit p: Parameters) extends XSModule {
     io.res_data := res_data_vec.reduce{ (a, b) => Cat(b, a) }
 }
 
-class Slide1UpIntModule(implicit p: Parameters) extends XSModule {
+class Slide1UpIntModule extends VPermModule {
     val io = IO(new VIALUIO)
 
-    val VFormatTable = List(
-        "b00".U -> (8.U,  16.U, 4.U),
-        "b01".U -> (16.U, 8.U,  3.U),
-        "b10".U -> (32.U, 4.U,  2.U),
-        "b11".U -> (64.U, 2.U,  1.U)
-    )
     val vformat = io.vd_type(1,0)
-    //val sew          = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._1)))
-    val elem_num     = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._2)))
-    val elem_num_pow = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._3)))
+    //val sew          = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._1)))
+    val elem_num     = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._2)))
+    val elem_num_pow = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._3)))
 
     val mask_start_idx = io.uop_idx << elem_num_pow
 
-    val vlmax := LookupTree(io.vlmul, List(
+    val vlmax = LookupTree(io.vlmul, List(
         "b000".U -> elem_num,          //lmul=1
         "b001".U -> (elem_num << 1),   //lmul=2
         "b010".U -> (elem_num << 2),   //lmul=4
@@ -258,7 +217,7 @@ class Slide1UpIntModule(implicit p: Parameters) extends XSModule {
     ))
     val vl_valid = Mux(io.vl <= vlmax, io.vl, vlmax)
 
-    val mask_selected = io.mask(mask_start_idx + 15.U, mask_start_idx)
+    val mask_selected = SelectMaskN(io.mask, 16, mask_start_idx)
 
     val slide_1_up_module_0 = Module(new Slide1UpInt(16)) //sew=8
     val slide_1_up_module_1 = Module(new Slide1UpInt(8))  //sew=16
@@ -280,36 +239,34 @@ class Slide1UpIntModule(implicit p: Parameters) extends XSModule {
         slide_1_up_module(i).prev_data      := io.old_vd
     }
 
-    io.res_data := Mux(io.vstart >= io.vl, io.old_vd, LookupTree(vformat, List(
-        "b00".U -> slide_1_up_module_0.io.res_data,
-        "b01".U -> slide_1_up_module_1.io.res_data,
-        "b10".U -> slide_1_up_module_2.io.res_data,
-        "b11".U -> slide_1_up_module_3.io.res_data
+    io.res_vd := Mux(io.vstart >= io.vl, io.old_vd, LookupTree(vformat, List(
+        VectorElementFormat.b -> slide_1_up_module_0.io.res_data,
+        VectorElementFormat.h -> slide_1_up_module_1.io.res_data,
+        VectorElementFormat.w -> slide_1_up_module_2.io.res_data,
+        VectorElementFormat.d -> slide_1_up_module_3.io.res_data
     )))
 }
 
 // vslidedown.vx/vi
-class SlideDownLookupIO extends Bundle {
-    val slide_base      = Input(UInt(7.W))
-    val mask_start_idx  = Input(UInt(7.W))
-    val first_slidedown = Input(Bool())
+class SlideDownLookup(n: Int) extends VPermModule {
+    val io = IO(new VPermBundle() {
+        val slide_base      = Input(UInt(7.W))
+        val mask_start_idx  = Input(UInt(7.W))
+        val first_slidedown = Input(Bool())
 
-    val slide    = Input(UInt(XLEN.W))
-    val vstart   = Input(UInt(7.W))
-    val vl_valid = Input(UInt(8.W))
-    val vm       = Input(Bool())
-    val ta       = Input(Bool())
-    val ma       = Input(Bool())
+        val slide    = Input(UInt(XLEN.W))
+        val vstart   = Input(UInt(7.W))
+        val vl_valid = Input(UInt(8.W))
+        val vm       = Input(Bool())
+        val ta       = Input(Bool())
+        val ma       = Input(Bool())
 
-    val mask      = Input(UInt((VLEN/8).W))
-    val src_data  = Input(UInt(VLEN.W))
-    val prev_data = Input(UInt(VLEN.W))
+        val mask      = Input(UInt((VLEN/8).W))
+        val src_data  = Input(UInt(VLEN.W))
+        val prev_data = Input(UInt(VLEN.W))
 
-    val res_data  = Output(UInt(VLEN.W))
-}
-
-class SlideDownLookup(n: Int)(implicit p: Parameters) extends XSModule {
-    val io = IO(new SlideDownLookupIO)
+        val res_data  = Output(UInt(VLEN.W))
+    })
 
     val src_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
     val prev_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
@@ -342,19 +299,13 @@ class SlideDownLookup(n: Int)(implicit p: Parameters) extends XSModule {
     io.res_data := res_data_vec.reduce{ (a, b) => Cat(b, a) }
 }
 
-class SlideDownLookupModule(implicit p: Parameters) extends XSModule {
+class SlideDownLookupModule extends VPermModule {
     val io = IO(new VIALUIO)
 
-    val VFormatTable = List(
-        "b00".U -> (8.U,  16.U, 4.U),
-        "b01".U -> (16.U, 8.U,  3.U),
-        "b10".U -> (32.U, 4.U,  2.U),
-        "b11".U -> (64.U, 2.U,  1.U)
-    )
     val vformat = io.vd_type(1,0)
-    //val sew          = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._1)))
-    val elem_num     = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._2)))
-    val elem_num_pow = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._3)))
+    //val sew          = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._1)))
+    val elem_num     = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._2)))
+    val elem_num_pow = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._3)))
 
     val vd_idx = Wire(UInt(3.W))
     when ( io.uop_idx === 35.U ) {
@@ -376,9 +327,9 @@ class SlideDownLookupModule(implicit p: Parameters) extends XSModule {
     }
     val mask_start_idx = vd_idx << elem_num_pow
 
-    val slide_base = Wire(UInt(7.W))
+    val slide_base = WireInit(0.U(7.W))
     switch (io.vlmul) {
-        is( "b101".U ) {  //lmul=1/8
+        /*is( "b101".U ) {  //lmul=1/8
             slide_base := 0.U
         }
         is( "b110".U ) {  //lmul=1/4
@@ -389,7 +340,7 @@ class SlideDownLookupModule(implicit p: Parameters) extends XSModule {
         }
         is( "b000".U ) {  //lmul=1
             slide_base := 0.U
-        }
+        }*/
         is( "b001".U ) {  //lmul=2
             when ( io.uop_idx === 0.U ) {
                 slide_base := 1.U << elem_num_pow
@@ -434,7 +385,7 @@ class SlideDownLookupModule(implicit p: Parameters) extends XSModule {
                           ((io.vlmul === "b010".U) && ((io.uop_idx === 4.U) || (io.uop_idx === 7.U) || (io.uop_idx === 9.U))) || 
                           ((io.vlmul === "b011".U) && ((io.uop_idx === 8.U) || (io.uop_idx === 15.U) || (io.uop_idx === 21.U) || (io.uop_idx === 26.U) || (io.uop_idx === 30.U) || (io.uop_idx === 33.U) || (io.uop_idx === 35.U)))
 
-    val vlmax := LookupTree(io.vlmul, List(
+    val vlmax = LookupTree(io.vlmul, List(
         "b000".U -> elem_num,          //lmul=1
         "b001".U -> (elem_num << 1),   //lmul=2
         "b010".U -> (elem_num << 2),   //lmul=4
@@ -445,7 +396,7 @@ class SlideDownLookupModule(implicit p: Parameters) extends XSModule {
     ))
     val vl_valid = Mux(io.vl <= vlmax, io.vl, vlmax)
 
-    val mask_selected = io.mask(mask_start_idx + 15.U, mask_start_idx)
+    val mask_selected = SelectMaskN(io.mask, 16, mask_start_idx)
 
     val slide_down_module_0 = Module(new SlideDownLookup(16)) //sew=8
     val slide_down_module_1 = Module(new SlideDownLookup(8))  //sew=16
@@ -468,39 +419,37 @@ class SlideDownLookupModule(implicit p: Parameters) extends XSModule {
         slide_down_module(i).prev_data       := io.old_vd
     }
 
-    io.res_data := Mux(io.vstart >= io.vl, io.old_vd, LookupTree(vformat, List(
-        "b00".U -> slide_down_module_0.io.res_data,
-        "b01".U -> slide_down_module_1.io.res_data,
-        "b10".U -> slide_down_module_2.io.res_data,
-        "b11".U -> slide_down_module_3.io.res_data
+    io.res_vd := Mux(io.vstart >= io.vl, io.old_vd, LookupTree(vformat, List(
+        VectorElementFormat.b -> slide_down_module_0.io.res_data,
+        VectorElementFormat.h -> slide_down_module_1.io.res_data,
+        VectorElementFormat.w -> slide_down_module_2.io.res_data,
+        VectorElementFormat.d -> slide_down_module_3.io.res_data
     )))
 }
 
 // vslide1down.vx
-class Slide1DownIntIO extends Bundle {
-    val mask_start_idx          = Input(UInt(7.W))
-    val ld_rs1_with_prev_res    = Input(Bool())
-    val ld_rs1_without_prev_res = Input(Bool())
-    val slide1down_from_vs1     = Input(Bool())
+class Slide1DownInt(n: Int) extends VPermModule {
+    val io = IO(new VPermBundle() {
+        val mask_start_idx          = Input(UInt(7.W))
+        val ld_rs1_with_prev_res    = Input(Bool())
+        val ld_rs1_without_prev_res = Input(Bool())
+        val slide1down_from_vs1     = Input(Bool())
 
-    val slide    = Input(UInt(5.W))
-    val vstart   = Input(UInt(7.W))
-    val vl       = Input(UInt(8.W))
-    val vl_valid = Input(UInt(8.W))
-    val vm       = Input(Bool())
-    val ta       = Input(Bool())
-    val ma       = Input(Bool())
+        val slide    = Input(UInt(5.W))
+        val vstart   = Input(UInt(7.W))
+        val vl       = Input(UInt(8.W))
+        val vl_valid = Input(UInt(8.W))
+        val vm       = Input(Bool())
+        val ta       = Input(Bool())
+        val ma       = Input(Bool())
 
-    val mask        = Input(UInt((VLEN/8).W))
-    val src_data_lo = Input(UInt(VLEN.W))     //vs2[i]
-    val src_data_hi = Input(UInt(VLEN.W))     //vs2[i+1] / rs1
-    val prev_data   = Input(UInt(VLEN.W))
+        val mask        = Input(UInt((VLEN/8).W))
+        val src_data_lo = Input(UInt(VLEN.W))     //vs2[i]
+        val src_data_hi = Input(UInt(VLEN.W))     //vs2[i+1] / rs1
+        val prev_data   = Input(UInt(VLEN.W))
 
-    val res_data    = Output(UInt(VLEN.W))
-}
-
-class Slide1DownInt(n: Int)(implicit p: Parameters) extends XSModule {
-    val io = IO(new Slide1DownIntIO)
+        val res_data    = Output(UInt(VLEN.W))
+    })
 
     val src_data_hi_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
     val src_data_lo_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
@@ -537,19 +486,13 @@ class Slide1DownInt(n: Int)(implicit p: Parameters) extends XSModule {
     io.res_data := res_data_vec.reduce{ (a, b) => Cat(b, a) }
 }
 
-class Slide1DownIntModule(implicit p: Parameters) extends XSModule {
+class Slide1DownIntModule extends VPermModule {
     val io = IO(new VIALUIO)
 
-    val VFormatTable = List(
-        "b00".U -> (8.U,  16.U, 4.U),
-        "b01".U -> (16.U, 8.U,  3.U),
-        "b10".U -> (32.U, 4.U,  2.U),
-        "b11".U -> (64.U, 2.U,  1.U)
-    )
     val vformat = io.vd_type(1,0)
-    //val sew          = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._1)))
-    val elem_num     = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._2)))
-    val elem_num_pow = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._3)))
+    //val sew          = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._1)))
+    val elem_num     = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._2)))
+    val elem_num_pow = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._3)))
 
     val mask_start_idx = (io.uop_idx >> 1) << elem_num_pow
 
@@ -566,7 +509,7 @@ class Slide1DownIntModule(implicit p: Parameters) extends XSModule {
                               ((io.vlmul === "b011".U) && (io.uop_idx === 6.U)) || 
                               (io.uop_idx === 8.U) || (io.uop_idx === 10.U) || (io.uop_idx === 12.U)
 
-    val vlmax := LookupTree(io.vlmul, List(
+    val vlmax = LookupTree(io.vlmul, List(
         "b000".U -> elem_num,          //lmul=1
         "b001".U -> (elem_num << 1),   //lmul=2
         "b010".U -> (elem_num << 2),   //lmul=4
@@ -577,7 +520,7 @@ class Slide1DownIntModule(implicit p: Parameters) extends XSModule {
     ))
     val vl_valid = Mux(io.vl <= vlmax, io.vl, vlmax)
 
-    val mask_selected = io.mask(mask_start_idx + 15.U, mask_start_idx)
+    val mask_selected = SelectMaskN(io.mask, 16, mask_start_idx)
 
     val slide_1_down_module_0 = Module(new Slide1DownInt(16)) //sew=8
     val slide_1_down_module_1 = Module(new Slide1DownInt(8))  //sew=16
@@ -603,10 +546,10 @@ class Slide1DownIntModule(implicit p: Parameters) extends XSModule {
         slide_1_down_module(i).prev_data               := io.old_vd
     }
 
-    io.res_data := Mux(io.vstart >= io.vl, io.old_vd, LookupTree(vformat, List(
-        "b00".U -> slide_1_down_module_0.io.res_data,
-        "b01".U -> slide_1_down_module_1.io.res_data,
-        "b10".U -> slide_1_down_module_2.io.res_data,
-        "b11".U -> slide_1_down_module_3.io.res_data
+    io.res_vd := Mux(io.vstart >= io.vl, io.old_vd, LookupTree(vformat, List(
+        VectorElementFormat.b -> slide_1_down_module_0.io.res_data,
+        VectorElementFormat.h -> slide_1_down_module_1.io.res_data,
+        VectorElementFormat.w -> slide_1_down_module_2.io.res_data,
+        VectorElementFormat.d -> slide_1_down_module_3.io.res_data
     )))
 }

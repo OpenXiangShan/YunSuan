@@ -1,61 +1,34 @@
+package yunsuan.vector
+
 import chisel3._
 import chisel3.util._
-import xiangshan._
-import utils._
-import utility._
+import yunsuan.util._
+import yunsuan.VectorElementFormat
+import yunsuan.vector.vpermutil._
 
-
-// vialu io
-class VIALUIO extends Bundle {
-    val vs1       = Input(UInt(VLEN.W))
-    val vs1_type  = Input(UInt(4.W))
-    val vs2       = Input(UInt(VLEN.W))
-    val vs2_type  = Input(UInt(4.W))
-    val old_vd    = Input(UInt(VLEN.W))
-    val vd_type   = Input(UInt(4.W))
-
-    val opcode    = Input(UInt(6.W))
-    val uop_idx   = Input(UInt(6.W))
-
-    val mask      = Input(UInt(VLEN.W))
-    val vm        = Input(Bool())         // 0: masked, 1: unmasked
-    val ta        = Input(Bool())         // 0: undisturbed, 1: agnostic
-    val ma        = Input(Bool())         // 0: undisturbed, 1: agnostic
-
-    val vstart    = Input(UInt(7.W))      // 0-127
-    val vl        = Input(UInt(8.W))      // 0-128
-    val vxrm      = Input(UInt(2.W))
-    val vlmul     = Input(UInt(3.W))
-
-    val is_vector = Input(Bool())
-
-    val res_vd    = Output(UInt(VLEN.W))
-}
 
 // vrgather.vv vd, vs2, vs1, vm
 // vrgather.vi vd, vs2, uimm, vm
-class VRGatherLookupIO extends Bundle {
-    val table_range_min = Input(UInt(7.W))
-    val table_range_max = Input(UInt(8.W))
-    val mask_start_idx  = Input(UInt(7.W))
-    val first_gather    = Input(Bool())
+class VRGatherLookup(n: Int) extends VPermModule {
+    val io = IO(new VPermBundle() {
+        val table_range_min = Input(UInt(7.W))
+        val table_range_max = Input(UInt(8.W))
+        val mask_start_idx  = Input(UInt(7.W))
+        val first_gather    = Input(Bool())
 
-    val vstart   = Input(UInt(7.W))
-    val vl_valid = Input(UInt(8.W))
-    val vm       = Input(Bool())
-    val ta       = Input(Bool())
-    val ma       = Input(Bool())
+        val vstart   = Input(UInt(7.W))
+        val vl_valid = Input(UInt(8.W))
+        val vm       = Input(Bool())
+        val ta       = Input(Bool())
+        val ma       = Input(Bool())
 
-    val mask       = Input(UInt((VLEN/8).W))
-    val index_data = Input(UInt(VLEN.W))    //vs1
-    val table_data = Input(UInt(VLEN.W))    //vs2
-    val prev_data  = Input(UInt(VLEN.W))
+        val mask       = Input(UInt((VLEN/8).W))
+        val index_data = Input(UInt(VLEN.W))    //vs1
+        val table_data = Input(UInt(VLEN.W))    //vs2
+        val prev_data  = Input(UInt(VLEN.W))
 
-    val res_data   = Output(UInt(VLEN.W))
-}
-
-class VRGatherLookup(n: Int)(implicit p: Parameters) extends XSModule {
-    val io = IO(new VRGatherLookupIO)
+        val res_data   = Output(UInt(VLEN.W))
+    })
 
     val index_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
     val table_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
@@ -91,28 +64,26 @@ class VRGatherLookup(n: Int)(implicit p: Parameters) extends XSModule {
 }
 
 // vrgather.vx vd, vs2, rs1, vm
-class VRGatherLookupVXIO extends Bundle {
-    val table_range_min = Input(UInt(7.W))
-    val table_range_max = Input(UInt(8.W))
-    val mask_start_idx  = Input(UInt(7.W))
-    val first_gather    = Input(Bool())
+class VRGatherLookupVX(n: Int) extends VPermModule {
+    val io = IO(new VPermBundle() {
+        val table_range_min = Input(UInt(7.W))
+        val table_range_max = Input(UInt(8.W))
+        val mask_start_idx  = Input(UInt(7.W))
+        val first_gather    = Input(Bool())
 
-    val vstart   = Input(UInt(7.W))
-    val vl_valid = Input(UInt(8.W))
-    val vm       = Input(Bool())
-    val ta       = Input(Bool())
-    val ma       = Input(Bool())
+        val vstart   = Input(UInt(7.W))
+        val vl_valid = Input(UInt(8.W))
+        val vm       = Input(Bool())
+        val ta       = Input(Bool())
+        val ma       = Input(Bool())
 
-    val mask       = Input(UInt((VLEN/8).W))
-    val index_data = Input(UInt(XLEN.W))    //vs1[63:0]
-    val table_data = Input(UInt(VLEN.W))    //vs2
-    val prev_data  = Input(UInt(VLEN.W))
+        val mask       = Input(UInt((VLEN/8).W))
+        val index_data = Input(UInt(XLEN.W))    //vs1[63:0]
+        val table_data = Input(UInt(VLEN.W))    //vs2
+        val prev_data  = Input(UInt(VLEN.W))
 
-    val res_data   = Output(UInt(VLEN.W))
-}
-
-class VRGatherLookupVX(n: Int)(implicit p: Parameters) extends XSModule {
-    val io = IO(new VRGatherLookupVXIO)
+        val res_data   = Output(UInt(VLEN.W))
+    })
 
     val table_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
     val prev_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
@@ -145,19 +116,13 @@ class VRGatherLookupVX(n: Int)(implicit p: Parameters) extends XSModule {
     io.res_data := res_data_vec.reduce{ (a, b) => Cat(b, a) }
 }
 
-class VRGatherLookupModule(implicit p: Parameters) extends XSModule {
+class VRGatherLookupModule extends VPermModule {
     val io = IO(new VIALUIO)
 
-    val VFormatTable = List(
-        "b00".U -> (8.U,  16.U, 4.U),
-        "b01".U -> (16.U, 8.U,  3.U),
-        "b10".U -> (32.U, 4.U,  2.U),
-        "b11".U -> (64.U, 2.U,  1.U)
-    )
     val vformat = io.vd_type(1,0)
-    //val sew          = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._1)))
-    val elem_num     = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._2)))
-    val elem_num_pow = LookupTree(vformat, VFormatTable.map(p => (p._1, p._2._3)))
+    //val sew          = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._1)))
+    val elem_num     = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._2)))
+    val elem_num_pow = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._3)))
 
     val vd_idx = Wire(UInt(3.W))
     when ( (56.U <= io.uop_idx) && (io.uop_idx <= 63.U) ) {
@@ -205,7 +170,7 @@ class VRGatherLookupModule(implicit p: Parameters) extends XSModule {
     val table_range_min = table_idx << elem_num_pow
     val table_range_max = (table_idx +& 1.U) << elem_num_pow
 
-    val vlmax := LookupTree(io.vlmul, List(
+    val vlmax = LookupTree(io.vlmul, List(
         "b000".U -> elem_num,          //lmul=1
         "b001".U -> (elem_num << 1),   //lmul=2
         "b010".U -> (elem_num << 2),   //lmul=4
@@ -216,7 +181,7 @@ class VRGatherLookupModule(implicit p: Parameters) extends XSModule {
     ))
     val vl_valid = Mux(io.vl <= vlmax, io.vl, vlmax)
 
-    val mask_selected = io.mask(mask_start_idx + 15.U, mask_start_idx)
+    val mask_selected = SelectMaskN(io.mask, 16, mask_start_idx)
 
     // vrgather.vv/vi
     val gather_lookup_module_0 = Module(new VRGatherLookup(16)) //sew=8
@@ -241,10 +206,10 @@ class VRGatherLookupModule(implicit p: Parameters) extends XSModule {
         gather_lookup_module(i).prev_data        := io.old_vd
     }
     val gather_res_data = LookupTree(vformat, List(
-        "b00".U -> gather_lookup_module_0.io.res_data,
-        "b01".U -> gather_lookup_module_1.io.res_data,
-        "b10".U -> gather_lookup_module_2.io.res_data,
-        "b11".U -> gather_lookup_module_3.io.res_data
+        VectorElementFormat.b -> gather_lookup_module_0.io.res_data,
+        VectorElementFormat.h -> gather_lookup_module_1.io.res_data,
+        VectorElementFormat.w -> gather_lookup_module_2.io.res_data,
+        VectorElementFormat.d -> gather_lookup_module_3.io.res_data
     ))
 
     // vrgather.vx
@@ -270,11 +235,11 @@ class VRGatherLookupModule(implicit p: Parameters) extends XSModule {
         gather_vx_lookup_module(i).prev_data        := io.old_vd
     }
     val gather_vx_res_data = LookupTree(vformat, List(
-        "b00".U -> gather_vx_lookup_module_0.io.res_data,
-        "b01".U -> gather_vx_lookup_module_1.io.res_data,
-        "b10".U -> gather_vx_lookup_module_2.io.res_data,
-        "b11".U -> gather_vx_lookup_module_3.io.res_data
+        VectorElementFormat.b -> gather_vx_lookup_module_0.io.res_data,
+        VectorElementFormat.h -> gather_vx_lookup_module_1.io.res_data,
+        VectorElementFormat.w -> gather_vx_lookup_module_2.io.res_data,
+        VectorElementFormat.d -> gather_vx_lookup_module_3.io.res_data
     ))
 
-    io.res_data := Mux(io.vstart >= io.vl, io.old_vd, Mux(io.opcode === 50.U, gather_res_data, gather_vx_res_data))
+    io.res_vd := Mux(io.vstart >= io.vl, io.old_vd, Mux(io.opcode === 50.U, gather_res_data, gather_vx_res_data))
 }
