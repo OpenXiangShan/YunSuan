@@ -93,3 +93,92 @@ class VIntAdderTest extends AnyFlatSpec with ChiselScalatestTester with Matchers
   }
 }
 
+class VSlideUpLookupTest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
+
+  behavior of "YunSuan VectorSlideUpLookup"
+  it should "pass the syntax" in {
+    test(new SlideUpLookupModule()).withAnnotations(Seq(
+      VerilatorBackendAnnotation,
+      VerilatorFlags(Seq()),
+      // WriteVcdAnnotation,
+      // TargetDirAnnotation("./build"),
+    )) { dut =>
+      dut.clock.step(10)
+    }
+  }
+}
+
+class VSlide1UpIntTest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
+
+  behavior of "YunSuan VectorSlide1UpInt"
+  it should "pass the syntax" in {
+    test(new Slide1UpIntModule()).withAnnotations(Seq(
+      VerilatorBackendAnnotation,
+      VerilatorFlags(Seq()),
+      // WriteVcdAnnotation,
+      // TargetDirAnnotation("./build"),
+    )) { dut =>
+      dut.clock.step(10)
+    }
+  }
+}
+
+class VSlideDownLookupTest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
+
+  behavior of "YunSuan VectorSlideDownLookup"
+  it should "pass the syntax" in {
+    test(new SlideDownLookupModule()).withAnnotations(Seq(
+      VerilatorBackendAnnotation,
+      VerilatorFlags(Seq()),
+      // WriteVcdAnnotation,
+      // TargetDirAnnotation("./build"),
+    )) { dut =>
+      dut.clock.step(10)
+    }
+  }
+}
+
+class VSlide1DownIntTest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
+
+  behavior of "YunSuan VectorSlide1DownInt"
+  it should "pass the syntax" in {
+    test(new Slide1DownIntModule()).withAnnotations(Seq(
+      VerilatorBackendAnnotation,
+      VerilatorFlags(Seq()),
+      // WriteVcdAnnotation,
+      // TargetDirAnnotation("./build"),
+    )) { dut =>
+      dut.clock.step(10)
+    }
+  }
+}
+
+class VRGatherLookupTest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
+
+  behavior of "YunSuan VectorRegGatherLookup"
+  it should "pass the syntax" in {
+    test(new VRGatherLookupModule()).withAnnotations(Seq(
+      VerilatorBackendAnnotation,
+      VerilatorFlags(Seq()),
+      // WriteVcdAnnotation,
+      // TargetDirAnnotation("./build"),
+    )) { dut =>
+      dut.clock.step(10)
+    }
+  }
+}
+
+class VCompressTest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
+
+  behavior of "YunSuan VectorCompress"
+  it should "pass the syntax" in {
+    test(new CompressModule()).withAnnotations(Seq(
+      VerilatorBackendAnnotation,
+      VerilatorFlags(Seq()),
+      // WriteVcdAnnotation,
+      // TargetDirAnnotation("./build"),
+    )) { dut =>
+      dut.clock.step(10)
+    }
+  }
+}
