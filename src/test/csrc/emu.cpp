@@ -88,7 +88,7 @@ Emulator::Emulator(int argc, const char *argv[]):
     tfp = new VerilatedVcdC;
     dut_ptr->trace(tfp, 99);
     time_t now = time(NULL);
-    tfp->open(waveform_filename(now));
+    tfp->open(waveform_filename(now,"_dump_wave"));
   }
 #endif
   
@@ -101,7 +101,7 @@ Emulator::~Emulator() {
 }
 
 
-int Emulator::single_cycle () {
+int Emulator::single_cycle() {
 
   dut_ptr->clock = 0;
   dut_ptr->eval();
@@ -115,8 +115,9 @@ int Emulator::single_cycle () {
         tfp->dump(cycles);
       }
     }
+    cycles ++;
   #endif
-  cycles ++;
+
 
   dut_ptr->clock = 1;
   dut_ptr->eval();
@@ -135,6 +136,29 @@ int Emulator::single_cycle () {
     operations += 1;
   }
   return trap_code;
+}
+
+void Emulator::dummy_single_cycle() {
+  dut_ptr->clock = 0;
+  dut_ptr->eval();
+  #if VM_TRACE == 1
+    if (args.enable_waveform) {
+      if (args.log_begin <= cycles && cycles <= args.log_end) {
+        tfp->dump(cycles);
+      }
+    }
+  cycles ++;
+  #endif
+  dut_ptr->clock = 1;
+  dut_ptr->eval();
+  #if VM_TRACE == 1
+    if (args.enable_waveform) {
+      if (args.log_begin <= cycles && cycles <= args.log_end) {
+        tfp->dump(cycles);
+      }
+    }
+  #endif
+  cycles ++;
 }
 
 void Emulator::reset_ncycles(size_t cycle) {
@@ -172,7 +196,7 @@ bool Emulator::execute() {
     trap_code = single_cycle();
     if ((trap_code != STATE_RUNNING) && (trap_code != STATE_FINISH_OPERATION)) {
       // after bad trap, dump more 10 cycles
-      for(int post=0; post<10; post++) single_cycle();
+      for(int post=0; post<5; post++) dummy_single_cycle();
       break;
     }
   }
@@ -194,14 +218,15 @@ bool Emulator::execute() {
     tfp = new VerilatedVcdC;
     dut_ptr->trace(tfp, 99);
     time_t now = time(NULL);
-    tfp->open(waveform_filename(now));
+    tfp->open(waveform_filename(now,"_re_execute"));
 #endif
+    cycles = 0;
     test_driver.verbose_exec();
     test_driver.keep_input();
-    test_driver.display_ref_input();
-    test_driver.display_ref_output();
+    reset_ncycles(5);
+    test_driver.gen_next_test_case(); // set issued true -> false
     execute_operations(1);
-    test_driver.display_dut();
+    for(int post=0; post<5; post++) dummy_single_cycle();
 #if VM_TRACE == 1
     tfp->close();
 #endif
@@ -220,10 +245,12 @@ inline char* Emulator::timestamp_filename(time_t t, char *buf) {
   return buf + len;
 }
 
-inline char* Emulator::waveform_filename(time_t t) {
+inline char* Emulator::waveform_filename(time_t t, const char *s) {
   static char buf[1024];
   char *p = timestamp_filename(t, buf);
-  strcpy(p, ".vcd");
+  char suffix[100];
+  snprintf(suffix, 100, "%s.vcd", s);
+  snprintf(p, 1024, "%s", suffix);
   printf("dump wave to %s...\n", buf);
   return buf;
 }
