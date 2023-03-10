@@ -41,14 +41,15 @@ private:
   uint64_t cycles;
   uint64_t operations;
   inline char* timestamp_filename(time_t t, char *buf);
-  inline char* waveform_filename(time_t t);
+  inline char* waveform_filename(time_t t, const char *s);
 public:
   Emulator(int argc, const char *argv[]);
   ~Emulator();
 
   EmuArgs get_args() const { return args; }
 
-  int single_cycle ();
+  int single_cycle();
+  void dummy_single_cycle();
   void reset_ncycles(size_t cycles);
   bool execute();
   int execute_operations(uint64_t ops);

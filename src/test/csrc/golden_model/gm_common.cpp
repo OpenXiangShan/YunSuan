@@ -12,9 +12,6 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
   int number = (128 / 8) >> sew;
   int half_number = number >> 1;
   int result_shift_len = 8 << sew;
-  int fflags_shift_len;
-  if (sew == 0) { fflags_shift_len = 5; }
-  else { fflags_shift_len = 5 << (sew - 1); }
 
   VecOutput output;
   ElementOutput output_part[number];
@@ -39,7 +36,7 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
     output.fflags[i] = 0;
     for (int j = 0; j < half_number; j++) {
       output.result[i] += (uint64_t)output_part[i*half_number+j].result << (j*result_shift_len);
-      output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << (j*5);//(j*fflags_shift_len);
+      output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << (j*5);
       if (verbose) {
         printf("%s::%s ResultJoint i:%d j:%d result:%lx fflags:%x\n", typeid(this).name(), __func__,i,j,output.result[i], output.fflags[i]);
       }
