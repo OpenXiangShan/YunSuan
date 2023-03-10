@@ -26,11 +26,6 @@ class MiscToFixP extends Bundle {
 
 class VFixPoint64b extends Module {
   val io = IO(new Bundle {
-    // val uop = Input(new VExpdUOp)
-    // val ctrl = Input(new Bundle {
-    //   val sew = new SewOH
-    //   val sub = Bool()
-    // })
     val opcode = Input(UInt(6.W))
     val info = Input(new VIFuInfo)
     val sew = Input(new SewOH)
@@ -39,11 +34,9 @@ class VFixPoint64b extends Module {
     val isNClip = Input(Bool())
     val fromAdder = Input(new AdderToFixP)
     val fromMisc = Input(new MiscToFixP)
-    val out = Output(new Bundle {
-      val vd = UInt(64.W)
-      val narrow = UInt(32.W)
-      val vxsat = Bool()
-    })
+    val vd = Output(UInt(64.W))
+    val narrowVd = Output(UInt(32.W))
+    val vxsat = Output(Bool())
   })
 
   val opcode = io.opcode
@@ -220,7 +213,7 @@ class VFixPoint64b extends Module {
   val nclipResult32 = narrowClip(afterRndUInt, 32)
   val nclipResult16 = UIntSplit(afterRndUInt, 32).map(x => narrowClip(x, 16))
   val nclipResult8 = UIntSplit(afterRndUInt, 16).map(x => narrowClip(x, 8))
-  io.out.narrow := Mux1H(Seq(
+  io.narrowVd := Mux1H(Seq(
     sew.is32 -> nclipResult32._1,
     sew.is16 -> Cat(nclipResult16.map(_._1).reverse),
     sew.is8  -> Cat(nclipResult8.map(_._1).reverse),
@@ -233,7 +226,7 @@ class VFixPoint64b extends Module {
   
   // io.out.vxsat := Mux(uop.ctrl.fixP && funct6(3) === funct6(2), 
                       // Mux(funct6(3), nclipSat, sat.reduce(_ || _)), false.B)
-  io.out.vxsat := Mux(io.isNClip, nclipSat, 
+  io.vxsat := Mux(io.isNClip, nclipSat, 
                       Mux(opcode === vsadd || opcode === vssub, sat.reduce(_ || _), false.B))
-  io.out.vd := Mux(opcode === vsadd || opcode === vssub, Cat(vdSat.reverse), afterRndUInt)
+  io.vd := Mux(opcode === vsadd || opcode === vssub, Cat(vdSat.reverse), afterRndUInt)
 }
