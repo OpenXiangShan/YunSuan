@@ -25,6 +25,7 @@ class VectorIntAdder() extends Module {
     val int_format = Input(VectorElementFormat()) // 0->int8,1->int16,2->int32,3->int64
     val op_code = Input(OpType())
     val uop_index = Input(OpType())
+    val rm_s = Input(UInt(2.W))
     val carry_or_borrow_in = Input(UInt(8.W))
     val carry_or_borrow_or_compare_out = Output(UInt(8.W))
     val out = Output(UInt(n.W))

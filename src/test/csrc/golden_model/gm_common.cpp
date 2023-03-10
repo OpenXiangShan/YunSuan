@@ -1,6 +1,8 @@
 #include "../include/gm_common.h"
 #include <typeinfo>
 
+#define	GET_BIT(x, bit)	((x & (1 << bit)) >> bit)
+
 VPUGoldenModel::VPUGoldenModel():
   verbose(false)
 {}
@@ -85,6 +87,7 @@ ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
       printf("VPU Golden Modle, bad sew %d\n", input.sew);
       exit(1);
   }
+  element.src4 = (uint64_t)GET_BIT(input16->src4[0], idx);
   element.fuOpType = input.fuOpType;
   element.src_widen = input.src_widen;
   element.widen = input.widen;
