@@ -30,7 +30,7 @@ class VPUTestBundle extends Bundle with VSPParameter
 class VPUTestModule extends Module with VSPParameter
 
 class VSTInputIO extends VPUTestBundle {
-  val src = Vec(3, Vec(VLEN/XLEN, UInt(XLEN.W)))
+  val src = Vec(4, Vec(VLEN/XLEN, UInt(XLEN.W)))
   val fuType = UInt(5.W)
   val fuOpType = UInt(8.W)
   val sew = UInt(2.W)
@@ -39,6 +39,7 @@ class VSTInputIO extends VPUTestBundle {
   val widen = Bool()
 
   val rm = UInt(3.W)
+  val rm_s = UInt(2.W)
 }
 
 class VSTOutputIO extends VPUTestBundle {
@@ -86,8 +87,8 @@ class SimTop() extends VPUTestModule {
   val finish_uncertain = Wire(Bool())
   val is_uncertain = (in.fuType === VPUTestFuType.vfd)
 
-  val (sew, rm, fuType, opcode, src_widen, widen) = (
-    in.sew, in.rm, in.fuType, in.fuOpType,
+  val (sew, rm, rm_s, fuType, opcode, src_widen, widen) = (
+    in.sew, in.rm, in.rm_s, in.fuType, in.fuOpType,
     in.src_widen, in.widen
   )
 
@@ -145,7 +146,19 @@ class SimTop() extends VPUTestModule {
     via.io.int_format := sew
     via.io.op_code := opcode
     via.io.uop_index := DontCare // TODO: add it
-    via.io.carry_or_borrow_in := DontCare
+    via.io.rm_s := rm_s
+    //via.io.carry_or_borrow_in := MuxLookUp(sew, 0.U, Seq(0.U -> (in.src(3)(0) >> (8 * i))(7, 0), 1.U -> (in.src(3)(0) >> (4 * i))(7, 0), 2.U -> (in.src(3)(0) >> (2 * i))(7, 0), 3.U -> (in.src(3)(0) >> i)(7, 0)))
+    when(sew === 0.U) {
+      via.io.carry_or_borrow_in := (in.src(3)(0) >> (8 * i))(7, 0)
+    }.elsewhen(sew === 1.U) {
+      via.io.carry_or_borrow_in := (in.src(3)(0) >> (4 * i))(7, 0)
+    }.elsewhen(sew === 2.U) {
+      via.io.carry_or_borrow_in := (in.src(3)(0) >> (2 * i))(7, 0)
+    }.elsewhen(sew === 3.U) {
+      via.io.carry_or_borrow_in := (in.src(3)(0) >> (i))(7, 0)
+    }.otherwise {
+      via.io.carry_or_borrow_in := 0.U
+    }
     via_result.result(i) := via.io.out
     via_result.fflags(i) := 0.U // DontCare
 

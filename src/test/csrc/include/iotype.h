@@ -5,12 +5,14 @@ struct VecInput {
   uint64_t src1[2];
   uint64_t src2[2];
   uint64_t src3[2];
+  uint64_t src4[2];
   uint8_t fuType; // only 5bits(or 2bits?)
   uint8_t fuOpType;
   uint8_t sew; // only 2 bits
   bool src_widen;
   bool widen;
   uint8_t rm; // only 3 bits
+  uint8_t rm_s; //only 2 bits
 };
 
 struct VecOutput {
@@ -22,36 +24,42 @@ struct VecInputE8 {
   uint8_t src1[16];
   uint8_t src2[16];
   uint8_t src3[16];
+  uint8_t src4[16];
   uint8_t fuType; // only 5bits(or 2bits?)
   uint8_t fuOpType;
   uint8_t sew; // only 2 bits
   bool src_widen;
   bool widen;
   uint8_t rm; // only 3 bits
+  uint8_t rm_s; //only 2 bits
 };
 
 struct VecInputE16 {
   uint16_t src1[8];
   uint16_t src2[8];
   uint16_t src3[8];
+  uint16_t src4[8];
   uint8_t fuType; // only 5bits(or 2bits?)
   uint8_t fuOpType;
   uint8_t sew; // only 2 bits
   bool src_widen;
   bool widen;
   uint8_t rm; // only 3 bits
+  uint8_t rm_s; //only 2 bits
 };
 
 struct VecInputE32 {
   uint32_t src1[4];
   uint32_t src2[4];
   uint32_t src3[4];
+  uint32_t src4[4];
   uint8_t fuType; // only 5bits(or 2bits?)
   uint8_t fuOpType;
   uint8_t sew; // only 2 bits
   bool src_widen;
   bool widen;
   uint8_t rm; // only 3 bits
+  uint8_t rm_s; //only 2 bits
 };
 
 struct VecOutputE8 {
@@ -80,10 +88,12 @@ struct ElementInput {
   uint64_t src1;
   uint64_t src2;
   uint64_t src3;
+  uint64_t src4;
   uint8_t fuOpType;
   bool src_widen;
   bool widen;
   uint8_t rm;
+  uint8_t rm_s;
 };
 
 #endif
