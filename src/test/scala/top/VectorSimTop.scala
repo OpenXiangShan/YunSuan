@@ -65,11 +65,10 @@ class SimTop() extends VPUTestModule {
   io.in.ready := !busy
   io.out.bits := out
 
-  when (has_issued) { has_issued := true.B }
+  has_issued := busy
   when (io.in.fire()) {
     counter := 0.U
     busy := true.B
-    has_issued := false.B
     in := io.in.bits
     latency := LookupTreeDefault(io.in.bits.fuType, 999.U, List(
       VPUTestFuType.vfa -> VFA_latency.U,

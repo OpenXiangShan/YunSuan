@@ -81,9 +81,6 @@ Emulator::Emulator(int argc, const char *argv[]):
   srand48(args.seed);
 
   Verilated::randReset(2);
-  reset_ncycles(10);
-
-  test_driver.set_default_value(dut_ptr);
 
 #if VM_TRACE == 1
   if (args.enable_waveform) {
@@ -94,7 +91,9 @@ Emulator::Emulator(int argc, const char *argv[]):
     tfp->open(waveform_filename(now));
   }
 #endif
-
+  
+  test_driver.set_default_value(dut_ptr);
+  reset_ncycles(10);
 }
 
 Emulator::~Emulator() {
@@ -107,23 +106,31 @@ int Emulator::single_cycle () {
   dut_ptr->clock = 0;
   dut_ptr->eval();
 
-#if VM_TRACE == 1
-  if (args.enable_waveform) {
-    if (args.log_begin <= cycles && cycles <= args.log_end) {
-      tfp->dump(cycles);
-    }
-  }
-#endif
-
   // clock posedge, assign value
   test_driver.assign_input_raising(dut_ptr);
+
+  #if VM_TRACE == 1
+    if (args.enable_waveform) {
+      if (args.log_begin <= cycles && cycles <= args.log_end) {
+        tfp->dump(cycles);
+      }
+    }
+  #endif
+  cycles ++;
 
   dut_ptr->clock = 1;
   dut_ptr->eval();
 
+  #if VM_TRACE == 1
+    if (args.enable_waveform) {
+      if (args.log_begin <= cycles && cycles <= args.log_end) {
+        tfp->dump(cycles);
+      }
+    }
+  #endif
+  cycles ++;
   // check result
   int trap_code = test_driver.diff_output_falling(dut_ptr);
-  cycles ++;
   if (trap_code == STATE_FINISH_OPERATION || trap_code == STATE_BADTRAP) {
     operations += 1;
   }
@@ -135,10 +142,18 @@ void Emulator::reset_ncycles(size_t cycle) {
     dut_ptr->reset = 1;
     dut_ptr->clock = 0;
     dut_ptr->eval();
+    #if VM_TRACE == 1
+      tfp->dump(cycles);
+    #endif
+    cycles++;
     dut_ptr->clock = 1;
     dut_ptr->eval();
-    dut_ptr->reset = 0;
+    #if VM_TRACE == 1
+      tfp->dump(cycles);
+    #endif
+    cycles++;
   }
+  dut_ptr->reset = 0;
 }
 
 int Emulator::execute_operations(uint64_t ops) {
@@ -155,7 +170,11 @@ bool Emulator::execute() {
   int trap_code;
   while ((cycles < args.max_cycles) && (operations < args.max_operations)) {
     trap_code = single_cycle();
-    if ((trap_code != STATE_RUNNING) && (trap_code != STATE_FINISH_OPERATION)) break;
+    if ((trap_code != STATE_RUNNING) && (trap_code != STATE_FINISH_OPERATION)) {
+      // after bad trap, dump more 10 cycles
+      for(int post=0; post<10; post++) single_cycle();
+      break;
+    }
   }
 
 #if VM_TRACE == 1

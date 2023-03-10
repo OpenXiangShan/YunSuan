@@ -2419,9 +2419,9 @@ class VectorFloatDivider() extends Module {
   val fflags_vec_2 = Cat(op_invalid_div_q(2),divided_by_zero_q(2),fflags_overflow_2,fflags_underflow_2,fflags_inexact_2)
   val fflags_vec_3 = Cat(op_invalid_div_q(3),divided_by_zero_q(3),fflags_overflow_3,fflags_underflow_3,fflags_inexact_3)
   io.fflags_o := Cat(
-    fflags_vec_3,
-    fflags_vec_2,
-    fflags_vec_1,
+    Mux(is_vec_q & fp_format_q_is_fp16, fflags_vec_3, 0.U(5.W)),
+    Mux(is_vec_q & fp_format_q_is_fp16, fflags_vec_2, 0.U(5.W)),
+    Mux(is_vec_q & (fp_format_q_is_fp32 | fp_format_q_is_fp16), fflags_vec_1, 0.U(5.W)),
     fflags_scalar
   )
 //  io.fflags_o := Cat(
