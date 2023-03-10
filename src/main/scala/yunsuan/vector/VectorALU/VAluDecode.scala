@@ -62,29 +62,30 @@ object VAluOpcode {
 
 import VAluOpcode._
 
-object VIntFixpMISC {
-                      //           misc
-                      //         sub |
-                      //          |  |
-  val default =          BitPat("b?  1")
+object VIntFixpTable {
+                   //           misc
+                   //         sub | cmp
+                   //          |  |  |
+  val default =       BitPat("b?  1  0")
   val table   = Seq(
-    BitPat(vadd)   -> BitPat("b0  0"),
-    BitPat(vsub)   -> BitPat("b1  0"),
-    BitPat(vadc)   -> BitPat("b0  0"),
-    BitPat(vmadc)  -> BitPat("b0  0"),
-    BitPat(vsbc)   -> BitPat("b1  0"),
-    BitPat(vmsbc)  -> BitPat("b1  0"),
-    BitPat(vmseq)  -> BitPat("b?  0"),
-    BitPat(vmsne)  -> BitPat("b?  0"),
-    BitPat(vmslt)  -> BitPat("b1  0"),
-    BitPat(vmsle)  -> BitPat("b1  0"),
-    BitPat(vmsgt)  -> BitPat("b1  0"),
-    BitPat(vmin)   -> BitPat("b1  0"),
-    BitPat(vmax)   -> BitPat("b1  0"),
-    BitPat(vsadd)  -> BitPat("b0  0"),
-    BitPat(vssub)  -> BitPat("b1  0"),
-    BitPat(vaadd)  -> BitPat("b0  0"),
-    BitPat(vasub)  -> BitPat("b1  0"),
+    BitPat(vadd)   -> BitPat("b0  0  0"),
+    BitPat(vsub)   -> BitPat("b1  0  0"),
+    BitPat(vsub)   -> BitPat("b1  0  0"),
+    BitPat(vadc)   -> BitPat("b0  0  0"),
+    BitPat(vmadc)  -> BitPat("b0  0  1"),
+    BitPat(vsbc)   -> BitPat("b1  0  0"),
+    BitPat(vmsbc)  -> BitPat("b1  0  1"),
+    BitPat(vmseq)  -> BitPat("b?  0  1"),
+    BitPat(vmsne)  -> BitPat("b?  0  1"),
+    BitPat(vmslt)  -> BitPat("b1  0  1"),
+    BitPat(vmsle)  -> BitPat("b1  0  1"),
+    BitPat(vmsgt)  -> BitPat("b1  0  1"),
+    BitPat(vmin)   -> BitPat("b1  0  0"),
+    BitPat(vmax)   -> BitPat("b1  0  0"),
+    BitPat(vsadd)  -> BitPat("b0  0  0"),
+    BitPat(vssub)  -> BitPat("b1  0  0"),
+    BitPat(vaadd)  -> BitPat("b0  0  0"),
+    BitPat(vasub)  -> BitPat("b1  0  0"),
   )
 }
 
