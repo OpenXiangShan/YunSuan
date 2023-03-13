@@ -35,6 +35,7 @@ private:
   TestType test_type;
   bool issued;
 
+  VGMFloatAdder vfa;
   VGMFloatDivider vfd;
   VGMIntegerALU valu;
 
