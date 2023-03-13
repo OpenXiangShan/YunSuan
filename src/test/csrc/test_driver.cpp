@@ -28,8 +28,8 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 void TestDriver::set_test_type() {
   test_type.pick_fuType = true;
   test_type.pick_fuOpType = true;
-  test_type.fuType = VIntegerALU;
-  test_type.fuOpType = VRSUB;
+  test_type.fuType = VFloatAdder;
+  test_type.fuOpType = VFADD;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 void TestDriver::gen_next_test_case(/*type wanted*/) {
@@ -54,10 +54,25 @@ void TestDriver::get_random_input() {
   else { input.fuType = test_type.fuType; }
   if (!test_type.pick_fuOpType) { input.fuOpType = rand() % 2; }
   else { input.fuOpType = test_type.fuOpType; }
-  input.sew = rand() % 4;//rand() & 0x3; // TODO
-  input.src_widen = false;
-  input.widen = false;
-  input.rm = RM_RDN; // TODO
+
+  if (test_type.fuType < 3) { input.sew = (rand() % 3) + 1; } // float point, don't have sew=0
+  else input.sew = rand() % 4;
+
+  if (input.sew > 1 && test_type.fuType == VFloatAdder && test_type.fuOpType == VFADD){ // only result is f32/f64 support widen
+    input.widen = (rand() % 2) == 0;
+    if (input.widen) input.src_widen = (rand() % 2) == 0;
+    else input.widen = false;
+  } 
+  else {
+    input.widen = false;
+    input.src_widen = false;
+  }
+
+  // input.sew = 2;
+  // input.widen = true;
+  // input.src_widen = true;
+
+  input.rm = rand() % 5;
   input.rm_s = rand() % 5;
 }
 
@@ -66,6 +81,9 @@ void TestDriver::get_expected_output() {
     case VIntegerALU:
       if (verbose) { printf("FuType:%d, choose VIntegerALU %d\n", input.fuType, VIntegerALU); }
       expect_output = valu.get_expected_output(input); return;
+    case VFloatAdder:
+      if (verbose) { printf("FuType:%d, choose VFloatAdder %d\n", input.fuType, VFloatAdder); }
+      expect_output = vfa.get_expected_output(input); return;
     case VFloatDivider:
       if (verbose) { printf("FuType:%d, choose VFloatDivider %d\n", input.fuType, VFloatDivider); }
       expect_output = vfd.get_expected_output(input); return;
