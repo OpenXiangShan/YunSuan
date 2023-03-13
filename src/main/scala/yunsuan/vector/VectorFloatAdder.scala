@@ -99,16 +99,17 @@ class VectorFloatAdder() extends Module {
   val U_F16_3_result = U_F16_3.io.fp_c
   val U_F16_3_fflags = U_F16_3.io.fflags
 
-  val res_is_f16 = io.fp_format === 0.U
-  val res_is_f32 = io.fp_format === 1.U
-  val res_is_f64 = io.fp_format === 2.U
+  val res_is_f16 = fp_format === 0.U
+  val res_is_f32 = fp_format === 1.U
+  val res_is_f64 = fp_format === 2.U
   io.fp_f64_result := U_F64_Widen_0_result
   io.fp_f32_result := Cat(U_F32_1_result,U_F32_0_result)
   io.fp_f16_result := Cat(U_F16_3_result,U_F16_2_result,U_F16_1_result,U_F16_0_result)
+  val is_vec_reg = RegNext(io.is_vec)
   io.fflags := Cat(
-    U_F16_3_fflags,
-    U_F16_2_fflags,
-    Mux(RegNext(res_is_f32),U_F32_1_fflags,U_F16_1_fflags),
+    Fill(5,is_vec_reg & res_is_f16) & U_F16_3_fflags,
+    Fill(5,is_vec_reg & res_is_f16) & U_F16_2_fflags,
+    Fill(5,is_vec_reg & !res_is_f64) & Mux(RegNext(res_is_f32),U_F32_1_fflags,U_F16_1_fflags),
     Mux(
       RegNext(res_is_f64),
       U_F64_Widen_0_fflags,
