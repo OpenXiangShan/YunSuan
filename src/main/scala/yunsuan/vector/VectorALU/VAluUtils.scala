@@ -3,7 +3,6 @@ package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
-import yunsuan.vector.SewOH
 
 object UIntSplit {
   //Split into elements, e.g., if sew=8, UInt(64.W) => Seq(UInt(8.W) * 8)
@@ -68,11 +67,11 @@ object TailGen {
   def apply(vl: UInt, uopIdx: UInt, eew: SewOH): UInt = {
     val tail = Wire(UInt(16.W))
     // vl - uopIdx * 128/eew
-    val nElemRemain = vl - Mux1H(eew.oneHot, Seq(4,3,2,1).map(x => Cat(uopIdx(2, 0), 0.U(x.W))))
+    val nElemRemain = Cat(0.U(1.W), vl) - Mux1H(eew.oneHot, Seq(4,3,2,1).map(x => Cat(uopIdx(2, 0), 0.U(x.W))))
     val maxNElemInOneUop = Mux1H(eew.oneHot, Seq(16.U, 8.U, 4.U, 2.U))
     val vl_width = vl.getWidth
     require(vl_width == 8)
-    when (nElemRemain(vl_width - 1)) {
+    when (nElemRemain(vl_width)) {
       tail := ~0.U(16.W)
     }.elsewhen (nElemRemain >= maxNElemInOneUop) {
       tail := 0.U
@@ -88,11 +87,11 @@ object PrestartGen {
   def apply(vstart: UInt, uopIdx: UInt, eew: SewOH): UInt = {
     val prestart = Wire(UInt(16.W))
     // vstart - uopIdx * 128/eew
-    val nElemRemain = vstart - Mux1H(eew.oneHot, Seq(4,3,2,1).map(x => Cat(uopIdx(2, 0), 0.U(x.W))))
+    val nElemRemain = Cat(0.U(1.W), vstart) - Mux1H(eew.oneHot, Seq(4,3,2,1).map(x => Cat(uopIdx(2, 0), 0.U(x.W))))
     val maxNElemInOneUop = Mux1H(eew.oneHot, Seq(16.U, 8.U, 4.U, 2.U))
     val vstart_width = vstart.getWidth
     require(vstart_width == 7)
-    when (nElemRemain(vstart_width - 1)) {
+    when (nElemRemain(vstart_width)) {
       prestart := 0.U
     }.elsewhen (nElemRemain >= maxNElemInOneUop) {
       prestart := ~0.U(16.W)
