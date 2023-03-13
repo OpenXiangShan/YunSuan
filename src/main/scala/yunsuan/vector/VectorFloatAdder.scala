@@ -5,10 +5,10 @@ import chisel3.util._
 import yunsuan.{OpType, VectorElementFormat}
 
 /**
- * f16/f32/f64 vector float add/sub/min/max/compare
- * carry or borrow output
- * support fadd/fsub/fmin/fmax/fcompare instruction
- **/
+  * f16/f32/f64 vector float add/sub/min/max/compare
+  * carry or borrow output
+  * support fadd/fsub/fmin/fmax/fcompare instruction
+  **/
 class VectorFloatAdder() extends Module {
   val exponentWidth = 11
   val significandWidth = 53
@@ -29,10 +29,10 @@ class VectorFloatAdder() extends Module {
   })
   // TODO change fp_format is_vec logic
   // assert(io.fp_format=/=0.U) // TODO: add valid to enable assert
-  val fp_format = Cat(io.fp_format===3.U,io.fp_format(1))
+  val fp_format = io.fp_format-1.U //Cat(io.fp_format===3.U,io.fp_format(1))
   val is_sub = io.op_code(3) & io.op_code(0)
 
-  val hasMinMaxCompare = true
+  val hasMinMaxCompare = false
   val is_add = io.op_code(3,0) === 0.U
   val is_min = io.op_code(3,0) === 1.U
   val is_max = io.op_code(3,0) === 2.U
@@ -115,15 +115,15 @@ class VectorFloatAdder() extends Module {
       Mux(RegNext(res_is_f32),U_F32_0_fflags,U_F16_0_fflags)
     )
   )
-//    Mux(
-//    RegNext(res_is_f64),
-//    U_F64_Widen_0_fflags,
-//    Mux(
-//      RegNext(res_is_f32),
-//      U_F32_0_fflags | (Fill(5,RegNext(io.is_vec)) & U_F32_1_fflags),
-//      U_F16_0_fflags | (Fill(5,RegNext(io.is_vec)) & (U_F16_1_fflags | U_F16_2_fflags | U_F16_3_fflags))
-//    )
-//  )
+  //    Mux(
+  //    RegNext(res_is_f64),
+  //    U_F64_Widen_0_fflags,
+  //    Mux(
+  //      RegNext(res_is_f32),
+  //      U_F32_0_fflags | (Fill(5,RegNext(io.is_vec)) & U_F32_1_fflags),
+  //      U_F16_0_fflags | (Fill(5,RegNext(io.is_vec)) & (U_F16_1_fflags | U_F16_2_fflags | U_F16_3_fflags))
+  //    )
+  //  )
 }
 
 private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = false,val hasMinMaxCompare:Boolean = false) extends Module {
@@ -434,11 +434,11 @@ private[this] class FarShiftRightWithMuxInvFirst(val srcW:Int,shiftValueW:Int) e
 }
 
 private[this] class FarPathF32WidenF16MixedPipeline(
-                                       exponentWidth : Int = 8,
-                                       significandWidth : Int = 24,
-                                       val is_print:Boolean = false,
-                                       val hasMinMaxCompare:Boolean = false
-                                     ) extends Module {
+                                                     exponentWidth : Int = 8,
+                                                     significandWidth : Int = 24,
+                                                     val is_print:Boolean = false,
+                                                     val hasMinMaxCompare:Boolean = false
+                                                   ) extends Module {
   val floatWidth = exponentWidth + significandWidth
   val io = IO(new Bundle() {
     val fp_a, fp_b  = Input (UInt(floatWidth.W))
@@ -637,6 +637,7 @@ private[this] class FarPathF32WidenF16MixedPipeline(
     Cat(far_sign_result_reg,far_exponent_result_reg,far_fraction_result_reg)
   )
   if (hasMinMaxCompare) io.isEfp_bGreater := isEfp_bGreater
+  else io.isEfp_bGreater := 0.U
 }
 
 private[this] class ClosePathF32WidenF16MixedPipelineAdder(val adderWidth:Int, val adderType:String) extends Module {
@@ -676,11 +677,11 @@ private[this] class CloseShiftLeftWithMux(val srcW:Int,shiftValueW:Int) extends 
 }
 
 private[this] class ClosePathF32WidenF16MixedPipeline(
-                                         exponentWidth : Int = 8,
-                                         var significandWidth : Int = 24,
-                                         val is_print:Boolean = false,
-                                         val hasMinMaxCompare:Boolean = false
-                                       ) extends Module {
+                                                       exponentWidth : Int = 8,
+                                                       var significandWidth : Int = 24,
+                                                       val is_print:Boolean = false,
+                                                       val hasMinMaxCompare:Boolean = false
+                                                     ) extends Module {
   val floatWidth = exponentWidth + significandWidth
   val io = IO(new Bundle() {
     val fp_a, fp_b  = Input (UInt(floatWidth.W))
@@ -860,6 +861,7 @@ private[this] class ClosePathF32WidenF16MixedPipeline(
   ))
   io.fp_c := Cat(close_sign_result_reg,close_exponent_result_reg,close_fraction_result_reg)
   if (hasMinMaxCompare) io.CS1 := U_CS1.io.result
+  else io.CS1 := 0.U
 }
 
 private[this] class ShiftLeftPriorityWithF64EXPResult(val srcW:Int, priorityShiftValueW:Int, expW:Int) extends Module {
@@ -927,10 +929,10 @@ private[this] class FarPathAdderF64WidenPipeline(val AW:Int, val AdderType:Strin
 }
 
 private[this] class FarPathFloatAdderF64WidenPipeline(
-                                         exponentWidth : Int = 11,
-                                         significandWidth : Int = 53,
-                                         val is_print:Boolean = false,
-                                         val hasMinMaxCompare:Boolean = false) extends Module {
+                                                       exponentWidth : Int = 11,
+                                                       significandWidth : Int = 53,
+                                                       val is_print:Boolean = false,
+                                                       val hasMinMaxCompare:Boolean = false) extends Module {
   val floatWidth = exponentWidth + significandWidth
   val io = IO(new Bundle() {
     val fp_a, fp_b  = Input (UInt(floatWidth.W))
@@ -1095,6 +1097,7 @@ private[this] class FarPathFloatAdderF64WidenPipeline(
     Cat(far_sign_result_reg,far_exponent_result,far_fraction_result)
   )
   if (hasMinMaxCompare) io.isEfp_bGreater := isEfp_bGreater
+  else io.isEfp_bGreater := 0.U
 }
 
 
@@ -1113,10 +1116,10 @@ private[this] class ClosePathAdder(val adderWidth:Int, val adderType:String) ext
 }
 
 private[this] class ClosePathFloatAdderF64WidenPipeline(
-                                           exponentWidth : Int = 11,
-                                           var significandWidth : Int = 53,
-                                           val is_print:Boolean = false,
-                                           val hasMinMaxCompare:Boolean = false) extends Module {
+                                                         exponentWidth : Int = 11,
+                                                         var significandWidth : Int = 53,
+                                                         val is_print:Boolean = false,
+                                                         val hasMinMaxCompare:Boolean = false) extends Module {
   val floatWidth = exponentWidth + significandWidth
   val io = IO(new Bundle() {
     val fp_a, fp_b  = Input (UInt(floatWidth.W))
@@ -1287,6 +1290,7 @@ private[this] class ClosePathFloatAdderF64WidenPipeline(
   ))
   io.fp_c := Cat(close_sign_result,close_exponent_result,close_fraction_result)
   if (hasMinMaxCompare) io.CS1 := U_CS1.io.result
+  else io.CS1 := 0.U
   if (is_print){
     printf(p"*****close path*****\n")
     printf(p"CS1 = ${Binary(CS1)}\n")
@@ -1521,10 +1525,10 @@ private[this] class FarPathAdderF16Pipeline(val AW:Int, val AdderType:String, va
 }
 
 private[this] class FarPathF16Pipeline(
-                          exponentWidth : Int = 5,
-                          significandWidth : Int = 11,
-                          val is_print:Boolean = false,
-                          val hasMinMaxCompare:Boolean = false) extends Module {
+                                        exponentWidth : Int = 5,
+                                        significandWidth : Int = 11,
+                                        val is_print:Boolean = false,
+                                        val hasMinMaxCompare:Boolean = false) extends Module {
   val floatWidth = exponentWidth + significandWidth
   val io = IO(new Bundle() {
     val fp_a, fp_b  = Input (UInt(floatWidth.W))
@@ -1689,6 +1693,7 @@ private[this] class FarPathF16Pipeline(
     Cat(far_sign_result_reg,far_exponent_result,far_fraction_result)
   )
   if (hasMinMaxCompare) io.isEfp_bGreater := isEfp_bGreater
+  else io.isEfp_bGreater := 0.U
 }
 
 private[this] class ClosePathAdderF16Pipeline(val adderWidth:Int, val adderType:String) extends Module {
@@ -1706,10 +1711,10 @@ private[this] class ClosePathAdderF16Pipeline(val adderWidth:Int, val adderType:
 }
 
 private[this] class ClosePathF16Pipeline(
-                            exponentWidth : Int = 11,
-                            var significandWidth : Int = 53,
-                            val is_print:Boolean = false,
-                            val hasMinMaxCompare:Boolean = false) extends Module {
+                                          exponentWidth : Int = 11,
+                                          var significandWidth : Int = 53,
+                                          val is_print:Boolean = false,
+                                          val hasMinMaxCompare:Boolean = false) extends Module {
   val floatWidth = exponentWidth + significandWidth
   val io = IO(new Bundle() {
     val fp_a, fp_b  = Input (UInt(floatWidth.W))
@@ -1885,6 +1890,7 @@ private[this] class ClosePathF16Pipeline(
   ))
   io.fp_c := Cat(close_sign_result,close_exponent_result,close_fraction_result)
   if (hasMinMaxCompare) io.CS1 := U_CS1.io.result
+  else io.CS1 := 0.U
   if (is_print){
     printf(p"*****close path*****\n")
     printf(p"CS1 = ${Binary(CS1)}\n")
