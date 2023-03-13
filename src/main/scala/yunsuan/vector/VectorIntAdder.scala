@@ -3,7 +3,7 @@ package yunsuan.vector
 import chisel3._
 import chisel3.util._
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
-import yunsuan.{OpType, VipuType, VectorElementFormat}
+import yunsuan.{OpType, VipuType0, VectorElementFormat}
 
 /**
  * 8/16/32/64 bits vector integer add/sub/add with carry/sub with borrow
@@ -36,45 +36,45 @@ class VectorIntAdder() extends Module {
   val is_int32 = io.int_format === 2.U
   val is_int64 = io.int_format === 3.U
 
-  val is_add = io.op_code === VipuType.add  //vadd 
-  val is_sub = io.op_code === VipuType.sub || io.op_code === VipuType.rsub  //vsub vrsub 
-  val is_add_carry = io.op_code === VipuType.adc || io.op_code === VipuType.madc || io.op_code === VipuType.madc0  //vadc vmadc
-  val is_sub_borrow = io.op_code === VipuType.subBorrow  //vsbc vmsbc
-  val is_unsigned_widening_add = io.op_code === VipuType.unsignedWideningAdd  //vwaddu
-  val is_unsigned_widening_sub = io.op_code === VipuType.unsignedWideningsub  //vwsubu
-  val is_signed_widening_add = io.op_code === VipuType.signedWideningAdd  //vwadd
-  val is_signed_widening_sub = io.op_code === VipuType.signedWideningSub  //vwsub
-  val is_unsigned_widening_add_in0widening = io.op_code === VipuType.unsignedWideningAddIn0Widening  //vwaddu
-  val is_unsigned_widening_sub_in0widening = io.op_code === VipuType.unsignedWideningSubIn0Widening  //vwsubu
-  val is_signed_widening_add_in0widening = io.op_code === VipuType.signedWideningAddIn0Widening  //vwadd
-  val is_signed_widening_sub_in0widening = io.op_code === VipuType.signedWideningSubIn0Widening  //vwsub
-  val is_max_unsigned = io.op_code === VipuType.maxUnsigned  //vmaxu
-  val is_min_unsigned = io.op_code === VipuType.minUnsigned  //vminu
-  val is_max_signed = io.op_code === VipuType.maxSigned  //vmax
-  val is_min_signed = io.op_code === VipuType.minSigned  //vmin
-  val is_equal = io.op_code === VipuType.equal  //vmseq
-  val is_not_equal = io.op_code === VipuType.notEqual  //vmsne
-  val is_less_than_unsigned = io.op_code === VipuType.lessThanUnsigned  //vmsltu
-  val is_less_than_signed = io.op_code === VipuType.lessThanSigned  //vmslt
-  val is_less_than_or_equal_unsigned = io.op_code === VipuType.lessThanOrEqualUnsigned  //vmsleu
-  val is_less_than_or_equal_signed = io.op_code === VipuType.lessThanOrEqualSigned  //vmsle
-  val is_greater_than_unsigned = io.op_code === VipuType.greaterThanUnsigned  //vmsgtu
-  val is_greater_than_signed = io.op_code === VipuType.greaterThanSigned  //vmsgt
-  val is_greater_than_or_equal_unsigned = io.op_code === VipuType.greaterThanOrEqualUnsigned  //vmsgeu
-  val is_greater_than_or_equal_signed = io.op_code === VipuType.greaterThanOrEqualSigned  //vmsge
-  val is_bitwise_logical_and = io.op_code === VipuType.bitwiseLogicalAnd //vand
-  val is_bitwise_logical_nand = io.op_code === VipuType.bitwiseLogicalNand  //vnand
-  val is_bitwise_logical_andn = io.op_code === VipuType.bitwiseLogicalAndn  //vandn
-  val is_bitwise_logical_or = io.op_code === VipuType.bitwiseLogicalOr  //vor
-  val is_bitwise_logical_nor = io.op_code === VipuType.bitwiseLogicalNor  //vnor
-  val is_bitwise_logical_orn = io.op_code === VipuType.bitwiseLogicalOrn  //vorn
-  val is_bitwise_logical_xor = io.op_code === VipuType.bitwiseLogicalXor  //vxor
-  val is_bitwise_logical_xnor = io.op_code === VipuType.bitwiseLogicalXnor  //vxnor
-  val is_shift_left_logical = io.op_code === VipuType.shiftLeftLogical  //vsll
-  val is_shift_right_logical = io.op_code === VipuType.shiftRightLogical  //vsrl
-  val is_shift_right_arithmetic = io.op_code === VipuType.shiftRightArithmetic  //vsra
-  val is_scaling_shift_right_logical = io.op_code === VipuType.scalingShiftRightLogical  //vssrl
-  val is_scaling_shift_right_arithmetic =io.op_code === VipuType.scalingShiftRightArithmetic  //vssra
+  val is_add = io.op_code === VipuType0.add  //vadd 
+  val is_sub = io.op_code === VipuType0.sub || io.op_code === VipuType0.rsub  //vsub vrsub 
+  val is_add_carry = io.op_code === VipuType0.adc || io.op_code === VipuType0.madc || io.op_code === VipuType0.madc0  //vadc vmadc
+  val is_sub_borrow = io.op_code === VipuType0.subBorrow  //vsbc vmsbc
+  val is_unsigned_widening_add = io.op_code === VipuType0.unsignedWideningAdd  //vwaddu
+  val is_unsigned_widening_sub = io.op_code === VipuType0.unsignedWideningsub  //vwsubu
+  val is_signed_widening_add = io.op_code === VipuType0.signedWideningAdd  //vwadd
+  val is_signed_widening_sub = io.op_code === VipuType0.signedWideningSub  //vwsub
+  val is_unsigned_widening_add_in0widening = io.op_code === VipuType0.unsignedWideningAddIn0Widening  //vwaddu
+  val is_unsigned_widening_sub_in0widening = io.op_code === VipuType0.unsignedWideningSubIn0Widening  //vwsubu
+  val is_signed_widening_add_in0widening = io.op_code === VipuType0.signedWideningAddIn0Widening  //vwadd
+  val is_signed_widening_sub_in0widening = io.op_code === VipuType0.signedWideningSubIn0Widening  //vwsub
+  val is_max_unsigned = io.op_code === VipuType0.maxUnsigned  //vmaxu
+  val is_min_unsigned = io.op_code === VipuType0.minUnsigned  //vminu
+  val is_max_signed = io.op_code === VipuType0.maxSigned  //vmax
+  val is_min_signed = io.op_code === VipuType0.minSigned  //vmin
+  val is_equal = io.op_code === VipuType0.equal  //vmseq
+  val is_not_equal = io.op_code === VipuType0.notEqual  //vmsne
+  val is_less_than_unsigned = io.op_code === VipuType0.lessThanUnsigned  //vmsltu
+  val is_less_than_signed = io.op_code === VipuType0.lessThanSigned  //vmslt
+  val is_less_than_or_equal_unsigned = io.op_code === VipuType0.lessThanOrEqualUnsigned  //vmsleu
+  val is_less_than_or_equal_signed = io.op_code === VipuType0.lessThanOrEqualSigned  //vmsle
+  val is_greater_than_unsigned = io.op_code === VipuType0.greaterThanUnsigned  //vmsgtu
+  val is_greater_than_signed = io.op_code === VipuType0.greaterThanSigned  //vmsgt
+  val is_greater_than_or_equal_unsigned = io.op_code === VipuType0.greaterThanOrEqualUnsigned  //vmsgeu
+  val is_greater_than_or_equal_signed = io.op_code === VipuType0.greaterThanOrEqualSigned  //vmsge
+  val is_bitwise_logical_and = io.op_code === VipuType0.bitwiseLogicalAnd //vand
+  val is_bitwise_logical_nand = io.op_code === VipuType0.bitwiseLogicalNand  //vnand
+  val is_bitwise_logical_andn = io.op_code === VipuType0.bitwiseLogicalAndn  //vandn
+  val is_bitwise_logical_or = io.op_code === VipuType0.bitwiseLogicalOr  //vor
+  val is_bitwise_logical_nor = io.op_code === VipuType0.bitwiseLogicalNor  //vnor
+  val is_bitwise_logical_orn = io.op_code === VipuType0.bitwiseLogicalOrn  //vorn
+  val is_bitwise_logical_xor = io.op_code === VipuType0.bitwiseLogicalXor  //vxor
+  val is_bitwise_logical_xnor = io.op_code === VipuType0.bitwiseLogicalXnor  //vxnor
+  val is_shift_left_logical = io.op_code === VipuType0.shiftLeftLogical  //vsll
+  val is_shift_right_logical = io.op_code === VipuType0.shiftRightLogical  //vsrl
+  val is_shift_right_arithmetic = io.op_code === VipuType0.shiftRightArithmetic  //vsra
+  val is_scaling_shift_right_logical = io.op_code === VipuType0.scalingShiftRightLogical  //vssrl
+  val is_scaling_shift_right_arithmetic =io.op_code === VipuType0.scalingShiftRightArithmetic  //vssra
 
   val is_widening_add = is_unsigned_widening_add | is_unsigned_widening_add_in0widening | is_signed_widening_add_in0widening | is_signed_widening_add
   val is_widening_sub = is_unsigned_widening_sub | is_unsigned_widening_sub_in0widening | is_signed_widening_sub_in0widening | is_signed_widening_sub
