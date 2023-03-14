@@ -350,7 +350,7 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN))
     val fflags_stage0 = Cat(fflags_NV_stage0,0.U(4.W))
     io.fp_c := Mux(RegNext(is_add),float_adder_result,RegNext(result_stage0))
-    io.fflags := Mux(RegNext(is_add),float_adder_result,RegNext(fflags_stage0))
+    io.fflags := Mux(RegNext(is_add),float_adder_fflags,RegNext(fflags_stage0))
   }
   else {
     io.fp_c := float_adder_result
@@ -1515,7 +1515,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN))
     val fflags_stage0 = Cat(fflags_NV_stage0,0.U(4.W))
     io.fp_c := Mux(RegNext(is_add),float_adder_result,RegNext(result_stage0))
-    io.fflags := Mux(RegNext(is_add),float_adder_result,RegNext(fflags_stage0))
+    io.fflags := Mux(RegNext(is_add),float_adder_fflags,RegNext(fflags_stage0))
   }
   else {
     io.fp_c := float_adder_result
