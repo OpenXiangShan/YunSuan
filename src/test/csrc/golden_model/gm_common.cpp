@@ -12,7 +12,8 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
   int number = (128 / 8) >> sew;
   int half_number = number >> 1;
   int result_shift_len = 8 << sew;
-
+  softfloat_detectTininess = softfloat_tininess_afterRounding;
+  
   VecOutput output;
   ElementOutput output_part[number];
   for(int i = 0; i < number; i++) {
