@@ -91,6 +91,8 @@ extern "C"{
 
 #define VFA_NUM 10 // for random
 #define VFADD (binstoi("10000000"))
+#define VFMIN (binstoi("10000001"))
+#define VFMAX (binstoi("10000010"))
 
 // rounding mode
 #define RM_RNE (0)
