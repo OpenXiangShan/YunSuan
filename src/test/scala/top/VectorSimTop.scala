@@ -120,9 +120,7 @@ class SimTop() extends VPUTestModule {
     vfa.io.res_widening := widen
     vfa.io.op_code      := opcode
     vfa.io.is_vec       := true.B // TODO: check it
-    vfa_result.result(i) := Mux1H(
-      Seq(sew === 1.U, sew === 2.U, sew === 3.U),
-      Seq(vfa.io.fp_f16_result, vfa.io.fp_f32_result, vfa.io.fp_f64_result)) // TODO: do sew inside vfa
+    vfa_result.result(i) := vfa.io.fp_result
     vfa_result.fflags(i) := vfa.io.fflags
 
     vfd.io.start_valid_i := busy && !has_issued && fuType === VPUTestFuType.vfd
