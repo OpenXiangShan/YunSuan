@@ -93,6 +93,13 @@ extern "C"{
 #define VFADD (binstoi("10000000"))
 #define VFMIN (binstoi("10000001"))
 #define VFMAX (binstoi("10000010"))
+#define VFEQ  (binstoi("10000011"))
+#define VFNE  (binstoi("10000100"))
+#define VFLT  (binstoi("10000101"))
+#define VFLE  (binstoi("10000110"))
+#define VFGT  (binstoi("10000111"))
+#define VFGE  (binstoi("10001000"))
+#define VFSUB (binstoi("10001001"))
 
 // rounding mode
 #define RM_RNE (0)
