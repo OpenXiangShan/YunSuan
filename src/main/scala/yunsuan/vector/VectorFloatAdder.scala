@@ -263,6 +263,7 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     val is_fle = io.op_code === 6.U
     val is_fgt = io.op_code === 7.U
     val is_fge = io.op_code === 8.U
+    val is_sub = io.op_code === 9.U
     val fp_a_sign = fp_a_to32.head(1)
     val fp_b_sign = fp_b_to32.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -349,8 +350,8 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
       ((is_feq | is_fne) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN))
     val fflags_stage0 = Cat(fflags_NV_stage0,0.U(4.W))
-    io.fp_c := Mux(RegNext(is_add),float_adder_result,RegNext(result_stage0))
-    io.fflags := Mux(RegNext(is_add),float_adder_fflags,RegNext(fflags_stage0))
+    io.fp_c := Mux(RegNext(is_add | is_sub),float_adder_result,RegNext(result_stage0))
+    io.fflags := Mux(RegNext(is_add | is_sub),float_adder_fflags,RegNext(fflags_stage0))
   }
   else {
     io.fp_c := float_adder_result
@@ -1430,6 +1431,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     val is_fle = io.op_code === 6.U
     val is_fgt = io.op_code === 7.U
     val is_fge = io.op_code === 8.U
+    val is_sub = io.op_code === 9.U
     val fp_a_sign = io.fp_a.head(1)
     val fp_b_sign = io.fp_b.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -1514,8 +1516,8 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
       ((is_feq | is_fne) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN))
     val fflags_stage0 = Cat(fflags_NV_stage0,0.U(4.W))
-    io.fp_c := Mux(RegNext(is_add),float_adder_result,RegNext(result_stage0))
-    io.fflags := Mux(RegNext(is_add),float_adder_fflags,RegNext(fflags_stage0))
+    io.fp_c := Mux(RegNext(is_add | is_sub),float_adder_result,RegNext(result_stage0))
+    io.fflags := Mux(RegNext(is_add | is_sub),float_adder_fflags,RegNext(fflags_stage0))
   }
   else {
     io.fp_c := float_adder_result
@@ -1995,6 +1997,7 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
     val is_fle = io.op_code === 6.U
     val is_fgt = io.op_code === 7.U
     val is_fge = io.op_code === 8.U
+    val is_sub = io.op_code === 9.U
     val fp_a_sign = io.fp_a.head(1)
     val fp_b_sign = io.fp_b.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -2079,8 +2082,8 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
       ((is_feq | is_fne) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN))
     val fflags_stage0 = Cat(fflags_NV_stage0,0.U(4.W))
-    io.fp_c := Mux(RegNext(is_add),float_adder_result,RegNext(result_stage0))
-    io.fflags := Mux(RegNext(is_add),float_adder_fflags,RegNext(fflags_stage0))
+    io.fp_c := Mux(RegNext(is_add | is_sub),float_adder_result,RegNext(result_stage0))
+    io.fflags := Mux(RegNext(is_add | is_sub),float_adder_fflags,RegNext(fflags_stage0))
   }
   else {
     io.fp_c := float_adder_result
