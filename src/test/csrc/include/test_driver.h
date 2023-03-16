@@ -47,6 +47,13 @@ public:
   void set_default_value(VSimTop *dut_ptr);
   void set_test_type();
   void gen_next_test_case(/*type wanted*/);
+  
+  uint8_t gen_random_futype(std::initializer_list<uint8_t> futype_list);
+  uint8_t gen_random_optype();
+  uint8_t gen_random_sew();
+  bool gen_random_widen();
+  bool gen_random_src_widen();
+
   void get_random_input();
   void get_expected_output();
   uint64_t rand64();
