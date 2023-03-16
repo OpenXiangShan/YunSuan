@@ -57,7 +57,7 @@ class SlideUpLookup(n: Int) extends VPermModule {
 }
 
 class SlideUpLookupModule extends VPermModule {
-    val io = IO(new VIALUIO)
+    val io = IO(new VPermIO)
 
     val vformat = io.vd_type(1,0)
     //val sew          = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._1)))
@@ -197,7 +197,7 @@ class Slide1UpInt(n: Int) extends VPermModule {
 }
 
 class Slide1UpIntModule extends VPermModule {
-    val io = IO(new VIALUIO)
+    val io = IO(new VPermIO)
 
     val vformat = io.vd_type(1,0)
     //val sew          = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._1)))
@@ -300,7 +300,7 @@ class SlideDownLookup(n: Int) extends VPermModule {
 }
 
 class SlideDownLookupModule extends VPermModule {
-    val io = IO(new VIALUIO)
+    val io = IO(new VPermIO)
 
     val vformat = io.vd_type(1,0)
     //val sew          = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._1)))
@@ -487,7 +487,7 @@ class Slide1DownInt(n: Int) extends VPermModule {
 }
 
 class Slide1DownIntModule extends VPermModule {
-    val io = IO(new VIALUIO)
+    val io = IO(new VPermIO)
 
     val vformat = io.vd_type(1,0)
     //val sew          = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._1)))

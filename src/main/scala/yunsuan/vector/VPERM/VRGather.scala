@@ -117,7 +117,7 @@ class VRGatherLookupVX(n: Int) extends VPermModule {
 }
 
 class VRGatherLookupModule extends VPermModule {
-    val io = IO(new VIALUIO)
+    val io = IO(new VPermIO)
 
     val vformat = io.vd_type(1,0)
     //val sew          = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._1)))
@@ -241,5 +241,5 @@ class VRGatherLookupModule extends VPermModule {
         VectorElementFormat.d -> gather_vx_lookup_module_3.io.res_data
     ))
 
-    io.res_vd := Mux(io.vstart >= io.vl, io.old_vd, Mux(io.opcode === 50.U, gather_res_data, gather_vx_res_data))
+    io.res_vd := Mux(io.vstart >= io.vl, io.old_vd, Mux(io.opcode === VPermType.vrgather, gather_res_data, gather_vx_res_data))
 }
