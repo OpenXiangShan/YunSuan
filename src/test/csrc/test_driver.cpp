@@ -27,17 +27,76 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 
 void TestDriver::set_test_type() {
   test_type.pick_fuType = true;
-  test_type.pick_fuOpType = true;
+  test_type.pick_fuOpType = false;
   test_type.fuType = VFloatAdder;
   test_type.fuOpType = VFADD;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
-void TestDriver::gen_next_test_case(/*type wanted*/) {
+
+void TestDriver::gen_next_test_case() {
   issued = false;
   get_random_input();
   if (verbose) { display_ref_input(); }
   get_expected_output();
   if (verbose) { display_ref_output(); }
+}
+
+
+uint8_t TestDriver::gen_random_futype(std::initializer_list<uint8_t> futype_list) {
+  return *(futype_list.begin() + (rand() % futype_list.size()));
+}
+
+uint8_t TestDriver::gen_random_optype() {
+  switch (input.fuType)
+  {
+    case VFloatAdder: {
+      uint8_t vfadd_all_optype[VFA_NUM] = VFA_ALL_OPTYPES;
+      return vfadd_all_optype[rand() % VFA_NUM];
+      break;
+      }
+    case VFloatFMA: break;
+    case VFloatDivider: break;
+    case VIntegerALU: break;
+    default:
+      printf("Unsupported FuType %d\n", input.fuType);
+      exit(1);
+      return 0;
+  }
+  return 0;
+}
+
+uint8_t TestDriver::gen_random_sew() {
+  switch (input.fuType)
+  {
+    case VIntegerALU: return rand()%4; break;
+    default: return (rand()%3)+1; break;
+  }
+}
+
+bool TestDriver::gen_random_widen() {
+  if(input.sew > 1){
+    switch (input.fuType)
+    {
+      case VFloatAdder: {
+        if( input.fuOpType == VFADD || input.fuOpType == VFSUB )  return rand()%2 == 1; 
+        else return false;
+        break;
+        }
+      default: return false; break;
+    }
+  }
+  else return false;
+}
+
+bool TestDriver::gen_random_src_widen() {
+  if (input.widen) {
+    switch (test_type.fuType)
+    {
+      case VFloatAdder: return rand()%2 == 1; break;
+      default: return false; break;
+    }
+  }
+  else return false;
 }
 
 void TestDriver::get_random_input() {
@@ -50,24 +109,13 @@ void TestDriver::get_random_input() {
   input.src3[1] = rand64();
   input.src4[0] = rand64();
   input.src4[1] = rand64();
-  if (!test_type.pick_fuType) { input.fuType = rand(); }
+  if (!test_type.pick_fuType) { input.fuType = gen_random_futype(ALL_FUTYPES); }
   else { input.fuType = test_type.fuType; }
-  if (!test_type.pick_fuOpType) { input.fuOpType = rand() % 2; }
+  if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
   else { input.fuOpType = test_type.fuOpType; }
-
-  if (test_type.fuType < 3) { input.sew = (rand() % 3) + 1; } // float point, don't have sew=0
-  else input.sew = rand() % 4;
-
-  if (input.sew > 1 && test_type.fuType == VFloatAdder && test_type.fuOpType == VFADD){ // only result is f32/f64 support widen
-    input.widen = (rand() % 2) == 0;
-    if (input.widen) input.src_widen = (rand() % 2) == 0;
-    else input.widen = false;
-  } 
-  else {
-    input.widen = false;
-    input.src_widen = false;
-  }
-
+  input.sew = gen_random_sew();
+  input.widen = gen_random_widen();
+  input.src_widen = gen_random_src_widen();
   // input.sew = 2;
   // input.widen = true;
   // input.src_widen = true;

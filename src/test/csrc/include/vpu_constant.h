@@ -15,6 +15,7 @@ extern "C"{
 #define VFloatFMA   (1)
 #define VFloatDivider (2)
 #define VIntegerALU (3)
+#define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU}
 
 #define INT_ROUNDING(result, xrm, gb) \
   do { \
@@ -90,16 +91,20 @@ extern "C"{
 #define RM_S_ROD (3)
 
 #define VFA_NUM 10 // for random
-#define VFADD (binstoi("10000000"))
-#define VFMIN (binstoi("10000001"))
-#define VFMAX (binstoi("10000010"))
-#define VFEQ  (binstoi("10000011"))
-#define VFNE  (binstoi("10000100"))
-#define VFLT  (binstoi("10000101"))
-#define VFLE  (binstoi("10000110"))
-#define VFGT  (binstoi("10000111"))
-#define VFGE  (binstoi("10001000"))
-#define VFSUB (binstoi("10001001"))
+#define VFADD (binstoi("00000"))
+#define VFSUB (binstoi("00001"))
+#define VFMIN (binstoi("00010"))
+#define VFMAX (binstoi("00011"))
+
+#define VFEQ  (binstoi("01001"))
+#define VFNE  (binstoi("01010"))
+#define VFLT  (binstoi("01011"))
+#define VFLE  (binstoi("01100"))
+#define VFGT  (binstoi("01101"))
+#define VFGE  (binstoi("01110"))
+
+#define VFA_ALL_OPTYPES {VFADD,VFSUB,VFMIN,VFMAX,VFEQ,VFNE,VFLT,VFLE,VFGT,VFGE}
+
 
 // rounding mode
 #define RM_RNE (0)
