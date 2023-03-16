@@ -2,12 +2,28 @@ package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
-import yunsuan.{OpType, VectorElementFormat}
+import yunsuan.{VfaddOpCode, VectorElementFormat}
 
 /**
-  * f16/f32/f64 vector float add/sub/min/max/compare
-  * carry or borrow output
-  * support fadd/fsub/fmin/fmax/fcompare instruction
+  * support vfadd/vfsub/vfmin/vfmax/vfcompare instruction
+  * f16/f32/f64, widen
+  * op_code(Width=5):
+  * 0: Add
+  * 1: Sub
+  * 2: Minimum
+  * 3: Maximum
+  * 4: Floating-Point Merge // not support now
+  * 5: Floating-Point Move  // not support now
+  * 6: Sign-Injection       // not support now
+  * 7: Sign-Injection, not  // not support now
+  * 8: Sign-Injection, xor  // not support now
+  * 9: Compare, equal
+  *10: Compare, not equal
+  *11: Compare, less than
+  *12: Compare, less than or equal
+  *13: Compare, greater than
+  *14: Compare, greater than or equal
+  *15: Classify // not support now
   **/
 class VectorFloatAdder() extends Module {
   val exponentWidth = 11
@@ -20,7 +36,7 @@ class VectorFloatAdder() extends Module {
     val fp_format     = Input (VectorElementFormat()) // result format b01->fp16,b10->fp32,b11->fp64
     val opb_widening  = Input (Bool())    // ture -> opb widening
     val res_widening  = Input (Bool())    // true -> widening operation
-    val op_code       = Input (OpType())  // 0000Add 0001Min 0010Max 0011FEQ 0100FNE 0101FLT 0110FLE 0111FGT 1000FGE 1001Sub
+    val op_code       = Input (UInt(5.W))
     
     val fp_result     = Output(UInt(floatWidth.W))
     val fflags        = Output(UInt(20.W))
@@ -28,27 +44,29 @@ class VectorFloatAdder() extends Module {
   // TODO change fp_format is_vec logic
   // assert(io.fp_format=/=0.U) // TODO: add valid to enable assert
   val fp_format = io.fp_format-1.U //Cat(io.fp_format===3.U,io.fp_format(1))
-  val is_sub = io.op_code(3) & io.op_code(0)
 
   val hasMinMaxCompare = true
-  val is_add = io.op_code(3,0) === 0.U
-  val is_min = io.op_code(3,0) === 1.U
-  val is_max = io.op_code(3,0) === 2.U
-  val is_feq = io.op_code(3,0) === 3.U
-  val is_fne = io.op_code(3,0) === 4.U
-  val is_flt = io.op_code(3,0) === 5.U
-  val is_fle = io.op_code(3,0) === 6.U
-  val is_fgt = io.op_code(3,0) === 7.U
-  val is_fge = io.op_code(3,0) === 8.U
+  val is_add = io.op_code === VfaddOpCode.fadd
+  val is_sub = io.op_code === VfaddOpCode.fsub
+  val is_min = io.op_code === VfaddOpCode.fmin
+  val is_max = io.op_code === VfaddOpCode.fmax
+  val is_feq = io.op_code === VfaddOpCode.feq
+  val is_fne = io.op_code === VfaddOpCode.fne
+  val is_flt = io.op_code === VfaddOpCode.flt
+  val is_fle = io.op_code === VfaddOpCode.fle
+  val is_fgt = io.op_code === VfaddOpCode.fgt
+  val is_fge = io.op_code === VfaddOpCode.fge
+
+  val fast_is_sub = io.op_code(0)
   val U_F32_Mixed_0 = Module(new FloatAdderF32WidenF16MixedPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F32_Mixed_0.io.fp_a := io.fp_a(31,0)
   U_F32_Mixed_0.io.fp_b := io.fp_b(31,0)
-  U_F32_Mixed_0.io.is_sub := is_sub
+  U_F32_Mixed_0.io.is_sub := fast_is_sub
   U_F32_Mixed_0.io.round_mode   := io.round_mode
   U_F32_Mixed_0.io.fp_format    := fp_format
   U_F32_Mixed_0.io.res_widening := io.res_widening
   U_F32_Mixed_0.io.opb_widening := io.opb_widening
-  U_F32_Mixed_0.io.op_code      := io.op_code(3,0)
+  U_F32_Mixed_0.io.op_code      := io.op_code
   val U_F32_0_result = U_F32_Mixed_0.io.fp_c
   val U_F32_0_fflags = U_F32_Mixed_0.io.fflags
   val U_F16_0_result = U_F32_Mixed_0.io.fp_c(15,0)
@@ -57,12 +75,12 @@ class VectorFloatAdder() extends Module {
   val U_F32_Mixed_1 = Module(new FloatAdderF32WidenF16MixedPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F32_Mixed_1.io.fp_a := io.fp_a(63,32)
   U_F32_Mixed_1.io.fp_b := io.fp_b(63,32)
-  U_F32_Mixed_1.io.is_sub := is_sub
+  U_F32_Mixed_1.io.is_sub := fast_is_sub
   U_F32_Mixed_1.io.round_mode   := io.round_mode
   U_F32_Mixed_1.io.fp_format    := fp_format
   U_F32_Mixed_1.io.res_widening := io.res_widening
   U_F32_Mixed_1.io.opb_widening := io.opb_widening
-  U_F32_Mixed_1.io.op_code      := io.op_code(3,0)
+  U_F32_Mixed_1.io.op_code      := io.op_code
   val U_F32_1_result = U_F32_Mixed_1.io.fp_c
   val U_F32_1_fflags = U_F32_Mixed_1.io.fflags
   val U_F16_2_result = U_F32_Mixed_1.io.fp_c(15,0)
@@ -71,29 +89,29 @@ class VectorFloatAdder() extends Module {
   val U_F64_Widen_0 = Module(new FloatAdderF64WidenPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F64_Widen_0.io.fp_a := io.fp_a
   U_F64_Widen_0.io.fp_b := io.fp_b
-  U_F64_Widen_0.io.is_sub := is_sub
+  U_F64_Widen_0.io.is_sub := fast_is_sub
   U_F64_Widen_0.io.round_mode := io.round_mode
   U_F64_Widen_0.io.res_widening := io.res_widening
   U_F64_Widen_0.io.opb_widening := io.opb_widening
-  U_F64_Widen_0.io.op_code      := io.op_code(3,0)
+  U_F64_Widen_0.io.op_code      := io.op_code
   val U_F64_Widen_0_result = U_F64_Widen_0.io.fp_c
   val U_F64_Widen_0_fflags = U_F64_Widen_0.io.fflags
 
   val U_F16_1 = Module(new FloatAdderF16Pipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F16_1.io.fp_a := io.fp_a(31,16)
   U_F16_1.io.fp_b := io.fp_b(31,16)
-  U_F16_1.io.is_sub := is_sub
+  U_F16_1.io.is_sub := fast_is_sub
   U_F16_1.io.round_mode := io.round_mode
-  U_F16_1.io.op_code    := io.op_code(3,0)
+  U_F16_1.io.op_code    := io.op_code
   val U_F16_1_result = U_F16_1.io.fp_c
   val U_F16_1_fflags = U_F16_1.io.fflags
 
   val U_F16_3 = Module(new FloatAdderF16Pipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F16_3.io.fp_a := io.fp_a(63,48)
   U_F16_3.io.fp_b := io.fp_b(63,48)
-  U_F16_3.io.is_sub := is_sub
+  U_F16_3.io.is_sub := fast_is_sub
   U_F16_3.io.round_mode := io.round_mode
-  U_F16_3.io.op_code    := io.op_code(3,0)
+  U_F16_3.io.op_code    := io.op_code
   val U_F16_3_result = U_F16_3.io.fp_c
   val U_F16_3_fflags = U_F16_3.io.fflags
 
@@ -154,7 +172,7 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     val fp_format    = Input (UInt(2.W))
     val opb_widening = Input (Bool())
     val res_widening = Input (Bool())
-    val op_code = if (hasMinMaxCompare) Input(UInt(4.W)) else Input(UInt(0.W))
+    val op_code = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
   })
   val res_is_f32 = io.fp_format(0).asBool
   val fp_a_16as32 = Cat(io.fp_a(15), Cat(0.U(3.W),io.fp_a(14,10)), Cat(io.fp_a(9,0),0.U(13.W)))
@@ -254,16 +272,16 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     float_adder_result := out_fp32_to_fp16_or_fp32_reg
   }
   if (hasMinMaxCompare) {
-    val is_add = io.op_code === 0.U
-    val is_min = io.op_code === 1.U
-    val is_max = io.op_code === 2.U
-    val is_feq = io.op_code === 3.U
-    val is_fne = io.op_code === 4.U
-    val is_flt = io.op_code === 5.U
-    val is_fle = io.op_code === 6.U
-    val is_fgt = io.op_code === 7.U
-    val is_fge = io.op_code === 8.U
-    val is_sub = io.op_code === 9.U
+    val is_add = io.op_code === VfaddOpCode.fadd
+    val is_sub = io.op_code === VfaddOpCode.fsub
+    val is_min = io.op_code === VfaddOpCode.fmin
+    val is_max = io.op_code === VfaddOpCode.fmax
+    val is_feq = io.op_code === VfaddOpCode.feq
+    val is_fne = io.op_code === VfaddOpCode.fne
+    val is_flt = io.op_code === VfaddOpCode.flt
+    val is_fle = io.op_code === VfaddOpCode.fle
+    val is_fgt = io.op_code === VfaddOpCode.fgt
+    val is_fge = io.op_code === VfaddOpCode.fge
     val fp_a_sign = fp_a_to32.head(1)
     val fp_b_sign = fp_b_to32.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -1334,7 +1352,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     val fflags      = Output(UInt(5.W))
     val opb_widening = Input (Bool())
     val res_widening = Input (Bool())
-    val op_code = if (hasMinMaxCompare) Input(UInt(4.W)) else Input(UInt(0.W))
+    val op_code = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
   })
   val fp_a_to64_is_denormal = !io.fp_a(30,23).orR
   val fp_a_lshift = Wire(UInt(23.W))
@@ -1422,16 +1440,16 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     float_adder_result := Mux(is_far_path_reg,U_far_path.io.fp_c,U_close_path.io.fp_c)
   }
   if (hasMinMaxCompare) {
-    val is_add = io.op_code === 0.U
-    val is_min = io.op_code === 1.U
-    val is_max = io.op_code === 2.U
-    val is_feq = io.op_code === 3.U
-    val is_fne = io.op_code === 4.U
-    val is_flt = io.op_code === 5.U
-    val is_fle = io.op_code === 6.U
-    val is_fgt = io.op_code === 7.U
-    val is_fge = io.op_code === 8.U
-    val is_sub = io.op_code === 9.U
+    val is_add = io.op_code === VfaddOpCode.fadd
+    val is_sub = io.op_code === VfaddOpCode.fsub
+    val is_min = io.op_code === VfaddOpCode.fmin
+    val is_max = io.op_code === VfaddOpCode.fmax
+    val is_feq = io.op_code === VfaddOpCode.feq
+    val is_fne = io.op_code === VfaddOpCode.fne
+    val is_flt = io.op_code === VfaddOpCode.flt
+    val is_fle = io.op_code === VfaddOpCode.fle
+    val is_fgt = io.op_code === VfaddOpCode.fgt
+    val is_fge = io.op_code === VfaddOpCode.fge
     val fp_a_sign = io.fp_a.head(1)
     val fp_b_sign = io.fp_b.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -1939,7 +1957,7 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
     val is_sub      = Input (Bool())
     val round_mode  = Input (UInt(3.W))
     val fflags      = Output(UInt(5.W))
-    val op_code     = if (hasMinMaxCompare) Input(UInt(4.W)) else Input(UInt(0.W))
+    val op_code     = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
   })
   val EOP = (io.fp_a.head(1) ^ io.is_sub ^ io.fp_b.head(1)).asBool
   val U_far_path = Module(new FarPathF16Pipeline(exponentWidth = exponentWidth,significandWidth = significandWidth, is_print = is_print, hasMinMaxCompare=hasMinMaxCompare))
@@ -1988,16 +2006,16 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
     float_adder_result := Mux(RegNext(is_far_path),U_far_path.io.fp_c,U_close_path.io.fp_c)
   }
   if (hasMinMaxCompare) {
-    val is_add = io.op_code === 0.U
-    val is_min = io.op_code === 1.U
-    val is_max = io.op_code === 2.U
-    val is_feq = io.op_code === 3.U
-    val is_fne = io.op_code === 4.U
-    val is_flt = io.op_code === 5.U
-    val is_fle = io.op_code === 6.U
-    val is_fgt = io.op_code === 7.U
-    val is_fge = io.op_code === 8.U
-    val is_sub = io.op_code === 9.U
+    val is_add = io.op_code === VfaddOpCode.fadd
+    val is_sub = io.op_code === VfaddOpCode.fsub
+    val is_min = io.op_code === VfaddOpCode.fmin
+    val is_max = io.op_code === VfaddOpCode.fmax
+    val is_feq = io.op_code === VfaddOpCode.feq
+    val is_fne = io.op_code === VfaddOpCode.fne
+    val is_flt = io.op_code === VfaddOpCode.flt
+    val is_fle = io.op_code === VfaddOpCode.fle
+    val is_fgt = io.op_code === VfaddOpCode.fgt
+    val is_fge = io.op_code === VfaddOpCode.fge
     val fp_a_sign = io.fp_a.head(1)
     val fp_b_sign = io.fp_b.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
