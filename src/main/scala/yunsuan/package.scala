@@ -193,6 +193,29 @@ package object yunsuan {
     def vslide1up = "b10000001".U(OpTypeWidth.W) // vd[0]=f[rs1], vd[i+1] = vs2[i]
   }
 
+  object VfaddOpCode {
+    def dummy = "b11111".U(5.W)
+    def fadd  = "b00000".U(5.W)
+    def fsub  = "b00001".U(5.W)
+    def fmin  = "b00010".U(5.W)
+    def fmax  = "b00011".U(5.W)
+//    def fmerge  = "b00100".U(5.W)
+//    def fmove   = "b00101".U(5.W)
+//    def fSI     = "b00110".U(5.W)
+//    def fSInor  = "b00111".U(5.W)
+//    def fSIxor  = "b01000".U(5.W)
+    def feq  = "b01001".U(5.W)
+    def fne  = "b01010".U(5.W)
+    def flt  = "b01011".U(5.W)
+    def fle  = "b01100".U(5.W)
+    def fgt  = "b01101".U(5.W)
+    def fge  = "b01110".U(5.W)
+//    def fclassify = "b01111".U(5.W)
+//    def fsum_re   = "b10000".U(5.W) // unorder
+//    def fmin_re   = "b10001".U(5.W)
+//    def fmax_re   = "b10010".U(5.W)
+  }
+
   object VectorElementFormat {
     def width = 2
     def b = "b00".U(width.W)
