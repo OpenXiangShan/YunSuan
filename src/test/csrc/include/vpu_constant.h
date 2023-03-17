@@ -90,21 +90,25 @@ extern "C"{
 #define RM_S_RDN (2)
 #define RM_S_ROD (3)
 
-#define VFA_NUM 10 // for random
-#define VFADD (binstoi("00000"))
-#define VFSUB (binstoi("00001"))
-#define VFMIN (binstoi("00010"))
-#define VFMAX (binstoi("00011"))
+#define VFA_NUM 14 // for random
+#define VFADD   (binstoi("00000"))
+#define VFSUB   (binstoi("00001"))
+#define VFMIN   (binstoi("00010"))
+#define VFMAX   (binstoi("00011"))
+  
+#define VFSGNJ  (binstoi("00110"))
+#define VFSGNJN (binstoi("00111"))
+#define VFSGNJX (binstoi("01000"))
+#define VFEQ    (binstoi("01001"))
+#define VFNE    (binstoi("01010"))
+#define VFLT    (binstoi("01011"))
+#define VFLE    (binstoi("01100"))
+#define VFGT    (binstoi("01101"))
+#define VFGE    (binstoi("01110"))
+#define VFGE    (binstoi("01110"))
+#define VFCLASS (binstoi("01111"))
 
-#define VFEQ  (binstoi("01001"))
-#define VFNE  (binstoi("01010"))
-#define VFLT  (binstoi("01011"))
-#define VFLE  (binstoi("01100"))
-#define VFGT  (binstoi("01101"))
-#define VFGE  (binstoi("01110"))
-
-#define VFA_ALL_OPTYPES {VFADD,VFSUB,VFMIN,VFMAX,VFEQ,VFNE,VFLT,VFLE,VFGT,VFGE}
-
+#define VFA_ALL_OPTYPES {VFADD,VFSUB,VFMIN,VFMAX,VFSGNJ,VFSGNJN,VFSGNJX,VFEQ,VFNE,VFLT,VFLE,VFGT,VFGE,VFCLASS}
 
 // rounding mode
 #define RM_RNE (0)
