@@ -6,7 +6,7 @@ import yunsuan.util._
 import yunsuan.vector.vpermutil._
 
 
-class VPermTopModule extends VPermModule {
+class VPermTop extends VPermModule {
     val io = IO(new VPermIO)
 
     val vslideup_module    = Module(new SlideUpLookupModule)

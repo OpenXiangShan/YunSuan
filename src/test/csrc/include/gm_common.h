@@ -52,11 +52,26 @@ class VGMFloatDivider : public VGMFloatBase {
   virtual ElementOutput calculation_e64(ElementInput input);
 };
 
-class VGMIntegerALU : public VPUGoldenModel{
+class VGMIntegerALU : public VPUGoldenModel {
   virtual ElementOutput calculation_e8(ElementInput input);
   virtual ElementOutput calculation_e16(ElementInput input);
   virtual ElementOutput calculation_e32(ElementInput input);
   virtual ElementOutput calculation_e64(ElementInput input);
+};
+
+class VGMPermutation : public VPUGoldenModel {
+  public:
+    VecOutput get_expected_output(VecInput input);
+    virtual ElementOutput calculation_e8(ElementInput input);
+    virtual ElementOutput calculation_e16(ElementInput input);
+    virtual ElementOutput calculation_e32(ElementInput input);
+    virtual ElementOutput calculation_e64(ElementInput input);
+  private:
+    VecOutput get_output_vslideup(VecInput input);
+    VecOutputE8  vslideup_calculation_e8(VSlideUpInput *input);
+    VecOutputE16 vslideup_calculation_e16(VSlideUpInput *input);
+    VecOutputE32 vslideup_calculation_e32(VSlideUpInput *input);
+    VecOutput    vslideup_calculation_e64(VSlideUpInput *input);
 };
 
 #endif

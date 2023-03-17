@@ -3,7 +3,7 @@ package yunsuan.top
 import chisel3._
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 import chisel3.util._
-import yunsuan.util.LookupTreeDefault
+import yunsuan.util._
 import yunsuan.vector._
 
 trait VSPParameter {
@@ -13,6 +13,7 @@ trait VSPParameter {
   val VFF_latency: Int = 3 // TODO: check only mul and mul+add, different or not
   val VFD_latency: Int = 99
   val VFA_latency: Int = 1
+  val VPERM_latency: Int = 0
 }
 
 object VPUTestFuType { // only use in test, difftest with xs
@@ -20,26 +21,40 @@ object VPUTestFuType { // only use in test, difftest with xs
   def vff = "b0000_0001".U(8.W)
   def vfd = "b0000_0010".U(8.W)
   def via = "b0000_0011".U(8.W)
+  def vperm = "b0000_0100".U(8.W)
 
   def unknown(typ: UInt) = {
-    (typ > 3.U)
+    (typ > 4.U)
   }
 }
 
 class VPUTestBundle extends Bundle with VSPParameter
 class VPUTestModule extends Module with VSPParameter
 
+class VecInfoBundle extends VPUTestBundle {
+  val vstart    = UInt(7.W)     // 0-127
+  val vl        = UInt(8.W)     // 0-128
+  val vlmul     = UInt(3.W)
+
+  val vm        = Bool()        // 0: masked, 1: unmasked
+  val ta        = Bool()        // 0: undisturbed, 1: agnostic
+  val ma        = Bool()        // 0: undisturbed, 1: agnostic
+}
+
 class VSTInputIO extends VPUTestBundle {
   val src = Vec(4, Vec(VLEN/XLEN, UInt(XLEN.W)))
   val fuType = UInt(5.W)
   val fuOpType = UInt(8.W)
   val sew = UInt(2.W)
+  val uop_idx = UInt(6.W)
 
   val src_widen = Bool()
   val widen = Bool()
 
   val rm = UInt(3.W)
   val rm_s = UInt(2.W)
+
+  val vinfo = new VecInfoBundle
 }
 
 class VSTOutputIO extends VPUTestBundle {
@@ -75,7 +90,8 @@ class SimTop() extends VPUTestModule {
       VPUTestFuType.vfa -> VFA_latency.U,
       VPUTestFuType.vff -> VFF_latency.U,
       VPUTestFuType.vfd -> VFD_latency.U,
-      VPUTestFuType.via -> VIA_latency.U
+      VPUTestFuType.via -> VIA_latency.U,
+      VPUTestFuType.vperm -> VPERM_latency.U
     )) // fuType --> latency, spec case for div
     assert(!VPUTestFuType.unknown(io.in.bits.fuType))
   }
@@ -87,15 +103,20 @@ class SimTop() extends VPUTestModule {
   val finish_uncertain = Wire(Bool())
   val is_uncertain = (in.fuType === VPUTestFuType.vfd)
 
-  val (sew, rm, rm_s, fuType, opcode, src_widen, widen) = (
-    in.sew, in.rm, in.rm_s, in.fuType, in.fuOpType,
+  val (sew, uop_idx, rm, rm_s, fuType, opcode, src_widen, widen) = (
+    in.sew, in.uop_idx, in.rm, in.rm_s, in.fuType, in.fuOpType,
     in.src_widen, in.widen
+  )
+
+  val (vstart, vl, vlmul, vm, ta, ma) = (
+    in.vinfo.vstart, in.vinfo.vl, in.vinfo.vlmul, in.vinfo.vm, in.vinfo.ta, in.vinfo.ma
   )
 
   val vfa_result = Wire(new VSTOutputIO)
   val vff_result = Wire(new VSTOutputIO)
   val vfd_result = Reg(new VSTOutputIO)
   val via_result = Wire(new VSTOutputIO)
+  val vperm_result = Wire(new VSTOutputIO)
   val vfd_result_valid = RegInit(VecInit(Seq.fill(VLEN/XLEN)(false.B)))
   when (io.in.fire() || io.out.fire()) {
     vfd_result_valid.map(_ := false.B)
@@ -171,13 +192,36 @@ class SimTop() extends VPUTestModule {
     vff_result.fflags(i) := vff.io.fflags
   }
 
+  val vperm = Module(new VPermTop)
+  vperm.io.vs1 := Cat(in.src(0)(1), in.src(0)(0))
+  vperm.io.vs2 := Cat(in.src(1)(1), in.src(1)(0))
+  vperm.io.old_vd := Cat(in.src(2)(1), in.src(2)(0))
+  vperm.io.mask := Cat(in.src(3)(1), in.src(3)(0))
+  vperm.io.vs1_type := ZeroExt(sew, 4)
+  vperm.io.vs2_type := ZeroExt(sew, 4)
+  vperm.io.vd_type := ZeroExt(sew, 4)
+
+  vperm.io.opcode := opcode
+  vperm.io.uop_idx := uop_idx
+  vperm.io.vstart := vstart
+  vperm.io.vl := vl
+  vperm.io.vlmul := vlmul
+  vperm.io.vm := vm
+  vperm.io.ta := ta
+  vperm.io.ma := ma
+  vperm_result.result(0) := vperm.io.res_vd(XLEN-1, 0)
+  vperm_result.result(1) := vperm.io.res_vd(VLEN-1, XLEN)
+  vperm_result.fflags(0) := 0.U
+  vperm_result.fflags(1) := 0.U
+
   // arbiter
   io.out.valid := Mux(is_uncertain, finish_uncertain, finish_fixLatency)
   io.out.bits := LookupTreeDefault(in.fuType, 0.U.asTypeOf(new VSTOutputIO), List(
     VPUTestFuType.vfa -> vfa_result,
     VPUTestFuType.vff -> vff_result,
     VPUTestFuType.vfd -> vfd_result,
-    VPUTestFuType.via -> via_result
+    VPUTestFuType.via -> via_result,
+    VPUTestFuType.vperm -> vperm_result
   ))
 }
 
