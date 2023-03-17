@@ -15,6 +15,12 @@ ElementOutput VGMFloatAdder::calculation_e16(ElementInput input) {
       output.result = f16_min(i2f16((uint16_t)input.src1), i2f16((uint16_t)input.src2)).v;  break;
     case VFMAX:
       output.result = f16_max(i2f16((uint16_t)input.src1), i2f16((uint16_t)input.src2)).v;  break;
+    case VFSGNJ:
+      output.result = f16_sgnj(i2f16((uint16_t)input.src1), i2f16((uint16_t)input.src2), false, false).v;  break;
+    case VFSGNJN:
+      output.result = f16_sgnj(i2f16((uint16_t)input.src1), i2f16((uint16_t)input.src2), true, false).v;  break;
+    case VFSGNJX:
+      output.result = f16_sgnj(i2f16((uint16_t)input.src1), i2f16((uint16_t)input.src2), false, true).v;  break;
     case VFEQ:
       output.result = f16_eq(i2f16((uint16_t)input.src1), i2f16((uint16_t)input.src2)) ? (uint64_t)1 : (uint64_t)0;  break;
     case VFNE:
@@ -27,6 +33,8 @@ ElementOutput VGMFloatAdder::calculation_e16(ElementInput input) {
       output.result = f16_lt(i2f16((uint16_t)input.src2), i2f16((uint16_t)input.src1)) ? (uint64_t)1 : (uint64_t)0;  break;
     case VFGE:
       output.result = f16_le(i2f16((uint16_t)input.src2), i2f16((uint16_t)input.src1)) ? (uint64_t)1 : (uint64_t)0;  break;
+    case VFCLASS:
+      output.result = f16_classify(i2f16((uint16_t)input.src1));  break;
     default:
       printf("VFADD Unsupported fuOpType %d\n", input.fuOpType);
       exit(1);
@@ -61,6 +69,12 @@ ElementOutput VGMFloatAdder::calculation_e32(ElementInput input) {
       output.result = f32_min(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2)).v;  break;
     case VFMAX:
       output.result = f32_max(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2)).v;  break;
+    case VFSGNJ:
+      output.result = f32_sgnj(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2), false, false).v;  break;
+    case VFSGNJN:
+      output.result = f32_sgnj(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2), true, false).v;  break;
+    case VFSGNJX:
+      output.result = f32_sgnj(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2), false, true).v;  break;
     case VFEQ:
       output.result = f32_eq(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2)) ? (uint64_t)1 : (uint64_t)0;  break;
     case VFNE:
@@ -73,6 +87,8 @@ ElementOutput VGMFloatAdder::calculation_e32(ElementInput input) {
       output.result = f32_lt(i2f32((uint32_t)input.src2), i2f32((uint32_t)input.src1)) ? (uint64_t)1 : (uint64_t)0;  break;
     case VFGE:
       output.result = f32_le(i2f32((uint32_t)input.src2), i2f32((uint32_t)input.src1)) ? (uint64_t)1 : (uint64_t)0;  break;
+    case VFCLASS:
+      output.result = f32_classify(i2f32((uint32_t)input.src1));  break;
     default:
       printf("VFADD Unsupported fuOpType %d\n", input.fuOpType);
       exit(1);
@@ -107,6 +123,12 @@ ElementOutput VGMFloatAdder::calculation_e64(ElementInput input) {
       output.result = f64_min(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2)).v;  break;
     case VFMAX:
       output.result = f64_max(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2)).v;  break;
+    case VFSGNJ:
+      output.result = f64_sgnj(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2), false, false).v;  break;
+    case VFSGNJN:
+      output.result = f64_sgnj(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2), true, false).v;  break;
+    case VFSGNJX:
+      output.result = f64_sgnj(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2), false, true).v;  break;
     case VFEQ:
       output.result = f64_eq(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2)) ? (uint64_t)1 : (uint64_t)0;  break;
     case VFNE:
@@ -119,6 +141,8 @@ ElementOutput VGMFloatAdder::calculation_e64(ElementInput input) {
       output.result = f64_lt(i2f64((uint64_t)input.src2), i2f64((uint64_t)input.src1)) ? (uint64_t)1 : (uint64_t)0;  break;
     case VFGE:
       output.result = f64_le(i2f64((uint64_t)input.src2), i2f64((uint64_t)input.src1)) ? (uint64_t)1 : (uint64_t)0;  break;
+    case VFCLASS:
+      output.result = f64_classify(i2f64((uint64_t)input.src1));  break;
     default:
       printf("VFADD Unsupported fuOpType %d\n", input.fuOpType);
       exit(1);
