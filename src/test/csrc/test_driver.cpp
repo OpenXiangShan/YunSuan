@@ -57,6 +57,7 @@ uint8_t TestDriver::gen_random_optype() {
     case VFloatFMA: break;
     case VFloatDivider: break;
     case VIntegerALU: break;
+    case VPermutation: return VSLIDEUP; break;
     default:
       printf("Unsupported FuType %d\n", input.fuType);
       exit(1);
@@ -69,6 +70,7 @@ uint8_t TestDriver::gen_random_sew() {
   switch (input.fuType)
   {
     case VIntegerALU: return rand()%4; break;
+    case VPermutation: return rand()%4; break;
     default: return (rand()%3)+1; break;
   }
 }
@@ -99,6 +101,40 @@ bool TestDriver::gen_random_src_widen() {
   else return false;
 }
 
+void TestDriver::gen_random_vecinfo() {
+  //               lmul =  8, 4, 2, 1,  1/2, 1/4, 1/8
+  uint8_t vlmul_list[7] = {3, 2, 1, 0,  7,   6,   5};
+
+  input.vinfo.vlmul = vlmul_list[rand() % (7 - input.sew)];
+  int elements_per_reg = (VLEN / 8) >> input.sew;
+  int vlmax = (input.vinfo.vlmul > 4) ? (elements_per_reg >> (8 - input.vinfo.vlmul)) : (elements_per_reg << input.vinfo.vlmul);
+  input.vinfo.vstart = rand() % vlmax;
+  input.vinfo.vl = rand() % (vlmax + 1);
+
+  input.vinfo.vm = rand() % 2;
+  input.vinfo.ta = rand() % 2;
+  input.vinfo.ma = rand() % 2;
+}
+
+void TestDriver::gen_random_uopidx() {
+  switch(input.fuType) {
+    case VPermutation: {
+      switch(input.fuOpType) {
+        case VSLIDEUP: {
+          if (input.vinfo.vlmul == 1) input.uop_idx = rand() % 3;
+          else if (input.vinfo.vlmul == 2) input.uop_idx = rand() % 10;
+          else if (input.vinfo.vlmul == 3) input.uop_idx = rand() % 36;
+          else input.uop_idx = 0;
+          break;
+        }
+        default: input.uop_idx = 0;
+      }
+      break;
+    }
+    default: input.uop_idx = 0;
+  }
+}
+
 void TestDriver::get_random_input() {
   if (keepinput) { return; }
   input.src1[0] = rand64();
@@ -122,6 +158,9 @@ void TestDriver::get_random_input() {
 
   input.rm = rand() % 5;
   input.rm_s = rand() % 5;
+
+  gen_random_vecinfo();
+  gen_random_uopidx();
 }
 
 void TestDriver::get_expected_output() {
@@ -135,6 +174,9 @@ void TestDriver::get_expected_output() {
     case VFloatDivider:
       if (verbose) { printf("FuType:%d, choose VFloatDivider %d\n", input.fuType, VFloatDivider); }
       expect_output = vfd.get_expected_output(input); return;
+    case VPermutation:
+      if (verbose) { printf("FuType:%d, choose VPermutation %d\n", input.fuType, VPermutation); }
+      expect_output = vperm.get_expected_output(input); return;
     default:
       printf("Unsupported FuType %d\n", input.fuType);
       exit(1);
@@ -168,9 +210,16 @@ bool TestDriver::assign_input_raising(VSimTop *dut_ptr) {
   dut_ptr->io_in_bits_fuType  = input.fuType;
   dut_ptr->io_in_bits_fuOpType = input.fuOpType;
   dut_ptr->io_in_bits_sew     = input.sew;
+  dut_ptr->io_in_bits_uop_idx = input.uop_idx;
   dut_ptr->io_in_bits_src_widen = input.src_widen;
   dut_ptr->io_in_bits_widen   = input.widen;
   dut_ptr->io_in_bits_rm      = input.rm;
+  dut_ptr->io_in_bits_vinfo_vstart = input.vinfo.vstart;
+  dut_ptr->io_in_bits_vinfo_vl     = input.vinfo.vl;
+  dut_ptr->io_in_bits_vinfo_vlmul  = input.vinfo.vlmul;
+  dut_ptr->io_in_bits_vinfo_vm     = input.vinfo.vm;
+  dut_ptr->io_in_bits_vinfo_ta     = input.vinfo.ta;
+  dut_ptr->io_in_bits_vinfo_ma     = input.vinfo.ma;
   // printf("fuType:%d fuOpType:%d inFuType:%d inFuOpType:%d\n", dut_ptr->io_in_bits_fuType,dut_ptr->io_in_bits_fuOpType,input.fuType,input.fuOpType);
   return  dut_ptr->io_in_valid;
 }
@@ -206,7 +255,8 @@ int TestDriver::diff_output_falling(VSimTop *dut_ptr) {
 void TestDriver::display_ref_input() {
   printf("REF Input:\n");
   printf("  src1 %016lx_%016lx src2 %016lx_%016lx src3 %016lx_%016lx src4 %016lx_%016lx\n", input.src1[1], input.src1[0], input.src2[1], input.src2[0], input.src3[1], input.src3[0], input.src4[1], input.src4[0]);
-  printf("  fuType %x fuOpType %x sew %x src_widen %d widen %d rm %d\n", input.fuType, input.fuOpType, input.sew, input.src_widen, input.widen, input.rm);
+  printf("  fuType %x fuOpType %x sew %x uop_idx %d src_widen %d widen %d rm %d\n", input.fuType, input.fuOpType, input.sew, input.uop_idx, input.src_widen, input.widen, input.rm);
+  printf("  vstart %d vl %d vlmul %x vm %d ta %d ma %d\n", input.vinfo.vstart, input.vinfo.vl, input.vinfo.vlmul, input.vinfo.vm, input.vinfo.ta, input.vinfo.ma);
 }
 
 void TestDriver::display_ref_output() {

@@ -13,7 +13,7 @@ class VPermBundle extends Bundle with VPermParameter
 class VPermModule extends Module with VPermParameter
 
 // vialu io
-class VIALUIO extends VPermBundle {
+class VPermIO extends VPermBundle {
     val vs1       = Input(UInt(VLEN.W))
     val vs1_type  = Input(UInt(4.W))
     val vs2       = Input(UInt(VLEN.W))
@@ -31,12 +31,22 @@ class VIALUIO extends VPermBundle {
 
     val vstart    = Input(UInt(7.W))      // 0-127
     val vl        = Input(UInt(8.W))      // 0-128
-    val vxrm      = Input(UInt(2.W))
     val vlmul     = Input(UInt(3.W))
 
-    val is_vector = Input(Bool())
-
     val res_vd    = Output(UInt(VLEN.W))
+}
+
+object VPermType {
+    def VPermTypeWidth: Int = 4
+
+    def vslideup     = "b0000".U(VPermTypeWidth.W) // Slideup
+    def vslidedown   = "b0001".U(VPermTypeWidth.W) // Slidedown
+    def vslide1up    = "b0010".U(VPermTypeWidth.W) // Slide1up
+    def vslide1down  = "b0011".U(VPermTypeWidth.W) // Slide1down
+    def vrgather     = "b0100".U(VPermTypeWidth.W) // Register Gather
+    def vrgatherrs1  = "b0101".U(VPermTypeWidth.W) // Register Gather, index is from rs1
+    def vcompress    = "b0110".U(VPermTypeWidth.W) // Compress
+    def vwregmov     = "b0111".U(VPermTypeWidth.W) // Whole Register Move
 }
 
 object VFormat{

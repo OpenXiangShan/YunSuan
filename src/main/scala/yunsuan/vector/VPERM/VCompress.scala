@@ -66,7 +66,7 @@ class Compress(n: Int) extends VPermModule {
 }
 
 class CompressModule extends VPermModule {
-    val io = IO(new VIALUIO)
+    val io = IO(new VPermIO)
 
     val vformat = io.vd_type(1,0)
     //val sew          = LookupTree(vformat, VFormat.VFormatTable.map(p => (p._1, p._2._1)))

@@ -38,6 +38,7 @@ private:
   VGMFloatAdder vfa;
   VGMFloatDivider vfd;
   VGMIntegerALU valu;
+  VGMPermutation vperm;
 
 
 public:
@@ -53,6 +54,8 @@ public:
   uint8_t gen_random_sew();
   bool gen_random_widen();
   bool gen_random_src_widen();
+  void gen_random_vecinfo();
+  void gen_random_uopidx();
 
   void get_random_input();
   void get_expected_output();
@@ -73,6 +76,7 @@ public:
   void verbose_exec() {
     verbose = true;
     vfd.verbose_exec(); valu.verbose_exec();
+    vperm.verbose_exec();
   }
   void keep_input() { keepinput = true; }
 };

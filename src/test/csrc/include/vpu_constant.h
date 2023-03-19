@@ -10,12 +10,16 @@ extern "C"{
 // NOTE: should keep same with chisel.
 // TODO: may dynamic generate this file when compiling chisel
 
-#define FU_NUM 4 // for random
+#define VLEN 128
+#define XLEN 64
+
+#define FU_NUM 5 // for random
 #define VFloatAdder (0)
 #define VFloatFMA   (1)
 #define VFloatDivider (2)
 #define VIntegerALU (3)
-#define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU}
+#define VPermutation (4)
+#define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU,VPermutation}
 
 #define INT_ROUNDING(result, xrm, gb) \
   do { \
@@ -83,6 +87,17 @@ extern "C"{
 #define VRSUB   (binstoi("00100111"))
 #define VMADC   (binstoi("00101000"))
 #define VMADC0  (binstoi("00101001"))
+
+// vperm funcop type
+#define VPERM_NUM 8
+#define VSLIDEUP    (binstoi("0000"))
+#define VSLIDEDOWN  (binstoi("0001"))
+#define VSLIDE1UP   (binstoi("0010"))
+#define VSLIDE1DOWN (binstoi("0011"))
+#define VRGATHER    (binstoi("0100"))
+#define VRGATHERRS1 (binstoi("0101"))
+#define VCOMPRESS   (binstoi("0110"))
+#define VWREGMOV    (binstoi("0111"))
 
 // rounding mode for fix point
 #define RM_S_RNU (0)
