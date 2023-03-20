@@ -105,12 +105,14 @@ extern "C"{
 #define RM_S_RDN (2)
 #define RM_S_ROD (3)
 
-#define VFA_NUM 14 // for random
+#define VFA_NUM 16 // for random
+
 #define VFADD   (binstoi("00000"))
 #define VFSUB   (binstoi("00001"))
 #define VFMIN   (binstoi("00010"))
 #define VFMAX   (binstoi("00011"))
-  
+#define VFMERGE (binstoi("00100"))
+#define VFMOVE  (binstoi("00101"))
 #define VFSGNJ  (binstoi("00110"))
 #define VFSGNJN (binstoi("00111"))
 #define VFSGNJX (binstoi("01000"))
@@ -123,7 +125,7 @@ extern "C"{
 #define VFGE    (binstoi("01110"))
 #define VFCLASS (binstoi("01111"))
 
-#define VFA_ALL_OPTYPES {VFADD,VFSUB,VFMIN,VFMAX,VFSGNJ,VFSGNJN,VFSGNJX,VFEQ,VFNE,VFLT,VFLE,VFGT,VFGE,VFCLASS}
+#define VFA_ALL_OPTYPES {VFADD,VFSUB,VFMIN,VFMAX,VFMERGE,VFMOVE,VFSGNJ,VFSGNJN,VFSGNJX,VFEQ,VFNE,VFLT,VFLE,VFGT,VFGE,VFCLASS}
 
 // rounding mode
 #define RM_RNE (0)

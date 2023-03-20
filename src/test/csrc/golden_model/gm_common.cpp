@@ -90,6 +90,7 @@ ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
   element.src_widen = input.src_widen;
   element.widen = input.widen;
   element.rm = input.rm;
+  element.uop_idx = input.uop_idx;
   return element;
 }
 
