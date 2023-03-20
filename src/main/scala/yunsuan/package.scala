@@ -222,13 +222,13 @@ package object yunsuan {
   }
 
   object VfaddOpCode {
-    def dummy = "b11111".U(5.W)
-    def fadd  = "b00000".U(5.W)
-    def fsub  = "b00001".U(5.W)
-    def fmin  = "b00010".U(5.W)
-    def fmax  = "b00011".U(5.W)
-//    def fmerge  = "b00100".U(5.W)
-//    def fmove   = "b00101".U(5.W)
+    def dummy   = "b11111".U(5.W)
+    def fadd    = "b00000".U(5.W)
+    def fsub    = "b00001".U(5.W)
+    def fmin    = "b00010".U(5.W)
+    def fmax    = "b00011".U(5.W)
+    def fmerge  = "b00100".U(5.W)
+    def fmove   = "b00101".U(5.W)
     def fsgnj   = "b00110".U(5.W)
     def fsgnjn  = "b00111".U(5.W)
     def fsgnjx  = "b01000".U(5.W)

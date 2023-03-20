@@ -134,6 +134,9 @@ class SimTop() extends VPUTestModule {
     require(vfa.io.fp_a.getWidth == XLEN)
     vfa.io.fp_a := src1
     vfa.io.fp_b := src2
+    // TODO: change mask
+    vfa.io.mask := Cat(src3(48),src3(32),src3(16),src3(0))
+    vfa.io.uop_idx := uop_idx(0)
     // TODO: which module to handle dest's original value
     vfa.io.round_mode := rm
     vfa.io.fp_format := sew

@@ -15,6 +15,10 @@ ElementOutput VGMFloatAdder::calculation_e16(ElementInput input) {
       output.result = f16_min(i2f16((uint16_t)input.src1), i2f16((uint16_t)input.src2)).v;  break;
     case VFMAX:
       output.result = f16_max(i2f16((uint16_t)input.src1), i2f16((uint16_t)input.src2)).v;  break;
+    case VFMERGE:
+      output.result = ((uint8_t)input.src3 & 0x01) == 1? i2f16((uint16_t)input.src2).v: i2f16((uint16_t)input.src1).v;  break;
+    case VFMOVE:
+      output.result = i2f16((uint16_t)input.src2).v;  break;
     case VFSGNJ:
       output.result = f16_sgnj(i2f16((uint16_t)input.src1), i2f16((uint16_t)input.src2), false, false).v;  break;
     case VFSGNJN:
@@ -53,15 +57,31 @@ ElementOutput VGMFloatAdder::calculation_e32(ElementInput input) {
   switch(input.fuOpType) {
     case VFADD:
       if (input.widen) {
-        if (input.src_widen) output.result = f32_add(f16_to_f32(i2f16((uint16_t)input.src1)), i2f32((uint32_t)input.src2)).v;
-        else output.result = f32_add(f16_to_f32(i2f16((uint16_t)input.src1)), f16_to_f32(i2f16((uint16_t)input.src2))).v;
+        if (input.src_widen) {
+          if (input.uop_idx % 2 == 0)
+            output.result = f32_add(f16_to_f32(i2f16((uint16_t)input.src1)), i2f32((uint32_t)input.src2)).v;
+          else output.result = f32_add(f16_to_f32(i2f16((uint16_t)(input.src1>>16))), i2f32((uint32_t)input.src2)).v;
+        } 
+        else {
+          if (input.uop_idx % 2 == 0)
+            output.result = f32_add(f16_to_f32(i2f16((uint16_t)input.src1)), f16_to_f32(i2f16((uint16_t)input.src2))).v;
+          else output.result = f32_add(f16_to_f32(i2f16((uint16_t)(input.src1>>16))), f16_to_f32(i2f16((uint16_t)(input.src2>>16)))).v;
+        }
       }
       else output.result = f32_add(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2)).v;
       break;
     case VFSUB:
       if (input.widen) {
-        if (input.src_widen) output.result = f32_sub(f16_to_f32(i2f16((uint16_t)input.src1)), i2f32((uint32_t)input.src2)).v;
-        else output.result = f32_sub(f16_to_f32(i2f16((uint16_t)input.src1)), f16_to_f32(i2f16((uint16_t)input.src2))).v;
+        if (input.src_widen) {
+          if (input.uop_idx % 2 == 0)
+            output.result = f32_sub(f16_to_f32(i2f16((uint16_t)input.src1)), i2f32((uint32_t)input.src2)).v;
+          else output.result = f32_sub(f16_to_f32(i2f16((uint16_t)(input.src1>>16))), i2f32((uint32_t)input.src2)).v;
+        } 
+        else {
+          if (input.uop_idx % 2 == 0)
+            output.result = f32_sub(f16_to_f32(i2f16((uint16_t)input.src1)), f16_to_f32(i2f16((uint16_t)input.src2))).v;
+          else output.result = f32_sub(f16_to_f32(i2f16((uint16_t)(input.src1>>16))), f16_to_f32(i2f16((uint16_t)(input.src2>>16)))).v;
+        } 
       }
       else output.result = f32_sub(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2)).v;
       break;
@@ -69,6 +89,10 @@ ElementOutput VGMFloatAdder::calculation_e32(ElementInput input) {
       output.result = f32_min(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2)).v;  break;
     case VFMAX:
       output.result = f32_max(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2)).v;  break;
+    case VFMERGE:
+      output.result = ((uint8_t)input.src3 & 0x01) == 1? i2f32((uint32_t)input.src2).v: i2f32((uint32_t)input.src1).v;  break;
+    case VFMOVE:
+      output.result = i2f32((uint32_t)input.src2).v;  break;
     case VFSGNJ:
       output.result = f32_sgnj(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2), false, false).v;  break;
     case VFSGNJN:
@@ -107,15 +131,31 @@ ElementOutput VGMFloatAdder::calculation_e64(ElementInput input) {
   switch(input.fuOpType) {
     case VFADD:
       if (input.widen) {
-        if (input.src_widen) output.result = f64_add(f32_to_f64(i2f32((uint32_t)input.src1)), i2f64((uint64_t)input.src2)).v;
-        else output.result = f64_add(f32_to_f64(i2f32((uint32_t)input.src1)), f32_to_f64(i2f32((uint32_t)input.src2))).v;
+        if (input.src_widen) {
+          if (input.uop_idx % 2 == 0)
+            output.result = f64_add(f32_to_f64(i2f32((uint32_t)input.src1)), i2f64((uint64_t)input.src2)).v;
+          else output.result = f64_add(f32_to_f64(i2f32((uint32_t)(input.src1>>32))), i2f64((uint64_t)input.src2)).v;
+        }
+        else {
+          if (input.uop_idx % 2 == 0)
+            output.result = f64_add(f32_to_f64(i2f32((uint32_t)input.src1)), f32_to_f64(i2f32((uint32_t)input.src2))).v;
+          else output.result = f64_add(f32_to_f64(i2f32((uint32_t)(input.src1>>32))), f32_to_f64(i2f32((uint32_t)(input.src2>>32)))).v;
+        }
       }
       else output.result = f64_add(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2)).v;
       break;
     case VFSUB:
       if (input.widen) {
-        if (input.src_widen) output.result = f64_sub(f32_to_f64(i2f32((uint32_t)input.src1)), i2f64((uint64_t)input.src2)).v;
-        else output.result = f64_sub(f32_to_f64(i2f32((uint32_t)input.src1)), f32_to_f64(i2f32((uint32_t)input.src2))).v;
+        if (input.src_widen) {
+          if (input.uop_idx % 2 == 0)
+            output.result = f64_sub(f32_to_f64(i2f32((uint32_t)input.src1)), i2f64((uint64_t)input.src2)).v;
+          else output.result = f64_sub(f32_to_f64(i2f32((uint32_t)(input.src1>>32))), i2f64((uint64_t)input.src2)).v;
+        }
+        else {
+          if (input.uop_idx % 2 == 0)
+            output.result = f64_sub(f32_to_f64(i2f32((uint32_t)input.src1)), f32_to_f64(i2f32((uint32_t)input.src2))).v;
+          else output.result = f64_sub(f32_to_f64(i2f32((uint32_t)(input.src1>>32))), f32_to_f64(i2f32((uint32_t)(input.src2>>32)))).v;
+        }
       }
       else output.result = f64_sub(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2)).v;
       break;
@@ -123,6 +163,10 @@ ElementOutput VGMFloatAdder::calculation_e64(ElementInput input) {
       output.result = f64_min(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2)).v;  break;
     case VFMAX:
       output.result = f64_max(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2)).v;  break;
+    case VFMERGE:
+      output.result = ((uint8_t)input.src3 & 0x01) == 1? i2f64((uint64_t)input.src2).v: i2f64((uint64_t)input.src1).v;  break;
+    case VFMOVE:
+      output.result = i2f64((uint64_t)input.src2).v;  break;
     case VFSGNJ:
       output.result = f64_sgnj(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2), false, false).v;  break;
     case VFSGNJN:

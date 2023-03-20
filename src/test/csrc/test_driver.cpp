@@ -131,6 +131,7 @@ void TestDriver::gen_random_uopidx() {
       }
       break;
     }
+    case VFloatAdder: input.uop_idx = input.widen ? rand() % 2 : 0; break;
     default: input.uop_idx = 0;
   }
 }
