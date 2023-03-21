@@ -153,15 +153,15 @@ void TestDriver::get_random_input() {
   input.sew = gen_random_sew();
   input.widen = gen_random_widen();
   input.src_widen = gen_random_src_widen();
-  // input.sew = 2;
-  // input.widen = true;
-  // input.src_widen = true;
-
   input.rm = rand() % 5;
   input.rm_s = rand() % 5;
-
   gen_random_vecinfo();
   gen_random_uopidx();
+
+  // input.sew = 2;
+  // input.widen = true;
+  // input.src_widen = false;
+  // input.uop_idx = 0;
 }
 
 void TestDriver::get_expected_output() {
