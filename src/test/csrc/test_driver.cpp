@@ -28,8 +28,8 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 void TestDriver::set_test_type() {
   test_type.pick_fuType = true;
   test_type.pick_fuOpType = false;
-  test_type.fuType = VFloatAdder;
-  test_type.fuOpType = VFADD;
+  test_type.fuType = VFloatFMA;
+  test_type.fuOpType = VFMACC;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -54,7 +54,11 @@ uint8_t TestDriver::gen_random_optype() {
       return vfadd_all_optype[rand() % VFA_NUM];
       break;
       }
-    case VFloatFMA: break;
+    case VFloatFMA: {
+      uint8_t vffma_all_optype[VFF_NUM] = VFF_ALL_OPTYPES;
+      return vffma_all_optype[rand() % VFF_NUM];
+      break;
+      }
     case VFloatDivider: break;
     case VIntegerALU: break;
     case VPermutation: return VSLIDEUP; break;
@@ -172,6 +176,9 @@ void TestDriver::get_expected_output() {
     case VFloatAdder:
       if (verbose) { printf("FuType:%d, choose VFloatAdder %d\n", input.fuType, VFloatAdder); }
       expect_output = vfa.get_expected_output(input); return;
+    case VFloatFMA:
+      if (verbose) { printf("FuType:%d, choose VFloatFMA %d\n", input.fuType, VFloatFMA); }
+      expect_output = vff.get_expected_output(input); return;
     case VFloatDivider:
       if (verbose) { printf("FuType:%d, choose VFloatDivider %d\n", input.fuType, VFloatDivider); }
       expect_output = vfd.get_expected_output(input); return;

@@ -36,6 +36,7 @@ private:
   bool issued;
 
   VGMFloatAdder vfa;
+  VGMFloatFMA vff;
   VGMFloatDivider vfd;
   VGMIntegerALU valu;
   VGMPermutation vperm;

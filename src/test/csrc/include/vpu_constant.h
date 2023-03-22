@@ -106,7 +106,7 @@ extern "C"{
 #define RM_S_ROD (3)
 
 #define VFA_NUM 16 // for random
-
+// vfa funcop type
 #define VFADD   (binstoi("00000"))
 #define VFSUB   (binstoi("00001"))
 #define VFMIN   (binstoi("00010"))
@@ -124,9 +124,11 @@ extern "C"{
 #define VFGE    (binstoi("01110"))
 #define VFGE    (binstoi("01110"))
 #define VFCLASS (binstoi("01111"))
-
 #define VFA_ALL_OPTYPES {VFADD,VFSUB,VFMIN,VFMAX,VFMERGE,VFMOVE,VFSGNJ,VFSGNJN,VFSGNJX,VFEQ,VFNE,VFLT,VFLE,VFGT,VFGE,VFCLASS}
-
+// vff funcop type
+#define VFF_NUM 1
+#define VFMACC (binstoi("0001"))
+#define VFF_ALL_OPTYPES {VFMACC}
 // rounding mode
 #define RM_RNE (0)
 #define RM_RTZ (1)
