@@ -195,6 +195,7 @@ package object yunsuan {
     def vid_v                          = "b01010001".U(OpTypeWidth.W) // vid
     // 1
     def vmv_s_x                        = "b01010010".U(OpTypeWidth.W) // TODO Integer Scalar Move vmv.s.x vd, rs1
+    def vslide1up                      = "b01010011".U(OpTypeWidth.W) // vslide1up
   }
 
   object VfpuType {
