@@ -30,6 +30,8 @@ class VectorFloatAdder() extends Module {
   val floatWidth = exponentWidth + significandWidth
   val io = IO(new Bundle() {
     val fp_a, fp_b    = Input (UInt(floatWidth.W)) // fp_a -> vs2, fp_b -> vs1
+    val widen_a       = Input (UInt(floatWidth.W)) // widen_a -> Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
+    val widen_b       = Input (UInt(floatWidth.W)) // widen_b -> Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
     val mask          = Input (UInt(4.W))
     val uop_idx       = Input (Bool())
     val is_vec        = Input (Bool())
@@ -65,9 +67,16 @@ class VectorFloatAdder() extends Module {
   val is_fclass = io.op_code === VfaddOpCode.fclass
 
   val fast_is_sub = io.op_code(0)
+
+  val U_Widen_Fotmat = Module(new FloatAdderWidenFormat())
+  U_Widen_Fotmat.io.uop_idx := io.uop_idx
+  U_Widen_Fotmat.io.widen_a := io.widen_a
+  U_Widen_Fotmat.io.widen_b := io.widen_b
   val U_F32_Mixed_0 = Module(new FloatAdderF32WidenF16MixedPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F32_Mixed_0.io.fp_a := io.fp_a(31,0)
   U_F32_Mixed_0.io.fp_b := io.fp_b(31,0)
+  U_F32_Mixed_0.io.widen_a := U_Widen_Fotmat.io.widen_a_f32_0
+  U_F32_Mixed_0.io.widen_b := U_Widen_Fotmat.io.widen_b_f32_0
   U_F32_Mixed_0.io.mask := io.mask(0)
   U_F32_Mixed_0.io.uop_idx := io.uop_idx
   U_F32_Mixed_0.io.is_sub := fast_is_sub
@@ -84,6 +93,8 @@ class VectorFloatAdder() extends Module {
   val U_F32_Mixed_1 = Module(new FloatAdderF32WidenF16MixedPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F32_Mixed_1.io.fp_a := io.fp_a(63,32)
   U_F32_Mixed_1.io.fp_b := io.fp_b(63,32)
+  U_F32_Mixed_1.io.widen_a := U_Widen_Fotmat.io.widen_a_f32_1
+  U_F32_Mixed_1.io.widen_b := U_Widen_Fotmat.io.widen_b_f32_1
   U_F32_Mixed_1.io.mask := Mux(fp_format === 2.U, io.mask(1), io.mask(2))
   U_F32_Mixed_1.io.uop_idx := io.uop_idx
   U_F32_Mixed_1.io.is_sub  := fast_is_sub
@@ -100,6 +111,8 @@ class VectorFloatAdder() extends Module {
   val U_F64_Widen_0 = Module(new FloatAdderF64WidenPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F64_Widen_0.io.fp_a := io.fp_a
   U_F64_Widen_0.io.fp_b := io.fp_b
+  U_F64_Widen_0.io.widen_a := U_Widen_Fotmat.io.widen_a_f64
+  U_F64_Widen_0.io.widen_b := U_Widen_Fotmat.io.widen_b_f64
   U_F64_Widen_0.io.mask := io.mask(0)
   U_F64_Widen_0.io.uop_idx := io.uop_idx
   U_F64_Widen_0.io.is_sub := fast_is_sub
@@ -163,15 +176,63 @@ class VectorFloatAdder() extends Module {
       Mux(res_is_f32,U_F32_0_fflags,U_F16_0_fflags)
     )
   )
-  //    Mux(
-  //    RegNext(res_is_f64),
-  //    U_F64_Widen_0_fflags,
-  //    Mux(
-  //      RegNext(res_is_f32),
-  //      U_F32_0_fflags | (Fill(5,RegNext(io.is_vec)) & U_F32_1_fflags),
-  //      U_F16_0_fflags | (Fill(5,RegNext(io.is_vec)) & (U_F16_1_fflags | U_F16_2_fflags | U_F16_3_fflags))
-  //    )
-  //  )
+}
+
+private[vector] class FloatAdderWidenFormat() extends Module {
+  val io = IO(new Bundle() {
+    val widen_a = Input(UInt(64.W))
+    val widen_b = Input(UInt(64.W))
+    val uop_idx = Input(Bool())
+    val widen_a_f32_0 = Output(UInt(32.W))
+    val widen_b_f32_0 = Output(UInt(32.W))
+    val widen_a_f32_1 = Output(UInt(32.W))
+    val widen_b_f32_1 = Output(UInt(32.W))
+    val widen_a_f64 = Output(UInt(64.W))
+    val widen_b_f64 = Output(UInt(64.W))
+  })
+  def Widen(in:UInt): UInt= {
+    assert(in.getWidth == 16 || in.getWidth == 32)
+    val w = in.getWidth
+    val exp_w = if (in.getWidth == 16) 5 else 8
+    val sig_w = if (in.getWidth == 16) 11 else 24
+    val dest_exp_w = if (in.getWidth == 16) 8 else 11
+    val dest_sig_w = if (in.getWidth == 16) 24 else 53
+    val fp_a_is_denormal = !in(w-2,sig_w-1).orR
+    val fp_a_lshift = Wire(UInt((sig_w-1).W))
+    val fp_a_is_denormal_to_widen_exp = Wire(UInt(dest_exp_w.W))
+    if (in.getWidth == 16) {
+      val U_fp_a_is_denormal_to_widen = Module(new ShiftLeftPriorityWithF32EXPResult(srcW = sig_w-1, priorityShiftValueW = sig_w-1, expW = dest_exp_w))
+      U_fp_a_is_denormal_to_widen.io.src := in(sig_w-2,0)
+      U_fp_a_is_denormal_to_widen.io.priority_shiftValue := in(sig_w-2,0)
+      fp_a_lshift := U_fp_a_is_denormal_to_widen.io.lshift_result
+      fp_a_is_denormal_to_widen_exp := U_fp_a_is_denormal_to_widen.io.exp_result
+    }
+    else {
+      val U_fp_a_is_denormal_to_widen = Module(new ShiftLeftPriorityWithF64EXPResult(srcW = sig_w-1, priorityShiftValueW = sig_w-1, expW = dest_exp_w))
+      U_fp_a_is_denormal_to_widen.io.src := in(sig_w-2,0)
+      U_fp_a_is_denormal_to_widen.io.priority_shiftValue := in(sig_w-2,0)
+      fp_a_lshift := U_fp_a_is_denormal_to_widen.io.lshift_result
+      fp_a_is_denormal_to_widen_exp := U_fp_a_is_denormal_to_widen.io.exp_result
+    }
+    val fp_a_widen_mantissa = Cat(
+      Mux(fp_a_is_denormal,Cat(fp_a_lshift.tail(1),0.U),in(sig_w-2,0)),
+      0.U((dest_sig_w-sig_w).W)
+    )
+    val const_1 =  if (in.getWidth == 16) "b1000".U else "b1000".U
+    val const_0 =  if (in.getWidth == 16) "b0111".U else "b0111".U
+    val fp_a_widen_exp = Mux(
+      fp_a_is_denormal,
+      fp_a_is_denormal_to_widen_exp,
+      Mux(in(w-2), Cat(const_1,in(w-3,w-1-exp_w)), Cat(const_0,in(w-3,w-1-exp_w)))
+    )
+    Cat(in(w-1), fp_a_widen_exp, fp_a_widen_mantissa)
+  }
+  io.widen_a_f32_0 := Mux(io.uop_idx,Widen(io.widen_a(47,32)),Widen(io.widen_a(15,0)))
+  io.widen_b_f32_0 := Mux(io.uop_idx,Widen(io.widen_b(47,32)),Widen(io.widen_b(15,0)))
+  io.widen_a_f32_1 := Mux(io.uop_idx,Widen(io.widen_a(63,48)),Widen(io.widen_a(31,16)))
+  io.widen_b_f32_1 := Mux(io.uop_idx,Widen(io.widen_b(63,48)),Widen(io.widen_b(31,16)))
+  io.widen_a_f64 := Mux(io.uop_idx,Widen(io.widen_a(63,32)),Widen(io.widen_a(31,0)))
+  io.widen_b_f64 := Mux(io.uop_idx,Widen(io.widen_b(63,32)),Widen(io.widen_b(31,0)))
 }
 
 private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = false,val hasMinMaxCompare:Boolean = false) extends Module {
@@ -180,6 +241,8 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
   val floatWidth = exponentWidth + significandWidth
   val io = IO(new Bundle() {
     val fp_a, fp_b   = Input (UInt(floatWidth.W))
+    val widen_a      = Input (UInt(32.W))
+    val widen_b      = Input (UInt(32.W))
     val fp_c         = Output(UInt(floatWidth.W))
     val is_sub       = Input (Bool())
     val mask         = Input (Bool())
@@ -194,51 +257,37 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
   val res_is_f32 = io.fp_format(0).asBool
   val fp_a_16as32 = Cat(io.fp_a(15), Cat(0.U(3.W),io.fp_a(14,10)), Cat(io.fp_a(9,0),0.U(13.W)))
   val fp_b_16as32 = Cat(io.fp_b(15), Cat(0.U(3.W),io.fp_b(14,10)), Cat(io.fp_b(9,0),0.U(13.W)))
-  val fp_a_16to32_is_denormal = !Mux(io.uop_idx,io.fp_a(30,26),io.fp_a(14,10)).orR
-  val fp_a_lshift = Wire(UInt(10.W))
-  val U_fp_a_is_denormal_to_f32 = Module(new ShiftLeftPriorityWithF32EXPResult(srcW = 10, priorityShiftValueW = 10, expW = 8))
-  U_fp_a_is_denormal_to_f32.io.src := Mux(io.uop_idx,io.fp_a(25,16),io.fp_a(9,0))
-  U_fp_a_is_denormal_to_f32.io.priority_shiftValue := Mux(io.uop_idx,io.fp_a(25,16),io.fp_a(9,0))
-  fp_a_lshift := U_fp_a_is_denormal_to_f32.io.lshift_result
-  val fp_a_is_denormal_to_f32_exp = U_fp_a_is_denormal_to_f32.io.exp_result
-  val fp_a_16to32_mantissa = Cat(
-    Mux(fp_a_16to32_is_denormal,Cat(fp_a_lshift.tail(1),0.U),Mux(io.uop_idx,io.fp_a(25,16),io.fp_a(9,0))),
-    0.U(13.W)
-  )
-  val fp_a_16to32_exp = Mux(
-    fp_a_16to32_is_denormal,
-    fp_a_is_denormal_to_f32_exp,
-    Mux(
-      io.uop_idx,
-      Mux(io.fp_a(30), Cat("b1000".U,io.fp_a(29,26)), Cat("b0111".U,io.fp_a(29,26))),
-      Mux(io.fp_a(14), Cat("b1000".U,io.fp_a(13,10)), Cat("b0111".U,io.fp_a(13,10)))
-    )
-  )
-  val fp_a_16to32_sign = Mux(io.uop_idx, io.fp_a(31), io.fp_a(15))
-  val fp_a_to32 = Mux(io.res_widening,Cat(fp_a_16to32_sign, fp_a_16to32_exp, fp_a_16to32_mantissa),Mux(res_is_f32,io.fp_a,fp_a_16as32))
+//
+//  val fp_a_16to32_is_denormal = !io.widen_a(14,10).orR
+//  val fp_a_lshift = Wire(UInt(10.W))
+//  val U_fp_a_is_denormal_to_f32 = Module(new ShiftLeftPriorityWithF32EXPResult(srcW = 10, priorityShiftValueW = 10, expW = 8))
+//  U_fp_a_is_denormal_to_f32.io.src := io.widen_a(9,0)
+//  U_fp_a_is_denormal_to_f32.io.priority_shiftValue := io.widen_a(9,0)
+//  fp_a_lshift := U_fp_a_is_denormal_to_f32.io.lshift_result
+//  val fp_a_is_denormal_to_f32_exp = U_fp_a_is_denormal_to_f32.io.exp_result
+//  val fp_a_16to32_mantissa = Cat(Mux(fp_a_16to32_is_denormal,Cat(fp_a_lshift.tail(1),0.U),io.widen_a(9,0)),0.U(13.W))
+//  val fp_a_16to32_exp = Mux(
+//    fp_a_16to32_is_denormal,
+//    fp_a_is_denormal_to_f32_exp,
+//    Mux(io.widen_a(14), Cat("b1000".U,io.widen_a(13,10)), Cat("b0111".U,io.widen_a(13,10)))
+//  )
+  val fp_a_to32 = Mux(io.res_widening,io.widen_a,Mux(res_is_f32,io.fp_a,fp_a_16as32))
 
-  val fp_b_16to32_is_denormal = !Mux(io.uop_idx,io.fp_b(30,26),io.fp_b(14,10)).orR
-  val fp_b_lshift = Wire(UInt(10.W))
-  val U_fp_b_is_denormal_to_f32 = Module(new ShiftLeftPriorityWithF32EXPResult(srcW = 10, priorityShiftValueW = 10, expW = 8))
-  U_fp_b_is_denormal_to_f32.io.src := Mux(io.uop_idx,io.fp_b(25,16),io.fp_b(9,0))
-  U_fp_b_is_denormal_to_f32.io.priority_shiftValue := Mux(io.uop_idx,io.fp_b(25,16),io.fp_b(9,0))
-  fp_b_lshift := U_fp_b_is_denormal_to_f32.io.lshift_result
-  val fp_b_is_denormal_to_f32_exp = U_fp_b_is_denormal_to_f32.io.exp_result
-  val fp_b_16to32_mantissa = Cat(
-    Mux(fp_b_16to32_is_denormal,Cat(fp_b_lshift.tail(1),0.U),Mux(io.uop_idx,io.fp_b(25,16),io.fp_b(9,0))),
-    0.U(13.W)
-  )
-  val fp_b_16to32_exp = Mux(
-    fp_b_16to32_is_denormal,
-    fp_b_is_denormal_to_f32_exp,
-    Mux(
-      io.uop_idx,
-      Mux(io.fp_b(30), Cat("b1000".U,io.fp_b(29,26)), Cat("b0111".U,io.fp_b(29,26))),
-      Mux(io.fp_b(14), Cat("b1000".U,io.fp_b(13,10)), Cat("b0111".U,io.fp_b(13,10)))
-    )
-  )
-  val fp_b_16to32_sign = Mux(io.uop_idx, io.fp_b(31), io.fp_b(15))
-  val fp_b_to32 = Mux(io.res_widening & !io.opb_widening,Cat(fp_b_16to32_sign, fp_b_16to32_exp, fp_b_16to32_mantissa),Mux(res_is_f32,io.fp_b,fp_b_16as32))
+//  val fp_b_16to32_is_denormal = !io.widen_b(14,10).orR
+//  val fp_b_lshift = Wire(UInt(10.W))
+//  val U_fp_b_is_denormal_to_f32 = Module(new ShiftLeftPriorityWithF32EXPResult(srcW = 10, priorityShiftValueW = 10, expW = 8))
+//  U_fp_b_is_denormal_to_f32.io.src := io.widen_b(9,0)
+//  U_fp_b_is_denormal_to_f32.io.priority_shiftValue := io.widen_b(9,0)
+//  fp_b_lshift := U_fp_b_is_denormal_to_f32.io.lshift_result
+//  val fp_b_is_denormal_to_f32_exp = U_fp_b_is_denormal_to_f32.io.exp_result
+//  val fp_b_16to32_mantissa = Cat(Mux(fp_b_16to32_is_denormal,Cat(fp_b_lshift.tail(1),0.U),io.widen_b(9,0)),0.U(13.W))
+//  val fp_b_16to32_exp = Mux(
+//    fp_b_16to32_is_denormal,
+//    fp_b_is_denormal_to_f32_exp,
+//    Mux(io.widen_b(14), Cat("b1000".U,io.widen_b(13,10)), Cat("b0111".U,io.widen_b(13,10)))
+//  )
+  val fp_b_to32 = Mux(io.res_widening & !io.opb_widening,io.widen_b,
+    Mux(res_is_f32,io.fp_b,fp_b_16as32))
 
   val EOP = (fp_a_to32.head(1) ^ io.is_sub ^ fp_b_to32.head(1)).asBool
   val U_far_path = Module(new FarPathF32WidenF16MixedPipeline(is_print=is_print, hasMinMaxCompare=hasMinMaxCompare))
@@ -266,12 +315,12 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
   val Efp_b_is_zero  = !Efp_b.orR | (fp_b_is_f16 & Efp_b==="b01100110".U)
   val Efp_a_is_all_one   = Mux(
     fp_a_is_f16,
-    Mux(io.uop_idx,io.fp_a(30,26).andR,io.fp_a(14,10).andR),
+    Mux(io.res_widening, Efp_a === "b10001111".U, io.fp_a(14,10).andR),
     io.fp_a(30,23).andR
   )
   val Efp_b_is_all_one   = Mux(
     fp_b_is_f16,
-    Mux(io.uop_idx,io.fp_b(30,26).andR,io.fp_b(14,10).andR),
+    Mux(io.res_widening, Efp_b === "b10001111".U, io.fp_b(14,10).andR),
     io.fp_b(30,23).andR
   )
   val fp_a_is_NAN        = Efp_a_is_all_one & fp_a_mantissa_isnot_zero
@@ -1431,6 +1480,8 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
   val floatWidth = exponentWidth + significandWidth
   val io = IO(new Bundle() {
     val fp_a, fp_b  = Input (UInt(floatWidth.W))
+    val widen_a     = Input (UInt(64.W))
+    val widen_b     = Input (UInt(64.W))
     val fp_c        = Output(UInt(floatWidth.W))
     val mask        = Input (Bool())
     val uop_idx     = Input (Bool())
@@ -1441,51 +1492,33 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     val res_widening = Input (Bool())
     val op_code = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
   })
-  val fp_a_to64_is_denormal = !Mux(io.uop_idx,io.fp_a(62,55),io.fp_a(30,23)).orR
-  val fp_a_lshift = Wire(UInt(23.W))
-  val U_fp_a_is_denormal_to_f64 = Module(new ShiftLeftPriorityWithF64EXPResult(srcW = 23, priorityShiftValueW = 23, expW = 11))
-  U_fp_a_is_denormal_to_f64.io.src := Mux(io.uop_idx,io.fp_a(54,32),io.fp_a(22,0))
-  U_fp_a_is_denormal_to_f64.io.priority_shiftValue := Mux(io.uop_idx,io.fp_a(54,32),io.fp_a(22,0))
-  fp_a_lshift := U_fp_a_is_denormal_to_f64.io.lshift_result
-  val fp_a_is_denormal_to_f64_exp = U_fp_a_is_denormal_to_f64.io.exp_result
-  val fp_a_to64_mantissa = Mux(
-    fp_a_to64_is_denormal,
-    Cat(fp_a_lshift.tail(1),0.U(30.W)),
-    Cat(Mux(io.uop_idx,io.fp_a(54,32),io.fp_a(22,0)),0.U(29.W))
-  )
-  val fp_a_to64_exp = Mux(fp_a_to64_is_denormal,
-    fp_a_is_denormal_to_f64_exp,
-    Mux(
-      io.uop_idx,
-      Mux(io.fp_a(62), Cat("b1000".U,io.fp_a(61,55)), Cat("b0111".U,io.fp_a(61,55))),
-      Mux(io.fp_a(30), Cat("b1000".U,io.fp_a(29,23)), Cat("b0111".U,io.fp_a(29,23)))
-    )
-  )
-  val fp_a_to64_sign = Mux(io.uop_idx,io.fp_a(63),io.fp_a(31))
-  val fp_a_to64 = Mux(io.res_widening,Cat(fp_a_to64_sign, fp_a_to64_exp, fp_a_to64_mantissa),io.fp_a)
+//  val fp_a_to64_is_denormal = !io.widen_a(30,23).orR
+//  val fp_a_lshift = Wire(UInt(23.W))
+//  val U_fp_a_is_denormal_to_f64 = Module(new ShiftLeftPriorityWithF64EXPResult(srcW = 23, priorityShiftValueW = 23, expW = 11))
+//  U_fp_a_is_denormal_to_f64.io.src := io.widen_a(22,0)
+//  U_fp_a_is_denormal_to_f64.io.priority_shiftValue := io.widen_a(22,0)
+//  fp_a_lshift := U_fp_a_is_denormal_to_f64.io.lshift_result
+//  val fp_a_is_denormal_to_f64_exp = U_fp_a_is_denormal_to_f64.io.exp_result
+//  val fp_a_to64_mantissa = Mux(fp_a_to64_is_denormal,Cat(fp_a_lshift.tail(1),0.U(30.W)),Cat(io.widen_a(22,0),0.U(29.W)))
+//  val fp_a_to64_exp = Mux(fp_a_to64_is_denormal,
+//    fp_a_is_denormal_to_f64_exp,
+//    Mux(io.widen_a(30), Cat("b1000".U,io.widen_a(29,23)), Cat("b0111".U,io.widen_a(29,23)))
+//  )
+  val fp_a_to64 = Mux(io.res_widening,io.widen_a,io.fp_a)
 
-  val fp_b_to64_is_denormal = !Mux(io.uop_idx,io.fp_b(62,55),io.fp_b(30,23)).orR
-  val fp_b_lshift = Wire(UInt(23.W))
-  val U_fp_b_is_denormal_to_f64 = Module(new ShiftLeftPriorityWithF64EXPResult(srcW = 23, priorityShiftValueW = 23, expW = 11))
-  U_fp_b_is_denormal_to_f64.io.src := Mux(io.uop_idx,io.fp_b(54,32),io.fp_b(22,0))
-  U_fp_b_is_denormal_to_f64.io.priority_shiftValue := Mux(io.uop_idx,io.fp_b(54,32),io.fp_b(22,0))
-  fp_b_lshift := U_fp_b_is_denormal_to_f64.io.lshift_result
-  val fp_b_is_denormal_to_f64_exp = U_fp_b_is_denormal_to_f64.io.exp_result
-  val fp_b_to64_mantissa = Mux(
-    fp_b_to64_is_denormal,
-    Cat(fp_b_lshift.tail(1),0.U(30.W)),
-    Cat(Mux(io.uop_idx,io.fp_b(54,32),io.fp_b(22,0)),0.U(29.W))
-  )
-  val fp_b_to64_exp = Mux(fp_b_to64_is_denormal,
-    fp_b_is_denormal_to_f64_exp,
-    Mux(
-      io.uop_idx,
-      Mux(io.fp_b(62), Cat("b1000".U,io.fp_b(61,55)), Cat("b0111".U,io.fp_b(61,55))),
-      Mux(io.fp_b(30), Cat("b1000".U,io.fp_b(29,23)), Cat("b0111".U,io.fp_b(29,23)))
-    )
-  )
-  val fp_b_to64_sign = Mux(io.uop_idx,io.fp_b(63),io.fp_b(31))
-  val fp_b_to64 = Mux(io.res_widening & !io.opb_widening,Cat(fp_b_to64_sign, fp_b_to64_exp, fp_b_to64_mantissa),io.fp_b)
+//  val fp_b_to64_is_denormal = !io.widen_b(30,23).orR
+//  val fp_b_lshift = Wire(UInt(23.W))
+//  val U_fp_b_is_denormal_to_f64 = Module(new ShiftLeftPriorityWithF64EXPResult(srcW = 23, priorityShiftValueW = 23, expW = 11))
+//  U_fp_b_is_denormal_to_f64.io.src := io.widen_b(22,0)
+//  U_fp_b_is_denormal_to_f64.io.priority_shiftValue := io.widen_b(22,0)
+//  fp_b_lshift := U_fp_b_is_denormal_to_f64.io.lshift_result
+//  val fp_b_is_denormal_to_f64_exp = U_fp_b_is_denormal_to_f64.io.exp_result
+//  val fp_b_to64_mantissa = Mux(fp_b_to64_is_denormal,Cat(fp_b_lshift.tail(1),0.U(30.W)),Cat(io.widen_b(22,0),0.U(29.W)))
+//  val fp_b_to64_exp = Mux(fp_b_to64_is_denormal,
+//    fp_b_is_denormal_to_f64_exp,
+//    Mux(io.widen_b(30), Cat("b1000".U,io.widen_b(29,23)), Cat("b0111".U,io.widen_b(29,23)))
+//  )
+  val fp_b_to64 = Mux(io.res_widening & !io.opb_widening,io.widen_b,io.fp_b)
 
   val EOP = (fp_a_to64.head(1) ^ io.is_sub ^ fp_b_to64.head(1)).asBool
   val U_far_path = Module(new FarPathFloatAdderF64WidenPipeline(exponentWidth = exponentWidth,significandWidth = significandWidth, is_print = is_print, hasMinMaxCompare=hasMinMaxCompare))
