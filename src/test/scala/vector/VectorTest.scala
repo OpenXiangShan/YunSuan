@@ -108,11 +108,11 @@ class VSlideUpLookupTest extends AnyFlatSpec with ChiselScalatestTester with Mat
   }
 }
 
-class VSlide1UpIntTest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
+class VSlide1UpTest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
 
-  behavior of "YunSuan VectorSlide1UpInt"
+  behavior of "YunSuan VectorSlide1Up"
   it should "pass the syntax" in {
-    test(new Slide1UpIntModule()).withAnnotations(Seq(
+    test(new Slide1UpModule()).withAnnotations(Seq(
       VerilatorBackendAnnotation,
       VerilatorFlags(Seq()),
       // WriteVcdAnnotation,
@@ -138,11 +138,11 @@ class VSlideDownLookupTest extends AnyFlatSpec with ChiselScalatestTester with M
   }
 }
 
-class VSlide1DownIntTest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
+class VSlide1DownTest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
 
-  behavior of "YunSuan VectorSlide1DownInt"
+  behavior of "YunSuan VectorSlide1Down"
   it should "pass the syntax" in {
-    test(new Slide1DownIntModule()).withAnnotations(Seq(
+    test(new Slide1DownModule()).withAnnotations(Seq(
       VerilatorBackendAnnotation,
       VerilatorFlags(Seq()),
       // WriteVcdAnnotation,

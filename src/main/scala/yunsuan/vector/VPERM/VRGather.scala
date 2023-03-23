@@ -16,8 +16,9 @@ class VRGatherLookup(n: Int) extends VPermModule {
         val mask_start_idx  = Input(UInt(7.W))
         val first_gather    = Input(Bool())
 
+        val elem_vld = Input(UInt(5.W))
         val vstart   = Input(UInt(7.W))
-        val vl_valid = Input(UInt(8.W))
+        val vl       = Input(UInt(8.W))
         val vm       = Input(Bool())
         val ta       = Input(Bool())
         val ma       = Input(Bool())
@@ -44,19 +45,23 @@ class VRGatherLookup(n: Int) extends VPermModule {
     for(i <- 0 until n) {
         val index = index_data_vec(i) + ~io.table_range_min + 1.U
         val elements_idx = io.mask_start_idx +& i.U
-        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl_valid) && !io.ta)
-        val res_agnostic = ((elements_idx >= io.vl_valid) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
+        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta)
+        val res_agnostic = ((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
 
-        when (res_keep_old_vd) {
-            res_data_vec(i) := prev_data_vec(i)
-        }.elsewhen (res_agnostic) {
-            res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
-        }.elsewhen ( (io.table_range_min <= index_data_vec(i)) & (index_data_vec(i) < io.table_range_max) ) {
-            res_data_vec(i) := table_data_vec(index)
-        }.elsewhen ( io.first_gather ) {
-            res_data_vec(i) := 0.U((VLEN/n).W)
+        when (i.U < io.elem_vld) {
+            when (res_keep_old_vd) {
+                res_data_vec(i) := prev_data_vec(i)
+            }.elsewhen (res_agnostic) {
+                res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
+            }.elsewhen ( (io.table_range_min <= index_data_vec(i)) & (index_data_vec(i) < io.table_range_max) ) {
+                res_data_vec(i) := table_data_vec(index)
+            }.elsewhen ( io.first_gather ) {
+                res_data_vec(i) := 0.U((VLEN/n).W)
+            }.otherwise {
+                res_data_vec(i) := prev_data_vec(i)
+            }
         }.otherwise {
-            res_data_vec(i) := prev_data_vec(i)
+            res_data_vec(i) := Mux(io.ta, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
         }
     }
 
@@ -71,8 +76,9 @@ class VRGatherLookupVX(n: Int) extends VPermModule {
         val mask_start_idx  = Input(UInt(7.W))
         val first_gather    = Input(Bool())
 
+        val elem_vld = Input(UInt(5.W))
         val vstart   = Input(UInt(7.W))
-        val vl_valid = Input(UInt(8.W))
+        val vl       = Input(UInt(8.W))
         val vm       = Input(Bool())
         val ta       = Input(Bool())
         val ma       = Input(Bool())
@@ -97,19 +103,23 @@ class VRGatherLookupVX(n: Int) extends VPermModule {
     for(i <- 0 until n) {
         val index = io.index_data + ~io.table_range_min + 1.U
         val elements_idx = io.mask_start_idx +& i.U
-        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl_valid) && !io.ta)
-        val res_agnostic = ((elements_idx >= io.vl_valid) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
+        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta)
+        val res_agnostic = ((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
 
-        when (res_keep_old_vd) {
-            res_data_vec(i) := prev_data_vec(i)
-        }.elsewhen (res_agnostic) {
-            res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
-        }.elsewhen ( (io.table_range_min <= io.index_data) & (io.index_data < io.table_range_max) ) {
-            res_data_vec(i) := table_data_vec(index)
-        }.elsewhen ( io.first_gather ) {
-            res_data_vec(i) := 0.U((VLEN/n).W)
+        when (i.U < io.elem_vld) {
+            when (res_keep_old_vd) {
+                res_data_vec(i) := prev_data_vec(i)
+            }.elsewhen (res_agnostic) {
+                res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
+            }.elsewhen ( (io.table_range_min <= io.index_data) & (io.index_data < io.table_range_max) ) {
+                res_data_vec(i) := table_data_vec(index)
+            }.elsewhen ( io.first_gather ) {
+                res_data_vec(i) := 0.U((VLEN/n).W)
+            }.otherwise {
+                res_data_vec(i) := prev_data_vec(i)
+            }
         }.otherwise {
-            res_data_vec(i) := prev_data_vec(i)
+            res_data_vec(i) := Mux(io.ta, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
         }
     }
 
@@ -170,16 +180,11 @@ class VRGatherLookupModule extends VPermModule {
     val table_range_min = table_idx << elem_num_pow
     val table_range_max = (table_idx +& 1.U) << elem_num_pow
 
-    val vlmax = LookupTree(io.vlmul, List(
-        "b000".U -> elem_num,          //lmul=1
-        "b001".U -> (elem_num << 1),   //lmul=2
-        "b010".U -> (elem_num << 2),   //lmul=4
-        "b011".U -> (elem_num << 3),   //lmul=8
+    val elem_vld = LookupTreeDefault(io.vlmul, elem_num, List(
         "b101".U -> (elem_num >> 3),   //lmul=1/8
         "b110".U -> (elem_num >> 2),   //lmul=1/4
         "b111".U -> (elem_num >> 1)    //lmul=1/2
     ))
-    val vl_valid = Mux(io.vl <= vlmax, io.vl, vlmax)
 
     val mask_selected = SelectMaskN(io.mask, 16, mask_start_idx)
 
@@ -195,8 +200,9 @@ class VRGatherLookupModule extends VPermModule {
         gather_lookup_module(i).table_range_max  := table_range_max
         gather_lookup_module(i).mask_start_idx   := mask_start_idx
         gather_lookup_module(i).first_gather     := first_gather
+        gather_lookup_module(i).elem_vld         := elem_vld
         gather_lookup_module(i).vstart           := io.vstart
-        gather_lookup_module(i).vl_valid         := vl_valid
+        gather_lookup_module(i).vl               := io.vl
         gather_lookup_module(i).vm               := io.vm
         gather_lookup_module(i).ta               := io.ta
         gather_lookup_module(i).ma               := io.ma
@@ -224,8 +230,9 @@ class VRGatherLookupModule extends VPermModule {
         gather_vx_lookup_module(i).table_range_max  := table_range_max
         gather_vx_lookup_module(i).mask_start_idx   := mask_start_idx
         gather_vx_lookup_module(i).first_gather     := first_gather
+        gather_vx_lookup_module(i).elem_vld         := elem_vld
         gather_vx_lookup_module(i).vstart           := io.vstart
-        gather_vx_lookup_module(i).vl_valid         := vl_valid
+        gather_vx_lookup_module(i).vl               := io.vl
         gather_vx_lookup_module(i).vm               := io.vm
         gather_vx_lookup_module(i).ta               := io.ta
         gather_vx_lookup_module(i).ma               := io.ma

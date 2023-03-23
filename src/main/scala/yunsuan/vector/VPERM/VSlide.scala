@@ -14,8 +14,9 @@ class SlideUpLookup(n: Int) extends VPermModule {
         val mask_start_idx = Input(UInt(7.W))
 
         val slide    = Input(UInt(XLEN.W))
+        val elem_vld = Input(UInt(5.W))
         val vstart   = Input(UInt(7.W))
-        val vl_valid = Input(UInt(8.W))
+        val vl       = Input(UInt(8.W))
         val vm       = Input(Bool())
         val ta       = Input(Bool())
         val ma       = Input(Bool())
@@ -39,17 +40,21 @@ class SlideUpLookup(n: Int) extends VPermModule {
     for(i <- 0 until n) {
         val index = io.slide_base +& i.U + ~io.slide + 1.U
         val elements_idx = io.mask_start_idx +& i.U
-        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl_valid) && !io.ta)
-        val res_agnostic = ((elements_idx >= io.vl_valid) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
+        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta)
+        val res_agnostic = ((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
 
-        when (res_keep_old_vd) {
-            res_data_vec(i) := prev_data_vec(i)
-        }.elsewhen (res_agnostic) {
-            res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
-        }.elsewhen ( (io.slide <= (io.slide_base +& i.U)) && ((io.slide_base +& i.U) < (n.U + io.slide)) ) {
-            res_data_vec(i) := src_data_vec(index)
+        when (i.U < io.elem_vld) {
+            when (res_keep_old_vd) {
+                res_data_vec(i) := prev_data_vec(i)
+            }.elsewhen (res_agnostic) {
+                res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
+            }.elsewhen ( (io.slide <= (io.slide_base +& i.U)) && ((io.slide_base +& i.U) < (n.U + io.slide)) ) {
+                res_data_vec(i) := src_data_vec(index)
+            }.otherwise {
+                res_data_vec(i) := prev_data_vec(i)
+            }
         }.otherwise {
-            res_data_vec(i) := prev_data_vec(i)
+            res_data_vec(i) := Mux(io.ta, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
         }
     }
 
@@ -93,7 +98,7 @@ class SlideUpLookupModule extends VPermModule {
         slide_base := 5.U << elem_num_pow
     }.elsewhen ( io.uop_idx === 10.U || io.uop_idx === 16.U || io.uop_idx === 23.U || io.uop_idx === 31.U ) {
         slide_base := 4.U << elem_num_pow
-    }.elsewhen ( io.uop_idx === 6.U || io.uop_idx === 11.U || io.uop_idx === 17.U || io.uop_idx === 23.U || io.uop_idx === 32.U ) {
+    }.elsewhen ( io.uop_idx === 6.U || io.uop_idx === 11.U || io.uop_idx === 17.U || io.uop_idx === 24.U || io.uop_idx === 32.U ) {
         slide_base := 3.U << elem_num_pow
     }.elsewhen ( io.uop_idx === 3.U || io.uop_idx === 7.U || io.uop_idx === 12.U || io.uop_idx === 18.U || io.uop_idx === 25.U || io.uop_idx === 33.U ) {
         slide_base := 2.U << elem_num_pow
@@ -103,16 +108,11 @@ class SlideUpLookupModule extends VPermModule {
         slide_base := 0.U << elem_num_pow
     }
 
-    val vlmax = LookupTree(io.vlmul, List(
-        "b000".U -> elem_num,          //lmul=1
-        "b001".U -> (elem_num << 1),   //lmul=2
-        "b010".U -> (elem_num << 2),   //lmul=4
-        "b011".U -> (elem_num << 3),   //lmul=8
+    val elem_vld = LookupTreeDefault(io.vlmul, elem_num, List(
         "b101".U -> (elem_num >> 3),   //lmul=1/8
         "b110".U -> (elem_num >> 2),   //lmul=1/4
         "b111".U -> (elem_num >> 1)    //lmul=1/2
     ))
-    val vl_valid = Mux(io.vl <= vlmax, io.vl, vlmax)
 
     val mask_selected = SelectMaskN(io.mask, 16, mask_start_idx)
 
@@ -126,8 +126,9 @@ class SlideUpLookupModule extends VPermModule {
         slide_up_module(i).slide_base     := slide_base
         slide_up_module(i).mask_start_idx := mask_start_idx
         slide_up_module(i).slide          := io.vs1(XLEN-1, 0)
+        slide_up_module(i).elem_vld       := elem_vld
         slide_up_module(i).vstart         := io.vstart
-        slide_up_module(i).vl_valid       := vl_valid
+        slide_up_module(i).vl             := io.vl
         slide_up_module(i).vm             := io.vm
         slide_up_module(i).ta             := io.ta
         slide_up_module(i).ma             := io.ma
@@ -145,13 +146,14 @@ class SlideUpLookupModule extends VPermModule {
 }
 
 // vslide1up.vx
-class Slide1UpInt(n: Int) extends VPermModule {
+class Slide1Up(n: Int) extends VPermModule {
     val io = IO(new VPermBundle() {
         val mask_start_idx = Input(UInt(7.W))
 
         val slide    = Input(UInt(5.W))
+        val elem_vld = Input(UInt(5.W))
         val vstart   = Input(UInt(7.W))
-        val vl_valid = Input(UInt(8.W))
+        val vl       = Input(UInt(8.W))
         val vm       = Input(Bool())
         val ta       = Input(Bool())
         val ma       = Input(Bool())
@@ -179,24 +181,28 @@ class Slide1UpInt(n: Int) extends VPermModule {
         val index = i.U + ~io.slide + 1.U
         val index2 = (i+n).U + ~io.slide + 1.U
         val elements_idx = io.mask_start_idx +& i.U
-        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl_valid) && !io.ta)
-        val res_agnostic = ((elements_idx >= io.vl_valid) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
+        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta)
+        val res_agnostic = ((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
 
-        when (res_keep_old_vd) {
-            res_data_vec(i) := prev_data_vec(i)
-        }.elsewhen (res_agnostic) {
-            res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
-        }.elsewhen ( io.slide <= i.U ) {
-            res_data_vec(i) := src_data_hi_vec(index)
+        when (i.U < io.elem_vld) {
+            when (res_keep_old_vd) {
+                res_data_vec(i) := prev_data_vec(i)
+            }.elsewhen (res_agnostic) {
+                res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
+            }.elsewhen ( io.slide <= i.U ) {
+                res_data_vec(i) := src_data_hi_vec(index)
+            }.otherwise {
+                res_data_vec(i) := src_data_lo_vec(index2)
+            }
         }.otherwise {
-            res_data_vec(i) := src_data_lo_vec(index2)
+            res_data_vec(i) := Mux(io.ta, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
         }
     }
 
     io.res_data := res_data_vec.reduce{ (a, b) => Cat(b, a) }
 }
 
-class Slide1UpIntModule extends VPermModule {
+class Slide1UpModule extends VPermModule {
     val io = IO(new VPermIO)
 
     val vformat = io.vd_type(1,0)
@@ -206,30 +212,26 @@ class Slide1UpIntModule extends VPermModule {
 
     val mask_start_idx = io.uop_idx << elem_num_pow
 
-    val vlmax = LookupTree(io.vlmul, List(
-        "b000".U -> elem_num,          //lmul=1
-        "b001".U -> (elem_num << 1),   //lmul=2
-        "b010".U -> (elem_num << 2),   //lmul=4
-        "b011".U -> (elem_num << 3),   //lmul=8
+    val elem_vld = LookupTreeDefault(io.vlmul, elem_num, List(
         "b101".U -> (elem_num >> 3),   //lmul=1/8
         "b110".U -> (elem_num >> 2),   //lmul=1/4
         "b111".U -> (elem_num >> 1)    //lmul=1/2
     ))
-    val vl_valid = Mux(io.vl <= vlmax, io.vl, vlmax)
 
     val mask_selected = SelectMaskN(io.mask, 16, mask_start_idx)
 
-    val slide_1_up_module_0 = Module(new Slide1UpInt(16)) //sew=8
-    val slide_1_up_module_1 = Module(new Slide1UpInt(8))  //sew=16
-    val slide_1_up_module_2 = Module(new Slide1UpInt(4))  //sew=32
-    val slide_1_up_module_3 = Module(new Slide1UpInt(2))  //sew=64
+    val slide_1_up_module_0 = Module(new Slide1Up(16)) //sew=8
+    val slide_1_up_module_1 = Module(new Slide1Up(8))  //sew=16
+    val slide_1_up_module_2 = Module(new Slide1Up(4))  //sew=32
+    val slide_1_up_module_3 = Module(new Slide1Up(2))  //sew=64
 
     val slide_1_up_module = VecInit(Seq(slide_1_up_module_0.io, slide_1_up_module_1.io, slide_1_up_module_2.io, slide_1_up_module_3.io))
     for(i <- 0 until 4) {
         slide_1_up_module(i).mask_start_idx := mask_start_idx
         slide_1_up_module(i).slide          := 1.U
+        slide_1_up_module(i).elem_vld       := elem_vld
         slide_1_up_module(i).vstart         := io.vstart
-        slide_1_up_module(i).vl_valid       := vl_valid
+        slide_1_up_module(i).vl             := io.vl
         slide_1_up_module(i).vm             := io.vm
         slide_1_up_module(i).ta             := io.ta
         slide_1_up_module(i).ma             := io.ma
@@ -255,8 +257,9 @@ class SlideDownLookup(n: Int) extends VPermModule {
         val first_slidedown = Input(Bool())
 
         val slide    = Input(UInt(XLEN.W))
+        val elem_vld = Input(UInt(5.W))
         val vstart   = Input(UInt(7.W))
-        val vl_valid = Input(UInt(8.W))
+        val vl       = Input(UInt(8.W))
         val vm       = Input(Bool())
         val ta       = Input(Bool())
         val ma       = Input(Bool())
@@ -280,19 +283,23 @@ class SlideDownLookup(n: Int) extends VPermModule {
     for(i <- 0 until n) {
         val index = io.slide +& i.U + ~io.slide_base + 1.U
         val elements_idx = io.mask_start_idx +& i.U
-        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl_valid) && !io.ta)
-        val res_agnostic = ((elements_idx >= io.vl_valid) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
+        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta)
+        val res_agnostic = ((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
 
-        when (res_keep_old_vd) {
-            res_data_vec(i) := prev_data_vec(i)
-        }.elsewhen (res_agnostic) {
-            res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
-        }.elsewhen ( (io.slide_base <= (io.slide +& i.U)) && ((io.slide +& i.U) < (n.U +& io.slide_base)) ) {
-            res_data_vec(i) := src_data_vec(index)
-        }.elsewhen ( io.first_slidedown ) {
-            res_data_vec(i) := 0.U((VLEN/n).W)
+        when (i.U < io.elem_vld) {
+            when (res_keep_old_vd) {
+                res_data_vec(i) := prev_data_vec(i)
+            }.elsewhen (res_agnostic) {
+                res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
+            }.elsewhen ( (io.slide_base <= (io.slide +& i.U)) && ((io.slide +& i.U) < (n.U +& io.slide_base)) ) {
+                res_data_vec(i) := src_data_vec(index)
+            }.elsewhen ( io.first_slidedown ) {
+                res_data_vec(i) := 0.U((VLEN/n).W)
+            }.otherwise {
+                res_data_vec(i) := prev_data_vec(i)
+            }
         }.otherwise {
-            res_data_vec(i) := prev_data_vec(i)
+            res_data_vec(i) := Mux(io.ta, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
         }
     }
 
@@ -385,16 +392,11 @@ class SlideDownLookupModule extends VPermModule {
                           ((io.vlmul === "b010".U) && ((io.uop_idx === 4.U) || (io.uop_idx === 7.U) || (io.uop_idx === 9.U))) || 
                           ((io.vlmul === "b011".U) && ((io.uop_idx === 8.U) || (io.uop_idx === 15.U) || (io.uop_idx === 21.U) || (io.uop_idx === 26.U) || (io.uop_idx === 30.U) || (io.uop_idx === 33.U) || (io.uop_idx === 35.U)))
 
-    val vlmax = LookupTree(io.vlmul, List(
-        "b000".U -> elem_num,          //lmul=1
-        "b001".U -> (elem_num << 1),   //lmul=2
-        "b010".U -> (elem_num << 2),   //lmul=4
-        "b011".U -> (elem_num << 3),   //lmul=8
+    val elem_vld = LookupTreeDefault(io.vlmul, elem_num, List(
         "b101".U -> (elem_num >> 3),   //lmul=1/8
         "b110".U -> (elem_num >> 2),   //lmul=1/4
         "b111".U -> (elem_num >> 1)    //lmul=1/2
     ))
-    val vl_valid = Mux(io.vl <= vlmax, io.vl, vlmax)
 
     val mask_selected = SelectMaskN(io.mask, 16, mask_start_idx)
 
@@ -409,8 +411,9 @@ class SlideDownLookupModule extends VPermModule {
         slide_down_module(i).mask_start_idx  := mask_start_idx
         slide_down_module(i).first_slidedown := first_slidedown
         slide_down_module(i).slide           := io.vs1(XLEN-1, 0)
+        slide_down_module(i).elem_vld        := elem_vld
         slide_down_module(i).vstart          := io.vstart
-        slide_down_module(i).vl_valid        := vl_valid
+        slide_down_module(i).vl              := io.vl
         slide_down_module(i).vm              := io.vm
         slide_down_module(i).ta              := io.ta
         slide_down_module(i).ma              := io.ma
@@ -428,7 +431,7 @@ class SlideDownLookupModule extends VPermModule {
 }
 
 // vslide1down.vx
-class Slide1DownInt(n: Int) extends VPermModule {
+class Slide1Down(n: Int) extends VPermModule {
     val io = IO(new VPermBundle() {
         val mask_start_idx          = Input(UInt(7.W))
         val ld_rs1_with_prev_res    = Input(Bool())
@@ -436,9 +439,9 @@ class Slide1DownInt(n: Int) extends VPermModule {
         val slide1down_from_vs1     = Input(Bool())
 
         val slide    = Input(UInt(5.W))
+        val elem_vld = Input(UInt(5.W))
         val vstart   = Input(UInt(7.W))
         val vl       = Input(UInt(8.W))
-        val vl_valid = Input(UInt(8.W))
         val vm       = Input(Bool())
         val ta       = Input(Bool())
         val ma       = Input(Bool())
@@ -465,28 +468,32 @@ class Slide1DownInt(n: Int) extends VPermModule {
     for(i <- 0 until n) {
         val index = i.U + io.slide
         val elements_idx = io.mask_start_idx +& i.U
-        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl_valid) && !io.ta) || (io.ld_rs1_with_prev_res && (elements_idx + 1.U =/= io.vl))
-        val res_agnostic = ((elements_idx >= io.vl_valid) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
+        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta) || (io.ld_rs1_with_prev_res && (elements_idx +& 1.U =/= io.vl))
+        val res_agnostic = ((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
 
-        when (res_keep_old_vd) {
-            res_data_vec(i) := prev_data_vec(i)
-        }.elsewhen (res_agnostic) {
-            res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
-        }.elsewhen ( (io.ld_rs1_with_prev_res || io.ld_rs1_without_prev_res) && (elements_idx + 1.U === io.vl) ) {
-            res_data_vec(i) := src_data_hi_vec(0)
-        }.elsewhen ( io.slide < (n-i).U ) {
-            res_data_vec(i) := src_data_lo_vec(index)
-        }.elsewhen ( io.slide1down_from_vs1 ) {
-            res_data_vec(i) := src_data_hi_vec(0)
+        when (i.U < io.elem_vld) {
+            when (res_keep_old_vd) {
+                res_data_vec(i) := prev_data_vec(i)
+            }.elsewhen (res_agnostic) {
+                res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
+            }.elsewhen ( (io.ld_rs1_with_prev_res || io.ld_rs1_without_prev_res) && (elements_idx +& 1.U === io.vl) ) {
+                res_data_vec(i) := src_data_hi_vec(0)
+            }.elsewhen ( io.slide < (n-i).U ) {
+                res_data_vec(i) := src_data_lo_vec(index)
+            }.elsewhen ( io.slide1down_from_vs1 ) {
+                res_data_vec(i) := src_data_hi_vec(0)
+            }.otherwise {
+                res_data_vec(i) := 0.U((VLEN/n).W)
+            }
         }.otherwise {
-            res_data_vec(i) := 0.U((VLEN/n).W)
+            res_data_vec(i) := Mux(io.ta, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
         }
     }
 
     io.res_data := res_data_vec.reduce{ (a, b) => Cat(b, a) }
 }
 
-class Slide1DownIntModule extends VPermModule {
+class Slide1DownModule extends VPermModule {
     val io = IO(new VPermIO)
 
     val vformat = io.vd_type(1,0)
@@ -496,7 +503,7 @@ class Slide1DownIntModule extends VPermModule {
 
     val mask_start_idx = (io.uop_idx >> 1) << elem_num_pow
 
-    val ld_rs1_without_prev_res = ((io.vlmul(2) === 0.U || io.vlmul === "b000".U) && (io.uop_idx === 0.U)) || 
+    val ld_rs1_without_prev_res = ((io.vlmul(2) === 1.U || io.vlmul === "b000".U) && (io.uop_idx === 0.U)) || 
                                   ((io.vlmul === "b001".U) && (io.uop_idx === 2.U)) || 
                                   ((io.vlmul === "b010".U) && (io.uop_idx === 6.U)) || 
                                   (io.uop_idx === 14.U)
@@ -509,23 +516,18 @@ class Slide1DownIntModule extends VPermModule {
                               ((io.vlmul === "b011".U) && (io.uop_idx === 6.U)) || 
                               (io.uop_idx === 8.U) || (io.uop_idx === 10.U) || (io.uop_idx === 12.U)
 
-    val vlmax = LookupTree(io.vlmul, List(
-        "b000".U -> elem_num,          //lmul=1
-        "b001".U -> (elem_num << 1),   //lmul=2
-        "b010".U -> (elem_num << 2),   //lmul=4
-        "b011".U -> (elem_num << 3),   //lmul=8
+    val elem_vld = LookupTreeDefault(io.vlmul, elem_num, List(
         "b101".U -> (elem_num >> 3),   //lmul=1/8
         "b110".U -> (elem_num >> 2),   //lmul=1/4
         "b111".U -> (elem_num >> 1)    //lmul=1/2
     ))
-    val vl_valid = Mux(io.vl <= vlmax, io.vl, vlmax)
 
     val mask_selected = SelectMaskN(io.mask, 16, mask_start_idx)
 
-    val slide_1_down_module_0 = Module(new Slide1DownInt(16)) //sew=8
-    val slide_1_down_module_1 = Module(new Slide1DownInt(8))  //sew=16
-    val slide_1_down_module_2 = Module(new Slide1DownInt(4))  //sew=32
-    val slide_1_down_module_3 = Module(new Slide1DownInt(2))  //sew=64
+    val slide_1_down_module_0 = Module(new Slide1Down(16)) //sew=8
+    val slide_1_down_module_1 = Module(new Slide1Down(8))  //sew=16
+    val slide_1_down_module_2 = Module(new Slide1Down(4))  //sew=32
+    val slide_1_down_module_3 = Module(new Slide1Down(2))  //sew=64
 
     val slide_1_down_module = VecInit(Seq(slide_1_down_module_0.io, slide_1_down_module_1.io, slide_1_down_module_2.io, slide_1_down_module_3.io))
     for(i <- 0 until 4) {
@@ -534,9 +536,9 @@ class Slide1DownIntModule extends VPermModule {
         slide_1_down_module(i).ld_rs1_without_prev_res := ld_rs1_without_prev_res
         slide_1_down_module(i).slide1down_from_vs1     := slide1down_from_vs1
         slide_1_down_module(i).slide                   := 1.U
+        slide_1_down_module(i).elem_vld                := elem_vld
         slide_1_down_module(i).vstart                  := io.vstart
         slide_1_down_module(i).vl                      := io.vl
-        slide_1_down_module(i).vl_valid                := vl_valid
         slide_1_down_module(i).vm                      := io.vm
         slide_1_down_module(i).ta                      := io.ta
         slide_1_down_module(i).ma                      := io.ma
