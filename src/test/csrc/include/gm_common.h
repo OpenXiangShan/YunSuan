@@ -74,4 +74,24 @@ class VGMPermutation : public VPUGoldenModel {
     VecOutput    vslideup_calculation_e64(VSlideUpInput *input);
 };
 
+class VGMIntegerALUF : public VPUGoldenModel {
+  public:
+    VecOutput get_expected_output(VecInput input);
+    virtual ElementOutput calculation_e8(ElementInput input);
+    virtual ElementOutput calculation_e16(ElementInput input);
+    virtual ElementOutput calculation_e32(ElementInput input);
+    virtual ElementOutput calculation_e64(ElementInput input);
+  private:
+    VecOutput get_output_vialuF(VecInput input);
+    VecOutput  vialuF_calculation_vvv(VecInput input);
+    VecOutput  vialuF_calculation_vvw(VecInput input);
+    VecOutput  vialuF_calculation_wvw(VecInput input);
+    VecOutput  vialuF_calculation_wvv(VecInput input);
+    VecOutput  vialuF_calculation_22v(VecInput input);
+    VecOutput  vialuF_calculation_44v(VecInput input);
+    VecOutput  vialuF_calculation_88v(VecInput input);
+    VecOutput  vialuF_calculation_vvm(VecInput input);
+    VecOutput  vialuF_calculation_mmm(VecInput input);
+};
+
 #endif
