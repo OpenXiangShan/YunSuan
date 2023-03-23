@@ -85,7 +85,7 @@ package object yunsuan {
     def vsbc_vvm                       = "b00000101".U(OpTypeWidth.W) // vsbc
     def vmsbc_vvm                      = "b01100110".U(OpTypeWidth.W) // vmsbc
     def vmsbc_vv                       = "b01000110".U(OpTypeWidth.W) // vmsbc
-    def vand_vv                        = "b01000111".U(OpTypeWidth.W) // vand
+    def vand_vv                        = "b00000111".U(OpTypeWidth.W) // vand
     def vor_vv                         = "b00001011".U(OpTypeWidth.W) // vor
     def vxor_vv                        = "b00001010".U(OpTypeWidth.W) // vxor
     def vsll_vv                        = "b00001111".U(OpTypeWidth.W) // vsll

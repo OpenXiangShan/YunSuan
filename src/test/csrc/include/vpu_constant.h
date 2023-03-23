@@ -69,7 +69,7 @@ extern "C"{
 #define VSBC_VVM     (binstoi("00000101"))
 #define VMSBC_VVM    (binstoi("01100110"))
 #define VMSBC_VV     (binstoi("01000110"))
-#define VAND_VV      (binstoi("01000111"))
+#define VAND_VV      (binstoi("00000111"))
 #define VOR_VV       (binstoi("00001011"))
 #define VXOR_VV      (binstoi("00001010"))
 #define VSLL_VV      (binstoi("00001111"))
