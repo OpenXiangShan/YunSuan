@@ -271,7 +271,7 @@ VecOutput VGMPermutation::vslideup_calculation_e64(VSlideUpInput *input) {
   return output;
 }
 
-ElementOutput VGMPermutation::calculation_e8(ElementInput input) {}
-ElementOutput VGMPermutation::calculation_e16(ElementInput input) {}
-ElementOutput VGMPermutation::calculation_e32(ElementInput input) {}
-ElementOutput VGMPermutation::calculation_e64(ElementInput input) {}
+ElementOutput VGMPermutation::calculation_e8(ElementInput  input) {ElementOutput rs; return rs;}
+ElementOutput VGMPermutation::calculation_e16(ElementInput input) {ElementOutput rs; return rs;}
+ElementOutput VGMPermutation::calculation_e32(ElementInput input) {ElementOutput rs; return rs;}
+ElementOutput VGMPermutation::calculation_e64(ElementInput input) {ElementOutput rs; return rs;}

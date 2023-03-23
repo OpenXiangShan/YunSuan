@@ -39,6 +39,7 @@ private:
   VGMFloatDivider vfd;
   VGMIntegerALU valu;
   VGMPermutation vperm;
+  VGMIntegerALUF vialuF;
 
 
 public:
