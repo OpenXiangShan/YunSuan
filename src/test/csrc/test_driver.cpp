@@ -27,9 +27,9 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 
 void TestDriver::set_test_type() {
   test_type.pick_fuType = true;
-  test_type.pick_fuOpType = false;
-  test_type.fuType = VFloatAdder;
-  test_type.fuOpType = VFADD;
+  test_type.pick_fuOpType = true;
+  test_type.fuType = VIntegerALUV2;
+  test_type.fuOpType = VSUB_VV;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -58,6 +58,11 @@ uint8_t TestDriver::gen_random_optype() {
     case VFloatDivider: break;
     case VIntegerALU: break;
     case VPermutation: return VSLIDEUP; break;
+    case VIntegerALUV2: {
+      uint8_t viaf_all_optype[VIAF_NUM] = VIAF_ALL_OPTYPES;
+      return viaf_all_optype[rand() % VIAF_NUM];
+      break;
+    }
     default:
       printf("Unsupported FuType %d\n", input.fuType);
       exit(1);
@@ -108,8 +113,8 @@ void TestDriver::gen_random_vecinfo() {
   input.vinfo.vlmul = vlmul_list[rand() % (7 - input.sew)];
   int elements_per_reg = (VLEN / 8) >> input.sew;
   int vlmax = (input.vinfo.vlmul > 4) ? (elements_per_reg >> (8 - input.vinfo.vlmul)) : (elements_per_reg << input.vinfo.vlmul);
-  input.vinfo.vstart = rand() % vlmax;
-  input.vinfo.vl = rand() % (vlmax + 1);
+  input.vinfo.vstart = 0; // rand() % vlmax; // The vstart of an arithmetic instruction is generally equal to 0
+  input.vinfo.vl = rand() % vlmax + 1; // TODO: vl == 0 may be illegal
 
   input.vinfo.vm = rand() % 2;
   input.vinfo.ta = rand() % 2;
@@ -178,6 +183,9 @@ void TestDriver::get_expected_output() {
     case VPermutation:
       if (verbose) { printf("FuType:%d, choose VPermutation %d\n", input.fuType, VPermutation); }
       expect_output = vperm.get_expected_output(input); return;
+    case VIntegerALUV2:
+      if (verbose) { printf("FuType:%d, choose VIntegerALUV2 %d\n", input.fuType, VIntegerALUV2); }
+      expect_output = vialuF.get_expected_output(input); return;
     default:
       printf("Unsupported FuType %d\n", input.fuType);
       exit(1);
@@ -233,6 +241,7 @@ int TestDriver::diff_output_falling(VSimTop *dut_ptr) {
     dut_output.result[1] = dut_ptr->io_out_bits_result_1;
     dut_output.fflags[0] = dut_ptr->io_out_bits_fflags_0;
     dut_output.fflags[1] = dut_ptr->io_out_bits_fflags_1;
+    dut_output.vxsat = dut_ptr->io_out_bits_vxsat;
 
     if (memcmp(&dut_output, &expect_output, sizeof(dut_output))) {
       printf("Error, compare failed\n");
@@ -262,12 +271,12 @@ void TestDriver::display_ref_input() {
 
 void TestDriver::display_ref_output() {
   printf("Expected Output \n");
-  printf("  result  %016lx_%016lx fflags: %x_%x\n", expect_output.result[1], expect_output.result[0], expect_output.fflags[1], expect_output.fflags[0]);
+  printf("  result  %016lx_%016lx fflags: %x_%x  vxsat: %lx\n", expect_output.result[1], expect_output.result[0], expect_output.fflags[1], expect_output.fflags[0], expect_output.vxsat);
 }
 
 void TestDriver::display_dut() {
   printf("DUT Output:\n");
-  printf("  result  %016lx_%016lx fflags: %x_%x\n", dut_output.result[1], dut_output.result[0], dut_output.fflags[1], dut_output.fflags[0]);
+  printf("  result  %016lx_%016lx fflags: %x_%x  vxsat: %lx\n", dut_output.result[1], dut_output.result[0], dut_output.fflags[1], dut_output.fflags[0], dut_output.vxsat);
 }
 
 void TestDriver::display() {
