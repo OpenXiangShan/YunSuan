@@ -1,10 +1,9 @@
-package yunsuan.vector.alu
+package yunsuan.vector.perm
 
 import chisel3._
 import chisel3.util._
 import scala.language.postfixOps
 import yunsuan.vector._
-import yunsuan.vector.alu.VAluOpcode._
 
 class Permutation extends Module {
   val VLEN = 128
@@ -13,7 +12,7 @@ class Permutation extends Module {
   val NLanes = VLEN/64
   val vlenb = VLEN/8
   val io = IO(new Bundle {
-    val in = Flipped(ValidIO(new VIFuInput))
+    val in = Flipped(ValidIO(new VPermInput))
     val out = Output(new VIFuOutput)
   })
 
@@ -47,12 +46,15 @@ val eewVs2 = SewOH(srcTypeVs2(1, 0))
 val eewVd = SewOH(vdType(1, 0))
 val vd_mask = (~0.U(VLEN.W))
 
-val vcompress = opcode === VAluOpcode.vcompress
-val vslideup    = opcode === VAluOpcode.vslideup   
-val vslidedn  = opcode === VAluOpcode.vslidedown 
-val vslide1up   = opcode === VAluOpcode.vslide1up  
-val vslide1dn = opcode === VAluOpcode.vslide1down
-val vrgather    = opcode === VAluOpcode.vrgather   
+val vcompress        = opcode.isVcompress
+val vslideup         = opcode.isVslideup   
+val vslidedn         = opcode.isVslidedown 
+val vslide1up        = opcode.isVslide1up  
+val vslide1dn        = opcode.isVslide1down
+val vrgather         = opcode.isVrgather   
+val vrgather_vx      = opcode.isVrgather_vx   
+val vmvnr            = opcode.isVmvnr   
+val vrgather16_sew8  = opcode.isVrgather && (srcTypeVs1 === 1.U) && (srcTypeVs2 === 0.U)   
 val vslide = vslideup || vslide1up || vslidedn || vslide1dn 
 
 val base = Wire(UInt(7.W))
@@ -67,19 +69,23 @@ val vd_reg = RegInit(0.U(VLEN.W))
 vlRemain := vl 
 when ((vcompress && (uopIdx === 3.U)) || 
       ((vslideup) && ((uopIdx === 1.U) || (uopIdx === 2.U))) || 
-      ((vslidedn) && (uopIdx === 2.U)) 
+      ((vslidedn) && (uopIdx === 2.U)) ||  
+      (((vrgather && !vrgather16_sew8) || vrgather_vx) && (uopIdx >= 2.U)) ||  
+      (vrgather16_sew8 && (uopIdx >= 4.U))  
       ) { 
   vlRemain := Mux(vl >= ele_cnt, vl - ele_cnt, 0.U) 
 } .elsewhen (vslide1up) {
   vlRemain := Mux(vl >= ele_cnt*uopIdx, vl - ele_cnt*uopIdx, 0.U) 
 } .elsewhen (vslide1dn) {
   vlRemain := Mux(vl >= ele_cnt*uopIdx(5,1), vl - ele_cnt*uopIdx(5,1), 0.U) 
-}
+} 
 
 vmask_uop := vmask0
 when ((vcompress && uopIdx(1)) || 
       (vslideup && ((uopIdx === 1.U) || (uopIdx === 2.U))) ||
-      (vslidedn && (uopIdx === 2.U))
+      (vslidedn && (uopIdx === 2.U)) ||  
+      (((vrgather && !vrgather16_sew8) || vrgather_vx) && (uopIdx >= 2.U)) ||  
+      (vrgather16_sew8 && (uopIdx >= 4.U))  
       ) {
   vmask_uop := vmask1
 } .elsewhen (vslide1up) {
@@ -109,6 +115,79 @@ for (i <-0 until vlenb) {
     }
   } .otherwise {
     vmask_byte_strb(i) := 0.U 
+  }
+}
+
+// vrgather/vrgather16
+val vrgather_byte_sel = Wire(Vec(vlenb, UInt(64.W)))
+val first_gather = (vlmul >= 4.U) || (vlmul === 0.U) || ((vlmul === 1.U) && (Mux(vrgather16_sew8, uopIdx(1), uopIdx(0)) === 0.U))
+val vs2_bytes_min = Mux((vrgather16_sew8 && uopIdx(1)) || (((vrgather && !vrgather16_sew8) || vrgather_vx) && uopIdx(0)), vlenb.U, 0.U)
+val vs2_bytes_max = Mux((vrgather16_sew8 && uopIdx(1)) || (((vrgather && !vrgather16_sew8) || vrgather_vx) && uopIdx(0)), Cat(vlenb.U, 0.U), vlenb.U)
+val vrgather_vd = Wire(Vec(vlenb, UInt(8.W)))
+
+for (i<-0 until vlenb) {
+  vrgather_byte_sel(i) := 0.U
+  vrgather_vd(i) := 0.U
+}
+
+for (i<-0 until vlenb/2) {
+  vrgather_byte_sel(i) := 0.U
+  when (vrgather_vx) {
+    vrgather_byte_sel(i) := vs1(63,0)
+  } .otherwise {
+    when (srcTypeVs1(1,0) === 0.U) {
+      vrgather_byte_sel(i) := vs1((i+1)*8 -1,i*8)
+    } .elsewhen (srcTypeVs1(1,0) === 1.U) {
+      when ((srcTypeVs2(1,0) === 0.U) && !uopIdx(0)) {
+        vrgather_byte_sel(i) := vs1((i+1)*16-1,i*16)
+      } .elsewhen (srcTypeVs2(1,0) === 1.U) {
+        vrgather_byte_sel(i) := Cat(vs1((i/2+1)*16-1,i/2*16), 0.U(1.W)) +i.U%2.U
+      } .elsewhen (srcTypeVs2(1,0) === 2.U) {
+        vrgather_byte_sel(i) := Cat(vs1((i/2+1)*16-1,i/2*16), 0.U(2.W)) +i.U%4.U
+      } .elsewhen (srcTypeVs2(1,0) === 3.U) {
+        vrgather_byte_sel(i) := Cat(vs1((i/2+1)*16-1,i/2*16), 0.U(3.W)) +i.U%8.U
+      }
+    } .elsewhen (srcTypeVs1(1,0) === 2.U) {
+      vrgather_byte_sel(i) := Cat(vs1((i/4+1)*32-1,i/4*32), 0.U(2.W)) +i.U%4.U
+    } .elsewhen (srcTypeVs1(1,0) === 3.U) {
+      vrgather_byte_sel(i) := Cat(vs1((i/8+1)*64-1,i/8*64), 0.U(3.W)) +i.U%8.U
+    }
+  }
+}
+
+for (i<-(vlenb/2) until vlenb) {
+  vrgather_byte_sel(i) := 0.U
+  when (vrgather_vx) {
+    vrgather_byte_sel(i) := vs1(63,0)
+  } .otherwise {
+    when (srcTypeVs1(1,0) === 0.U) {
+      vrgather_byte_sel(i) := vs1((i+1)*8 -1,i*8)
+    } .elsewhen (srcTypeVs1(1,0) === 1.U) {
+      when ((srcTypeVs2(1,0) === 0.U) && uopIdx(0)) {
+        vrgather_byte_sel(i) := vs1((i+1-vlenb/2)*16-1, (i-vlenb/2)*16)
+      } .elsewhen (srcTypeVs2(1,0) === 1.U) {
+        vrgather_byte_sel(i) := Cat(vs1((i/2+1)*16-1,i/2*16), 0.U(1.W)) +i.U%2.U
+      } .elsewhen (srcTypeVs2(1,0) === 2.U) {
+        vrgather_byte_sel(i) := Cat(vs1((i/2+1)*16-1,i/2*16), 0.U(2.W)) +i.U%4.U
+      } .elsewhen (srcTypeVs2(1,0) === 3.U) {
+        vrgather_byte_sel(i) := Cat(vs1((i/2+1)*16-1,i/2*16), 0.U(3.W)) +i.U%8.U
+      }
+    } .elsewhen (srcTypeVs1(1,0) === 2.U) {
+      vrgather_byte_sel(i) := Cat(vs1((i/4+1)*32-1,i/4*32), 0.U(2.W)) +i.U%4.U
+    } .elsewhen (srcTypeVs1(1,0) === 3.U) {
+      vrgather_byte_sel(i) := Cat(vs1((i/8+1)*64-1,i/8*64), 0.U(3.W)) +i.U%8.U
+    }
+  }
+}
+
+when ((vrgather || vrgather_vx) && fire) {
+  for (i<-0 until vlenb) {
+    vrgather_vd(i) := old_vd((i+1)*8-1,i*8)
+    when ((vrgather_byte_sel(i) >= vs2_bytes_min) && (vrgather_byte_sel(i) < vs2_bytes_max) && vmask_byte_strb(i).asBool) {
+      vrgather_vd(i) := vs2_bytes(vrgather_byte_sel(i.U)-vs2_bytes_min)
+    } .elsewhen (first_gather && vmask_byte_strb(i).asBool) {
+      vrgather_vd(i) := 0.U 
+    }
   }
 }
 
@@ -175,33 +254,34 @@ when (load_rs1 || uopIdx(0)) {
   }
 }
 
-
 val tail_bytes = Mux((vlRemainBytes >= vlenb.U), 0.U, vlenb.U-vlRemainBytes) 
 val tail_bits = Cat(tail_bytes, 0.U(3.W))
 val vmask_tail_bits = vd_mask >> tail_bits 
 val tail_old_vd = old_vd & (~vmask_tail_bits)  
 val tail_ones_vd = ~vmask_tail_bits
 val tail_vd = Mux(ta, tail_ones_vd, tail_old_vd)
-val vslide_vd = Wire(Vec(vlenb, UInt(8.W)))  
-val vslide_tail_mask_vd = Wire(UInt(VLEN.W))
+val perm_vd = Wire(Vec(vlenb, UInt(8.W)))  
+val perm_tail_mask_vd = Wire(UInt(VLEN.W))
 
-vslide_vd :=vslideup_vd
+perm_vd :=vslideup_vd
 when (vslideup && fire) {
-  vslide_vd := vslideup_vd
+  perm_vd := vslideup_vd
 } .elsewhen (vslide1up && fire) {
-  vslide_vd := vslide1up_vd
+  perm_vd := vslide1up_vd
 } .elsewhen (vslidedn && fire) {
-  vslide_vd := vslidedn_vd
+  perm_vd := vslidedn_vd
 } .elsewhen (vslide1dn && fire) {
-  vslide_vd := vslide1dn_vd 
+  perm_vd := vslide1dn_vd 
+} .elsewhen ((vrgather || vrgather_vx) && fire) {
+  perm_vd := vrgather_vd 
 }
 
-vslide_tail_mask_vd := Cat(vslide_vd.reverse) 
+perm_tail_mask_vd := Cat(perm_vd.reverse) 
 when ((vslideup && fire && (uopIdx =/= 1.U))  ||
       (vslidedn && fire && (uopIdx =/= 0.U))  ||
       (vslide1up && fire)  ||
       (vslide1dn && fire && (uopIdx(0) || load_rs1))) {
-  vslide_tail_mask_vd := (Cat(vslide_vd.reverse) & vmask_tail_bits) | tail_vd
+  perm_tail_mask_vd := (Cat(perm_vd.reverse) & vmask_tail_bits) | tail_vd
 }
 
 val in_previous_ones_sum = Wire(UInt(7.W))
@@ -225,9 +305,18 @@ when (vcompress && fire) {
   } .otherwise {
     vd_reg := Cat(cmprs_vd.reverse) 
   }
-} .elsewhen (vslide && fire) {
-    vd_reg := vslide_tail_mask_vd
+} .elsewhen (vrgather16_sew8 && fire) {
+   when (uopIdx(0)) {
+     vd_reg := Cat(perm_tail_mask_vd(VLEN-1, VLEN/2), old_vd(VLEN/2-1, 0))
+   } .otherwise {
+     vd_reg := Cat(old_vd(VLEN-1, VLEN/2), perm_tail_mask_vd(VLEN/2-1, 0))
+   }
+} .elsewhen ((vslide || vrgather || vrgather_vx) && fire) {
+    vd_reg := perm_tail_mask_vd
+} .elsewhen (vmvnr && fire) {
+    vd_reg := vs2
 } 
+
 
 in_previous_ones_sum := vmask(6,0)
 
@@ -258,7 +347,7 @@ io.out.vxsat := false.B
 
 object VerilogPer extends App {
   println("Generating the VPU CrossLane hardware")
-  emitVerilog(new Permutation(), Array("--target-dir", "generated"))
+  emitVerilog(new Permutation(), Array("--target-dir", "build/vifu"))
 }
 
 

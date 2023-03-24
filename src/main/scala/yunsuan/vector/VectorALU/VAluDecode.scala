@@ -52,13 +52,8 @@ object VAluOpcode {
   val vmsof   = 43.U(6.W)
   val viota   = 44.U(6.W)
   val vid     = 45.U(6.W)
-  // Integer Scalar Move vmv.s.x vd, rs1
-  val vslideup    = 46.U(6.W)
-  val vslidedown  = 47.U(6.W)
-  val vslide1up   = 48.U(6.W)
-  val vslide1down = 49.U(6.W)
-  val vrgather    = 50.U(6.W)
-  val vcompress   = 51.U(6.W)
+  val vmvxs   = 46.U(6.W)
+
 }
 
 import VAluOpcode._
@@ -70,7 +65,6 @@ object VIntFixpTable {
   val default =       BitPat("b?  1  0")
   val table   = Seq(
     BitPat(vadd)   -> BitPat("b0  0  0"),
-    BitPat(vsub)   -> BitPat("b1  0  0"),
     BitPat(vsub)   -> BitPat("b1  0  0"),
     BitPat(vadc)   -> BitPat("b0  0  0"),
     BitPat(vmadc)  -> BitPat("b0  0  1"),

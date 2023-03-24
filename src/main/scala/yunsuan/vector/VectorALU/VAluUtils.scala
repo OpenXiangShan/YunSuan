@@ -64,10 +64,10 @@ object UIntToCont1s {
 
 // Tail generation: 16 bits. Note: uopIdx < 8
 object TailGen {
-  def apply(vl: UInt, uopIdx: UInt, eew: SewOH): UInt = {
+  def apply(vl: UInt, uopIdx: UInt, eew: SewOH, narrow: Bool): UInt = {
     val tail = Wire(UInt(16.W))
     // vl - uopIdx * 128/eew
-    val nElemRemain = Cat(0.U(1.W), vl) - Mux1H(eew.oneHot, Seq(4,3,2,1).map(x => Cat(uopIdx(2, 0), 0.U(x.W))))
+    val nElemRemain = Cat(0.U(1.W), vl) - Mux1H(eew.oneHot, Seq(4,3,2,1).map(x => Cat(Mux(narrow, uopIdx(2,1), uopIdx(2,0)), 0.U(x.W))))
     val maxNElemInOneUop = Mux1H(eew.oneHot, Seq(16.U, 8.U, 4.U, 2.U))
     val vl_width = vl.getWidth
     require(vl_width == 8)
@@ -84,10 +84,10 @@ object TailGen {
 
 // Prestart generation: 16 bits. Note: uopIdx < 8
 object PrestartGen {
-  def apply(vstart: UInt, uopIdx: UInt, eew: SewOH): UInt = {
+  def apply(vstart: UInt, uopIdx: UInt, eew: SewOH, narrow: Bool): UInt = {
     val prestart = Wire(UInt(16.W))
     // vstart - uopIdx * 128/eew
-    val nElemRemain = Cat(0.U(1.W), vstart) - Mux1H(eew.oneHot, Seq(4,3,2,1).map(x => Cat(uopIdx(2, 0), 0.U(x.W))))
+    val nElemRemain = Cat(0.U(1.W), vstart) - Mux1H(eew.oneHot, Seq(4,3,2,1).map(x => Cat(Mux(narrow, uopIdx(2,1), uopIdx(2,0)), 0.U(x.W))))
     val maxNElemInOneUop = Mux1H(eew.oneHot, Seq(16.U, 8.U, 4.U, 2.U))
     val vstart_width = vstart.getWidth
     require(vstart_width == 7)

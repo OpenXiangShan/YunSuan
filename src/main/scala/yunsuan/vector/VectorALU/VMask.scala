@@ -46,13 +46,13 @@ val eewVs2 = SewOH(srcTypeVs2(1, 0))
 val eewVd = SewOH(vdType(1, 0))
 val vd_mask = (~0.U(VLEN.W))
 
-val vcpop_m  = opcode === VAluOpcode.vcpop 
-val vfirst_m = opcode === VAluOpcode.vfirst
-val vmsbf_m  = opcode === VAluOpcode.vmsbf 
-val vmsif_m  = opcode === VAluOpcode.vmsif 
-val vmsof_m  = opcode === VAluOpcode.vmsof 
-val viota_m  = opcode === VAluOpcode.viota 
-val vid_v    = opcode === VAluOpcode.vid   
+val vcpop_m  = opcode.isVcpop  
+val vfirst_m = opcode.isVfirst 
+val vmsbf_m  = opcode.isVmsbf  
+val vmsif_m  = opcode.isVmsif  
+val vmsof_m  = opcode.isVmsof  
+val viota_m  = opcode.isViota  
+val vid_v    = opcode.isVid    
 
 val first = Wire(Vec(NLanes, SInt(xLen.W)))
 val vmfirst = Wire(SInt(xLen.W))
@@ -222,7 +222,7 @@ io.out.vxsat := false.B
 
 object VerilogMask extends App {
   println("Generating the VPU Mask hardware")
-  emitVerilog(new VMask(), Array("--target-dir", "generated"))
+  emitVerilog(new VMask(), Array("--target-dir", "build/vifu"))
 }
 
 

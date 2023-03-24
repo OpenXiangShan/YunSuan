@@ -37,7 +37,7 @@ class VIAluFWrapper extends Module {
 
 // connect VIAluF
   val vIntFixpAlu = Module(new VIntFixpAlu)
-  vIntFixpAlu.io.in.opcode := VialuFixType.getOpcode(in.fuOpType)
+  vIntFixpAlu.io.in.opcode := VialuFixType.getOpcode(in.fuOpType).asTypeOf(vIntFixpAlu.io.in.opcode.cloneType)
   vIntFixpAlu.io.in.info.vm := in.info.vm
   vIntFixpAlu.io.in.info.ma := in.info.ma
   vIntFixpAlu.io.in.info.ta := in.info.ta
