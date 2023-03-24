@@ -68,10 +68,15 @@ class VGMPermutation : public VPUGoldenModel {
     virtual ElementOutput calculation_e64(ElementInput input);
   private:
     VecOutput get_output_vslideup(VecInput input);
-    VecOutputE8  vslideup_calculation_e8(VSlideUpInput *input);
-    VecOutputE16 vslideup_calculation_e16(VSlideUpInput *input);
-    VecOutputE32 vslideup_calculation_e32(VSlideUpInput *input);
-    VecOutput    vslideup_calculation_e64(VSlideUpInput *input);
+    VecOutputE8  vslideup_calculation_e8(VSlideInput *input);
+    VecOutputE16 vslideup_calculation_e16(VSlideInput *input);
+    VecOutputE32 vslideup_calculation_e32(VSlideInput *input);
+    VecOutput    vslideup_calculation_e64(VSlideInput *input);
+    VecOutput get_output_vslidedown(VecInput input);
+    VecOutputE8  vslidedown_calculation_e8(VSlideInput *input);
+    VecOutputE16 vslidedown_calculation_e16(VSlideInput *input);
+    VecOutputE32 vslidedown_calculation_e32(VSlideInput *input);
+    VecOutput    vslidedown_calculation_e64(VSlideInput *input);
 };
 
 class VGMIntegerALUF : public VPUGoldenModel {

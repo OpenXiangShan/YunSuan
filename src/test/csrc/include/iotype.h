@@ -120,7 +120,7 @@ struct ElementInput {
 };
 
 
-struct VSlideUpInput {
+struct VSlideInput {
   uint64_t *src_data;
   uint64_t *prev_data;
   uint16_t mask;
@@ -128,6 +128,7 @@ struct VSlideUpInput {
   int mask_start_idx;
   int slide_base;
   int elements;
+  bool first_slide;
   VecInfo *vinfo;
 };
 
