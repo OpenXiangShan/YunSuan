@@ -55,6 +55,7 @@ public:
   uint8_t gen_random_sew();
   bool gen_random_widen();
   bool gen_random_src_widen();
+  bool gen_random_is_frs1();
   void gen_random_vecinfo();
   void gen_random_uopidx();
 

@@ -50,6 +50,7 @@ class VSTInputIO extends VPUTestBundle {
 
   val src_widen = Bool()
   val widen = Bool()
+  val is_frs1 = Bool()
 
   val rm = UInt(3.W)
   val rm_s = UInt(2.W)
@@ -103,9 +104,9 @@ class SimTop() extends VPUTestModule {
   val finish_uncertain = Wire(Bool())
   val is_uncertain = (in.fuType === VPUTestFuType.vfd)
 
-  val (sew, uop_idx, rm, rm_s, fuType, opcode, src_widen, widen) = (
+  val (sew, uop_idx, rm, rm_s, fuType, opcode, src_widen, widen, is_frs1) = (
     in.sew, in.uop_idx, in.rm, in.rm_s, in.fuType, in.fuOpType,
-    in.src_widen, in.widen
+    in.src_widen, in.widen, in.is_frs1
   )
 
   val (vstart, vl, vlmul, vm, ta, ma) = (
@@ -137,6 +138,7 @@ class SimTop() extends VPUTestModule {
     // Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
     vfa.io.widen_a := Cat(in.src(0)(1)(31+i*32,0+i*32),in.src(0)(0)(31+i*32,0+i*32))
     vfa.io.widen_b := Cat(in.src(1)(1)(31+i*32,0+i*32),in.src(1)(0)(31+i*32,0+i*32))
+    vfa.io.frs1  := in.src(1)(0) // VS1(63,0)
     vfa.io.fp_b := src2
     // TODO: change mask
     vfa.io.mask := Cat(src3(48),src3(32),src3(16),src3(0))
@@ -146,6 +148,7 @@ class SimTop() extends VPUTestModule {
     vfa.io.fp_format := sew
     vfa.io.opb_widening := src_widen
     vfa.io.res_widening := widen
+    vfa.io.is_frs1 := is_frs1
     vfa.io.op_code      := opcode
     vfa.io.is_vec       := true.B // TODO: check it
     vfa_result.result(i) := vfa.io.fp_result
