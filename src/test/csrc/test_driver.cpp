@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <cstdlib>
 #include <stdint.h>
+#include <algorithm>
 extern "C" {
 #include <softfloat.h>
 }
@@ -54,7 +55,11 @@ uint8_t TestDriver::gen_random_optype() {
       return vfadd_all_optype[rand() % VFA_NUM];
       break;
       }
-    case VFloatFMA: break;
+    case VFloatFMA: {
+      uint8_t vffma_all_optype[VFF_NUM] = VFF_ALL_OPTYPES;
+      return vffma_all_optype[rand() % VFF_NUM];
+      break;
+      }
     case VFloatDivider: break;
     case VIntegerALU: break;
     case VPermutation: return VSLIDEUP; break;
@@ -104,6 +109,21 @@ bool TestDriver::gen_random_src_widen() {
     }
   }
   else return false;
+}
+
+bool TestDriver::gen_random_is_frs1() {
+  switch(input.fuType){
+    case VFloatAdder: {
+      uint8_t need_frs1_ops[] = VFA_NEED_FRS1_OPTYPES;
+      uint8_t must_frs1_ops[] = VFA_MUST_FRS1_OPTYPES;
+      bool need_frs1 = std::find(std::begin(need_frs1_ops), std::end(need_frs1_ops), input.fuOpType) != std::end(need_frs1_ops);
+      bool must_frs1 = std::find(std::begin(must_frs1_ops), std::end(must_frs1_ops), input.fuOpType) != std::end(must_frs1_ops);
+      if (must_frs1) {return true; break;}
+      else if (need_frs1) {return rand() % 2 == 0; break;}
+      else {return false; break;}
+    }
+    default: return false; break;
+  }
 }
 
 void TestDriver::gen_random_vecinfo() {
@@ -158,6 +178,7 @@ void TestDriver::get_random_input() {
   input.sew = gen_random_sew();
   input.widen = gen_random_widen();
   input.src_widen = gen_random_src_widen();
+  input.is_frs1 = gen_random_is_frs1();
   input.rm = rand() % 5;
   input.rm_s = rand() % 5;
   gen_random_vecinfo();
@@ -177,6 +198,9 @@ void TestDriver::get_expected_output() {
     case VFloatAdder:
       if (verbose) { printf("FuType:%d, choose VFloatAdder %d\n", input.fuType, VFloatAdder); }
       expect_output = vfa.get_expected_output(input); return;
+    case VFloatFMA:
+      if (verbose) { printf("FuType:%d, choose VFloatFMA %d\n", input.fuType, VFloatFMA); }
+      expect_output = vff.get_expected_output(input); return;
     case VFloatDivider:
       if (verbose) { printf("FuType:%d, choose VFloatDivider %d\n", input.fuType, VFloatDivider); }
       expect_output = vfd.get_expected_output(input); return;
@@ -222,6 +246,7 @@ bool TestDriver::assign_input_raising(VSimTop *dut_ptr) {
   dut_ptr->io_in_bits_uop_idx = input.uop_idx;
   dut_ptr->io_in_bits_src_widen = input.src_widen;
   dut_ptr->io_in_bits_widen   = input.widen;
+  dut_ptr->io_in_bits_is_frs1 = input.is_frs1;
   dut_ptr->io_in_bits_rm      = input.rm;
   dut_ptr->io_in_bits_vinfo_vstart = input.vinfo.vstart;
   dut_ptr->io_in_bits_vinfo_vl     = input.vinfo.vl;
@@ -265,7 +290,7 @@ int TestDriver::diff_output_falling(VSimTop *dut_ptr) {
 void TestDriver::display_ref_input() {
   printf("REF Input:\n");
   printf("  src1 %016lx_%016lx src2 %016lx_%016lx src3 %016lx_%016lx src4 %016lx_%016lx\n", input.src1[1], input.src1[0], input.src2[1], input.src2[0], input.src3[1], input.src3[0], input.src4[1], input.src4[0]);
-  printf("  fuType %x fuOpType %x sew %x uop_idx %d src_widen %d widen %d rm %d\n", input.fuType, input.fuOpType, input.sew, input.uop_idx, input.src_widen, input.widen, input.rm);
+  printf("  fuType %x fuOpType %x sew %x uop_idx %d src_widen %d widen %d is_frs1 %d rm %d\n", input.fuType, input.fuOpType, input.sew, input.uop_idx, input.src_widen, input.widen, input.is_frs1, input.rm);
   printf("  vstart %d vl %d vlmul %x vm %d ta %d ma %d\n", input.vinfo.vstart, input.vinfo.vl, input.vinfo.vlmul, input.vinfo.vm, input.vinfo.ta, input.vinfo.ma);
 }
 

@@ -8,7 +8,7 @@ import yunsuan.{VfaddOpCode, VectorElementFormat}
   * f16/f32/f64, support widen
   * op_code(Width=5):
   * 0: Add
-  * 1: Sub
+  * 1: Sub, vfrsub contrl logic reverse the input data
   * 2: Minimum
   * 3: Maximum
   * 4: Floating-Point Merge
@@ -32,6 +32,8 @@ class VectorFloatAdder() extends Module {
     val fp_a, fp_b    = Input (UInt(floatWidth.W)) // fp_a -> vs2, fp_b -> vs1
     val widen_a       = Input (UInt(floatWidth.W)) // widen_a -> Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
     val widen_b       = Input (UInt(floatWidth.W)) // widen_b -> Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
+    val frs1          = Input (UInt(floatWidth.W)) // VS1(63,0)
+    val is_frs1       = Input (Bool()) // VS1()
     val mask          = Input (UInt(4.W))
     val uop_idx       = Input (Bool())
     val is_vec        = Input (Bool())
@@ -72,9 +74,11 @@ class VectorFloatAdder() extends Module {
   U_Widen_Fotmat.io.uop_idx := io.uop_idx
   U_Widen_Fotmat.io.widen_a := io.widen_a
   U_Widen_Fotmat.io.widen_b := io.widen_b
+  U_Widen_Fotmat.io.is_frs1 := io.is_frs1
+  U_Widen_Fotmat.io.frs1 := io.frs1
   val U_F32_Mixed_0 = Module(new FloatAdderF32WidenF16MixedPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F32_Mixed_0.io.fp_a := io.fp_a(31,0)
-  U_F32_Mixed_0.io.fp_b := io.fp_b(31,0)
+  U_F32_Mixed_0.io.fp_b := Mux(io.is_frs1,io.frs1(31,0),io.fp_b(31,0))
   U_F32_Mixed_0.io.widen_a := U_Widen_Fotmat.io.widen_a_f32_0
   U_F32_Mixed_0.io.widen_b := U_Widen_Fotmat.io.widen_b_f32_0
   U_F32_Mixed_0.io.mask := io.mask(0)
@@ -92,7 +96,7 @@ class VectorFloatAdder() extends Module {
 
   val U_F32_Mixed_1 = Module(new FloatAdderF32WidenF16MixedPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F32_Mixed_1.io.fp_a := io.fp_a(63,32)
-  U_F32_Mixed_1.io.fp_b := io.fp_b(63,32)
+  U_F32_Mixed_1.io.fp_b := Mux(io.is_frs1,io.frs1(31,0),io.fp_b(63,32))
   U_F32_Mixed_1.io.widen_a := U_Widen_Fotmat.io.widen_a_f32_1
   U_F32_Mixed_1.io.widen_b := U_Widen_Fotmat.io.widen_b_f32_1
   U_F32_Mixed_1.io.mask := Mux(fp_format === 2.U, io.mask(1), io.mask(2))
@@ -110,7 +114,7 @@ class VectorFloatAdder() extends Module {
 
   val U_F64_Widen_0 = Module(new FloatAdderF64WidenPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F64_Widen_0.io.fp_a := io.fp_a
-  U_F64_Widen_0.io.fp_b := io.fp_b
+  U_F64_Widen_0.io.fp_b := Mux(io.is_frs1,io.frs1,io.fp_b)
   U_F64_Widen_0.io.widen_a := U_Widen_Fotmat.io.widen_a_f64
   U_F64_Widen_0.io.widen_b := U_Widen_Fotmat.io.widen_b_f64
   U_F64_Widen_0.io.mask := io.mask(0)
@@ -125,7 +129,7 @@ class VectorFloatAdder() extends Module {
 
   val U_F16_1 = Module(new FloatAdderF16Pipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F16_1.io.fp_a := io.fp_a(31,16)
-  U_F16_1.io.fp_b := io.fp_b(31,16)
+  U_F16_1.io.fp_b := Mux(io.is_frs1,io.frs1(15,0),io.fp_b(31,16))
   U_F16_1.io.mask := io.mask(1)
   U_F16_1.io.is_sub := fast_is_sub
   U_F16_1.io.round_mode := io.round_mode
@@ -135,7 +139,7 @@ class VectorFloatAdder() extends Module {
 
   val U_F16_3 = Module(new FloatAdderF16Pipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F16_3.io.fp_a := io.fp_a(63,48)
-  U_F16_3.io.fp_b := io.fp_b(63,48)
+  U_F16_3.io.fp_b := Mux(io.is_frs1,io.frs1(15,0),io.fp_b(63,48))
   U_F16_3.io.mask := io.mask(3)
   U_F16_3.io.is_sub := fast_is_sub
   U_F16_3.io.round_mode := io.round_mode
@@ -182,7 +186,9 @@ private[vector] class FloatAdderWidenFormat() extends Module {
   val io = IO(new Bundle() {
     val widen_a = Input(UInt(64.W))
     val widen_b = Input(UInt(64.W))
+    val frs1 = Input(UInt(64.W))
     val uop_idx = Input(Bool())
+    val is_frs1 = Input(Bool())
     val widen_a_f32_0 = Output(UInt(32.W))
     val widen_b_f32_0 = Output(UInt(32.W))
     val widen_a_f32_1 = Output(UInt(32.W))
@@ -228,11 +234,11 @@ private[vector] class FloatAdderWidenFormat() extends Module {
     Cat(in(w-1), fp_a_widen_exp, fp_a_widen_mantissa)
   }
   io.widen_a_f32_0 := Mux(io.uop_idx,Widen(io.widen_a(47,32)),Widen(io.widen_a(15,0)))
-  io.widen_b_f32_0 := Mux(io.uop_idx,Widen(io.widen_b(47,32)),Widen(io.widen_b(15,0)))
+  io.widen_b_f32_0 := Mux(io.is_frs1,Widen(io.frs1(15,0)),Mux(io.uop_idx,Widen(io.widen_b(47,32)),Widen(io.widen_b(15,0))))
   io.widen_a_f32_1 := Mux(io.uop_idx,Widen(io.widen_a(63,48)),Widen(io.widen_a(31,16)))
-  io.widen_b_f32_1 := Mux(io.uop_idx,Widen(io.widen_b(63,48)),Widen(io.widen_b(31,16)))
+  io.widen_b_f32_1 := Mux(io.is_frs1,Widen(io.frs1(15,0)),Mux(io.uop_idx,Widen(io.widen_b(63,48)),Widen(io.widen_b(31,16))))
   io.widen_a_f64 := Mux(io.uop_idx,Widen(io.widen_a(63,32)),Widen(io.widen_a(31,0)))
-  io.widen_b_f64 := Mux(io.uop_idx,Widen(io.widen_b(63,32)),Widen(io.widen_b(31,0)))
+  io.widen_b_f64 := Mux(io.is_frs1,Widen(io.frs1(31,0)),Mux(io.uop_idx,Widen(io.widen_b(63,32)),Widen(io.widen_b(31,0))))
 }
 
 private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = false,val hasMinMaxCompare:Boolean = false) extends Module {

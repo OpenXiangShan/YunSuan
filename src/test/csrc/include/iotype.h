@@ -21,6 +21,7 @@ struct VecInput {
   uint8_t sew; // only 2 bits
   bool src_widen;
   bool widen;
+  bool is_frs1; // vector-scalar vs2, f[rs1]
   uint8_t rm; // only 3 bits
   uint8_t rm_s; //only 2 bits
   VecInfo vinfo;

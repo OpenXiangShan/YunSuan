@@ -66,12 +66,12 @@ ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
       switch (sew) {
         case 2:
           element.src1 = (uint64_t)input16->src1[widen_idx];
-          element.src2 = input.src_widen ? (uint64_t)input32->src2[idx] : input16->src2[widen_idx];
+          element.src2 = input.is_frs1 ? (uint64_t)input64->src2[0] : (input.src_widen ? (uint64_t)input32->src2[idx] : (uint64_t)input16->src2[widen_idx]);
           element.src3 = (uint64_t)input32->src3[idx];
           break;
         case 3:
           element.src1 = (uint64_t)input32->src1[widen_idx];
-          element.src2 = input.src_widen ? (uint64_t)input64->src2[idx] : (uint64_t)input32->src2[widen_idx];
+          element.src2 = input.is_frs1 ?  (uint64_t)input64->src2[0] : (input.src_widen ? (uint64_t)input64->src2[idx] : (uint64_t)input32->src2[widen_idx]);
           element.src3 = (uint64_t)input64->src3[idx];
           break;
         default:
@@ -93,17 +93,17 @@ ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
         break;
       case 1:
         element.src1 = (uint64_t)input16->src1[idx];
-        element.src2 = (uint64_t)input16->src2[idx];
+        element.src2 = input.is_frs1 ? (uint64_t)input64->src2[0] : (uint64_t)input16->src2[idx];
         element.src3 = (uint64_t)input16->src3[idx];
         break;
       case 2:
         element.src1 = (uint64_t)input32->src1[idx];
-        element.src2 = (uint64_t)input32->src2[idx];
+        element.src2 = input.is_frs1 ? (uint64_t)input64->src2[0] : (uint64_t)input32->src2[idx];
         element.src3 = (uint64_t)input32->src3[idx];
         break;
       case 3:
         element.src1 = (uint64_t)input64->src1[idx];
-        element.src2 = (uint64_t)input64->src2[idx];
+        element.src2 = input.is_frs1 ? (uint64_t)input64->src2[0] : (uint64_t)input64->src2[idx];
         element.src3 = (uint64_t)input64->src3[idx];
         break;
       default:
