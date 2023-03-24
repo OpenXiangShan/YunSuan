@@ -140,7 +140,7 @@ class VIntAdder64b extends Module {
     eewVs1.is64 -> Cat(~(0.U(7.W)), cmpOut(7))
   ))
   io.cmpOut := Mux(addWithCarry, cmpOutAdjust,
-    Cat(Seq.tabulate(8)(i => Mux(!vm && !vmask(i), io.oldVd(i), cmpOutAdjust(i))).reverse))
+    Cat(Seq.tabulate(8)(i => Mux(!vm && !vmask(i), 1.U(1.W), cmpOutAdjust(i))).reverse))
 
   //---- To Fixed-Point unit ----
   for (i <- 0 until 8) {
