@@ -105,6 +105,7 @@ VecOutput VGMPermutation::get_output_vslideup(VecInput input) {
     output.result[1] = input.src3[1];
   }
   output.fflags[0] = output.fflags[1] = 0;
+  output.vxsat = 0;
 
   if (verbose) {
     printf("%s::%s  src: %016lx_%016lx prev: %016lx_%016lx mask: %x\n", typeid(this).name(), __func__, vslideup_input.src_data[1], vslideup_input.src_data[0], vslideup_input.prev_data[1], vslideup_input.prev_data[0], vslideup_input.mask);
@@ -392,6 +393,7 @@ VecOutput VGMPermutation::get_output_vslidedown(VecInput input) {
     output.result[1] = input.src3[1];
   }
   output.fflags[0] = output.fflags[1] = 0;
+  output.vxsat = 0;
 
   if (verbose) {
     printf("%s::%s  src: %016lx_%016lx prev: %016lx_%016lx mask: %x\n", typeid(this).name(), __func__, vslidedown_input.src_data[1], vslidedown_input.src_data[0], vslidedown_input.prev_data[1], vslidedown_input.prev_data[0], vslidedown_input.mask);
