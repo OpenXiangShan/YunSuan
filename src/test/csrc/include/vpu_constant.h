@@ -176,6 +176,8 @@ extern "C"{
 #define VCOMPRESS   (binstoi("0110"))
 #define VWREGMOV    (binstoi("0111"))
 
+#define VPERM_ALL_OPTYPES {VSLIDEUP,VSLIDEDOWN,VSLIDE1UP,VSLIDE1DOWN,VRGATHER,VRGATHERRS1,VCOMPRESS}
+
 // rounding mode for fix point
 #define RM_S_RNU (0)
 #define RM_S_RNE (1)

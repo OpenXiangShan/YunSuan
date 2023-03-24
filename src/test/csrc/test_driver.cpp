@@ -28,9 +28,9 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 
 void TestDriver::set_test_type() {
   test_type.pick_fuType = true;
-  test_type.pick_fuOpType = true;
-  test_type.fuType = VIntegerALUV2;
-  test_type.fuOpType = VSUB_VV;
+  test_type.pick_fuOpType = false;
+  test_type.fuType = VPermutation;
+  test_type.fuOpType = VFADD;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -54,7 +54,7 @@ uint8_t TestDriver::gen_random_optype() {
       uint8_t vfadd_all_optype[VFA_NUM] = VFA_ALL_OPTYPES;
       return vfadd_all_optype[rand() % VFA_NUM];
       break;
-      }
+    }
     case VFloatFMA: {
       uint8_t vffma_all_optype[VFF_NUM] = VFF_ALL_OPTYPES;
       return vffma_all_optype[rand() % VFF_NUM];
@@ -62,7 +62,11 @@ uint8_t TestDriver::gen_random_optype() {
       }
     case VFloatDivider: break;
     case VIntegerALU: break;
-    case VPermutation: return VSLIDEUP; break;
+    case VPermutation: { //TODO: add other type
+      uint8_t vperm_all_optype[2] = {VSLIDEUP,VSLIDEDOWN};
+      return vperm_all_optype[rand() % 2];
+      break;
+    }
     case VIntegerALUV2: {
       uint8_t viaf_all_optype[VIAF_NUM] = VIAF_ALL_OPTYPES;
       return viaf_all_optype[rand() % VIAF_NUM];
@@ -149,6 +153,27 @@ void TestDriver::gen_random_uopidx() {
           if (input.vinfo.vlmul == 1) input.uop_idx = rand() % 3;
           else if (input.vinfo.vlmul == 2) input.uop_idx = rand() % 10;
           else if (input.vinfo.vlmul == 3) input.uop_idx = rand() % 36;
+          else input.uop_idx = 0;
+          break;
+        }
+        case VSLIDEDOWN: {
+          if (input.vinfo.vlmul == 1) input.uop_idx = rand() % 3;
+          else if (input.vinfo.vlmul == 2) input.uop_idx = rand() % 10;
+          else if (input.vinfo.vlmul == 3) input.uop_idx = rand() % 36;
+          else input.uop_idx = 0;
+          break;
+        }
+        case VSLIDE1UP: {
+          if (input.vinfo.vlmul == 1) input.uop_idx = rand() % 2;
+          else if (input.vinfo.vlmul == 2) input.uop_idx = rand() % 4;
+          else if (input.vinfo.vlmul == 3) input.uop_idx = rand() % 8;
+          else input.uop_idx = 0;
+          break;
+        }
+        case VSLIDE1DOWN: {
+          if (input.vinfo.vlmul == 1) input.uop_idx = rand() % 3;
+          else if (input.vinfo.vlmul == 2) input.uop_idx = rand() % 7;
+          else if (input.vinfo.vlmul == 3) input.uop_idx = rand() % 15;
           else input.uop_idx = 0;
           break;
         }

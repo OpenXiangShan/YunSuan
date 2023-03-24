@@ -11,8 +11,8 @@ class VPermTop extends VPermModule {
 
     val vslideup_module    = Module(new SlideUpLookupModule)
     val vslidedown_module  = Module(new SlideDownLookupModule)
-    val vslide1up_module   = Module(new Slide1UpIntModule)
-    val vslide1down_module = Module(new Slide1DownIntModule)
+    val vslide1up_module   = Module(new Slide1UpModule)
+    val vslide1down_module = Module(new Slide1DownModule)
     val vrgather_module    = Module(new VRGatherLookupModule)
     val vcompress_module   = Module(new CompressModule)
 
