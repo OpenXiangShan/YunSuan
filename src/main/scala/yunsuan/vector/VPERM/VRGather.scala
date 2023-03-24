@@ -31,37 +31,51 @@ class VRGatherLookup(n: Int) extends VPermModule {
         val res_data   = Output(UInt(VLEN.W))
     })
 
+    // stage-0
+    val index = Wire(Vec(n, UInt(log2Up(n).W)))
+    val res_keep_old_vd = Wire(Vec(n, Bool()))
+    val res_agnostic = Wire(Vec(n, Bool()))
+    val res_update = Wire(Vec(n, Bool()))
+
     val index_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
     val table_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
     val prev_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
-    val res_data_vec   = Wire(Vec(n, UInt((VLEN/n).W)))
 
     for(i <- 0 until n) {
+        val elements_idx = io.mask_start_idx + i.U
         index_data_vec(i) := io.index_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-        table_data_vec(i) := io.table_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-        prev_data_vec(i)  := io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
+
+        index(i) := RegNext(index_data_vec(i) + ~io.table_range_min + 1.U)
+        res_keep_old_vd(i) := RegNext((!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta))
+        res_agnostic(i) := RegNext(((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma))
+        res_update(i) := RegNext((io.table_range_min <= index_data_vec(i)) & (index_data_vec(i) < io.table_range_max))
+
+        table_data_vec(i) := RegNext(io.table_data((VLEN/n)*(i+1)-1, (VLEN/n)*i))
+        prev_data_vec(i)  := RegNext(io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i))
     }
 
-    for(i <- 0 until n) {
-        val index = index_data_vec(i) + ~io.table_range_min + 1.U
-        val elements_idx = io.mask_start_idx +& i.U
-        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta)
-        val res_agnostic = ((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
+    val ta_reg = RegNext(io.ta)
+    val elem_vld_reg = RegNext(io.elem_vld)
+    val first_gather_reg = RegNext(io.first_gather)
 
-        when (i.U < io.elem_vld) {
-            when (res_keep_old_vd) {
+    // stage-1
+    val res_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
+
+    for(i <- 0 until n) {
+        when (i.U < elem_vld_reg) {
+            when (res_keep_old_vd(i)) {
                 res_data_vec(i) := prev_data_vec(i)
-            }.elsewhen (res_agnostic) {
+            }.elsewhen (res_agnostic(i)) {
                 res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
-            }.elsewhen ( (io.table_range_min <= index_data_vec(i)) & (index_data_vec(i) < io.table_range_max) ) {
-                res_data_vec(i) := table_data_vec(index)
-            }.elsewhen ( io.first_gather ) {
+            }.elsewhen (res_update(i)) {
+                res_data_vec(i) := table_data_vec(index(i))
+            }.elsewhen (first_gather_reg) {
                 res_data_vec(i) := 0.U((VLEN/n).W)
             }.otherwise {
                 res_data_vec(i) := prev_data_vec(i)
             }
         }.otherwise {
-            res_data_vec(i) := Mux(io.ta, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
+            res_data_vec(i) := Mux(ta_reg, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
         }
     }
 
@@ -91,35 +105,48 @@ class VRGatherLookupVX(n: Int) extends VPermModule {
         val res_data   = Output(UInt(VLEN.W))
     })
 
+    // stage-0
+    val index = Wire(UInt(log2Up(n).W))
+    val res_update = Wire(Bool())
+    val res_keep_old_vd = Wire(Vec(n, Bool()))
+    val res_agnostic = Wire(Vec(n, Bool()))
+
     val table_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
     val prev_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
-    val res_data_vec   = Wire(Vec(n, UInt((VLEN/n).W)))
 
     for(i <- 0 until n) {
-        table_data_vec(i) := io.table_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-        prev_data_vec(i)  := io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
+        val elements_idx = io.mask_start_idx + i.U
+        res_keep_old_vd(i) := RegNext((!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta))
+        res_agnostic(i) := RegNext(((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma))
+
+        table_data_vec(i) := RegNext(io.table_data((VLEN/n)*(i+1)-1, (VLEN/n)*i))
+        prev_data_vec(i)  := RegNext(io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i))
     }
+    res_update := RegNext((io.table_range_min <= io.index_data) & (io.index_data < io.table_range_max))
+    index := RegNext(io.index_data + ~io.table_range_min + 1.U)
+
+    val ta_reg = RegNext(io.ta)
+    val elem_vld_reg = RegNext(io.elem_vld)
+    val first_gather_reg = RegNext(io.first_gather)
+
+    // stage-1
+    val res_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
 
     for(i <- 0 until n) {
-        val index = io.index_data + ~io.table_range_min + 1.U
-        val elements_idx = io.mask_start_idx +& i.U
-        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta)
-        val res_agnostic = ((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
-
-        when (i.U < io.elem_vld) {
-            when (res_keep_old_vd) {
+        when (i.U < elem_vld_reg) {
+            when (res_keep_old_vd(i)) {
                 res_data_vec(i) := prev_data_vec(i)
-            }.elsewhen (res_agnostic) {
+            }.elsewhen (res_agnostic(i)) {
                 res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
-            }.elsewhen ( (io.table_range_min <= io.index_data) & (io.index_data < io.table_range_max) ) {
+            }.elsewhen (res_update) {
                 res_data_vec(i) := table_data_vec(index)
-            }.elsewhen ( io.first_gather ) {
+            }.elsewhen (first_gather_reg) {
                 res_data_vec(i) := 0.U((VLEN/n).W)
             }.otherwise {
                 res_data_vec(i) := prev_data_vec(i)
             }
         }.otherwise {
-            res_data_vec(i) := Mux(io.ta, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
+            res_data_vec(i) := Mux(ta_reg, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
         }
     }
 

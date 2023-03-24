@@ -14,7 +14,7 @@ trait VSPParameter {
   val VFF_latency: Int = 3 // TODO: check only mul and mul+add, different or not
   val VFD_latency: Int = 99
   val VFA_latency: Int = 1
-  val VPERM_latency: Int = 0
+  val VPERM_latency: Int = 1
 }
 
 object VPUTestFuType { // only use in test, difftest with xs

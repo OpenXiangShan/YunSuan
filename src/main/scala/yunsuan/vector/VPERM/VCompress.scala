@@ -25,44 +25,44 @@ class Compress(n: Int) extends VPermModule {
         val cmos_last = Output(UInt(8.W)) // current_mask_ones_sum
     })
 
+    // stage-0
     val src_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
     val prev_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
-    val res_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
+    val temp_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
 
     for(i <- 0 until n) {
-        src_data_vec(i)  := io.src_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
+        src_data_vec(i)  := RegNext(io.src_data((VLEN/n)*(i+1)-1, (VLEN/n)*i))
         prev_data_vec(i) := io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
 
         val elements_idx = io.os_base + i.U
         val res_agnostic = ((elements_idx >= io.vl) || (i.U >= io.elem_vld)) && io.ta
 
-        when (res_agnostic) {
-            res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
-        }.otherwise {
-            res_data_vec(i) := prev_data_vec(i)
-        }
+        temp_data_vec(i) := RegNext(Mux(res_agnostic, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i)))
     }
 
     val cmos_vec = Wire(Vec(n+1, UInt(8.W)))
+    val cmos_vec_reg = Wire(Vec(n+1, UInt(8.W)))
     for(i <- 0 until n+1) {
         if (i == 0)
             cmos_vec(i) := io.pmos
         else
             cmos_vec(i) := cmos_vec(i-1) + io.mask(i-1)
+
+        cmos_vec_reg(i) := RegNext(cmos_vec(i))
     }
 
-    //for(i <- 0 until n) {
-    //    val res_idx = cmos_vec(i) + ~io.os_base // = cmos_vec(i) - base - 1
-    //
-    //    when( io.mask(i).asBool && (io.os_base < cmos_vec(i)) && (cmos_vec(i) < (io.os_base +& (n+1).U)) && (cmos_vec(i) <= io.vl) ) {
-    //        res_data_vec(res_idx) := src_data_vec(i)
-    //    }
-    //}
+    val mask_reg = RegNext(io.mask)
+    val os_base_reg = RegNext(io.os_base)
+    val elem_vld_reg = RegNext(io.elem_vld)
+    val vl_reg = RegNext(io.vl)
+
+    // stage-1
+    val res_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
     val compressed_en_vec = Wire(Vec(n, UInt(n.W)))
     val compressed_data_vec = Wire(Vec(n, UInt(VLEN.W)))
     for(i <- 0 until n) {
-        val res_idx = (cmos_vec(i) - io.os_base)(3, 0)
-        val compress_en = io.mask(i).asBool && (io.os_base <= cmos_vec(i)) && (cmos_vec(i) < (io.os_base +& io.elem_vld)) && (cmos_vec(i) < io.vl)
+        val res_idx = (cmos_vec_reg(i) - os_base_reg)(3, 0)
+        val compress_en = mask_reg(i).asBool && (os_base_reg <= cmos_vec_reg(i)) && (cmos_vec_reg(i) < (os_base_reg +& elem_vld_reg)) && (cmos_vec_reg(i) < vl_reg)
 
         compressed_en_vec(i) := ZeroExt(compress_en.asUInt << res_idx, n)
         compressed_data_vec(i) := Fill(VLEN, compress_en.asUInt) & ZeroExt((src_data_vec(i) << (res_idx << log2Up(VLEN/n))), VLEN)
@@ -71,17 +71,13 @@ class Compress(n: Int) extends VPermModule {
     val compressed_data_merged = ParallelOR(compressed_data_vec)
 
     val compressed_data_merged_vec = Wire(Vec(n, UInt((VLEN/n).W)))
-
     for(i <- 0 until n) {
         compressed_data_merged_vec(i) := compressed_data_merged((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-
-        when (select_compressed(i).asBool) {
-            res_data_vec(i) := compressed_data_merged_vec(i)
-        }
+        res_data_vec(i) := Mux(select_compressed(i).asBool, compressed_data_merged_vec(i), temp_data_vec(i))
     }
 
     io.res_data  := res_data_vec.reduce{ (a, b) => Cat(b, a) }
-    io.cmos_last := cmos_vec(n)
+    io.cmos_last := cmos_vec_reg(n)
 }
 
 class CompressModule extends VPermModule {

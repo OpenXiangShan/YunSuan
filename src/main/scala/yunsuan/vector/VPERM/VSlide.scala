@@ -28,33 +28,44 @@ class SlideUpLookup(n: Int) extends VPermModule {
         val res_data  = Output(UInt(VLEN.W))
     })
 
+    // stage-0
+    val index = Wire(Vec(n, UInt(log2Up(n).W)))
+    val res_keep_old_vd = Wire(Vec(n, Bool()))
+    val res_agnostic = Wire(Vec(n, Bool()))
+    val res_update = Wire(Vec(n, Bool()))
     val src_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
     val prev_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
+
+    for(i <- 0 until n) {
+        val elements_idx = io.mask_start_idx + i.U
+        index(i) := RegNext(io.slide_base +& i.U + ~io.slide + 1.U)
+        res_keep_old_vd(i) := RegNext((!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta))
+        res_agnostic(i) := RegNext(((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma))
+        res_update(i) := RegNext((io.slide <= (io.slide_base +& i.U)) && ((io.slide_base +& i.U) < (n.U + io.slide)))
+
+        src_data_vec(i)  := RegNext(io.src_data((VLEN/n)*(i+1)-1, (VLEN/n)*i))
+        prev_data_vec(i) := RegNext(io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i))
+    }
+
+    val ta_reg = RegNext(io.ta)
+    val elem_vld_reg = RegNext(io.elem_vld)
+
+    // stage-1
     val res_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
 
     for(i <- 0 until n) {
-        src_data_vec(i)  := io.src_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-        prev_data_vec(i) := io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-    }
-
-    for(i <- 0 until n) {
-        val index = io.slide_base +& i.U + ~io.slide + 1.U
-        val elements_idx = io.mask_start_idx +& i.U
-        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta)
-        val res_agnostic = ((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
-
-        when (i.U < io.elem_vld) {
-            when (res_keep_old_vd) {
+        when (i.U < elem_vld_reg) {
+            when (res_keep_old_vd(i)) {
                 res_data_vec(i) := prev_data_vec(i)
-            }.elsewhen (res_agnostic) {
+            }.elsewhen (res_agnostic(i)) {
                 res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
-            }.elsewhen ( (io.slide <= (io.slide_base +& i.U)) && ((io.slide_base +& i.U) < (n.U + io.slide)) ) {
-                res_data_vec(i) := src_data_vec(index)
+            }.elsewhen (res_update(i)) {
+                res_data_vec(i) := src_data_vec(index(i))
             }.otherwise {
                 res_data_vec(i) := prev_data_vec(i)
             }
         }.otherwise {
-            res_data_vec(i) := Mux(io.ta, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
+            res_data_vec(i) := Mux(ta_reg, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
         }
     }
 
@@ -166,36 +177,46 @@ class Slide1Up(n: Int) extends VPermModule {
         val res_data    = Output(UInt(VLEN.W))
     })
 
+    // stage-0
+    val index = Wire(Vec(n, UInt(log2Up(n).W)))
+    val res_keep_old_vd = Wire(Vec(n, Bool()))
+    val res_agnostic = Wire(Vec(n, Bool()))
+    val res_update_hi = Wire(Vec(n, Bool()))
     val src_data_hi_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
     val src_data_lo_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
     val prev_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
+
+    for(i <- 0 until n) {
+        val elements_idx = io.mask_start_idx + i.U
+        index(i) := RegNext(i.U + ~io.slide + 1.U)
+        res_keep_old_vd(i) := RegNext((!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta))
+        res_agnostic(i) := RegNext(((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma))
+        res_update_hi(i) := RegNext(io.slide <= i.U)
+
+        src_data_hi_vec(i) := RegNext(io.src_data_hi((VLEN/n)*(i+1)-1, (VLEN/n)*i))
+        src_data_lo_vec(i) := RegNext(io.src_data_lo((VLEN/n)*(i+1)-1, (VLEN/n)*i))
+        prev_data_vec(i)   := RegNext(io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i))
+    }
+
+    val ta_reg = RegNext(io.ta)
+    val elem_vld_reg = RegNext(io.elem_vld)
+
+    // stage-1
     val res_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
 
     for(i <- 0 until n) {
-        src_data_hi_vec(i)  := io.src_data_hi((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-        src_data_lo_vec(i)  := io.src_data_lo((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-        prev_data_vec(i)    := io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-    }
-
-    for(i <- 0 until n) {
-        val index = i.U + ~io.slide + 1.U
-        val index2 = (i+n).U + ~io.slide + 1.U
-        val elements_idx = io.mask_start_idx +& i.U
-        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta)
-        val res_agnostic = ((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
-
-        when (i.U < io.elem_vld) {
-            when (res_keep_old_vd) {
+        when (i.U < elem_vld_reg) {
+            when (res_keep_old_vd(i)) {
                 res_data_vec(i) := prev_data_vec(i)
-            }.elsewhen (res_agnostic) {
+            }.elsewhen (res_agnostic(i)) {
                 res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
-            }.elsewhen ( io.slide <= i.U ) {
-                res_data_vec(i) := src_data_hi_vec(index)
+            }.elsewhen (res_update_hi(i)) {
+                res_data_vec(i) := src_data_hi_vec(index(i))
             }.otherwise {
-                res_data_vec(i) := src_data_lo_vec(index2)
+                res_data_vec(i) := src_data_lo_vec(index(i))
             }
         }.otherwise {
-            res_data_vec(i) := Mux(io.ta, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
+            res_data_vec(i) := Mux(ta_reg, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
         }
     }
 
@@ -271,35 +292,47 @@ class SlideDownLookup(n: Int) extends VPermModule {
         val res_data  = Output(UInt(VLEN.W))
     })
 
+    // stage-0
+    val index = Wire(Vec(n, UInt(log2Up(n).W)))
+    val res_keep_old_vd = Wire(Vec(n, Bool()))
+    val res_agnostic = Wire(Vec(n, Bool()))
+    val res_update = Wire(Vec(n, Bool()))
     val src_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
     val prev_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
+
+    for(i <- 0 until n) {
+        val elements_idx = io.mask_start_idx + i.U
+        index(i) := RegNext(io.slide +& i.U + ~io.slide_base + 1.U)
+        res_keep_old_vd(i) := RegNext((!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta))
+        res_agnostic(i) := RegNext(((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma))
+        res_update(i) := RegNext((io.slide_base <= (io.slide +& i.U)) && ((io.slide +& i.U) < (n.U +& io.slide_base)))
+
+        src_data_vec(i)  := RegNext(io.src_data((VLEN/n)*(i+1)-1, (VLEN/n)*i))
+        prev_data_vec(i) := RegNext(io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i))
+    }
+
+    val ta_reg = RegNext(io.ta)
+    val elem_vld_reg = RegNext(io.elem_vld)
+    val first_slide_reg = RegNext(io.first_slidedown)
+
+    // stage-1
     val res_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
 
     for(i <- 0 until n) {
-        src_data_vec(i)  := io.src_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-        prev_data_vec(i) := io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-    }
-
-    for(i <- 0 until n) {
-        val index = io.slide +& i.U + ~io.slide_base + 1.U
-        val elements_idx = io.mask_start_idx +& i.U
-        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta)
-        val res_agnostic = ((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
-
-        when (i.U < io.elem_vld) {
-            when (res_keep_old_vd) {
+        when (i.U < elem_vld_reg) {
+            when (res_keep_old_vd(i)) {
                 res_data_vec(i) := prev_data_vec(i)
-            }.elsewhen (res_agnostic) {
+            }.elsewhen (res_agnostic(i)) {
                 res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
-            }.elsewhen ( (io.slide_base <= (io.slide +& i.U)) && ((io.slide +& i.U) < (n.U +& io.slide_base)) ) {
-                res_data_vec(i) := src_data_vec(index)
-            }.elsewhen ( io.first_slidedown ) {
+            }.elsewhen (res_update(i)) {
+                res_data_vec(i) := src_data_vec(index(i))
+            }.elsewhen (first_slide_reg) {
                 res_data_vec(i) := 0.U((VLEN/n).W)
             }.otherwise {
                 res_data_vec(i) := prev_data_vec(i)
             }
         }.otherwise {
-            res_data_vec(i) := Mux(io.ta, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
+            res_data_vec(i) := Mux(ta_reg, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
         }
     }
 
@@ -454,39 +487,54 @@ class Slide1Down(n: Int) extends VPermModule {
         val res_data    = Output(UInt(VLEN.W))
     })
 
+    // stage-0
+    val index = Wire(Vec(n, UInt(log2Up(n).W)))
+    val res_keep_old_vd = Wire(Vec(n, Bool()))
+    val res_agnostic = Wire(Vec(n, Bool()))
+    val res_update_hi = Wire(Vec(n, Bool()))
+    val res_update_lo = Wire(Vec(n, Bool()))
+
     val src_data_hi_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
     val src_data_lo_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
     val prev_data_vec = Wire(Vec(n, UInt((VLEN/n).W)))
+
+    for(i <- 0 until n) {
+        val elements_idx = io.mask_start_idx + i.U
+        index(i) := RegNext(i.U + io.slide)
+        res_keep_old_vd(i) := RegNext((!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta) || (io.ld_rs1_with_prev_res && (elements_idx +& 1.U =/= io.vl)))
+        res_agnostic(i) := RegNext(((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma))
+        res_update_hi(i) := RegNext((io.ld_rs1_with_prev_res || io.ld_rs1_without_prev_res) && (elements_idx +& 1.U === io.vl))
+        res_update_lo(i) := RegNext(io.slide < (n-i).U)
+
+        src_data_hi_vec(i) := RegNext(io.src_data_hi((VLEN/n)*(i+1)-1, (VLEN/n)*i))
+        src_data_lo_vec(i) := RegNext(io.src_data_lo((VLEN/n)*(i+1)-1, (VLEN/n)*i))
+        prev_data_vec(i)   := RegNext(io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i))
+    }
+
+    val ta_reg = RegNext(io.ta)
+    val elem_vld_reg = RegNext(io.elem_vld)
+    val slide1down_from_vs1_reg = RegNext(io.slide1down_from_vs1)
+
+    // stage-1
     val res_data_vec  = Wire(Vec(n, UInt((VLEN/n).W)))
 
     for(i <- 0 until n) {
-        src_data_hi_vec(i)  := io.src_data_hi((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-        src_data_lo_vec(i)  := io.src_data_lo((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-        prev_data_vec(i)    := io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i)
-    }
-
-    for(i <- 0 until n) {
-        val index = i.U + io.slide
-        val elements_idx = io.mask_start_idx +& i.U
-        val res_keep_old_vd = (!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta) || (io.ld_rs1_with_prev_res && (elements_idx +& 1.U =/= io.vl))
-        val res_agnostic = ((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma)
-
-        when (i.U < io.elem_vld) {
-            when (res_keep_old_vd) {
+        when (i.U < elem_vld_reg) {
+            when (res_keep_old_vd(i)) {
                 res_data_vec(i) := prev_data_vec(i)
-            }.elsewhen (res_agnostic) {
+            }.elsewhen (res_agnostic(i)) {
                 res_data_vec(i) := Fill(VLEN/n, 1.U(1.W))
-            }.elsewhen ( (io.ld_rs1_with_prev_res || io.ld_rs1_without_prev_res) && (elements_idx +& 1.U === io.vl) ) {
+            }.elsewhen (res_update_hi(i)) {
                 res_data_vec(i) := src_data_hi_vec(0)
-            }.elsewhen ( io.slide < (n-i).U ) {
-                res_data_vec(i) := src_data_lo_vec(index)
-            }.elsewhen ( io.slide1down_from_vs1 ) {
+            }.elsewhen (res_update_lo(i)) {
+                res_data_vec(i) := src_data_lo_vec(index(i))
+            }.elsewhen (slide1down_from_vs1_reg) {
                 res_data_vec(i) := src_data_hi_vec(0)
             }.otherwise {
                 res_data_vec(i) := 0.U((VLEN/n).W)
             }
         }.otherwise {
-            res_data_vec(i) := Mux(io.ta, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
+            res_data_vec(i) := Mux(ta_reg, Fill(VLEN/n, 1.U(1.W)), prev_data_vec(i))
         }
     }
 
