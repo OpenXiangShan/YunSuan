@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <cstdlib>
 #include <stdint.h>
+#include <algorithm>
 extern "C" {
 #include <softfloat.h>
 }
