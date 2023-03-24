@@ -1388,21 +1388,18 @@ class VectorFloatFMA() extends Module{
       Cat(fp_result_f16_3,fp_result_f16_2,fp_result_f16_1,fp_result_f16_0)
     )
   )
+  val is_fp16_reg2 = !is_fp32_reg2 & !is_fp64_reg2
+  val is_vec_reg2 = ShiftRegister(io.is_vec,3)
   io.fflags := Cat(
-    fflags_f16_3,
-    fflags_f16_2,
-    Mux(is_fp32_reg2, fflags_f32_1, fflags_f16_1),
-    Mux(is_fp64_reg2, fflags_f64,Mux(is_fp32_reg2, fflags_f32_0, fflags_f16_0))
+    Fill(5,is_vec_reg2 & is_fp16_reg2) & fflags_f16_3,
+    Fill(5,is_vec_reg2 & is_fp16_reg2) & fflags_f16_2,
+    Fill(5,is_vec_reg2 & !is_fp64_reg2) & Mux(is_fp32_reg2,fflags_f32_1,fflags_f16_1),
+    Mux(
+      is_fp64_reg2,
+      fflags_f64,
+      Mux(is_fp32_reg2,fflags_f32_0,fflags_f16_0)
+    )
   )
-//    Mux(
-//    is_fp64_reg2,
-//    fflags_f64,
-//    Mux(
-//      is_fp32_reg2,
-//      (fflags_f32_1 & ShiftRegister(Fill(5,io.is_vec),3)) | fflags_f32_0,
-//      ((fflags_f16_3 | fflags_f16_2 | fflags_f16_1) & ShiftRegister(Fill(5,io.is_vec),3)) | fflags_f16_0
-//    )
-//  )
 }
 
 private[vector] class CSA3to2(width :Int) extends Module{
