@@ -207,9 +207,17 @@ extern "C"{
 #define VFA_MUST_FRS1_OPTYPES {VFMERGE,VFMOVE,VFGT,VFGE}
 #define VFA_NEED_FRS1_OPTYPES {VFADD,VFSUB,VFMIN,VFMAX,VFSGNJ,VFSGNJN,VFSGNJX,VFEQ,VFNE,VFLT,VFLE}
 // vff funcop type
-#define VFF_NUM 1
-#define VFMACC (binstoi("0001"))
-#define VFF_ALL_OPTYPES {VFMACC}
+#define VFF_NUM 2
+#define VFMUL   (binstoi("0000"))
+#define VFMACC  (binstoi("0001"))
+#define VFNMACC (binstoi("0001"))
+#define VFMSAC  (binstoi("0001"))
+#define VFNMSAC (binstoi("0001"))
+#define VFMADD  (binstoi("0001"))
+#define VFNMADD (binstoi("0001"))
+#define VFMSUB  (binstoi("0001"))
+#define VFNMSUB (binstoi("0001"))
+#define VFF_ALL_OPTYPES {VFMUL,VFMACC}
 // rounding mode
 #define RM_RNE (0)
 #define RM_RTZ (1)

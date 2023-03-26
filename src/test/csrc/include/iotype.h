@@ -28,9 +28,9 @@ struct VecInput {
 };
 
 struct VecOutput {
-  uint64_t result[2];
-  uint32_t fflags[2]; // only 20bits for each op
-  uint64_t vxsat;    // NOTE: The length of the aligned structure must be an integer multiple of the largest alignment parameter (PPB) in the member
+  uint64_t result[2] = {0,0};
+  uint32_t fflags[2] = {0,0}; // only 20bits for each op
+  uint64_t vxsat = 0;    // NOTE: The length of the aligned structure must be an integer multiple of the largest alignment parameter (PPB) in the member
 };
 
 struct VecInputE8 {
