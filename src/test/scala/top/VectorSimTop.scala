@@ -202,8 +202,11 @@ class SimTop() extends VPUTestModule {
     vff.io.fp_a := src1
     vff.io.fp_b := src2
     vff.io.fp_c := src3
+    vff.io.frs1  := in.src(1)(0) // VS1(63,0)
     vff.io.round_mode := rm
     vff.io.fp_format := sew
+    vff.io.op_code := opcode
+    vff.io.is_frs1  := is_frs1
     vff.io.is_vec := true.B // TODO: check it
     vff.io.res_widening := widen
     vff_result.result(i) := vff.io.fp_result
