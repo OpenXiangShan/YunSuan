@@ -3,6 +3,7 @@ package yunsuan.vector
 import chisel3._
 import chisel3.util._
 import scala.collection.mutable.ListBuffer
+import yunsuan.VfmaOpCode
 
 class VectorFloatFMA() extends Module{
   val exponentWidth : Int = 11
@@ -13,7 +14,10 @@ class VectorFloatFMA() extends Module{
     val fp_result         = Output(UInt(floatWidth.W))
     val round_mode   = Input (UInt(3.W))
     val fp_format    = Input (UInt(2.W)) // result format b01->fp16,b10->fp32,b11->fp64
+    val op_code      = Input (UInt(4.W))
+    val frs1         = Input (UInt(64.W))
     val is_vec       = Input (Bool())
+    val is_frs1      = Input (Bool())
     val res_widening = Input (Bool())
     val fflags       = Output(UInt(20.W))
   })
@@ -43,6 +47,15 @@ class VectorFloatFMA() extends Module{
   def printfEn(pable: Printable): Unit ={
     if (printfen) printf(pable)
   }
+  val is_vfmul   = io.op_code === VfmaOpCode.vfmul
+  val is_vfmacc  = io.op_code === VfmaOpCode.vfmacc
+  val is_vfnmacc = io.op_code === VfmaOpCode.vfnmacc
+  val is_vfmsac  = io.op_code === VfmaOpCode.vfmsac
+  val is_vfnmsac = io.op_code === VfmaOpCode.vfnmsac
+  val is_vfmadd  = io.op_code === VfmaOpCode.vfmadd
+  val is_vfnmadd = io.op_code === VfmaOpCode.vfnmadd
+  val is_vfmsub  = io.op_code === VfmaOpCode.vfmsub
+  val is_vfnmsub = io.op_code === VfmaOpCode.vfnmsub
   val is_fp64                 = io.fp_format === 3.U(2.W)
   val is_fp64_reg0            = RegNext(is_fp64)
   val is_fp64_reg1            = RegNext(is_fp64_reg0)
@@ -51,12 +64,15 @@ class VectorFloatFMA() extends Module{
   val is_fp32_reg0            = RegNext(is_fp32)
   val is_fp32_reg1            = RegNext(is_fp32_reg0)
   val is_fp32_reg2            = RegNext(is_fp32_reg1)
+  val fp_a_f64                = io.fp_a(63,0)
+  val fp_b_f64                = io.fp_b(63,0)
+  val fp_c_f64                = Mux(is_vfmul,0.U(64.W),io.fp_c(63,0))
   val fp_a_f32_0              = io.fp_a(31,0 )
   val fp_a_f32_1              = io.fp_a(63,32)
   val fp_b_f32_0              = io.fp_b(31,0 )
   val fp_b_f32_1              = io.fp_b(63,32)
-  val fp_c_f32_0              = io.fp_c(31,0 )
-  val fp_c_f32_1              = io.fp_c(63,32)
+  val fp_c_f32_0              = Mux(is_vfmul,0.U(32.W),io.fp_c(31,0 ))
+  val fp_c_f32_1              = Mux(is_vfmul,0.U(32.W),io.fp_c(63,32))
   val fp_a_f16_0              = io.fp_a(15,0 )
   val fp_a_f16_1              = io.fp_a(31,16)
   val fp_a_f16_2              = io.fp_a(47,32)
@@ -65,18 +81,18 @@ class VectorFloatFMA() extends Module{
   val fp_b_f16_1              = io.fp_b(31,16)
   val fp_b_f16_2              = io.fp_b(47,32)
   val fp_b_f16_3              = io.fp_b(63,48)
-  val fp_c_f16_0              = io.fp_c(15,0 )
-  val fp_c_f16_1              = io.fp_c(31,16)
-  val fp_c_f16_2              = io.fp_c(47,32)
-  val fp_c_f16_3              = io.fp_c(63,48)
+  val fp_c_f16_0              = Mux(is_vfmul,0.U(16.W),io.fp_c(15,0 ))
+  val fp_c_f16_1              = Mux(is_vfmul,0.U(16.W),io.fp_c(31,16))
+  val fp_c_f16_2              = Mux(is_vfmul,0.U(16.W),io.fp_c(47,32))
+  val fp_c_f16_3              = Mux(is_vfmul,0.U(16.W),io.fp_c(63,48))
   val sign_a_b_f16_0          = (fp_a_f16_0.head(1) ^ fp_b_f16_0.head(1)).asBool
   val sign_a_b_f16_1          = (fp_a_f16_1.head(1) ^ fp_b_f16_1.head(1)).asBool
   val sign_a_b_f16_2          = (fp_a_f16_2.head(1) ^ fp_b_f16_2.head(1)).asBool
   val sign_a_b_f16_3          = (fp_a_f16_3.head(1) ^ fp_b_f16_3.head(1)).asBool
   val sign_a_b_f32_0          = Mux(io.res_widening & is_fp32,sign_a_b_f16_0,(fp_a_f32_0.head(1) ^ fp_b_f32_0.head(1)).asBool)
   val sign_a_b_f32_1          = Mux(io.res_widening & is_fp32,sign_a_b_f16_1,(fp_a_f32_1.head(1) ^ fp_b_f32_1.head(1)).asBool)
-  val sign_a_b_f64            = Mux(io.res_widening & is_fp64,sign_a_b_f32_0,(io.fp_a(63) ^ io.fp_b(63)).asBool)
-  val sign_c_f64              = io.fp_c(63).asBool
+  val sign_a_b_f64            = Mux(io.res_widening & is_fp64,sign_a_b_f32_0,(fp_a_f64(63) ^ fp_b_f64(63)).asBool)
+  val sign_c_f64              = fp_c_f64(63).asBool
   val sign_c_f32_0            = fp_c_f32_0.head(1).asBool
   val sign_c_f32_1            = fp_c_f32_1.head(1).asBool
   val sign_c_f16_0            = fp_c_f16_0.head(1).asBool
@@ -93,9 +109,9 @@ class VectorFloatFMA() extends Module{
   val is_sub_f16_1            = sign_a_b_f16_1 ^ sign_c_f16_1
   val is_sub_f16_2            = sign_a_b_f16_2 ^ sign_c_f16_2
   val is_sub_f16_3            = sign_a_b_f16_3 ^ sign_c_f16_3
-  val Ea_f64                  = io.fp_a.tail(1).head(exponentWidth)
-  val Eb_f64                  = io.fp_b.tail(1).head(exponentWidth)
-  val Ec_f64                  = io.fp_c.tail(1).head(exponentWidth)
+  val Ea_f64                  = fp_a_f64.tail(1).head(exponentWidth)
+  val Eb_f64                  = fp_b_f64.tail(1).head(exponentWidth)
+  val Ec_f64                  = fp_c_f64.tail(1).head(exponentWidth)
   val Ea_f32_0                = fp_a_f32_0(30,23)
   val Eb_f32_0                = fp_b_f32_0(30,23)
   val Ec_f32_0                = fp_c_f32_0(30,23)
@@ -153,9 +169,9 @@ class VectorFloatFMA() extends Module{
   val fp_a_significand_f32_1  = Mux(io.res_widening & is_fp32,Cat(fp_a_significand_f16_1,0.U(13.W)),Cat(Ea_f32_1_is_not_zero,fp_a_f32_1(22,0)))
   val fp_b_significand_f32_1  = Mux(io.res_widening & is_fp32,Cat(fp_b_significand_f16_1,0.U(13.W)),Cat(Eb_f32_1_is_not_zero,fp_b_f32_1(22,0)))
   val fp_c_significand_f32_1  = Cat(Ec_f32_1_is_not_zero,fp_c_f32_1(22,0))
-  val fp_a_significand_f64    = Mux(io.res_widening & is_fp64,Cat(fp_a_significand_f32_0,0.U(29.W)),Cat(Ea_f64_is_not_zero,io.fp_a.tail(exponentWidth+1)))
-  val fp_b_significand_f64    = Mux(io.res_widening & is_fp64,Cat(fp_b_significand_f32_0,0.U(29.W)),Cat(Eb_f64_is_not_zero,io.fp_b.tail(exponentWidth+1)))
-  val fp_c_significand_f64    = Cat(Ec_f64_is_not_zero,io.fp_c.tail(exponentWidth+1))
+  val fp_a_significand_f64    = Mux(io.res_widening & is_fp64,Cat(fp_a_significand_f32_0,0.U(29.W)),Cat(Ea_f64_is_not_zero,fp_a_f64.tail(exponentWidth+1)))
+  val fp_b_significand_f64    = Mux(io.res_widening & is_fp64,Cat(fp_b_significand_f32_0,0.U(29.W)),Cat(Eb_f64_is_not_zero,fp_b_f64.tail(exponentWidth+1)))
+  val fp_c_significand_f64    = Cat(Ec_f64_is_not_zero,fp_c_f64.tail(exponentWidth+1))
   val rshiftBasicF64          = significandWidth + 3    
   val rshiftMaxF64            = 3*significandWidth + 4  
   val rshiftBasicF32          = 24 + 3   
@@ -1152,7 +1168,7 @@ class VectorFloatFMA() extends Module{
   val is_overflow_f64_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f64_reg2.asBool) | (RUP_reg2 & sign_result_temp_f64_reg2.asBool)
   val fp_a_or_b_is_zero_f64_reg2 = ShiftRegister(fp_a_is_zero_f64 | fp_b_is_zero_f64,3)
   val fp_result_f64_fp_a_or_b_is_zero_reg2 = ShiftRegister(
-    Cat(Mux(fp_c_is_zero_f64,(sign_a_b_f64 & sign_c_f64) | (RDN & (sign_a_b_f64 ^ sign_c_f64)),io.fp_c.head(1)),io.fp_c.tail(1)),
+    Cat(Mux(fp_c_is_zero_f64,(sign_a_b_f64 & sign_c_f64) | (RDN & (sign_a_b_f64 ^ sign_c_f64)),fp_c_f64.head(1)),fp_c_f64.tail(1)),
     3)
   when(has_nan_f64_reg2){
     fp_result_f64 := result_nan_f64
