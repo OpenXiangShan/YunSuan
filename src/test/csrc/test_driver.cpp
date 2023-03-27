@@ -29,8 +29,8 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 void TestDriver::set_test_type() {
   test_type.pick_fuType = true;
   test_type.pick_fuOpType = false;
-  test_type.fuType = VPermutation;
-  test_type.fuOpType = VFADD;
+  test_type.fuType = VFloatFMA;
+  test_type.fuOpType = VFNMACC;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -126,6 +126,12 @@ bool TestDriver::gen_random_is_frs1() {
       else if (need_frs1) {return rand() % 2 == 0; break;}
       else {return false; break;}
     }
+    case VFloatFMA: {
+      uint8_t need_frs1_ops[] = VFF_NEED_FRS1_OPTYPES;
+      bool need_frs1 = std::find(std::begin(need_frs1_ops), std::end(need_frs1_ops), input.fuOpType) != std::end(need_frs1_ops);
+      if (need_frs1) {return rand() % 2 == 0; break;}
+      else {return false; break;}
+    }
     default: return false; break;
   }
 }
@@ -208,8 +214,8 @@ void TestDriver::get_random_input() {
   input.rm_s = rand() % 5;
   gen_random_vecinfo();
   gen_random_uopidx();
-
-  // input.sew = 2;
+  // input.is_frs1 = false;
+  // input.sew = 3;
   // input.widen = true;
   // input.src_widen = false;
   // input.uop_idx = 0;

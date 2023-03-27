@@ -10,7 +10,7 @@ class VectorFloatFMA() extends Module{
   val significandWidth : Int = 53
   val floatWidth = exponentWidth + significandWidth
   val io = IO(new Bundle() {
-    val fp_a, fp_b, fp_c  = Input (UInt(floatWidth.W))
+    val fp_a, fp_b, fp_c  = Input (UInt(floatWidth.W))  // fp_a->VS2,fp_b->VS1,fp_c->VD
     val fp_result         = Output(UInt(floatWidth.W))
     val round_mode   = Input (UInt(3.W))
     val fp_format    = Input (UInt(2.W)) // result format b01->fp16,b10->fp32,b11->fp64
@@ -64,27 +64,32 @@ class VectorFloatFMA() extends Module{
   val is_fp32_reg0            = RegNext(is_fp32)
   val is_fp32_reg1            = RegNext(is_fp32_reg0)
   val is_fp32_reg2            = RegNext(is_fp32_reg1)
-  val fp_a_f64                = io.fp_a(63,0)
-  val fp_b_f64                = io.fp_b(63,0)
-  val fp_c_f64                = Mux(is_vfmul,0.U(64.W),io.fp_c(63,0))
-  val fp_a_f32_0              = io.fp_a(31,0 )
-  val fp_a_f32_1              = io.fp_a(63,32)
-  val fp_b_f32_0              = io.fp_b(31,0 )
-  val fp_b_f32_1              = io.fp_b(63,32)
-  val fp_c_f32_0              = Mux(is_vfmul,0.U(32.W),io.fp_c(31,0 ))
-  val fp_c_f32_1              = Mux(is_vfmul,0.U(32.W),io.fp_c(63,32))
-  val fp_a_f16_0              = io.fp_a(15,0 )
-  val fp_a_f16_1              = io.fp_a(31,16)
-  val fp_a_f16_2              = io.fp_a(47,32)
-  val fp_a_f16_3              = io.fp_a(63,48)
-  val fp_b_f16_0              = io.fp_b(15,0 )
-  val fp_b_f16_1              = io.fp_b(31,16)
-  val fp_b_f16_2              = io.fp_b(47,32)
-  val fp_b_f16_3              = io.fp_b(63,48)
-  val fp_c_f16_0              = Mux(is_vfmul,0.U(16.W),io.fp_c(15,0 ))
-  val fp_c_f16_1              = Mux(is_vfmul,0.U(16.W),io.fp_c(31,16))
-  val fp_c_f16_2              = Mux(is_vfmul,0.U(16.W),io.fp_c(47,32))
-  val fp_c_f16_3              = Mux(is_vfmul,0.U(16.W),io.fp_c(63,48))
+  def sign_inv(src: UInt,sel:Bool): UInt = {
+    Cat(Mux(sel,~src.head(1),src.head(1)),src.tail(1))
+  }
+  val fp_a_is_sign_inv = is_vfnmacc
+  val fp_c_is_sign_inv = is_vfnmacc
+  val fp_a_f64                = sign_inv(io.fp_a(63,0),fp_a_is_sign_inv)
+  val fp_b_f64                = Mux(io.is_frs1,io.frs1,io.fp_b(63,0))
+  val fp_c_f64                = Mux(is_vfmul,0.U(64.W),sign_inv(io.fp_c(63,0),fp_c_is_sign_inv))
+  val fp_a_f32_0              = sign_inv(io.fp_a(31,0 ),fp_a_is_sign_inv)
+  val fp_a_f32_1              = sign_inv(io.fp_a(63,32),fp_a_is_sign_inv)
+  val fp_b_f32_0              = Mux(io.is_frs1,io.frs1(31,0),io.fp_b(31,0 ))
+  val fp_b_f32_1              = Mux(io.is_frs1,io.frs1(31,0),io.fp_b(63,32))
+  val fp_c_f32_0              = Mux(is_vfmul,0.U(32.W),sign_inv(io.fp_c(31,0 ),fp_c_is_sign_inv))
+  val fp_c_f32_1              = Mux(is_vfmul,0.U(32.W),sign_inv(io.fp_c(63,32),fp_c_is_sign_inv))
+  val fp_a_f16_0              = sign_inv(io.fp_a(15,0 ),fp_a_is_sign_inv)
+  val fp_a_f16_1              = sign_inv(io.fp_a(31,16),fp_a_is_sign_inv)
+  val fp_a_f16_2              = sign_inv(io.fp_a(47,32),fp_a_is_sign_inv)
+  val fp_a_f16_3              = sign_inv(io.fp_a(63,48),fp_a_is_sign_inv)
+  val fp_b_f16_0              = Mux(io.is_frs1,io.frs1(15,0),io.fp_b(15,0 ))
+  val fp_b_f16_1              = Mux(io.is_frs1,io.frs1(15,0),io.fp_b(31,16))
+  val fp_b_f16_2              = Mux(io.is_frs1,io.frs1(15,0),io.fp_b(47,32))
+  val fp_b_f16_3              = Mux(io.is_frs1,io.frs1(15,0),io.fp_b(63,48))
+  val fp_c_f16_0              = Mux(is_vfmul,0.U(16.W),sign_inv(io.fp_c(15,0 ),fp_c_is_sign_inv))
+  val fp_c_f16_1              = Mux(is_vfmul,0.U(16.W),sign_inv(io.fp_c(31,16),fp_c_is_sign_inv))
+  val fp_c_f16_2              = Mux(is_vfmul,0.U(16.W),sign_inv(io.fp_c(47,32),fp_c_is_sign_inv))
+  val fp_c_f16_3              = Mux(is_vfmul,0.U(16.W),sign_inv(io.fp_c(63,48),fp_c_is_sign_inv))
   val sign_a_b_f16_0          = (fp_a_f16_0.head(1) ^ fp_b_f16_0.head(1)).asBool
   val sign_a_b_f16_1          = (fp_a_f16_1.head(1) ^ fp_b_f16_1.head(1)).asBool
   val sign_a_b_f16_2          = (fp_a_f16_2.head(1) ^ fp_b_f16_2.head(1)).asBool
@@ -1168,8 +1173,16 @@ class VectorFloatFMA() extends Module{
   val is_overflow_f64_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f64_reg2.asBool) | (RUP_reg2 & sign_result_temp_f64_reg2.asBool)
   val fp_a_or_b_is_zero_f64_reg2 = ShiftRegister(fp_a_is_zero_f64 | fp_b_is_zero_f64,3)
   val fp_result_f64_fp_a_or_b_is_zero_reg2 = ShiftRegister(
-    Cat(Mux(fp_c_is_zero_f64,(sign_a_b_f64 & sign_c_f64) | (RDN & (sign_a_b_f64 ^ sign_c_f64)),fp_c_f64.head(1)),fp_c_f64.tail(1)),
-    3)
+    Cat(
+      Mux(
+        fp_c_is_zero_f64,
+        Mux(is_vfmul, sign_a_b_f64, (sign_a_b_f64 & sign_c_f64) | (RDN & (sign_a_b_f64 ^ sign_c_f64)) ),
+        fp_c_f64.head(1)
+      ),
+      fp_c_f64.tail(1)
+    ),
+    3
+  )
   when(has_nan_f64_reg2){
     fp_result_f64 := result_nan_f64
     fflags_f64 := Mux(has_nan_f64_is_NV_reg2,"b10000".U,"b00000".U)
@@ -1205,8 +1218,16 @@ class VectorFloatFMA() extends Module{
   val is_overflow_f32_0_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f32_0_reg2.asBool) | (RUP_reg2 & sign_result_temp_f32_0_reg2.asBool)
   val fp_a_or_b_is_zero_f32_0_reg2 = ShiftRegister(fp_a_is_zero_f32_0 | fp_b_is_zero_f32_0,3)
   val fp_result_f32_0_fp_a_or_b_is_zero_reg2 = ShiftRegister(
-    Cat(Mux(fp_c_is_zero_f32_0,(sign_a_b_f32_0 & sign_c_f32_0) | (RDN & (sign_a_b_f32_0 ^ sign_c_f32_0)),fp_c_f32_0.head(1)),fp_c_f32_0.tail(1)),
-    3)
+    Cat(
+      Mux(
+        fp_c_is_zero_f32_0,
+        Mux(is_vfmul, sign_a_b_f32_0, (sign_a_b_f32_0 & sign_c_f32_0) | (RDN & (sign_a_b_f32_0 ^ sign_c_f32_0)) ),
+        fp_c_f32_0.head(1)
+      ),
+      fp_c_f32_0.tail(1)
+    ),
+    3
+  )
   when(has_nan_f32_0_reg2){
     fp_result_f32_0 := result_nan_f32_0
     fflags_f32_0 := Mux(has_nan_f32_0_is_NV_reg2,"b10000".U,"b00000".U)
@@ -1239,8 +1260,16 @@ class VectorFloatFMA() extends Module{
   val is_overflow_f32_1_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f32_1_reg2.asBool) | (RUP_reg2 & sign_result_temp_f32_1_reg2.asBool)
   val fp_a_or_b_is_zero_f32_1_reg2 = ShiftRegister(fp_a_is_zero_f32_1 | fp_b_is_zero_f32_1,3)
   val fp_result_f32_1_fp_a_or_b_is_zero_reg2 = ShiftRegister(
-    Cat(Mux(fp_c_is_zero_f32_1,(sign_a_b_f32_1 & sign_c_f32_1) | (RDN & (sign_a_b_f32_1 ^ sign_c_f32_1)),fp_c_f32_1.head(1)),fp_c_f32_1.tail(1)),
-    3)
+    Cat(
+      Mux(
+        fp_c_is_zero_f32_1,
+        Mux(is_vfmul, sign_a_b_f32_1, (sign_a_b_f32_1 & sign_c_f32_1) | (RDN & (sign_a_b_f32_1 ^ sign_c_f32_1)) ),
+        fp_c_f32_1.head(1)
+      ),
+      fp_c_f32_1.tail(1)
+    ),
+    3
+  )
   when(has_nan_f32_1_reg2){
     fp_result_f32_1 := result_nan_f32_1
     fflags_f32_1 := Mux(has_nan_f32_1_is_NV_reg2,"b10000".U,"b00000".U)
@@ -1273,8 +1302,16 @@ class VectorFloatFMA() extends Module{
   val is_overflow_f16_0_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f16_0_reg2.asBool) | (RUP_reg2 & sign_result_temp_f16_0_reg2.asBool)
   val fp_a_or_b_is_zero_f16_0_reg2 = ShiftRegister(fp_a_is_zero_f16_0 | fp_b_is_zero_f16_0,3)
   val fp_result_f16_0_fp_a_or_b_is_zero_reg2 = ShiftRegister(
-    Cat(Mux(fp_c_is_zero_f16_0,(sign_a_b_f16_0 & sign_c_f16_0) | (RDN & (sign_a_b_f16_0 ^ sign_c_f16_0)),fp_c_f16_0.head(1)),fp_c_f16_0.tail(1)),
-    3)
+    Cat(
+      Mux(
+        fp_c_is_zero_f16_0,
+        Mux(is_vfmul, sign_a_b_f16_0, (sign_a_b_f16_0 & sign_c_f16_0) | (RDN & (sign_a_b_f16_0 ^ sign_c_f16_0)) ),
+        fp_c_f16_0.head(1)
+      ),
+      fp_c_f16_0.tail(1)
+    ),
+    3
+  )
   when(has_nan_f16_0_reg2){
     fp_result_f16_0 := result_nan_f16_0
     fflags_f16_0 := Mux(has_nan_f16_0_is_NV_reg2,"b10000".U,"b00000".U)
@@ -1307,8 +1344,16 @@ class VectorFloatFMA() extends Module{
   val is_overflow_f16_1_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f16_1_reg2.asBool) | (RUP_reg2 & sign_result_temp_f16_1_reg2.asBool)
   val fp_a_or_b_is_zero_f16_1_reg2 = ShiftRegister(fp_a_is_zero_f16_1 | fp_b_is_zero_f16_1,3)
   val fp_result_f16_1_fp_a_or_b_is_zero_reg2 = ShiftRegister(
-    Cat(Mux(fp_c_is_zero_f16_1,(sign_a_b_f16_1 & sign_c_f16_1) | (RDN & (sign_a_b_f16_1 ^ sign_c_f16_1)),fp_c_f16_1.head(1)),fp_c_f16_1.tail(1)),
-    3)
+    Cat(
+      Mux(
+        fp_c_is_zero_f16_1,
+        Mux(is_vfmul, sign_a_b_f16_1, (sign_a_b_f16_1 & sign_c_f16_1) | (RDN & (sign_a_b_f16_1 ^ sign_c_f16_1)) ),
+        fp_c_f16_1.head(1)
+      ),
+      fp_c_f16_1.tail(1)
+    ),
+    3
+  )
   when(has_nan_f16_1_reg2){
     fp_result_f16_1 := result_nan_f16_1
     fflags_f16_1 := Mux(has_nan_f16_1_is_NV_reg2,"b10000".U,"b00000".U)
@@ -1341,8 +1386,16 @@ class VectorFloatFMA() extends Module{
   val is_overflow_f16_2_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f16_2_reg2.asBool) | (RUP_reg2 & sign_result_temp_f16_2_reg2.asBool)
   val fp_a_or_b_is_zero_f16_2_reg2 = ShiftRegister(fp_a_is_zero_f16_2 | fp_b_is_zero_f16_2,3)
   val fp_result_f16_2_fp_a_or_b_is_zero_reg2 = ShiftRegister(
-    Cat(Mux(fp_c_is_zero_f16_2,(sign_a_b_f16_2 & sign_c_f16_2) | (RDN & (sign_a_b_f16_2 ^ sign_c_f16_2)),fp_c_f16_2.head(1)),fp_c_f16_2.tail(1)),
-    3)
+    Cat(
+      Mux(
+        fp_c_is_zero_f16_2,
+        Mux(is_vfmul, sign_a_b_f16_2, (sign_a_b_f16_2 & sign_c_f16_2) | (RDN & (sign_a_b_f16_2 ^ sign_c_f16_2)) ),
+        fp_c_f16_2.head(1)
+      ),
+      fp_c_f16_2.tail(1)
+    ),
+    3
+  )
   when(has_nan_f16_2_reg2){
     fp_result_f16_2 := result_nan_f16_2
     fflags_f16_2 := Mux(has_nan_f16_2_is_NV_reg2,"b10000".U,"b00000".U)
@@ -1375,8 +1428,16 @@ class VectorFloatFMA() extends Module{
   val is_overflow_f16_3_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f16_3_reg2.asBool) | (RUP_reg2 & sign_result_temp_f16_3_reg2.asBool)
   val fp_a_or_b_is_zero_f16_3_reg2 = ShiftRegister(fp_a_is_zero_f16_3 | fp_b_is_zero_f16_3,3)
   val fp_result_f16_3_fp_a_or_b_is_zero_reg2 = ShiftRegister(
-    Cat(Mux(fp_c_is_zero_f16_3,(sign_a_b_f16_3 & sign_c_f16_3) | (RDN & (sign_a_b_f16_3 ^ sign_c_f16_3)),fp_c_f16_3.head(1)),fp_c_f16_3.tail(1)),
-    3)
+    Cat(
+      Mux(
+        fp_c_is_zero_f16_3,
+        Mux(is_vfmul, sign_a_b_f16_3, (sign_a_b_f16_3 & sign_c_f16_3) | (RDN & (sign_a_b_f16_3 ^ sign_c_f16_3)) ),
+        fp_c_f16_3.head(1)
+      ),
+      fp_c_f16_3.tail(1)
+    ),
+    3
+  )
   when(has_nan_f16_3_reg2){
     fp_result_f16_3 := result_nan_f16_3
     fflags_f16_3 := Mux(has_nan_f16_3_is_NV_reg2,"b10000".U,"b00000".U)

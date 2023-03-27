@@ -184,6 +184,10 @@ extern "C"{
 #define RM_S_RDN (2)
 #define RM_S_ROD (3)
 
+#define F16_SIGN ((uint64_t)1ul << 15)
+#define F32_SIGN ((uint64_t)1ul << 31)
+#define F64_SIGN ((uint64_t)1ul << 63)
+
 #define VFA_NUM 16 // for random
 // vfa funcop type
 #define VFADD   (binstoi("00000"))
@@ -207,17 +211,18 @@ extern "C"{
 #define VFA_MUST_FRS1_OPTYPES {VFMERGE,VFMOVE,VFGT,VFGE}
 #define VFA_NEED_FRS1_OPTYPES {VFADD,VFSUB,VFMIN,VFMAX,VFSGNJ,VFSGNJN,VFSGNJX,VFEQ,VFNE,VFLT,VFLE}
 // vff funcop type
-#define VFF_NUM 2
+#define VFF_NUM 3
 #define VFMUL   (binstoi("0000"))
 #define VFMACC  (binstoi("0001"))
-#define VFNMACC (binstoi("0001"))
-#define VFMSAC  (binstoi("0001"))
-#define VFNMSAC (binstoi("0001"))
-#define VFMADD  (binstoi("0001"))
-#define VFNMADD (binstoi("0001"))
-#define VFMSUB  (binstoi("0001"))
-#define VFNMSUB (binstoi("0001"))
-#define VFF_ALL_OPTYPES {VFMUL,VFMACC}
+#define VFNMACC (binstoi("0010"))
+#define VFMSAC  (binstoi("0011"))
+#define VFNMSAC (binstoi("0100"))
+#define VFMADD  (binstoi("0101"))
+#define VFNMADD (binstoi("0110"))
+#define VFMSUB  (binstoi("0111"))
+#define VFNMSUB (binstoi("1000"))
+#define VFF_ALL_OPTYPES {VFMUL,VFMACC,VFNMACC}
+#define VFF_NEED_FRS1_OPTYPES {VFMUL,VFMACC,VFNMACC}
 // rounding mode
 #define RM_RNE (0)
 #define RM_RTZ (1)

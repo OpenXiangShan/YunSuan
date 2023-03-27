@@ -5,10 +5,6 @@ extern "C"{
 #include <internals.h>
 }
 
-#define F16_SIGN ((uint64_t)1ul << 15)
-#define F32_SIGN ((uint64_t)1ul << 31)
-#define F64_SIGN ((uint64_t)1ul << 63)
-
 const uint16_t defaultNaN_ui16 = defaultNaNF16UI;
 const uint32_t defaultNaN_ui32 = defaultNaNF32UI;
 const uint64_t defaultNaN_ui64 = defaultNaNF64UI;
