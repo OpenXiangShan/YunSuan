@@ -1,4 +1,3 @@
-
 /**
   * Integer and fixed-point (except mult and div)
   *   
@@ -37,7 +36,7 @@ class VIntFixpDecode extends Bundle {
 
 class VIntFixpAlu64b extends Module {
   val io = IO(new Bundle {
-    val opcode = Input(UInt(6.W))
+    val opcode = Input(new VAluOpcode)
     val info = Input(new VIFuInfo)
     val srcType = Input(Vec(2, UInt(4.W)))
     val vdType  = Input(UInt(4.W))
@@ -55,7 +54,7 @@ class VIntFixpAlu64b extends Module {
     val vd = Output(UInt(64.W))
     val narrowVd = Output(UInt(32.W))
     val cmpOut = Output(UInt(8.W))
-    val vxsat = Output(Bool())
+    val vxsat = Output(UInt(8.W))
   })
 
   val srcTypeVs2 = io.srcType(0)
@@ -96,8 +95,7 @@ class VIntFixpAlu64b extends Module {
   vFixPoint64b.io.sew := RegNext(SewOH(io.vdType(1, 0)))
   vFixPoint64b.io.isSub := RegNext(io.isSub)
   vFixPoint64b.io.isSigned := RegNext(srcTypeVs2(3, 2) === 1.U)
-  vFixPoint64b.io.isNClip := RegNext((io.opcode === vssrl || io.opcode === vssra) &&
-                             io.vdType(1,0) =/= srcTypeVs2(1,0))
+  vFixPoint64b.io.isNClip := RegNext(io.opcode.isScalingShift && io.vdType(1,0) =/= srcTypeVs2(1,0))
   vFixPoint64b.io.fromAdder := RegNext(vIntAdder64b.io.toFixP)
   vFixPoint64b.io.fromMisc := RegNext(vIntMisc64b.io.toFixP)
 
@@ -111,7 +109,7 @@ class VIntFixpAlu64b extends Module {
 class VIntFixpAlu extends Module {
   val io = IO(new Bundle {
     val in = Input(new Bundle {
-      val opcode = UInt(6.W)
+      val opcode = Input(new VAluOpcode)
       val info = new VIFuInfo
       val srcType = Vec(2, UInt(4.W))
       val vdType  = UInt(4.W)
@@ -141,15 +139,14 @@ class VIntFixpAlu extends Module {
   val vl = io.in.info.vl
   val vstart = io.in.info.vstart
   val signed = srcTypeVs2(3, 2) === 1.U
-  val widen = (opcode === vadd || opcode === vsub) && srcTypeVs1(1, 0) =/= vdType(1, 0)
+  val widen = opcode.isAddSub && srcTypeVs1(1, 0) =/= vdType(1, 0)
   val widen_vs2 = widen && srcTypeVs2(1, 0) =/= vdType(1, 0)
 
   val truthTable = TruthTable(VIntFixpTable.table, VIntFixpTable.default)
-  val decoderOut = decoder(QMCMinimizer, Cat(opcode), truthTable)
+  val decoderOut = decoder(QMCMinimizer, Cat(opcode.op), truthTable)
   val vIntFixpDecode = decoderOut.asTypeOf(new VIntFixpDecode)
 
-  val isFixp = Mux(vIntFixpDecode.misc, opcode === vssrl || opcode === vssra,
-                   opcode === vsadd || opcode === vssub || opcode === vaadd || opcode === vasub)
+  val isFixp = Mux(vIntFixpDecode.misc, opcode.isScalingShift, opcode.isSatAdd || opcode.isAvgAdd)
 
   //------- Two 64b modules form one 128b unit ------
   val vIntFixpAlu64bs = Seq.fill(2)(Module(new VIntFixpAlu64b))
@@ -168,9 +165,9 @@ class VIntFixpAlu extends Module {
   //------- Input extension (widen & extension instrucitons) ----
   val vd_sub_srcType = vdType(1, 0) - srcTypeVs2(1, 0)
   // Extension instructions
-  val vf2 = vd_sub_srcType === 1.U && opcode === vext
-  val vf4 = vd_sub_srcType === 2.U && opcode === vext
-  val vf8 = vd_sub_srcType === 3.U && opcode === vext
+  val vf2 = vd_sub_srcType === 1.U && opcode.isVext
+  val vf4 = vd_sub_srcType === 2.U && opcode.isVext
+  val vf8 = vd_sub_srcType === 3.U && opcode.isVext
   // Rearrange vs2
   when (vf2 || widen_vs2) {
     vIntFixpAlu64bs(0).io.vs2 := Cat(vs2(95, 64), vs2(31, 0))
@@ -242,10 +239,12 @@ class VIntFixpAlu extends Module {
    * Output tail/prestart/mask handling for eewVd >= 8
    */
   //---- Tail gen ----
-  val tail = TailGen(vl, uopIdx, Mux(narrow, eewVs2, eewVd))
+  // val tail = TailGen(vl, uopIdx, Mux(narrow, eewVs2, eewVd))
+  val tail = TailGen(vl, uopIdx, eewVd, narrow)
   val tailS1 = RegNext(tail)
   //---- Prestart gen ----
-  val prestart = PrestartGen(vstart, uopIdx, Mux(narrow, eewVs2, eewVd))
+  // val prestart = PrestartGen(vstart, uopIdx, Mux(narrow, eewVs2, eewVd))
+  val prestart = PrestartGen(vstart, uopIdx, eewVd, narrow)
   val prestartS1 = RegNext(prestart)
   //---- vstart >= vl ----
   val vstart_gte_vl_S1 = RegNext(io.ctrl.vstart_gte_vl)
@@ -254,14 +253,13 @@ class VIntFixpAlu extends Module {
   val prestartReorg = MaskReorg.splash(prestartS1, eewVdS1)
   val mask16bReorg = MaskReorg.splash(mask16bS1, eewVdS1)
   val updateType = Wire(Vec(16, UInt(2.W))) // 00: keep result  10: old_vd  11: write 1s
-  val isAddWithCarry = opcodeS1 === vadc || opcodeS1 === vsbc
-  val isVmerge = opcodeS1 === vmerge
+  // val isAddWithCarry = opcodeS1 === vadc || opcodeS1 === vsbc
   for (i <- 0 until 16) {
     when (prestartReorg(i) || vstart_gte_vl_S1) {
       updateType(i) := 2.U
     }.elsewhen (tailReorg(i)) {
       updateType(i) := Mux(taS1, 3.U, 2.U)
-    }.elsewhen (isAddWithCarry || isVmerge) {
+    }.elsewhen (opcodeS1.isAddWithCarry || opcodeS1.isVmerge) {
       updateType(i) := 0.U
     }.elsewhen (!vmS1 && !mask16bReorg(i)) {
       updateType(i) := Mux(maS1, 3.U, 2.U)
@@ -280,7 +278,7 @@ class VIntFixpAlu extends Module {
   val tail_1b_temp = UIntToCont0s(vl_S1(wVL-2, 0), wVL-1)
   require(tail_1b_temp.getWidth == 128)
   val tail_1b = Mux(vl_S1 === 128.U, 0.U(128.W), tail_1b_temp)
-  val prestart_1b = UIntToCont1s(prestartS1, wVSTART)
+  val prestart_1b = UIntToCont1s(vstartS1, wVSTART)
   require(prestart_1b.getWidth == 128)
   val bitsKeep_1b = ~(prestart_1b | tail_1b)
   val bitsReplace_1b = Mux(vstart_gte_vl_S1, old_vd_S1, 
@@ -292,7 +290,15 @@ class VIntFixpAlu extends Module {
   val vdResult = Mux(narrowS1, vdOfNarrow, 
               Mux(cmpFlagS1, cmpOutResult, Cat(vIntFixpAlu64bs.map(_.io.vd).reverse)))
   io.out.vd := vdResult & bitsKeepFinal | bitsReplaceFinal
-  io.out.vxsat := vIntFixpAlu64bs.map(_.io.vxsat).reduce(_ || _)
+  when (!narrowS1) {
+    io.out.vxsat := (Cat(vIntFixpAlu64bs.map(_.io.vxsat).reverse) &
+                     Cat(updateType.map(_(1) === false.B).reverse)).orR
+  }.otherwise {
+    io.out.vxsat := (Cat(vIntFixpAlu64bs.map(_.io.vxsat(VLENB/4 - 1, 0)).reverse) &
+                     Mux(uopIdxS1(0), Cat(updateType.drop(VLENB/2).map(_(1) === false.B).reverse),
+                                      Cat(updateType.take(VLENB/2).map(_(1) === false.B).reverse))
+                     ).orR
+  }
 
 
   //---- Some methods ----

@@ -195,7 +195,6 @@ package object yunsuan {
     def vid_v                          = "b01010001".U(OpTypeWidth.W) // vid
     // 1
     def vmv_s_x                        = "b01010010".U(OpTypeWidth.W) // TODO Integer Scalar Move vmv.s.x vd, rs1
-    def vslide1up                      = "b01010011".U(OpTypeWidth.W) // vslide1up
   }
 
   object VfpuType {
@@ -216,10 +215,66 @@ package object yunsuan {
     def isVfalu(vfpuType: UInt) = vfpuType(7) & !vfpuType(6)
   }
 
-  object VppuType {
-    def dummy = "b11111111".U(OpTypeWidth.W) // exu not implemented
-    def f2s   = "b10000000".U(OpTypeWidth.W) // vd[0] = f[rs1] (vs2=0)
-    def vslide1up = "b10000001".U(OpTypeWidth.W) // vd[0]=f[rs1], vd[i+1] = vs2[i]
+  object VpermType {
+    // format:2bits   sign:1bit    opcode:5bits
+    // 00 -> vvv
+    def dummy              = "b11111111".U(OpTypeWidth.W) // exu not implemented
+    def vslideup           = "b00000000".U(OpTypeWidth.W) // 
+    def vslidedown         = "b00000001".U(OpTypeWidth.W) // 
+    def vslide1up          = "b00000010".U(OpTypeWidth.W) // vd[0]=f[rs1], vd[i+1] = vs2[i]
+    def vslide1down        = "b00000011".U(OpTypeWidth.W) // 
+    def vrgather           = "b00000100".U(OpTypeWidth.W) // 
+    def vrgather_vx        = "b00000101".U(OpTypeWidth.W) // 
+    def vcompress          = "b00000110".U(OpTypeWidth.W) // 
+    def vmvnr              = "b00000111".U(OpTypeWidth.W) // 
+    def vfmv_s_f           = "b00001000".U(OpTypeWidth.W) // 
+    def vfslide1up         = "b00001001".U(OpTypeWidth.W) // 
+
+    def getOpcode(fuOpType: UInt) = fuOpType(5,0)
+    def getSrcVdType(fuOpType: UInt, sew: UInt) = {
+      val Sew =   Cat(0.U(1.W) ,0.U(1.W),  sew(1,0)       )
+      val format = Cat(Sew, Sew, Sew).asUInt()
+      format
+    }
+
+// vslideup.vx vd, vs2, rs1, vm
+// vslideup.vi vd, vs2, uimm, vm
+// vslidedown.vx vd, vs2, rs1, vm
+// vslidedown.vi vd, vs2, uimm, vm
+// vslide1up.vx vd, vs2, rs1, vm
+// vfslide1up.vf vd, vs2, rs1, vm      // --------
+// vslide1down.vx vd, vs2, rs1, vm
+// vfslide1down.vf vd, vs2, rs1, vm    // --------
+// vrgather.vv vd, vs2, vs1, vm
+// vrgather.vx vd, vs2, rs1, vm
+// vrgather.vi vd, vs2, uimm, vm
+// vrgatherei16.vv vd, vs2, vs1, vm    // --------
+// vcompress.vm vd, vs2, vs1
+// vmv<nr>r.v vd, vs2                  // -------- --------
+
+
+// srcType1 1101 1110 1111
+// vfslide1up.vf   vs1 fp16 fp32 fp64
+// vfslide1down.vf vs1 fp16 fp32 fp64
+// vcompress.vm    vs1 mask
+
+
+// srcType1 0000 0001 0010 0011
+// vslideup.vx vs1 u8 u16 u32 u64
+// vslideup.vi vs1 u8 u16 u32 u64
+// vslidedown.vx
+// vslidedown.vi
+// vslide1up.vx
+// vslide1down.vx
+// vrgather.vv
+// vrgather.vx
+// vrgather.vi
+// vrgatherei16.vv
+
+
+// srcType2 0000 0001 0010 0011
+// vdType   0000 0001 0010 0011
+
   }
 
   object VfaddOpCode {

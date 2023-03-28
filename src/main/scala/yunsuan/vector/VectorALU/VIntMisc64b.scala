@@ -15,12 +15,12 @@ package yunsuan.vector.alu
 
 import chisel3._
 import chisel3.util._
-import yunsuan.vector.{VIFuInfo, SewOH, UIntSplit, BitsExtend}
+import yunsuan.vector._
 import yunsuan.vector.alu.VAluOpcode._
 
 class VIntMisc64b extends Module {
   val io = IO(new Bundle {
-    val opcode = Input(UInt(6.W))
+    val opcode = Input(new VAluOpcode)
     val info = Input(new VIFuInfo)
     val srcType = Input(Vec(2, UInt(4.W)))
     val vdType  = Input(UInt(4.W))
@@ -68,22 +68,20 @@ class VIntMisc64b extends Module {
 
   //---- Bitwise Logical instructions ----
   val bitLogical = Mux1H(Seq(
-    (opcode === vand) -> (vs2 & vs1),
-    (opcode === vnand) -> ~(vs2 & vs1),
-    (opcode === vandn) -> (vs2 & ~vs1),
-    (opcode === vxor) -> (vs2 ^ vs1),
-    (opcode === vor) -> (vs2 | vs1),
-    (opcode === vnor) -> ~(vs2 | vs1),
-    (opcode === vorn) -> (vs2 | ~vs1),
-    (opcode === vxnor) -> ~(vs2 ^ vs1),
+    (opcode.isVand) -> (vs2 & vs1),
+    (opcode.isVnand) -> ~(vs2 & vs1),
+    (opcode.isVandn) -> (vs2 & ~vs1),
+    (opcode.isVxor) -> (vs2 ^ vs1),
+    (opcode.isVor) -> (vs2 | vs1),
+    (opcode.isVnor) -> ~(vs2 | vs1),
+    (opcode.isVorn) -> (vs2 | ~vs1),
+    (opcode.isVxnor) -> ~(vs2 ^ vs1),
   ))
-  val is_bitLogical = opcode === vand || opcode === vnand || opcode === vandn || opcode === vxor || 
-                      opcode === vor || opcode === vnor || opcode === vorn || opcode === vxnor
 
   /**
     * Shift: vsll, vsrl, vsra, vnsrl, vnsra (vssrl, vssra and vnclipu/vnclip)
     */
-  val signed_shift = opcode === vsra || opcode === vssra
+  val signed_shift = opcode.isSignedShift
   def shiftOnce(n: Int, data: UInt): (UInt, Bool, Bool) = { // n: number of shift bits
     val len = data.getWidth
     require(len > n)
@@ -122,10 +120,9 @@ class VIntMisc64b extends Module {
       }
     }
   }
-  val is_shift = opcode === vsll || opcode === vsrl || opcode === vssrl || signed_shift
 
   // Handle shift left
-  val leftShift = opcode === vsll
+  val leftShift = opcode.isLeftShift
   val vs2_reverse = Cat(vs2.asBools) // bit reverse
   val vs2_adjust = Mux(leftShift, vs2_reverse, vs2)
   val vs1_revsByElem = MuxCase(vs1, Seq(  // reverse vs1 by element when left-shift
@@ -198,7 +195,7 @@ class VIntMisc64b extends Module {
   val mergeMove = Mux(vm, vs1, mergeResult.asUInt)
 
   // Output arbiter
-  io.vd := Mux(is_shift, shiftResult,
-               Mux(opcode === vext, extResult,
-               Mux(is_bitLogical, bitLogical, mergeMove)))
+  io.vd := Mux(opcode.isShift, shiftResult,
+               Mux(opcode.isVext, extResult,
+               Mux(opcode.isBitLogical, bitLogical, mergeMove)))
 }

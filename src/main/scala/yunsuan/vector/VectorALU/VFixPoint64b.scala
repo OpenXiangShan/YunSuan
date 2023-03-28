@@ -9,7 +9,7 @@ package yunsuan.vector.alu
 
 import chisel3._
 import chisel3.util._
-import yunsuan.vector.{VIFuInfo, SewOH, UIntSplit}
+import yunsuan.vector._
 import yunsuan.vector.alu.VAluOpcode._
 
 class AdderToFixP extends Bundle {
@@ -26,7 +26,7 @@ class MiscToFixP extends Bundle {
 
 class VFixPoint64b extends Module {
   val io = IO(new Bundle {
-    val opcode = Input(UInt(6.W))
+    val opcode = Input(new VAluOpcode)
     val info = Input(new VIFuInfo)
     val sew = Input(new SewOH)
     val isSub = Input(Bool())
@@ -36,7 +36,7 @@ class VFixPoint64b extends Module {
     val fromMisc = Input(new MiscToFixP)
     val vd = Output(UInt(64.W))
     val narrowVd = Output(UInt(32.W))
-    val vxsat = Output(Bool())
+    val vxsat = Output(UInt(8.W))
   })
 
   val opcode = io.opcode
@@ -129,7 +129,7 @@ class VFixPoint64b extends Module {
     val out = Wire(Vec(8, UInt(8.W)))
     for (i <- 0 until 8) {
       val adder_8b_rnd = new Adder_8b_rnd(data(i), cin(i))
-      cin(i) := Mux1H(sew.oneHot, Seq(1, 2, 4, 8).map(n => 
+      cin(i) := Mux1H(Mux(io.isNClip, (sew.oneHot.asUInt << 1)(3, 0), sew.oneHot.asUInt), Seq(1, 2, 4, 8).map(n => 
         if ((i % n) == 0) rndInc(i) else cout(i-1))
       )
       cout(i) := adder_8b_rnd.cout
@@ -175,9 +175,8 @@ class VFixPoint64b extends Module {
     ))
   }
 
-  val isScalingShift = opcode === vssrl || opcode === vssra
-  val beforeRnd = dataFromMisc zip avgBeforeRnd map {case (d, a) => Mux(isScalingShift, d, a)}
-  val rndInc = shiftRndInc zip avgRndInc map {case (s, a) => Mux(isScalingShift, s, a)}
+  val beforeRnd = dataFromMisc zip avgBeforeRnd map {case (d, a) => Mux(opcode.isScalingShift, d, a)}
+  val rndInc = shiftRndInc zip avgRndInc map {case (s, a) => Mux(opcode.isScalingShift, s, a)}
   val afterRnd = Adder_chain_rnd(beforeRnd, rndInc)
 
   /**
@@ -219,14 +218,12 @@ class VFixPoint64b extends Module {
     sew.is8  -> Cat(nclipResult8.map(_._1).reverse),
   ))
   val nclipSat = Mux1H(Seq(
-    sew.is32 -> nclipResult32._2,
-    sew.is16 -> nclipResult16.map(_._2).reduce(_ || _),
-    sew.is8  -> nclipResult8.map(_._2).reduce(_ || _)
+    sew.is32 -> Fill(4, nclipResult32._2),
+    sew.is16 -> Cat(Fill(2, nclipResult16(1)._2), Fill(2, nclipResult16(0)._2)),
+    sew.is8  -> Cat(nclipResult8.map(_._2).reverse)
   ))
   
-  // io.out.vxsat := Mux(uop.ctrl.fixP && funct6(3) === funct6(2), 
-                      // Mux(funct6(3), nclipSat, sat.reduce(_ || _)), false.B)
   io.vxsat := Mux(io.isNClip, nclipSat, 
-                      Mux(opcode === vsadd || opcode === vssub, sat.reduce(_ || _), false.B))
-  io.vd := Mux(opcode === vsadd || opcode === vssub, Cat(vdSat.reverse), afterRndUInt)
+                  Mux(opcode.isSatAdd, saturate, 0.U))
+  io.vd := Mux(opcode.isSatAdd, Cat(vdSat.reverse), afterRndUInt)
 }

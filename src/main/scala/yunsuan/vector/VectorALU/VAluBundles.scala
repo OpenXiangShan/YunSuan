@@ -3,6 +3,55 @@ package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
+import yunsuan.vector.alu.VAluOpcode._
+
+class VAluOpcode extends Bundle{
+  val op = UInt(6.W)
+  
+  def isAddSub = op === vadd || op === vsub
+  def isVext = op === vext
+  def isAddWithCarry = op === vadc || op === vmadc || op === vsbc || op === vmsbc
+  def isVmsbc = op === vmsbc
+  def isVand = op === vand
+  def isVnand = op === vnand
+  def isVandn = op === vandn
+  def isVxor = op === vxor
+  def isVor = op === vor
+  def isVnor = op === vnor
+  def isVorn = op === vorn
+  def isVxnor = op === vxnor
+  def isBitLogical = isVand || isVnand || isVandn || isVxor || isVor || isVnor || isVorn || isVxnor
+  def isVmseq = op === vmseq
+  def isVmsne = op === vmsne
+  def isVmslt = op === vmslt
+  def isVmsle = op === vmsle
+  def isVmsgt = op === vmsgt
+  def isVmax = op === vmax
+  def isVmin = op === vmin
+  def isVmerge = op === vmerge
+  def isSatAdd = op === vsadd || op === vssub
+  def isAvgAdd = op === vaadd || op === vasub
+  def isScalingShift = op === vssrl || op === vssra
+  def isSignedShift = op === vsra || op === vssra
+  def isShift = op === vsll || op === vsrl || op === vssrl || isSignedShift
+  def isLeftShift = op === vsll
+  def isIntFixp = op < vredsum
+  def isReduction = (op >= vredsum) && (op <= vredxor) 
+  def isVredsum = op === vredsum
+  def isVredmax = op === vredmax
+  def isVredmin = op === vredmin  
+  def isVredand = op === vredand
+  def isVredor  = op === vredor
+  def isVredxor = op === vredxor
+  def isVcpop   = op === vcpop 
+  def isVfirst  = op === vfirst
+  def isVmsbf   = op === vmsbf 
+  def isVmsif   = op === vmsif 
+  def isVmsof   = op === vmsof 
+  def isViota   = op === viota 
+  def isVid     = op === vid   
+
+}
 
 class VIFuInfo extends Bundle {
   val vm = Bool()
@@ -16,9 +65,9 @@ class VIFuInfo extends Bundle {
 }
 
 class VIFuInput extends Bundle {
-  val opcode = UInt(6.W)
+  val opcode = new VAluOpcode
   val info = new VIFuInfo
-  val srcType = Vec(2, UInt(4.W))
+  val srcType = Vec(2, UInt(4.W))  // 0: vs2   1: vs1
   val vdType  = UInt(4.W)
   val vs1 = UInt(128.W)
   val vs2 = UInt(128.W)
