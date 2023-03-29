@@ -62,7 +62,7 @@ ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
   VecInputE32 *input32 = (VecInputE32 *) &input;
   VecInput *input64 = (VecInput *) &input;
   if (input.widen) {
-    if(input.fuType == VFloatAdder && (input.fuOpType == VFADD || input.fuOpType == VFSUB)) {
+    if(input.fuType == VFloatAdder) {
       switch (sew) {
         case 2:
           element.src1 = (uint64_t)input16->src1[widen_idx];
@@ -71,7 +71,24 @@ ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
           break;
         case 3:
           element.src1 = (uint64_t)input32->src1[widen_idx];
-          element.src2 = input.is_frs1 ?  (uint64_t)input64->src2[0] : (input.src_widen ? (uint64_t)input64->src2[idx] : (uint64_t)input32->src2[widen_idx]);
+          element.src2 = input.is_frs1 ? (uint64_t)input64->src2[0] : (input.src_widen ? (uint64_t)input64->src2[idx] : (uint64_t)input32->src2[widen_idx]);
+          element.src3 = (uint64_t)input64->src3[idx];
+          break;
+        default:
+          printf("VPU Golden Modle, bad widen sew %d\n", input.sew);
+          exit(1);
+      }
+    }
+    else if(input.fuType == VFloatFMA) {
+      switch (sew) {
+        case 2:
+          element.src1 = (uint64_t)input16->src1[widen_idx];
+          element.src2 = input.is_frs1 ? (uint64_t)input64->src2[0] : (uint64_t)input16->src2[widen_idx];
+          element.src3 = (uint64_t)input32->src3[idx];
+          break;
+        case 3:
+          element.src1 = (uint64_t)input32->src1[widen_idx];
+          element.src2 = input.is_frs1 ? (uint64_t)input64->src2[0] : (uint64_t)input32->src2[widen_idx];
           element.src3 = (uint64_t)input64->src3[idx];
           break;
         default:

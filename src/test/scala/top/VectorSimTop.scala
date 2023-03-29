@@ -140,7 +140,8 @@ class SimTop() extends VPUTestModule {
     require(vfa.io.fp_a.getWidth == XLEN)
     vfa.io.fp_a := src1
     vfa.io.fp_b := src2
-    // Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
+    //io.widen_a Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
+    //io.widen_b Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
     vfa.io.widen_a := Cat(in.src(0)(1)(31+i*32,0+i*32),in.src(0)(0)(31+i*32,0+i*32))
     vfa.io.widen_b := Cat(in.src(1)(1)(31+i*32,0+i*32),in.src(1)(0)(31+i*32,0+i*32))
     vfa.io.frs1  := in.src(1)(0) // VS1(63,0)
@@ -202,6 +203,11 @@ class SimTop() extends VPUTestModule {
     vff.io.fp_a := src1
     vff.io.fp_b := src2
     vff.io.fp_c := src3
+    //io.widen_a Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
+    //io.widen_b Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
+    vff.io.widen_a := Cat(in.src(0)(1)(31+i*32,0+i*32),in.src(0)(0)(31+i*32,0+i*32))
+    vff.io.widen_b := Cat(in.src(1)(1)(31+i*32,0+i*32),in.src(1)(0)(31+i*32,0+i*32))
+    vff.io.uop_idx := uop_idx(0)
     vff.io.frs1  := in.src(1)(0) // VS1(63,0)
     vff.io.round_mode := rm
     vff.io.fp_format := sew

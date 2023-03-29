@@ -30,7 +30,7 @@ void TestDriver::set_test_type() {
   test_type.pick_fuType = true;
   test_type.pick_fuOpType = false;
   test_type.fuType = VFloatFMA;
-  test_type.fuOpType = VFNMACC;
+  test_type.fuOpType = VFMUL;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -97,7 +97,13 @@ bool TestDriver::gen_random_widen() {
         if( input.fuOpType == VFADD || input.fuOpType == VFSUB )  return rand()%2 == 1; 
         else return false;
         break;
-        }
+      }
+      case VFloatFMA: {
+        if(input.fuOpType==VFMUL || input.fuOpType==VFMACC || input.fuOpType==VFNMACC || input.fuOpType==VFMSAC || input.fuOpType==VFNMSAC) 
+          return rand()%2 == 1;
+        else return false;
+        break;
+      }
       default: return false; break;
     }
   }
