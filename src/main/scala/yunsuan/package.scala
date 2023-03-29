@@ -222,59 +222,23 @@ package object yunsuan {
     def vslideup           = "b00000000".U(OpTypeWidth.W) // 
     def vslidedown         = "b00000001".U(OpTypeWidth.W) // 
     def vslide1up          = "b00000010".U(OpTypeWidth.W) // vd[0]=f[rs1], vd[i+1] = vs2[i]
+    def vfslide1up         = "b01000010".U(OpTypeWidth.W) // 
     def vslide1down        = "b00000011".U(OpTypeWidth.W) // 
+    def vfslide1down       = "b01000011".U(OpTypeWidth.W) // 
     def vrgather           = "b00000100".U(OpTypeWidth.W) // 
     def vrgather_vx        = "b00000101".U(OpTypeWidth.W) // 
     def vcompress          = "b00000110".U(OpTypeWidth.W) // 
     def vmvnr              = "b00000111".U(OpTypeWidth.W) // 
     def vfmv_s_f           = "b00001000".U(OpTypeWidth.W) // 
-    def vfslide1up         = "b00001001".U(OpTypeWidth.W) // 
 
     def getOpcode(fuOpType: UInt) = fuOpType(5,0)
     def getSrcVdType(fuOpType: UInt, sew: UInt) = {
-      val Sew =   Cat(0.U(1.W) ,0.U(1.W),  sew(1,0)       )
-      val format = Cat(Sew, Sew, Sew).asUInt()
+      val sign = fuOpType(6)
+      val sSew =   Cat(sign ,sign,  sew(1,0))
+      val uSew =   Cat(1.U(1.W), 1.U(1.W), sew(1,0))
+      val format = Cat(uSew, sSew, uSew).asUInt()
       format
     }
-
-// vslideup.vx vd, vs2, rs1, vm
-// vslideup.vi vd, vs2, uimm, vm
-// vslidedown.vx vd, vs2, rs1, vm
-// vslidedown.vi vd, vs2, uimm, vm
-// vslide1up.vx vd, vs2, rs1, vm
-// vfslide1up.vf vd, vs2, rs1, vm      // --------
-// vslide1down.vx vd, vs2, rs1, vm
-// vfslide1down.vf vd, vs2, rs1, vm    // --------
-// vrgather.vv vd, vs2, vs1, vm
-// vrgather.vx vd, vs2, rs1, vm
-// vrgather.vi vd, vs2, uimm, vm
-// vrgatherei16.vv vd, vs2, vs1, vm    // --------
-// vcompress.vm vd, vs2, vs1
-// vmv<nr>r.v vd, vs2                  // -------- --------
-
-
-// srcType1 1101 1110 1111
-// vfslide1up.vf   vs1 fp16 fp32 fp64
-// vfslide1down.vf vs1 fp16 fp32 fp64
-// vcompress.vm    vs1 mask
-
-
-// srcType1 0000 0001 0010 0011
-// vslideup.vx vs1 u8 u16 u32 u64
-// vslideup.vi vs1 u8 u16 u32 u64
-// vslidedown.vx
-// vslidedown.vi
-// vslide1up.vx
-// vslide1down.vx
-// vrgather.vv
-// vrgather.vx
-// vrgather.vi
-// vrgatherei16.vv
-
-
-// srcType2 0000 0001 0010 0011
-// vdType   0000 0001 0010 0011
-
   }
 
   object VfaddOpCode {
