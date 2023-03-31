@@ -30,7 +30,7 @@ void TestDriver::set_test_type() {
   test_type.pick_fuType = true;
   test_type.pick_fuOpType = false;
   test_type.fuType = VPermutation;
-  test_type.fuOpType = VRGATHERRS1;
+  test_type.fuOpType = VSLIDE1DOWN;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -63,7 +63,7 @@ uint8_t TestDriver::gen_random_optype() {
     case VFloatDivider: break;
     case VIntegerALU: break;
     case VPermutation: { //TODO: add other type
-      uint8_t vperm_all_optype[5] = {VSLIDEUP,VSLIDEDOWN,VSLIDE1UP,VRGATHER,VRGATHERRS1};
+      uint8_t vperm_all_optype[6] = {VSLIDEUP,VSLIDEDOWN,VSLIDE1UP,VSLIDE1DOWN,VRGATHER,VRGATHERRS1};
       return vperm_all_optype[rand() % 5];
       break;
     }
@@ -298,7 +298,6 @@ void TestDriver::get_expected_output() {
       expect_output = vfd.get_expected_output(input); return;
     case VPermutation:
       if (verbose) { printf("FuType:%d, choose VPermutation %d\n", input.fuType, VPermutation); }
-      printf("FuType:%d, choose VPermutation %d, fuOpType %d\n", input.fuType, VPermutation, input.fuOpType);
       expect_output = vperm.get_expected_output(input); return;
     case VIntegerALUV2:
       if (verbose) { printf("FuType:%d, choose VIntegerALUV2 %d\n", input.fuType, VIntegerALUV2); }

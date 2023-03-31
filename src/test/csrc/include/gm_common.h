@@ -98,6 +98,11 @@ class VGMPermutation : public VPUGoldenModel {
     VecOutputE16 vrgather_calculation_e16(VRGatherInput *input);
     VecOutputE32 vrgather_calculation_e32(VRGatherInput *input);
     VecOutput    vrgather_calculation_e64(VRGatherInput *input);
+    VecOutput get_output_vcompress(VecInput input);
+    VecOutputE8  vcompress_calculation_e8(VCompressInput *input);
+    VecOutputE16 vcompress_calculation_e16(VCompressInput *input);
+    VecOutputE32 vcompress_calculation_e32(VCompressInput *input);
+    VecOutput    vcompress_calculation_e64(VCompressInput *input);
 };
 
 class VGMIntegerALUF : public VPUGoldenModel {
