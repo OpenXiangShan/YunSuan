@@ -28,9 +28,9 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 
 void TestDriver::set_test_type() {
   test_type.pick_fuType = true;
-  test_type.pick_fuOpType = false;
-  test_type.fuType = VFloatFMA;
-  test_type.fuOpType = VFMUL;
+  test_type.pick_fuOpType = true;
+  test_type.fuType = VFloatDivider;
+  test_type.fuOpType = VFDIV;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -138,6 +138,20 @@ bool TestDriver::gen_random_is_frs1() {
       if (need_frs1) {return rand() % 2 == 0; break;}
       else {return false; break;}
     }
+    case VFloatDivider: {
+      if(input.fuOpType == VFDIV) {return rand() % 2 == 0; break;}
+      else {return false; break;}
+    }
+    default: return false; break;
+  }
+}
+
+bool TestDriver::gen_random_is_frs2() {
+  switch(input.fuType){
+    case VFloatDivider: {
+      if(input.fuOpType == VFDIV && (!input.is_frs2)) {return rand() % 2 == 0; break;}
+      else {return false; break;}
+    }
     default: return false; break;
   }
 }
@@ -216,6 +230,7 @@ void TestDriver::get_random_input() {
   input.widen = gen_random_widen();
   input.src_widen = gen_random_src_widen();
   input.is_frs1 = gen_random_is_frs1();
+  input.is_frs2 = gen_random_is_frs2();
   input.rm = rand() % 5;
   input.rm_s = rand() % 5;
   gen_random_vecinfo();
@@ -284,6 +299,7 @@ bool TestDriver::assign_input_raising(VSimTop *dut_ptr) {
   dut_ptr->io_in_bits_src_widen = input.src_widen;
   dut_ptr->io_in_bits_widen   = input.widen;
   dut_ptr->io_in_bits_is_frs1 = input.is_frs1;
+  dut_ptr->io_in_bits_is_frs2 = input.is_frs2;
   dut_ptr->io_in_bits_rm      = input.rm;
   dut_ptr->io_in_bits_vinfo_vstart = input.vinfo.vstart;
   dut_ptr->io_in_bits_vinfo_vl     = input.vinfo.vl;
