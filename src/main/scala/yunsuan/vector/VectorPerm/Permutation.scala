@@ -248,9 +248,9 @@ for (i <-0 until vlenb) {
 
 vslide1dn_vd_rs1 := old_vd
 when (load_rs1 || uopIdx(0)) {
-  when ((vlRemainBytes >= 0.U) && (vlRemainBytes < vlenb.U)) {
+  when ((vlRemainBytes > 0.U) && (vlRemainBytes <= vlenb.U)) {
     vslide1dn_vd_rs1 := (Cat(vslide1dn_vd_wo_rs1.reverse) & (vd_mask >> (VLEN.U - Cat((vlRemainBytes - vsew_bytes), 0.U(3.W))))) | 
-                        (vs1 & (vd_mask >> (VLEN.U - vsew_bits)))
+                        (vs1 & (vd_mask << (VLEN.U - vsew_bits)))
   }
 }
 
