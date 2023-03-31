@@ -134,4 +134,30 @@ struct VSlideInput {
   VecInfo *vinfo;
 };
 
+struct VSlideOneInput {
+  uint64_t *src_data_lo;
+  uint64_t *src_data_hi;
+  uint64_t *prev_data;
+  uint16_t mask;
+  int slide;
+  int mask_start_idx;
+  int elements;
+  VecInfo *vinfo;
+};
+
+struct VRGatherInput {
+  uint64_t *index_data;
+  uint64_t *table_data;
+  uint64_t *prev_data;
+  uint16_t mask;
+  uint64_t index;
+  int mask_start_idx;
+  int table_range_min;
+  int table_range_max;
+  int elements;
+  bool first_gather;
+  bool is_gather_vx;
+  VecInfo *vinfo;
+};
+
 #endif

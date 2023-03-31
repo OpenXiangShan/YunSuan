@@ -28,9 +28,9 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 
 void TestDriver::set_test_type() {
   test_type.pick_fuType = true;
-  test_type.pick_fuOpType = true;
-  test_type.fuType = VFloatDivider;
-  test_type.fuOpType = VFDIV;
+  test_type.pick_fuOpType = false;
+  test_type.fuType = VPermutation;
+  test_type.fuOpType = VRGATHERRS1;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -63,8 +63,8 @@ uint8_t TestDriver::gen_random_optype() {
     case VFloatDivider: break;
     case VIntegerALU: break;
     case VPermutation: { //TODO: add other type
-      uint8_t vperm_all_optype[2] = {VSLIDEUP,VSLIDEDOWN};
-      return vperm_all_optype[rand() % 2];
+      uint8_t vperm_all_optype[5] = {VSLIDEUP,VSLIDEDOWN,VSLIDE1UP,VRGATHER,VRGATHERRS1};
+      return vperm_all_optype[rand() % 5];
       break;
     }
     case VIntegerALUV2: {
@@ -163,7 +163,10 @@ void TestDriver::gen_random_vecinfo() {
   input.vinfo.vlmul = vlmul_list[rand() % (7 - input.sew)];
   int elements_per_reg = (VLEN / 8) >> input.sew;
   int vlmax = (input.vinfo.vlmul > 4) ? (elements_per_reg >> (8 - input.vinfo.vlmul)) : (elements_per_reg << input.vinfo.vlmul);
-  input.vinfo.vstart = 0; // rand() % vlmax; // The vstart of an arithmetic instruction is generally equal to 0
+  switch (input.fuType) {
+    case VPermutation: input.vinfo.vstart = rand() % vlmax; break;
+    default: input.vinfo.vstart = 0; break;
+  } // The vstart of an arithmetic instruction is generally equal to 0
   input.vinfo.vl = rand() % vlmax + 1; // TODO: vl == 0 may be illegal
 
   input.vinfo.vm = rand() % 2;
@@ -203,12 +206,48 @@ void TestDriver::gen_random_uopidx() {
           else input.uop_idx = 0;
           break;
         }
+        case VRGATHER: {
+          if (input.vinfo.vlmul == 1) input.uop_idx = rand() % 4;
+          else if (input.vinfo.vlmul == 2) input.uop_idx = rand() % 16;
+          else if (input.vinfo.vlmul == 3) input.uop_idx = rand() % 64;
+          else input.uop_idx = 0;
+          break;
+        }
+        case VRGATHERRS1: {
+          if (input.vinfo.vlmul == 1) input.uop_idx = rand() % 4;
+          else if (input.vinfo.vlmul == 2) input.uop_idx = rand() % 16;
+          else if (input.vinfo.vlmul == 3) input.uop_idx = rand() % 64;
+          else input.uop_idx = 0;
+          break;
+        }
         default: input.uop_idx = 0;
       }
       break;
     }
     case VFloatAdder: input.uop_idx = input.widen ? rand() % 2 : 0; break;
     default: input.uop_idx = 0;
+  }
+}
+
+void TestDriver::gen_input_vperm() {
+  if(input.fuType == VPermutation) {
+    if (input.fuOpType == VSLIDEUP || input.fuOpType == VSLIDEDOWN) {
+      input.src1[1] = 0;
+      input.src1[0] = input.src1[0] % (VLEN * 2);
+    }
+    else if (input.fuOpType == VSLIDE1UP) {
+      uint64_t temp = (input.sew == 0) ? (input.src1[0] & 0xff) : \
+                      (input.sew == 1) ? (input.src1[0] & 0xffff) : \
+                      (input.sew == 2) ? (input.src1[0] & 0xffffffff) : input.src1[0];
+      uint64_t res = temp;
+      for (int i=0; i<(((VLEN / 8) >> (input.sew + 1)) - 1); i++) {
+        res = (res << (8 << input.sew)) + temp;
+      }
+      input.src1[1] = input.src1[0] = res;
+    }
+    else if (input.fuOpType == VRGATHERRS1) {
+      input.src1[1] = 0;
+    }
   }
 }
 
@@ -235,6 +274,7 @@ void TestDriver::get_random_input() {
   input.rm_s = rand() % 5;
   gen_random_vecinfo();
   gen_random_uopidx();
+  gen_input_vperm();
   // input.is_frs1 = false;
   // input.sew = 3;
   // input.widen = true;
@@ -258,6 +298,7 @@ void TestDriver::get_expected_output() {
       expect_output = vfd.get_expected_output(input); return;
     case VPermutation:
       if (verbose) { printf("FuType:%d, choose VPermutation %d\n", input.fuType, VPermutation); }
+      printf("FuType:%d, choose VPermutation %d, fuOpType %d\n", input.fuType, VPermutation, input.fuOpType);
       expect_output = vperm.get_expected_output(input); return;
     case VIntegerALUV2:
       if (verbose) { printf("FuType:%d, choose VIntegerALUV2 %d\n", input.fuType, VIntegerALUV2); }

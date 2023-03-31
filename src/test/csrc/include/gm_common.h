@@ -83,6 +83,21 @@ class VGMPermutation : public VPUGoldenModel {
     VecOutputE16 vslidedown_calculation_e16(VSlideInput *input);
     VecOutputE32 vslidedown_calculation_e32(VSlideInput *input);
     VecOutput    vslidedown_calculation_e64(VSlideInput *input);
+    VecOutput get_output_vslide1up(VecInput input);
+    VecOutputE8  vslide1up_calculation_e8(VSlideOneInput *input);
+    VecOutputE16 vslide1up_calculation_e16(VSlideOneInput *input);
+    VecOutputE32 vslide1up_calculation_e32(VSlideOneInput *input);
+    VecOutput    vslide1up_calculation_e64(VSlideOneInput *input);
+    VecOutput get_output_vslide1down(VecInput input);
+    VecOutputE8  vslide1down_calculation_e8(VSlideOneInput *input);
+    VecOutputE16 vslide1down_calculation_e16(VSlideOneInput *input);
+    VecOutputE32 vslide1down_calculation_e32(VSlideOneInput *input);
+    VecOutput    vslide1down_calculation_e64(VSlideOneInput *input);
+    VecOutput get_output_vrgather(VecInput input);
+    VecOutputE8  vrgather_calculation_e8(VRGatherInput *input);
+    VecOutputE16 vrgather_calculation_e16(VRGatherInput *input);
+    VecOutputE32 vrgather_calculation_e32(VRGatherInput *input);
+    VecOutput    vrgather_calculation_e64(VRGatherInput *input);
 };
 
 class VGMIntegerALUF : public VPUGoldenModel {
