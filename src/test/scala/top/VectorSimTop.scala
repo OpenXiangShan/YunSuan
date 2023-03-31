@@ -53,6 +53,7 @@ class VSTInputIO extends VPUTestBundle {
   val src_widen = Bool()
   val widen = Bool()
   val is_frs1 = Bool()
+  val is_frs2 = Bool()
 
   val rm = UInt(3.W)
   val rm_s = UInt(2.W)
@@ -108,9 +109,9 @@ class SimTop() extends VPUTestModule {
   val finish_uncertain = Wire(Bool())
   val is_uncertain = (in.fuType === VPUTestFuType.vfd)
 
-  val (sew, uop_idx, rm, rm_s, fuType, opcode, src_widen, widen, is_frs1) = (
+  val (sew, uop_idx, rm, rm_s, fuType, opcode, src_widen, widen, is_frs1, is_frs2) = (
     in.sew, in.uop_idx, in.rm, in.rm_s, in.fuType, in.fuOpType,
-    in.src_widen, in.widen, in.is_frs1
+    in.src_widen, in.widen, in.is_frs1, in.is_frs2
   )
 
   val (vstart, vl, vlmul, vm, ta, ma) = (
@@ -167,6 +168,11 @@ class SimTop() extends VPUTestModule {
     vfd.io.fp_format_i := sew
     vfd.io.opa_i := src1
     vfd.io.opb_i := src2
+    vfd.io.frs2_i := in.src(0)(0) // VS2(63,0)
+    vfd.io.frs1_i := in.src(1)(0) // VS1(63,0)
+    vfd.io.is_frs2_i := is_frs2
+    vfd.io.is_frs1_i := is_frs1
+    vfd.io.is_sqrt_i := false.B
     vfd.io.rm_i := rm
     vfd.io.is_vec_i := true.B // TODO: check it
     vfd.io.finish_ready_i := !vfd_result_valid(i) && busy

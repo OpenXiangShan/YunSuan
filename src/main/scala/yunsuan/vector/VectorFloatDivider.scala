@@ -11,8 +11,13 @@ class VectorFloatDivider() extends Module {
     val start_ready_o = Output(Bool())
     val flush_i = Input(Bool())
     val fp_format_i = Input(UInt(2.W)) // b01->fp16,b10->fp32,b11->fp64
-    val opa_i = Input(UInt(64.W))
-    val opb_i = Input(UInt(64.W))
+    val opa_i = Input(UInt(64.W)) // vs2
+    val opb_i = Input(UInt(64.W)) // vs1
+    val frs2_i = Input(UInt(64.W)) // f[rs2]
+    val frs1_i = Input(UInt(64.W)) // f[rs1]
+    val is_frs2_i = Input(Bool()) // if true, f[rs2] / vs1
+    val is_frs1_i = Input(Bool()) // if true, vs2 / f[rs1]
+    val is_sqrt_i = Input(Bool()) // must false, not support sqrt now
     val rm_i = Input(UInt(3.W))
     val is_vec_i = Input(Bool())
 
@@ -23,6 +28,35 @@ class VectorFloatDivider() extends Module {
 
   })
 
+  val fp_format_is_fp16 = io.fp_format_i === 1.U(2.W)
+  val fp_format_is_fp32 = io.fp_format_i === 2.U(2.W)
+  val fp_format_is_fp64 = io.fp_format_i === 3.U(2.W)
+  val frs2 = Mux1H(
+    Seq(
+      fp_format_is_fp16,
+      fp_format_is_fp32,
+      fp_format_is_fp64
+    ),
+    Seq(
+      Fill(4,io.frs2_i(15,0)),
+      Fill(2,io.frs2_i(31,0)),
+      Fill(1,io.frs2_i(63,0))
+    )
+  )
+  val frs1 = Mux1H(
+    Seq(
+      fp_format_is_fp16,
+      fp_format_is_fp32,
+      fp_format_is_fp64
+    ),
+    Seq(
+      Fill(4,io.frs1_i(15,0)),
+      Fill(2,io.frs1_i(31,0)),
+      Fill(1,io.frs1_i(63,0))
+    )
+  )
+  val opa = Mux(io.is_frs2_i, frs2, io.opa_i)
+  val opb = Mux(io.is_frs1_i, frs1, io.opb_i)
   val REM_W_f64_0 = 3 + 53 + 3 + 1
   val REM_W_f32_1 = 3 + 24 + 3 + 1
   val REM_W_f16_2 = 3 + 11 + 3 + 1
@@ -120,11 +154,6 @@ class VectorFloatDivider() extends Module {
   val start_handshaked = io.start_valid_i & io.start_ready_o
   io.finish_valid_o := fsm_q(FSM_POST_1_BIT) | (fsm_q(FSM_POST_0_BIT) & !is_vec_q & ~res_is_denormal_f64_0)
 
-
-  val fp_format_is_fp16 = io.fp_format_i === 1.U(2.W)
-  val fp_format_is_fp32 = io.fp_format_i === 2.U(2.W)
-  val fp_format_is_fp64 = io.fp_format_i === 3.U(2.W)
-
   val opa_sign_f64_0 = Mux1H(
     Seq(
       fp_format_is_fp64,
@@ -132,14 +161,14 @@ class VectorFloatDivider() extends Module {
       fp_format_is_fp16
     ),
     Seq(
-      io.opa_i(63),
-      io.opa_i(31),
-      io.opa_i(15)
+      opa(63),
+      opa(31),
+      opa(15)
     )
   )
-  val opa_sign_f32_1 = Mux(fp_format_is_fp32, io.opa_i(63), io.opa_i(31))
-  val opa_sign_f16_2 = io.opa_i(47)
-  val opa_sign_f16_3 = io.opa_i(63)
+  val opa_sign_f32_1 = Mux(fp_format_is_fp32, opa(63), opa(31))
+  val opa_sign_f16_2 = opa(47)
+  val opa_sign_f16_3 = opa(63)
   val opb_sign_f64_0 = Mux1H(
     Seq(
       fp_format_is_fp64,
@@ -147,14 +176,14 @@ class VectorFloatDivider() extends Module {
       fp_format_is_fp16
     ),
     Seq(
-      io.opb_i(63),
-      io.opb_i(31),
-      io.opb_i(15)
+      opb(63),
+      opb(31),
+      opb(15)
     )
   )
-  val opb_sign_f32_1 = Mux(fp_format_is_fp32, io.opb_i(63), io.opb_i(31))
-  val opb_sign_f16_2 = io.opb_i(47)
-  val opb_sign_f16_3 = io.opb_i(63)
+  val opb_sign_f32_1 = Mux(fp_format_is_fp32, opb(63), opb(31))
+  val opb_sign_f16_2 = opb(47)
+  val opb_sign_f16_3 = opb(63)
   val opa_exp_f64_0 = Mux1H(
     Seq(
       fp_format_is_fp64,
@@ -162,14 +191,14 @@ class VectorFloatDivider() extends Module {
       fp_format_is_fp16
     ),
     Seq(
-      io.opa_i(62, 52),
-      Cat(0.U(3.W), io.opa_i(30, 23)),
-      Cat(0.U(6.W), io.opa_i(14, 10))
+      opa(62, 52),
+      Cat(0.U(3.W), opa(30, 23)),
+      Cat(0.U(6.W), opa(14, 10))
     )
   )
-  val opa_exp_f32_1 = Mux(fp_format_is_fp32, io.opa_i.head(32)(30, 23), Cat(0.U(3.W), io.opa_i(30, 26)))
-  val opa_exp_f16_2 = io.opa_i(46, 42)
-  val opa_exp_f16_3 = io.opa_i(62, 58)
+  val opa_exp_f32_1 = Mux(fp_format_is_fp32, opa.head(32)(30, 23), Cat(0.U(3.W), opa(30, 26)))
+  val opa_exp_f16_2 = opa(46, 42)
+  val opa_exp_f16_3 = opa(62, 58)
   val opb_exp_f64_0 = Mux1H(
     Seq(
       fp_format_is_fp64,
@@ -177,14 +206,14 @@ class VectorFloatDivider() extends Module {
       fp_format_is_fp16
     ),
     Seq(
-      io.opb_i(62, 52),
-      Cat(0.U(3.W), io.opb_i(30, 23)),
-      Cat(0.U(6.W), io.opb_i(14, 10))
+      opb(62, 52),
+      Cat(0.U(3.W), opb(30, 23)),
+      Cat(0.U(6.W), opb(14, 10))
     )
   )
-  val opb_exp_f32_1 = Mux(fp_format_is_fp32, io.opb_i.head(32)(30, 23), Cat(0.U(3.W), io.opb_i(30, 26)))
-  val opb_exp_f16_2 = io.opb_i(46, 42)
-  val opb_exp_f16_3 = io.opb_i(62, 58)
+  val opb_exp_f32_1 = Mux(fp_format_is_fp32, opb.head(32)(30, 23), Cat(0.U(3.W), opb(30, 26)))
+  val opb_exp_f16_2 = opb(46, 42)
+  val opb_exp_f16_3 = opb(62, 58)
   val opa_exp_is_zero_f64_0 = opa_exp_f64_0 === 0.U(11.W)
   val opa_exp_is_zero_f32_1 = opa_exp_f32_1 === 0.U(8.W)
   val opa_exp_is_zero_f16_2 = opa_exp_f16_2 === 0.U(5.W)
@@ -245,14 +274,14 @@ class VectorFloatDivider() extends Module {
       fp_format_is_fp16
     ),
     Seq(
-      io.opa_i(51, 0),
-      Cat(io.opa_i(22, 0), 0.U(29.W)),
-      Cat(io.opa_i(9, 0), 0.U(42.W))
+      opa(51, 0),
+      Cat(opa(22, 0), 0.U(29.W)),
+      Cat(opa(9, 0), 0.U(42.W))
     )
   )
-  val opa_frac_f32_1 = Mux(fp_format_is_fp32, io.opa_i(54, 32), Cat(io.opa_i(25, 16), 0.U(13.W)))
-  val opa_frac_f16_2 = io.opa_i(41, 32)
-  val opa_frac_f16_3 = io.opa_i(57, 48)
+  val opa_frac_f32_1 = Mux(fp_format_is_fp32, opa(54, 32), Cat(opa(25, 16), 0.U(13.W)))
+  val opa_frac_f16_2 = opa(41, 32)
+  val opa_frac_f16_3 = opa(57, 48)
   val opa_frac_is_zero_f64_0 = opa_frac_f64_0 === 0.U
   val opa_frac_is_zero_f32_1 = opa_frac_f32_1 === 0.U
   val opa_frac_is_zero_f16_2 = opa_frac_f16_2 === 0.U
@@ -264,14 +293,14 @@ class VectorFloatDivider() extends Module {
       fp_format_is_fp16
     ),
     Seq(
-      io.opb_i(51, 0),
-      Cat(io.opb_i(22, 0), 0.U(29.W)),
-      Cat(io.opb_i(9, 0), 0.U(42.W))
+      opb(51, 0),
+      Cat(opb(22, 0), 0.U(29.W)),
+      Cat(opb(9, 0), 0.U(42.W))
     )
   )
-  val opb_frac_f32_1 = Mux(fp_format_is_fp32, io.opb_i(54, 32), Cat(io.opb_i(25, 16), 0.U(13.W)))
-  val opb_frac_f16_2 = io.opb_i(41, 32)
-  val opb_frac_f16_3 = io.opb_i(57, 48)
+  val opb_frac_f32_1 = Mux(fp_format_is_fp32, opb(54, 32), Cat(opb(25, 16), 0.U(13.W)))
+  val opb_frac_f16_2 = opb(41, 32)
+  val opb_frac_f16_3 = opb(57, 48)
   val opb_frac_is_zero_f64_0 = opb_frac_f64_0 === 0.U
   val opb_frac_is_zero_f32_1 = opb_frac_f32_1 === 0.U
   val opb_frac_is_zero_f16_2 = opb_frac_f16_2 === 0.U
@@ -1394,11 +1423,11 @@ class VectorFloatDivider() extends Module {
       opb_is_power_of_2_f64_0,
       Mux(
         fp_format_is_fp64,
-        Cat(1.U(2.W), io.opa_i(51, 0)),
+        Cat(1.U(2.W), opa(51, 0)),
         Mux(
           fp_format_is_fp32,
-          Cat(1.U(31.W), io.opa_i(22, 0)),
-          Cat(1.U(44.W), io.opa_i(9, 0))
+          Cat(1.U(31.W), opa(22, 0)),
+          Cat(1.U(44.W), opa(9, 0))
         )
       ),
       scale_adder_opa_f64_0(53, 0)
@@ -1419,7 +1448,7 @@ class VectorFloatDivider() extends Module {
   )
   nxt_quo_iter_pre_0_f32_1 := Mux(
     opb_is_power_of_2_f32_1 & !(opa_exp_is_zero_f32_1 | opb_exp_is_zero_f32_1),
-    Mux(fp_format_is_fp32, Cat(1.U(2.W), io.opa_i.head(32)(22, 0)), Cat(1.U(15.W), io.opa_i(25, 16))),
+    Mux(fp_format_is_fp32, Cat(1.U(2.W), opa.head(32)(22, 0)), Cat(1.U(15.W), opa(25, 16))),
 
     Mux(
       opb_is_power_of_2_f32_1 & (opa_exp_is_zero_f32_1 | opb_exp_is_zero_f32_1) & fp_format_is_fp16 & is_vec_d,
@@ -1428,8 +1457,8 @@ class VectorFloatDivider() extends Module {
     )
 
   )
-  nxt_quo_iter_pre_0_f16_2 := Mux(opb_is_power_of_2_f16_2 & !(opa_exp_is_zero_f16_2 | opb_exp_is_zero_f16_2), Cat(1.U(2.W), io.opa_i(41, 32)), Cat(0.U(1.W), opa_frac_l_shifted_f16_2))
-  nxt_quo_iter_pre_0_f16_3 := Mux(opb_is_power_of_2_f16_3 & !(opa_exp_is_zero_f16_3 | opb_exp_is_zero_f16_3), Cat(1.U(2.W), io.opa_i(57, 48)), Cat(0.U(1.W), opa_frac_l_shifted_f16_3))
+  nxt_quo_iter_pre_0_f16_2 := Mux(opb_is_power_of_2_f16_2 & !(opa_exp_is_zero_f16_2 | opb_exp_is_zero_f16_2), Cat(1.U(2.W), opa(41, 32)), Cat(0.U(1.W), opa_frac_l_shifted_f16_2))
+  nxt_quo_iter_pre_0_f16_3 := Mux(opb_is_power_of_2_f16_3 & !(opa_exp_is_zero_f16_3 | opb_exp_is_zero_f16_3), Cat(1.U(2.W), opa(57, 48)), Cat(0.U(1.W), opa_frac_l_shifted_f16_3))
   val nxt_quo_iter_pre_1_f64_0 = scale_adder_opa_f64_0(53, 0)
   val nxt_quo_iter_pre_1_f32_1 = scale_adder_opa_f32_1(24, 0)
   val nxt_quo_iter_pre_1_f16_2 = scale_adder_opa_f16_2(11, 0)

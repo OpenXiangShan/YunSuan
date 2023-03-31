@@ -22,6 +22,7 @@ struct VecInput {
   bool src_widen;
   bool widen;
   bool is_frs1; // vector-scalar vs2, f[rs1]
+  bool is_frs2; // scalar-vector f[rs2], vs1
   uint8_t rm; // only 3 bits
   uint8_t rm_s; //only 2 bits
   VecInfo vinfo;
