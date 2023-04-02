@@ -305,7 +305,7 @@ class SlideDownLookup(n: Int) extends VPermModule {
         index(i) := RegNext(io.slide +& i.U + ~io.slide_base + 1.U)
         res_keep_old_vd(i) := RegNext((!io.vm && !io.mask(i).asBool && !io.ma) || (elements_idx < io.vstart) || ((elements_idx >= io.vl) && !io.ta))
         res_agnostic(i) := RegNext(((elements_idx >= io.vl) && io.ta) || (!io.vm && !io.mask(i).asBool && io.ma))
-        res_update(i) := RegNext((io.slide_base <= (io.slide +& i.U)) && ((io.slide +& i.U) < (n.U +& io.slide_base)))
+        res_update(i) := RegNext((io.slide_base <= (io.slide +& i.U)) && ((io.slide +& i.U) < (io.elem_vld +& io.slide_base)))
 
         src_data_vec(i)  := RegNext(io.src_data((VLEN/n)*(i+1)-1, (VLEN/n)*i))
         prev_data_vec(i) := RegNext(io.prev_data((VLEN/n)*(i+1)-1, (VLEN/n)*i))

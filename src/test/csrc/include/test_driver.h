@@ -60,6 +60,7 @@ public:
   bool gen_random_is_frs2();
   void gen_random_vecinfo();
   void gen_random_uopidx();
+  void gen_input_vperm();
 
   void get_random_input();
   void get_expected_output();
