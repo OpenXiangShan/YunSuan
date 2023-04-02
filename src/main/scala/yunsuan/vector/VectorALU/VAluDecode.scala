@@ -52,7 +52,7 @@ object VAluOpcode {
   val vmsof   = 43.U(6.W)
   val viota   = 44.U(6.W)
   val vid     = 45.U(6.W)
-  val vmvxs   = 46.U(6.W)
+  val vmvsx   = 46.U(6.W)
 
 }
 
