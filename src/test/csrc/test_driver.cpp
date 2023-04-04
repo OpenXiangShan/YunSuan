@@ -60,7 +60,10 @@ uint8_t TestDriver::gen_random_optype() {
       return vffma_all_optype[rand() % VFF_NUM];
       break;
       }
-    case VFloatDivider: break;
+    case VFloatDivider: {
+      return VFDIV;
+      break;
+    }
     case VIntegerALU: break;
     case VPermutation: { //TODO: add other type
       uint8_t vperm_all_optype[6] = {VSLIDEUP,VSLIDEDOWN,VSLIDE1UP,VSLIDE1DOWN,VRGATHER,VRGATHERRS1};
