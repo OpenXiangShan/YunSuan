@@ -254,6 +254,7 @@ package object yunsuan {
       val format = Cat(uSew, sSew, uSew).asUInt()
       format
     }
+    def isVsilde(fuOpType: UInt) = !fuOpType(7,1).orR
   }
 
   object VfaddOpCode {
