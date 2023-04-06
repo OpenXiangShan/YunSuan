@@ -30,7 +30,7 @@ void TestDriver::set_test_type() {
   test_type.pick_fuType = true;
   test_type.pick_fuOpType = false;
   test_type.fuType = VPermutation;
-  test_type.fuOpType = VSLIDE1DOWN;
+  test_type.fuOpType = VCOMPRESS;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -66,8 +66,8 @@ uint8_t TestDriver::gen_random_optype() {
     }
     case VIntegerALU: break;
     case VPermutation: { //TODO: add other type
-      uint8_t vperm_all_optype[6] = {VSLIDEUP,VSLIDEDOWN,VSLIDE1UP,VSLIDE1DOWN,VRGATHER,VRGATHERRS1};
-      return vperm_all_optype[rand() % 5];
+      uint8_t vperm_all_optype[VPERM_NUM-1] = VPERM_ALL_OPTYPES;
+      return vperm_all_optype[rand() % (VPERM_NUM-1)];
       break;
     }
     case VIntegerALUV2: {
@@ -167,7 +167,13 @@ void TestDriver::gen_random_vecinfo() {
   int elements_per_reg = (VLEN / 8) >> input.sew;
   int vlmax = (input.vinfo.vlmul > 4) ? (elements_per_reg >> (8 - input.vinfo.vlmul)) : (elements_per_reg << input.vinfo.vlmul);
   switch (input.fuType) {
-    case VPermutation: input.vinfo.vstart = rand() % vlmax; break;
+    case VPermutation: {
+      if (input.fuOpType == VCOMPRESS)
+        input.vinfo.vstart = 0;
+      else
+        input.vinfo.vstart = rand() % vlmax;
+      break;
+    }
     default: input.vinfo.vstart = 0; break;
   } // The vstart of an arithmetic instruction is generally equal to 0
   input.vinfo.vl = rand() % vlmax + 1; // TODO: vl == 0 may be illegal
@@ -223,6 +229,13 @@ void TestDriver::gen_random_uopidx() {
           else input.uop_idx = 0;
           break;
         }
+        case VCOMPRESS: {
+          if (input.vinfo.vlmul == 1) input.uop_idx = rand() % 4;
+          else if (input.vinfo.vlmul == 2) input.uop_idx = rand() % 13;
+          else if (input.vinfo.vlmul == 3) input.uop_idx = rand() % 43;
+          else input.uop_idx = 0;
+          break;
+        }
         default: input.uop_idx = 0;
       }
       break;
@@ -250,6 +263,19 @@ void TestDriver::gen_input_vperm() {
     }
     else if (input.fuOpType == VRGATHERRS1) {
       input.src1[1] = 0;
+    }
+    else if (input.fuOpType == VCOMPRESS) {
+      int pmos;
+      int elements_per_reg = (VLEN / 8) >> input.sew;
+      int os_base = vperm.get_ones_sum_base(input.uop_idx, input.sew);
+      if (os_base == -1 && input.uop_idx == 1)
+        pmos = 0;
+      else if (os_base == -1 && input.uop_idx != 1)
+        pmos = rand() % (VLEN - 16 + 1);
+      else
+        pmos = rand() % (os_base + elements_per_reg);
+      input.src4[1] = 0;
+      input.src4[0] = pmos & 0xff;
     }
   }
 }

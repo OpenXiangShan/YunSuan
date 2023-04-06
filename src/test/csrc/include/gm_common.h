@@ -72,6 +72,7 @@ class VGMPermutation : public VPUGoldenModel {
     virtual ElementOutput calculation_e16(ElementInput input);
     virtual ElementOutput calculation_e32(ElementInput input);
     virtual ElementOutput calculation_e64(ElementInput input);
+    int get_ones_sum_base(int uop_idx, int sew);
   private:
     VecOutput get_output_vslideup(VecInput input);
     VecOutputE8  vslideup_calculation_e8(VSlideInput *input);

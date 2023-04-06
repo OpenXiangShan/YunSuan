@@ -28,6 +28,10 @@ VecOutput VGMPermutation::get_expected_output(VecInput input) {
       output = get_output_vrgather(input);
       break;
     }
+    case VCOMPRESS: {
+      output = get_output_vcompress(input);
+      break;
+    }
     default: {
       printf("VGM Permutation, bad fuOpType %d\n", input.fuOpType);
       exit(1);
@@ -1358,11 +1362,343 @@ VecOutput VGMPermutation::vrgather_calculation_e64(VRGatherInput *input) {
   return output;
 }
 
-VecOutput VGMPermutation::get_output_vcompress(VecInput input) { VecOutput output; return output;}
-VecOutputE8 VGMPermutation::vcompress_calculation_e8(VCompressInput *input) { VecOutputE8 output; return output;}
-VecOutputE16 VGMPermutation::vcompress_calculation_e16(VCompressInput *input) { VecOutputE16 output; return output;}
-VecOutputE32 VGMPermutation::vcompress_calculation_e32(VCompressInput *input) { VecOutputE32 output; return output;}
-VecOutput VGMPermutation::vcompress_calculation_e64(VCompressInput *input) { VecOutput output; return output;}
+int VGMPermutation::get_ones_sum_base(int uop_idx, int sew) {
+  int elements_per_reg = (VLEN / 8) >> sew;
+  int vd_idx;
+  if ((uop_idx == 0) || (uop_idx == 2) || (uop_idx == 5) || (uop_idx == 9) || (uop_idx == 14) || (uop_idx == 20) || (uop_idx == 27) || (uop_idx == 35))
+    vd_idx = 0;
+  else if ((uop_idx == 3) || (uop_idx == 6) || (uop_idx == 10) || (uop_idx == 15) || (uop_idx == 21) || (uop_idx == 28) || (uop_idx == 36))
+    vd_idx = 1;
+  else if ((uop_idx == 7) || (uop_idx == 11) || (uop_idx == 16) || (uop_idx == 22) || (uop_idx == 29) || (uop_idx == 37))
+    vd_idx = 2;
+  else if ((uop_idx == 12) || (uop_idx == 17) || (uop_idx == 23) || (uop_idx == 30) || (uop_idx == 38))
+    vd_idx = 3;
+  else if ((uop_idx == 18) || (uop_idx == 24) || (uop_idx == 31) || (uop_idx == 39))
+    vd_idx = 4;
+  else if ((uop_idx == 25) || (uop_idx == 32) || (uop_idx == 40))
+    vd_idx = 5;
+  else if ((uop_idx == 33) || (uop_idx == 41))
+    vd_idx = 6;
+  else if (uop_idx == 42)
+    vd_idx = 7;
+  else if (uop_idx <= 42)
+    vd_idx = -1;
+  else { printf("VGM Permutation get_ones_sum_base, bad uop_idx %d\n", uop_idx); exit(1); }
+
+  int ones_sum_base;
+  if (vd_idx == -1) ones_sum_base = -1;
+  else ones_sum_base = vd_idx * elements_per_reg;
+  return ones_sum_base;
+}
+VecOutput VGMPermutation::get_output_vcompress(VecInput input) {
+  VecOutput output;
+
+  int sew = input.sew;
+  int vlmul = input.vinfo.vlmul;
+  int elements_per_reg = (VLEN / 8) >> sew;
+  int elements = (vlmul & 0x4) ? (elements_per_reg >> ((~vlmul & 0x7) + 1)) : elements_per_reg;
+
+  if (verbose) {
+    printf("%s::%s  vlmul:%d elements_per_reg:%d elements:%d cond:%d\n", typeid(this).name(), __func__, vlmul, elements_per_reg, elements, (vlmul & 0x4));
+  }
+
+  int uop_idx = input.uop_idx;
+  int vs1_idx;
+  if (uop_idx == 0 || uop_idx == 1)
+    vs1_idx = 0;
+  else if ((2 <= uop_idx) && (uop_idx <= 4))
+    vs1_idx = 1;
+  else if ((5 <= uop_idx) && (uop_idx <= 8))
+    vs1_idx = 2;
+  else if ((9 <= uop_idx) && (uop_idx <= 13))
+    vs1_idx = 3;
+  else if ((14 <= uop_idx) && (uop_idx <= 19))
+    vs1_idx = 4;
+  else if ((20 <= uop_idx) && (uop_idx <= 26))
+    vs1_idx = 5;
+  else if ((27 <= uop_idx) && (uop_idx <= 34))
+    vs1_idx = 6;
+  else if ((35 <= uop_idx) && (uop_idx <= 42))
+    vs1_idx = 7;
+  else { printf("VGM Permutation vcompress, bad uop_idx %d\n", uop_idx); exit(1); }
+  int mask_start_idx = vs1_idx * elements_per_reg;
+
+  uint16_t mask_selected = (mask_start_idx >= 64) ? input.src1[1] >> (mask_start_idx - 64) : input.src1[0] >> mask_start_idx;
+  if (sew == 3)
+    mask_selected = mask_selected & 0x3;
+  else if (sew == 2)
+    mask_selected = mask_selected & 0xf;
+  else if (sew == 1)
+    mask_selected = mask_selected & 0xff;
+
+  int vd_idx;
+  if ((uop_idx == 0) || (uop_idx == 2) || (uop_idx == 5) || (uop_idx == 9) || (uop_idx == 14) || (uop_idx == 20) || (uop_idx == 27) || (uop_idx == 35))
+    vd_idx = 0;
+  else if ((uop_idx == 3) || (uop_idx == 6) || (uop_idx == 10) || (uop_idx == 15) || (uop_idx == 21) || (uop_idx == 28) || (uop_idx == 36))
+    vd_idx = 1;
+  else if ((uop_idx == 7) || (uop_idx == 11) || (uop_idx == 16) || (uop_idx == 22) || (uop_idx == 29) || (uop_idx == 37))
+    vd_idx = 2;
+  else if ((uop_idx == 12) || (uop_idx == 17) || (uop_idx == 23) || (uop_idx == 30) || (uop_idx == 38))
+    vd_idx = 3;
+  else if ((uop_idx == 18) || (uop_idx == 24) || (uop_idx == 31) || (uop_idx == 39))
+    vd_idx = 4;
+  else if ((uop_idx == 25) || (uop_idx == 32) || (uop_idx == 40))
+    vd_idx = 5;
+  else if ((uop_idx == 33) || (uop_idx == 41))
+    vd_idx = 6;
+  else if (uop_idx == 42)
+    vd_idx = 7;
+  else if (uop_idx <= 42)
+    vd_idx = 0;
+  else { printf("VGM Permutation vcompress, bad uop_idx %d\n", uop_idx); exit(1); }
+
+  int ones_sum_base = vd_idx * elements_per_reg;
+
+  bool output_ones_sum_res = (uop_idx == 1) || (uop_idx == 4) || (uop_idx == 8) || (uop_idx == 13) || (uop_idx == 19) || (uop_idx == 26) || (uop_idx == 34);
+
+  VCompressInput vcompress_input;
+  vcompress_input.src_data = (uint64_t *)(input.src2);
+  vcompress_input.prev_data = (uint64_t *)(input.src3);
+  vcompress_input.mask = mask_selected;
+  vcompress_input.elements = elements;
+  vcompress_input.os_base = ones_sum_base;
+  vcompress_input.pmos = input.src4[0] & 0xff;
+  vcompress_input.vinfo = &(input.vinfo);
+
+  int ones_sum_res;
+  switch(input.sew) {
+    case 0: {
+      VecOutputE8 output_e8 = vcompress_calculation_e8(&vcompress_input);
+      output.result[0] = *(uint64_t *)(&output_e8.result[0]);
+      output.result[1] = *(uint64_t *)(&output_e8.result[8]);
+      ones_sum_res = output_e8.vxsat[0];
+      break;
+    }
+    case 1: {
+      VecOutputE16 output_e16 = vcompress_calculation_e16(&vcompress_input);
+      output.result[0] = *(uint64_t *)(&output_e16.result[0]);
+      output.result[1] = *(uint64_t *)(&output_e16.result[4]);
+      ones_sum_res = output_e16.vxsat[0];
+      break;
+    }
+    case 2: {
+      VecOutputE32 output_e32 = vcompress_calculation_e32(&vcompress_input);
+      output.result[0] = *(uint64_t *)(&output_e32.result[0]);
+      output.result[1] = *(uint64_t *)(&output_e32.result[2]);
+      ones_sum_res = output_e32.vxsat[0];
+      break;
+    }
+    case 3: {
+      VecOutput output_e64 = vcompress_calculation_e64(&vcompress_input);
+      output.result[0] = output_e64.result[0];
+      output.result[1] = output_e64.result[1];
+      ones_sum_res = output_e64.vxsat;
+      break;
+    }
+    default: {
+      printf("VGM Permutation vcompress, bad sew %d\n", input.sew);
+      exit(1);
+    }
+  }
+
+  if (input.vinfo.vstart >= input.vinfo.vl) {
+    output.result[0] = input.src3[0];
+    output.result[1] = input.src3[1];
+  }
+  if (output_ones_sum_res) {
+    output.result[0] = ones_sum_res;
+    output.result[1] = 0;
+  }
+  output.fflags[0] = output.fflags[1] = 0;
+  output.vxsat = 0;
+
+  if (verbose) {
+    printf("%s::%s  src_data: %016lx_%016lx prev: %016lx_%016lx mask: %x\n", typeid(this).name(), __func__, vcompress_input.src_data[1], vcompress_input.src_data[0], vcompress_input.prev_data[1], vcompress_input.prev_data[0], vcompress_input.mask);
+    printf("%s::%s  os_base:%d pmos:%d mask_start_idx:%d elements:%d output_ones_sum_res:%d ones_sum_res:%d\n", typeid(this).name(), __func__, vcompress_input.os_base, vcompress_input.pmos, mask_start_idx, vcompress_input.elements, output_ones_sum_res, ones_sum_res);
+  }
+
+  return output;
+}
+VecOutputE8 VGMPermutation::vcompress_calculation_e8(VCompressInput *input) {
+  VecOutputE8 output;
+  uint8_t *src_data = (uint8_t *)(input->src_data);
+  uint8_t *prev_data = (uint8_t *)(input->prev_data);
+  uint16_t mask = input->mask;
+  int os_base = input->os_base;
+  int pmos = input->pmos;
+  int elements = input->elements;
+  uint8_t vlmul = input->vinfo->vlmul;
+  int vl = input->vinfo->vl;
+  bool ta = input->vinfo->ta;
+
+  int vlmax = (vlmul > 4) ? elements : (elements << vlmul);
+  int vl_valid = (vl <= vlmax) ? vl : vlmax;
+
+  int cmos[16];
+  int n = 16;
+
+  for (int i = 0; i < n; i++) {
+    int elements_idx = os_base + i;
+    int mask_i = (mask >> i) & 0x1;
+    bool res_agnostic = (elements_idx >= vl_valid) && ta;
+
+    if(res_agnostic)
+      output.result[i] = 0xff;
+    else
+      output.result[i] = prev_data[i];
+
+    if (i == 0)
+      cmos[i] = pmos + mask_i;
+    else
+      cmos[i] = cmos[i-1] + mask_i;
+  }
+  // os_base + n >= pmos
+
+  for (int i = 0; i < n; i++) {
+    int res_idx = cmos[i] - os_base - 1;
+    int mask_i = (mask >> i) & 0x1;
+    if (mask_i && (os_base < cmos[i]) && (cmos[i] < (os_base + n+1)) && (cmos[i] <= vl_valid))
+      output.result[res_idx] = src_data[i];
+  }
+  output.vxsat[0] = cmos[n-1];
+
+  return output;
+}
+VecOutputE16 VGMPermutation::vcompress_calculation_e16(VCompressInput *input) {
+  VecOutputE16 output;
+  uint16_t *src_data = (uint16_t *)(input->src_data);
+  uint16_t *prev_data = (uint16_t *)(input->prev_data);
+  uint16_t mask = input->mask;
+  int os_base = input->os_base;
+  int pmos = input->pmos;
+  int elements = input->elements;
+  uint8_t vlmul = input->vinfo->vlmul;
+  int vl = input->vinfo->vl;
+  bool ta = input->vinfo->ta;
+
+  int vlmax = (vlmul > 4) ? elements : (elements << vlmul);
+  int vl_valid = (vl <= vlmax) ? vl : vlmax;
+
+  int cmos[8];
+  int n = 8;
+
+  for (int i = 0; i < n; i++) {
+    int elements_idx = os_base + i;
+    int mask_i = (mask >> i) & 0x1;
+    bool res_agnostic = (elements_idx >= vl_valid) && ta;
+
+    if(res_agnostic)
+      output.result[i] = 0xffff;
+    else
+      output.result[i] = prev_data[i];
+
+    if (i == 0)
+      cmos[i] = pmos + mask_i;
+    else
+      cmos[i] = cmos[i-1] + mask_i;
+  }
+  // os_base + n >= pmos
+
+  for (int i = 0; i < n; i++) {
+    int res_idx = cmos[i] - os_base - 1;
+    int mask_i = (mask >> i) & 0x1;
+    if (mask_i && (os_base < cmos[i]) && (cmos[i] < (os_base + n+1)) && (cmos[i] <= vl_valid))
+      output.result[res_idx] = src_data[i];
+  }
+  output.vxsat[0] = cmos[n-1];
+
+  return output;
+}
+VecOutputE32 VGMPermutation::vcompress_calculation_e32(VCompressInput *input) {
+  VecOutputE32 output;
+  uint32_t *src_data = (uint32_t *)(input->src_data);
+  uint32_t *prev_data = (uint32_t *)(input->prev_data);
+  uint16_t mask = input->mask;
+  int os_base = input->os_base;
+  int pmos = input->pmos;
+  int elements = input->elements;
+  uint8_t vlmul = input->vinfo->vlmul;
+  int vl = input->vinfo->vl;
+  bool ta = input->vinfo->ta;
+
+  int vlmax = (vlmul > 4) ? elements : (elements << vlmul);
+  int vl_valid = (vl <= vlmax) ? vl : vlmax;
+
+  int cmos[4];
+  int n = 4;
+
+  for (int i = 0; i < n; i++) {
+    int elements_idx = os_base + i;
+    int mask_i = (mask >> i) & 0x1;
+    bool res_agnostic = (elements_idx >= vl_valid) && ta;
+
+    if(res_agnostic)
+      output.result[i] = 0xffffffff;
+    else
+      output.result[i] = prev_data[i];
+
+    if (i == 0)
+      cmos[i] = pmos + mask_i;
+    else
+      cmos[i] = cmos[i-1] + mask_i;
+  }
+  // os_base + n >= pmos
+
+  for (int i = 0; i < n; i++) {
+    int res_idx = cmos[i] - os_base - 1;
+    int mask_i = (mask >> i) & 0x1;
+    if (mask_i && (os_base < cmos[i]) && (cmos[i] < (os_base + n+1)) && (cmos[i] <= vl_valid))
+      output.result[res_idx] = src_data[i];
+  }
+  output.vxsat[0] = cmos[n-1];
+
+  return output;
+}
+VecOutput VGMPermutation::vcompress_calculation_e64(VCompressInput *input) {
+  VecOutput output;
+  uint64_t *src_data = (uint64_t *)(input->src_data);
+  uint64_t *prev_data = (uint64_t *)(input->prev_data);
+  uint16_t mask = input->mask;
+  int os_base = input->os_base;
+  int pmos = input->pmos;
+  int elements = input->elements;
+  uint8_t vlmul = input->vinfo->vlmul;
+  int vl = input->vinfo->vl;
+  bool ta = input->vinfo->ta;
+
+  int vlmax = (vlmul > 4) ? elements : (elements << vlmul);
+  int vl_valid = (vl <= vlmax) ? vl : vlmax;
+
+  int cmos[2];
+  int n = 2;
+
+  for (int i = 0; i < n; i++) {
+    int elements_idx = os_base + i;
+    int mask_i = (mask >> i) & 0x1;
+    bool res_agnostic = (elements_idx >= vl_valid) && ta;
+
+    if(res_agnostic)
+      output.result[i] = 0xffffffffffffffff;
+    else
+      output.result[i] = prev_data[i];
+
+    if (i == 0)
+      cmos[i] = pmos + mask_i;
+    else
+      cmos[i] = cmos[i-1] + mask_i;
+  }
+  // os_base + n >= pmos
+
+  for (int i = 0; i < n; i++) {
+    int res_idx = cmos[i] - os_base - 1;
+    int mask_i = (mask >> i) & 0x1;
+    if (mask_i && (os_base < cmos[i]) && (cmos[i] < (os_base + n+1)) && (cmos[i] <= vl_valid))
+      output.result[res_idx] = src_data[i];
+  }
+  output.vxsat = cmos[n-1];
+
+  return output;
+}
 
 ElementOutput VGMPermutation::calculation_e8(ElementInput  input) {ElementOutput rs; return rs;}
 ElementOutput VGMPermutation::calculation_e16(ElementInput input) {ElementOutput rs; return rs;}

@@ -172,7 +172,7 @@ class CompressModule extends VPermModule {
         VectorElementFormat.d -> compress_module_3.io.cmos_last
     ))
 
-    val output_mask_ones_sum = (io.uop_idx === 1.U)
+    val output_mask_ones_sum = (io.uop_idx === 1.U) || (io.uop_idx === 4.U) || (io.uop_idx === 8.U) || (io.uop_idx === 13.U) || (io.uop_idx === 19.U) || (io.uop_idx === 26.U) || (io.uop_idx === 34.U)
 
     io.res_vd := Mux(io.vstart >= io.vl, io.old_vd, Mux(output_mask_ones_sum, ZeroExt(ones_sum_res_data, VLEN), compress_res_data))
 }
