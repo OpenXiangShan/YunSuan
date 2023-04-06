@@ -20,7 +20,7 @@ package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
-import yunsuan.vector._
+import yunsuan.util._
 // Integer division module using SRT radix-16 algorithm, supporting 8/16/32/64bit bitwidth
 // parameters
 // (mk:index) -1: 0 0 :1 1:2 2:3
@@ -1022,18 +1022,4 @@ class CSA3_2(len: Int) extends CarrySaveAdderMToN(3, 2)(len){
     t := Cat(cout, sum)
   }
   io.out.zipWithIndex.foreach({case(x, i) => x := Cat(temp.reverse map(_(i)))})
-}
-object SignExt {
-  def apply(a: UInt, len: Int): UInt = {
-    val aLen = a.getWidth
-    val signBit = a(aLen-1)
-    if (aLen >= len) a(len-1,0) else Cat(Fill(len - aLen, signBit), a)
-  }
-}
-
-object ZeroExt {
-  def apply(a: UInt, len: Int): UInt = {
-    val aLen = a.getWidth
-    if (aLen >= len) a(len-1,0) else Cat(0.U((len - aLen).W), a)
-  }
 }
