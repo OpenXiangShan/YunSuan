@@ -21,15 +21,15 @@ package yunsuan.vector
 import chisel3._
 import chisel3.util._
 import yunsuan.vector._
-// 采用SRT radix-16算法的整数除法模块，支持8/16/32/64bit位宽
-// 参数对应
+// Integer division module using SRT radix-16 algorithm, supporting 8/16/32/64bit bitwidth
+// parameters
 // (mk:index) -1: 0 0 :1 1:2 2:3
 // (u:index) -2: 0 ...
-// (q:index) 2:0   -2 3 注意与u reverse，因为每次是-q,因此根据q在u中查找常数时需要reverse
+// (q:index) 2:0   -2 3 need to reverse u index here，because we search as -q for const
 // sign (index, k) :(0, -1)  (1, 0) (2, 1) (3, 2)
 
-// v2 尝试降低sel 模块所需bit数，目前sel 3+5， spec 3+6
-// 在该文件中 x+y代表xbit整数，ybit分数位
+// v2 Attempting to reduce the number of bits required for the sel module, currently sel 3+5, spec 3+6
+// In this file, x+y represents the xbit integer and the ybit fractions
 class SRT16Divint(bit_width: Int) extends Module {
   val io = IO(new Bundle() {
     val sign = Input(Bool())
@@ -38,7 +38,7 @@ class SRT16Divint(bit_width: Int) extends Module {
     val divisor = Input(UInt(bit_width.W))
     val flush = Input(Bool())
     val d_zero = Output(Bool())
-    val sew = Input(UInt(2.W)) // 多位宽数据
+    val sew = Input(UInt(2.W)) // multi bit width
     /*
     'b00: I8
     'b01: I16
@@ -55,11 +55,11 @@ class SRT16Divint(bit_width: Int) extends Module {
     val div_out_rem = Output(UInt(bit_width.W))
 
   })
-  val Bypass_width = bit_width << 1 // 旁路，用于存储与divisor 对齐的division（未做左移归一化），以直接得到最后余数，最大位宽两倍bit_width
-  val w_width = bit_width + 6 // 6: 1bit符号位，2bit用于*4/4移位， bit_width 3bit用于ralign
-  val lzc_w = log2Up(bit_width) // lzc leading zero count 前导零，
-  val early_finish = Wire(Bool()) // 特殊情况标志
-  val iter_finish = Wire(Bool()) // 迭代结束标志
+  val Bypass_width = bit_width << 1 // Bypass, used to store divisions aligned with the advisor (not normalized by left shift) to directly obtain the final remainder, with a maximum bitwidth of twice the bit_ width
+  val w_width = bit_width + 6 // 6: 1bit for sign ，2bit for *4/4 shift，  3bit for ralign
+  val lzc_w = log2Up(bit_width) // lzc leading zero count
+  val early_finish = Wire(Bool()) // handle special case
+  val iter_finish = Wire(Bool()) // handle iteration finish
   val idle :: pre_0 :: pre_1 :: iter :: post :: output :: Nil = Enum(6)
   val (oh_idle,oh_pre_0,oh_pre_1, oh_iter, oh_post, oh_output) =
     (UIntToOH(idle,6),UIntToOH(pre_0,6),UIntToOH(pre_1,6),UIntToOH(iter,6),UIntToOH(post,6),UIntToOH(output, 6))
@@ -95,12 +95,12 @@ class SRT16Divint(bit_width: Int) extends Module {
 
   
   // pre_0 stage
-  val x = io.dividend // x 被除数
+  val x = io.dividend // x dividend
   //val x_reg = RegEnable(x,stateReg(pre_0))
-  val d = io.divisor // d 除数
+  val d = io.divisor // d divisor
   val format = io.sew
   //val format = 3.U(2.W)
-  // ext_x ext_d 由于sew位宽不同，无法保证接入信号是按照零拓展或符号拓展处理的，因此需要重新check一下，
+  // ext_x ext_d Due to the different bit widths of SEW, it cannot be guaranteed that the access signal is processed according to zero extension or symbol extension, so it needs to be rechecked,
   val ext_x = MuxCase(0.U(64.W), Seq(
     (format === "b00".U)  -> Mux(io.sign, SignExt(x(7,0),64), ZeroExt(x(7,0),64)),
     (format === "b01".U)  -> Mux(io.sign, SignExt(x(15,0),64), ZeroExt(x(15,0),64)),
@@ -113,7 +113,7 @@ class SRT16Divint(bit_width: Int) extends Module {
     (format === "b10".U) -> Mux(io.sign, SignExt(d(31, 0), 64), ZeroExt(d(31, 0), 64)),
     (format === "b11".U) -> Mux(io.sign, SignExt(d(63, 0), 64), ZeroExt(d(63, 0), 64))
   ))
-  // 不同sew下的符号位硬编码
+  // Hard coding of symbol bits under different sews
   val sign_array_x = VecInit(x(7),x(15),x(31),x(63))
   val sign_array_d = VecInit(d(7),d(15),d(31),d(63))
 
@@ -134,7 +134,7 @@ class SRT16Divint(bit_width: Int) extends Module {
   val iter_q_B_reg = RegEnable(iter_q_B, stateReg(pre_0) | stateReg(pre_1) | stateReg(iter)) // pre_0 store norm_part_x iter stage store real q -1
 //  val norm_x_part = Wire(UInt((bit_width+1).W))
 //  val norm_d_part = Wire(UInt((bit_width+1).W))
-  val norm_x_part = Wire(UInt((bit_width ).W)) // 归一化处理时，pre0stage先移位一部分，
+  val norm_x_part = Wire(UInt((bit_width ).W)) // During normalization processing, a partion of the pre-stage is shifted first,
   val norm_d_part = Wire(UInt((bit_width ).W))
 
   // w for iter
@@ -152,9 +152,9 @@ class SRT16Divint(bit_width: Int) extends Module {
 
   val neg_x_q = Wire(UInt(bit_width.W)) // -x or -real q
   val neg_d_q = Wire(UInt(bit_width.W)) // -d or -real q -1
-  val abs_x = Wire(UInt(bit_width.W)) // x绝对值
+  val abs_x = Wire(UInt(bit_width.W)) // Absolute value of x
   val abs_x_reg = RegEnable(abs_x, stateReg(pre_0))
-  val abs_d = Wire(UInt(bit_width.W)) // d 绝对值
+  val abs_d = Wire(UInt(bit_width.W)) // Absolute value of d
   val abs_d_reg = RegEnable(abs_d, stateReg(pre_0))
 
 //  neg_x_q := -Mux(stateReg(pre_0),x, iter_q_A_reg)
@@ -168,11 +168,11 @@ class SRT16Divint(bit_width: Int) extends Module {
 
 
   // lzc
-  val lzc_x = Wire(UInt(lzc_w.W)) // x 先导零个数
-  val zero_x = Wire(Bool()) // x 全零
-  val lzc_d = Wire(UInt(lzc_w.W)) // d 先导零个数
-  val zero_d = Wire(Bool()) // d 全零
-  val zero_d_reg = RegEnable(zero_d,stateReg(pre_0)) // 寄存器用于post阶段判断q是否需要做符号修改（可能可以省略）
+  val lzc_x = Wire(UInt(lzc_w.W)) // x leading zero count
+  val zero_x = Wire(Bool()) // x all zero
+  val lzc_d = Wire(UInt(lzc_w.W)) // d leading zero count
+  val zero_d = Wire(Bool()) // d all zero
+  val zero_d_reg = RegEnable(zero_d,stateReg(pre_0)) // Registers are used in the post stage to determine whether sign adjust are needed for q (which may be omitted)
   val lzc_pre0_all = Wire(UInt(14.W))
   val d_is_one = Wire(Bool())
   /* lzc_pre0_all :use for w_iter store lzc_x lzc_d lzc_diff from pre_0 to pre_1
@@ -199,8 +199,8 @@ class SRT16Divint(bit_width: Int) extends Module {
 //  zero_d := lzc_d_m.io.V
 //  val x_to_lzc = Mux(x_sign, Cat(~x(bit_width - 1, 1), 1.U(1.W)), x)
 //  val d_to_lzc = Mux(d_sign, Cat(~d(bit_width - 1, 1), 1.U(1.W)), d)
-  val x_enc = Wire(UInt((lzc_w+1).W)) // x优先编码器值
-  val d_enc = Wire(UInt((lzc_w+1).W)) // d优先编码器值
+  val x_enc = Wire(UInt((lzc_w+1).W)) 
+  val d_enc = Wire(UInt((lzc_w+1).W)) 
   x_enc := PriorityEncoder(abs_x(bit_width-1, 0).asBools().reverse)
   d_enc := PriorityEncoder(abs_d(bit_width-1, 0).asBools().reverse)
 //  x_enc := PriorityEncoder(x_to_lzc(bit_width - 1, 0).asBools().reverse)
@@ -211,8 +211,8 @@ class SRT16Divint(bit_width: Int) extends Module {
   zero_d := ~abs_d.orR()
   d_is_one := lzc_d(lzc_w - 1, 0).andR()
   // lzc_diff and pre shifter
-  val lzc_diff = Cat(0.U(1.W),lzc_d) - Cat(0.U(1.W),lzc_x) // x d 先导零差值
-  val lzc_x_ex = ZeroExt(lzc_x, 6) // 由于多位宽可能，因此需要统一对lzc零拓展，便于存储
+  val lzc_diff = Cat(0.U(1.W),lzc_d) - Cat(0.U(1.W),lzc_x) // x d the diffenrence between lzc of x and lzc of d
+  val lzc_x_ex = ZeroExt(lzc_x, 6) // Due to the possibility of multiple bit widths, it is necessary to uniformly zero expand lzc for easy storage
   val lzc_d_ex = ZeroExt(lzc_d, 6)
   val lzc_diff_ex = SignExt(lzc_diff, 7) // err 1  sign ext not zero ext for
 //  lzc_pre0_all := Cat(norm_d_part(bit_width),norm_x_part(bit_width)SRT16Divint.scala,zero_x,lzc_x_ex(1,0),zero_d,d_is_one,lzc_d_ex(1,0),lzc_diff_ex) // err2 forget to pass d_is_one
@@ -259,27 +259,27 @@ class SRT16Divint(bit_width: Int) extends Module {
   //val norm_d_reg = RegEnable(norm_d,stateReg(pre_1))
 
   // special case
-  val x_small = lzc_diff_pre_1(lzc_w) // x过小
-  val d_zero = zero_d_reg // d是零
+  val x_small = lzc_diff_pre_1(lzc_w) // x smaller then d
+  val d_zero = zero_d_reg // d is zero
   val d_one = w_iter_reg(0)(9)
   early_finish := x_small|d_zero|d_one
   val early_finish_q = RegEnable(early_finish, stateReg(pre_1))
 
   val early_q = Mux(x_small, 0.U,
                 Mux(d_zero,Fill(bit_width,1.U),
-                  abs_x_reg)) // error when d is one abs 特殊情况的商
-  val early_rem = Mux(x_small|d_zero,abs_x_reg,0.U) // 特殊情况的余数
+                  abs_x_reg)) // error when d is one abs special case quotatient
+  val early_rem = Mux(x_small|d_zero,abs_x_reg,0.U) // special case rem
 
   // bypass for not r shift at post stage
-  val r_shift_num = Wire(UInt(lzc_w.W)) // bypass x 右移lzc_diff与原d对齐
-  val r_shift_hb = UIntToOH(lzc_diff_pre_1(1,0),4) // bypass x 或者norm x右移align0/1/2/3 得到精确余数
-  val Bypass_abs_x = Wire(UInt(Bypass_width.W)) // bypass x右移结果
-  val Bypass_abs_x_h = Wire(UInt(bit_width.W)) // bypass x右移高位
-  val Bypass_abs_x_l = Wire(UInt(bit_width.W)) // bypass x 右移低位
-  val Bypass_align_x_h = Wire(UInt(bit_width.W)) // bypass x 右移align后高位
-  val Bypass_align_x_l = Wire(UInt(bit_width.W)) // bypass x 右移align后低位
-  val Bypass_align_w_init = Wire(Vec(2,UInt(bit_width.W))) // 冗余形式，bypass_align_x_h
-  val Bypass_align_w_l = Wire(UInt(bit_width.W)) // 迭代过程中 x低位每次左移四位
+  val r_shift_num = Wire(UInt(lzc_w.W)) // bypass x rshift for lzc_diff bit to align with d
+  val r_shift_hb = UIntToOH(lzc_diff_pre_1(1,0),4) // bypass x or norm x rshift to align0/1/2/3 and get the correct quotation
+  val Bypass_abs_x = Wire(UInt(Bypass_width.W)) // bypass x after rshit
+  val Bypass_abs_x_h = Wire(UInt(bit_width.W)) // bypass x msb
+  val Bypass_abs_x_l = Wire(UInt(bit_width.W)) // bypass x lsb
+  val Bypass_align_x_h = Wire(UInt(bit_width.W)) // bypass x msb after align
+  val Bypass_align_x_l = Wire(UInt(bit_width.W)) // bypass x lsb after align
+  val Bypass_align_w_init = Wire(Vec(2,UInt(bit_width.W))) // Redundant representation ，bypass_align_x_h
+  val Bypass_align_w_l = Wire(UInt(bit_width.W))
   val Bypass_align_w_l_reg = RegEnable(Bypass_align_w_l,stateReg(pre_1)|stateReg(iter))
   r_shift_num := Mux(early_finish, 0.U, lzc_diff_pre_1) // error not lzc_dif
   Bypass_abs_x := Cat(abs_x_reg,0.U(bit_width.W)) >> r_shift_num
@@ -307,7 +307,7 @@ class SRT16Divint(bit_width: Int) extends Module {
 
 
 
-  // iter num 迭代次数
+  // iter num 
   val iter_num = Wire(UInt((lzc_w-2).W))
   val init_iter = Wire(UInt((lzc_w-2).W))
   val iter_num_reg = RegEnable(iter_num, stateReg(pre_1)|stateReg(iter))
@@ -350,14 +350,14 @@ class SRT16Divint(bit_width: Int) extends Module {
   )
   val m_pos2_q1 = pos_2_lookUpTale_q1(norm_d(bit_width - 2, bit_width - 4))
 
-  val w_trunc_1_4 = Wire(UInt(5.W)) // 1+4 位做商选择
-  w_trunc_1_4 := Cat(0.U(1.W), w_align_init(0)(w_width - 4, w_width - 7)) // *4 做trunc err 4
+  val w_trunc_1_4 = Wire(UInt(5.W)) // 1+4 for first quo selection
+  w_trunc_1_4 := Cat(0.U(1.W), w_align_init(0)(w_width - 4, w_width - 7)) // *4  for trunc err 4
   val cmp_pos_1 = w_trunc_1_4 >= m_pos1_q1
   val cmp_pos_2 = w_trunc_1_4 >= m_pos2_q1
-  val q_1 = Cat(0.U(2.W),//-2 -1注意cat最高是高位，所以这个弄反error vec 0 -2d 1 -d 2 0 3 d 4 2d 因此q_1 0最低位 对应q =  2
+  val q_1 = Cat(0.U(2.W),//-2 -1
     (!cmp_pos_1) & (!cmp_pos_2), //0
     (cmp_pos_1)  & (!cmp_pos_2),// 1
-    cmp_pos_2)//2  q_1 即第一位商独热码形式，提前算出用作iter模块输入
+    cmp_pos_2)//2  q_1 the first quo with one-hot representation, pre caculate as the q_j
 //  val tmp_q_A = Wire(UInt(bit_width.W))
 //  val conv_pre1 = Module(new Conversion(bit_width)).suggestName("conversion for pre1")
 //  conv_pre1.io.q_j_1 := q_1
@@ -365,7 +365,7 @@ class SRT16Divint(bit_width: Int) extends Module {
 //  conv_pre1.io.pre_q_A := 0.U
 //  tmp_q_A  := conv_pre1.io.nxt_q_A
   init_q_B := 0.U
-  init_q_A := Mux(early_finish, early_q,0.U) // 注意此处赋0，因为每次是提前算出一个q，因此需要挪后一个将独热码转为real q
+  init_q_A := Mux(early_finish, early_q,0.U) // Note assigning 0 here because each time a q is calculated in advance, it is necessary to delay one conversion to convert the unique code to real q
 
   //selection const
   val neg_Vec_m = Wire(Vec(4,UInt(9.W))) // -mk vec
@@ -382,18 +382,18 @@ class SRT16Divint(bit_width: Int) extends Module {
   val neg_abs_d = -abs_d_reg
   val iter_cons = Wire(Vec(5,UInt(w_width.W)))  //ud for neg u u= -2 -1 0 1 2
   val iter_cons_reg = RegEnable(iter_cons,stateReg(pre_1))
-  val Bypass_cons = Wire(Vec(5,UInt(bit_width.W))) //ud 注意此处d是没有经过norm操作的
+  val Bypass_cons = Wire(Vec(5,UInt(bit_width.W))) //ud note this d is not normalized
   val Bypass_cons_reg = RegEnable(Bypass_cons,stateReg(pre_1))
   val rud = Wire(Vec(5,UInt(9.W)))  // 4*ud 3+6
   val r2ud = Wire(Vec(5,UInt(9.W))) // 16*ud 3+6
-  val d_trunc = Wire(Vec(4,UInt(9.W))) // 4*ud ,除去0（后续考虑是否课省略）
+  val d_trunc = Wire(Vec(4,UInt(9.W))) // 4*ud , rud exclude u = 0 (can be omit ?)
   val d_trunc_reg = RegEnable(d_trunc, stateReg(pre_1))
   val sel_cons = Wire(Vec(5,Vec(4,UInt(8.W)))) // 4ud-mk for neg u u = -2 -1 0 1 2  k = -1 0 1 2 3+5 sel block
   val sel_cons_reg = RegEnable(sel_cons,stateReg(pre_1))
   val spec_cons = Wire(Vec(5,Vec(4,UInt(9.W)))) // 16ud-mk 3+6 spec block
   val spec_cons_reg = RegEnable(spec_cons,stateReg(pre_1))
 
-  iter_cons := VecInit(  // 000.xxxx err3 位宽弄错
+  iter_cons := VecInit(  // 000.xxxx err3 
     Cat(SignExt(neg_d_ext,bit_width+2), 0.U(4.W)),
     Cat(SignExt(neg_d_ext,bit_width+3), 0.U(3.W)),
     0.U(w_width.W),
@@ -449,7 +449,7 @@ class SRT16Divint(bit_width: Int) extends Module {
 
   iter_q := Mux(stateReg(pre_1), q_1, nxt_q)
   iter_q_A := Mux(stateReg(pre_0), norm_x_part(bit_width - 1, 0),Mux(stateReg(pre_1),init_q_A, nxt_q_A))
-  iter_q_B := Mux(stateReg(pre_0), norm_d_part(bit_width - 1, 0),Mux(stateReg(pre_1),init_q_B, nxt_q_B)) // error pre_0 pre_1 写错
+  iter_q_B := Mux(stateReg(pre_0), norm_d_part(bit_width - 1, 0),Mux(stateReg(pre_1),init_q_B, nxt_q_B)) // error pre_0 pre_1 mismatch
 
   // iterblock
   val IterBlock = Module(new IterBlock_v2(bit_width, w_width))
@@ -483,12 +483,12 @@ class SRT16Divint(bit_width: Int) extends Module {
   // post stage
   val q_A_sign_c = Wire(UInt(bit_width.W)) // q after sign adjust
   val q_B_sign_c = Wire(UInt(bit_width.W)) // q-1 after sign adjust
-  val Bypass_final_rem = Wire(UInt(bit_width.W)) // bypass 余数经过sign adjust
-  val Bypass_final_rem_plus_d = Wire(UInt(bit_width.W)) // bypass余数经过sign adjust后加d
+  val Bypass_final_rem = Wire(UInt(bit_width.W)) // bypass rem after sign adjust
+  val Bypass_final_rem_plus_d = Wire(UInt(bit_width.W)) // bypass rem after sign adjust and plus d
   q_A_sign_c := Mux(q_sign_reg && !zero_d_reg, neg_x_q, iter_q_A_reg)
   q_B_sign_c := Mux(q_sign_reg && !zero_d_reg, neg_d_q, iter_q_B_reg)
-  when(x_sign_reg ) { // error ?? early finish初始化用的是abs_reg不是
-    Bypass_final_rem := (~Bypass_iter_reg(0)).asUInt + (~Bypass_iter_reg(1)).asUInt + 2.U // 取反+1
+  when(x_sign_reg ) { // error ?? early finish init with abs_reg
+    Bypass_final_rem := (~Bypass_iter_reg(0)).asUInt + (~Bypass_iter_reg(1)).asUInt + 2.U // reverse every bit and add 1 for neg 
     Bypass_final_rem_plus_d := (~Bypass_iter_reg(0)).asUInt + (~Bypass_iter_reg(1)).asUInt + neg_abs_d + 2.U
   } .otherwise {
     Bypass_final_rem := Bypass_iter_reg(0) + Bypass_iter_reg(1)
@@ -588,8 +588,8 @@ class IterBlock_v2(bit_width: Int, w_width: Int) extends Module {
   nxt_w_o(0) := csa_2.io.out(0)
   nxt_w_o(1) := (csa_2.io.out(1) << 1)(w_width - 1, 0)
   io.nxt_w := VecInit(Seq.tabulate(2){i => nxt_w_o(i) << 2}) // xxx.xx after mul 4
-  io.nxt_w_mul16_trunc := VecInit(Seq.tabulate(2){i => (nxt_w_o(i) << 4)(w_width-1, w_width-8)}) // xxx.xxxx  xxxx|xxx.xxxneed to check ? // error 移位弄错
-  io.nxt_w_mul64_trunc := VecInit(Seq.tabulate(2){i => (nxt_w_o(i) << 6)(w_width-1, w_width-9)}) // xxx.xxxx  xxxxxx|xxx.xxxx小数点仍然在rem_w -1 and rem_w-2
+  io.nxt_w_mul16_trunc := VecInit(Seq.tabulate(2){i => (nxt_w_o(i) << 4)(w_width-1, w_width-8)}) // xxx.xxxx  xxxx|xxx.xxxneed to check ? // error rshift bit
+  io.nxt_w_mul64_trunc := VecInit(Seq.tabulate(2){i => (nxt_w_o(i) << 6)(w_width-1, w_width-9)}) // xxx.xxxx  xxxxxx|xxx.xxxxThe decimal point is still between rem_ w -1 and rem_ w-2
   // to do
 
   // on-the-fly conversion
@@ -708,7 +708,7 @@ class SpecBlock_v2 extends Module {
 //  val sign = Wire(Vec(5,Vec(4,Bool())))
   val q_j_2_v = Wire(Vec(5,UInt(5.W)))
 //  cons_u := Mux1H(io.q_j,io.cons.toSeq)
-  temp(4) := io.rem_3_5  // 注意 0d 放在第五个了需要调整
+  temp(4) := io.rem_3_5  // 注意 0d in fifth place need to adjust
   for (i <-0 until 4) {
     val csa_spec_1 = Module(new CSA3_2(9)).suggestName(s"csa_spec_1_${i}")
     csa_spec_1.io.in(0) := io.rem_3_5(0)

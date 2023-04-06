@@ -3,7 +3,7 @@ package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
-// 采用不恢复余数除法的8bit整数除法模块
+// 8bit div int module using non-restoring division
 class I8DivNr4(bit_width: Int=8) extends Module {
   val io = IO(new Bundle() {
     val sign = Input(Bool())
@@ -31,7 +31,7 @@ class I8DivNr4(bit_width: Int=8) extends Module {
     (UIntToOH(idle, 5), UIntToOH(pre, 5), UIntToOH(iter, 5), UIntToOH(post, 5), UIntToOH(output, 5))
   // handshake
   val stateReg = RegInit((1 << idle.litValue.toInt).U(6.W))
-  val in_handshake = io.div_in_valid && io.div_ready // 输入握手
+  val in_handshake = io.div_in_valid && io.div_ready // input handshake
   //  val out_handshake = io.div_out_valid && io.div_out_ready
   //  val div_out_valid_v = Mux(stateReg(idle), false.B, stateReg(post))
   //  val div_out_valid_reg = RegEnable(div_out_valid_v, stateReg(post)|stateReg(idle))
@@ -61,11 +61,11 @@ class I8DivNr4(bit_width: Int=8) extends Module {
   val init_w = Wire(UInt((bit_width+1).W))
   val iter_w = Wire(UInt((bit_width+1).W))
   val nxt_w = Wire(UInt((bit_width+1).W))
-  val iter_w_reg = RegEnable(iter_w, stateReg(pre)|stateReg(iter)) // 余数高n位
+  val iter_w_reg = RegEnable(iter_w, stateReg(pre)|stateReg(iter)) // msb of rem
   val init_w_low = Wire(UInt(bit_width.W))
   val iter_w_low = Wire(UInt(bit_width.W))
   val nxt_w_low = Wire(UInt(bit_width.W))
-  val iter_w_low_reg = RegEnable(iter_w_low,stateReg(pre)|stateReg(iter)) // 余数低n位，由于divisor需要左移n位，相当于将余数扩展到2*n位，用高位与divisor相减
+  val iter_w_low_reg = RegEnable(iter_w_low,stateReg(pre)|stateReg(iter)) // lsbn of rem :divisor need to left shift n bit，which means we subtract d from msb of rem and each iteration we left shift msb and get the lsb from this reg
 
 
   // pre
@@ -157,7 +157,7 @@ class I8DivNr4(bit_width: Int=8) extends Module {
   // post
   val out_q_final = Wire(UInt(bit_width.W))
   out_q_final := Mux(q_sign_reg && !zero_d_reg, neg_x_q, iter_q_reg)
-  val out_q_final_reg = RegEnable(out_q_final,stateReg(post)) // 打一拍输出
+  val out_q_final_reg = RegEnable(out_q_final,stateReg(post)) 
 
   val out_rem_is_zero = Wire(Bool())
   out_rem_is_zero := !(iter_w_reg.orR)
@@ -239,7 +239,7 @@ class IterBlockI8Nr4(bit_width: Int) extends Module {
   val tmp = Wire(UInt((bit_width+1).W))
   tmp := cons + pre_w_mul2
 
-  // speculative 并行实现，在上一个q未得到之前预测所有可能的值，
+  // speculative Parallel implementation, predicting all possible values before obtaining the previous q,
   val spec_rem = Wire(Vec(4,UInt((bit_width + 1).W)))
   spec_rem := VecInit (
     Seq.tabulate(4) {i => io.d_cons(i) + pre_w_mul4}

@@ -3,13 +3,13 @@ package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
-// 采用SRT radix-4 算法的8bit整数除法模块
-// 参数对应
+// 8bit div int module using SRT radix-4
+// parameters:
 // (mk:index) -1: 0 0 :1 1:2 2:3
 // (u:index) -2: 0 ...
-// (q:index) 2:0   -2 3 注意与u reverse，因为每次是-q,因此根据q在u中查找常数时需要reverse
-// v2 减少寄存器个数
-// v3 尝试减少选择常数位宽
+// (q:index) 2:0   -2 3  need to reverse u index here，because we search as -q for const
+// v2 try to reduce the number of registers
+// v3 try to reduce the bitwidth of selection const
 class SRT4Divint8(bit_width: Int=8) extends Module {
   val io = IO(new Bundle() {
     val sign = Input(Bool())
@@ -29,7 +29,7 @@ class SRT4Divint8(bit_width: Int=8) extends Module {
     val div_out_rem = Output(UInt(bit_width.W))
 
   })
-  val w_width  = bit_width + 4 // 4 : 1bit 符号位， 2bit用于*4/4移位，1bit用于ralign
+  val w_width  = bit_width + 4 // 4 : 1bit sign， 2bit *4/4 shift，1bit ralign
   val bypass_width = bit_width << 1
   val lzc_w = log2Up(bit_width)
   val early_finish = Wire(Bool())
@@ -69,9 +69,9 @@ class SRT4Divint8(bit_width: Int=8) extends Module {
   val init_q = Wire(UInt(5.W))
   val nxt_q = Wire(UInt(5.W))
   val iter_q = Wire(UInt(5.W))
-  val iter_q_reg = RegEnable(iter_q, stateReg(pre) | stateReg(iter)) // q的独热码形式，存储上一个q
+  val iter_q_reg = RegEnable(iter_q, stateReg(pre) | stateReg(iter)) // q with one-hot style，store pre q
 
-  val w_init = Wire(Vec(2, UInt((w_width+2).W))) // 由于未采用 bypass移位减小面积，而按照算法每次输出的w是*4，最后需要>> lzc_d + 2 + ralign， 因此修改算法，将每次iter后的w是未*4结果，直接需要额外的2bit位置用于左移
+  val w_init = Wire(Vec(2, UInt((w_width+2).W))) // because we donot take bypass to reduce the size，after each iteration w*4，so we need to rshift lzc_d + 2 + ralign，to not rshift 2 bit we extend the result of each iter as not mul 4 wich need extra 2bit for shift
   val w_iter = Wire(Vec(2, UInt((w_width+2).W)))
   val w_next = Wire(Vec(2, UInt((w_width+2).W)))
   val w_iter_reg = RegEnable(w_iter, stateReg(pre) | stateReg(iter))
@@ -93,7 +93,7 @@ class SRT4Divint8(bit_width: Int=8) extends Module {
   abs_x := Mux(x_sign, neg_x_q, x)
   abs_d := Mux(d_sign, neg_d_q, d)
 
-  // lzc 前导零个数
+  // lzc leading zero count
   val lzc_x = Wire(UInt(lzc_w.W))
   val zero_x = Wire(Bool())
   val lzc_d = Wire(UInt(lzc_w.W))
@@ -114,7 +114,7 @@ class SRT4Divint8(bit_width: Int=8) extends Module {
   q_sign := x_sign ^ d_sign
   // lzc_diff
   val lzc_diff = Cat(0.U(1.W), lzc_d) - Cat(0.U(1.W), lzc_x)
-  val norm_x = Wire(UInt(bit_width.W)) // 需要少移动一位
+  val norm_x = Wire(UInt(bit_width.W)) 
   val norm_d = Wire(UInt(bit_width.W))
   norm_x := abs_x << lzc_x
   norm_d := abs_d << lzc_d
@@ -174,10 +174,10 @@ class SRT4Divint8(bit_width: Int=8) extends Module {
   )
   val m_pos2_q1 = pos_2_lookUpTale_q1(norm_d(bit_width - 2, bit_width - 4))
   val w_trunc_1_4 = Wire(UInt(5.W))
-  w_trunc_1_4 := Cat(0.U(1.W), w_init(0)(w_width - 4, w_width - 7)) // *4 做trunc err 4
+  w_trunc_1_4 := Cat(0.U(1.W), w_init(0)(w_width - 4, w_width - 7)) // *4 and trunc err 4
   val cmp_pos_1 = w_trunc_1_4 >= m_pos1_q1
   val cmp_pos_2 = w_trunc_1_4 >= m_pos2_q1
-  init_q := Cat(0.U(2.W), //-2 -1注意cat最高是高位，所以这个弄反error vec 0 -2d 1 -d 2 0 3 d 4 2d 因此q_1 0最低位 对应q =  2
+  init_q := Cat(0.U(2.W), //-2 -1 attentin the msb of cat opeartion is at the right，so it reverse :vec 0 -2d 1 -d 2 0 3 d 4 2d 
     (!cmp_pos_1) & (!cmp_pos_2), //0
     (cmp_pos_1) & (!cmp_pos_2), // 1
     cmp_pos_2) //2
@@ -200,7 +200,7 @@ class SRT4Divint8(bit_width: Int=8) extends Module {
   val const_d_reg = RegEnable(rud, stateReg(pre)) // -2d d 0 d 2d
 
   // get mk
-  val neg_mk = Wire(Vec(4,UInt(6.W))) // 选择常数mk的负数
+  val neg_mk = Wire(Vec(4,UInt(6.W))) // - selection const
   val R4_qds = Module(new SRT4qdsCons_i8_v3)
   R4_qds.io.d_trunc_3 := norm_d(bit_width - 2, bit_width -4)
   neg_mk(0) := R4_qds.io.m_neg_1
@@ -230,8 +230,8 @@ class SRT4Divint8(bit_width: Int=8) extends Module {
   iter_q := Mux(stateReg(pre), init_q, nxt_q)
 
   // post stage
-  val rem_sign = Wire(UInt(w_width.W)) // 余数经过符号矫正
-  val rem_sign_plus_d = Wire(UInt(w_width.W)) // 余数经过符号矫正后 +/- d
+  val rem_sign = Wire(UInt(w_width.W)) // rem after sign adust
+  val rem_sign_plus_d = Wire(UInt(w_width.W)) // rem after sign adust then +/- d
   val rem_adjust = Wire(UInt(w_width.W))
   val q_A_sign_c = Wire(UInt(bit_width.W)) // q after sign adjust
   val q_B_sign_c = Wire(UInt(bit_width.W)) // q-1 after sign adjust
@@ -254,7 +254,7 @@ class SRT4Divint8(bit_width: Int=8) extends Module {
   rem_adjust :=
     Mux(adjust, rem_sign_plus_d, rem_sign)
   val out_rem_final =
-    Mux(early_finish_q, rem_adjust.asSInt , rem_adjust.asSInt >>(lzc_d_reg+1.U)) // 注意是算数右移，保持符号位（因为该部分已经进行过sign adjust）该处可以考虑将移位放到output阶段？ 多右移的1bit主要是r_align上
+    Mux(early_finish_q, rem_adjust.asSInt , rem_adjust.asSInt >>(lzc_d_reg+1.U)) // attention arithmetic rshift， because it has been sign adjusted,(can put it in the post stage?)
   val out_q_final_reg = RegEnable(out_q_final, stateReg(post))
   val out_rem_final_reg = RegEnable(out_rem_final, stateReg(post))
 
@@ -331,7 +331,7 @@ class IterBlockSR4_v3(bit_width: Int,w_width: Int) extends Module {
     val nxt_q_B = Output(UInt(bit_width.W))
   })
   val pre_w_mul4 = Wire(Vec(2,UInt((w_width).W)))
-  pre_w_mul4 := VecInit(Seq.tabulate(2) {i => (io.pre_w(i) << 2)(w_width + 1, 2)})//左移两位
+  pre_w_mul4 := VecInit(Seq.tabulate(2) {i => (io.pre_w(i) << 2)(w_width + 1, 2)})//left shift 2
   val csa_1 = Module(new CSA3_2(w_width)).suggestName(s"IterBlockSR4_csa1")
   val d_cons_sel = Mux1H(io.q_j, io.d_cons.toSeq)
   csa_1.io.in(0) := pre_w_mul4(0)
@@ -342,8 +342,8 @@ class IterBlockSR4_v3(bit_width: Int,w_width: Int) extends Module {
     csa_1.io.out(0),
     csa_1.io.out(1)<<1
   )
-  val rem_trunc = Wire(Vec(4, Vec(2,UInt(6.W)))) // m_2 (2,4) m_1(3,3) m_0(3,3) m_-1(2,4) (整数位，小数位)
-  val nxt_w_mul4 = VecInit( // x_xxxxx00 省略最高两位，为下一次乘4做准备
+  val rem_trunc = Wire(Vec(4, Vec(2,UInt(6.W)))) // m_2 (2,4) m_1(3,3) m_0(3,3) m_-1(2,4) (integer，fraction)
+  val nxt_w_mul4 = VecInit( // x_xxxxx00 
     Cat(temp_w(0)(w_width - 3, 0), 0.U(2.W)),
     Cat(temp_w(1)(w_width - 3, 0), 0.U(2.W))
   )
