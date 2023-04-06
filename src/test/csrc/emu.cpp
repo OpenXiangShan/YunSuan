@@ -249,7 +249,7 @@ inline char* Emulator::waveform_filename(time_t t, const char *s) {
   static char buf[1024];
   char *p = timestamp_filename(t, buf);
   char suffix[100];
-  snprintf(suffix, 100, "%s.vcd", s);
+  snprintf(suffix, 100, "%s_seed_%d.vcd", s, args.seed);
   snprintf(p, 1024, "%s", suffix);
   printf("dump wave to %s...\n", buf);
   return buf;
