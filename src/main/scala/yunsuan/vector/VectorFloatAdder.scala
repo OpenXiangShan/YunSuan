@@ -22,7 +22,7 @@ import yunsuan.{VfaddOpCode, VectorElementFormat}
   *12: Compare, less than or equal
   *13: Compare, greater than
   *14: Compare, greater than or equal
-  *15: Classify // not support now
+  *15: Classify
   **/
 class VectorFloatAdder() extends Module {
   val exponentWidth = 11
@@ -395,9 +395,9 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     val fp_b_significand_is_greater = !U_close_path.io.CS1.head(1) & (fp_a_mantissa =/= fp_b_mantissa)
     val fp_b_significand_is_equal   = fp_a_mantissa === fp_b_mantissa
     val fp_b_significand_is_smaller = !fp_b_significand_is_greater & !fp_b_significand_is_equal
-    val fp_b_is_greater = (!fp_b_sign & (fp_a_sign | fp_b_exponent_is_greater | (fp_b_exponent_is_equal & fp_b_significand_is_greater))) |
+    val fp_b_is_greater = (!fp_b_sign & ((fp_a_sign & !(fp_b_is_zero & fp_a_is_zero)) | fp_b_exponent_is_greater | (fp_b_exponent_is_equal & fp_b_significand_is_greater))) |
                           (fp_b_sign & fp_a_sign & (fp_b_exponent_is_smaller | (fp_b_exponent_is_equal & fp_b_significand_is_smaller)))  
-    val fp_b_is_equal = fp_b_sign_is_equal & fp_b_exponent_is_equal & fp_b_significand_is_equal
+    val fp_b_is_equal = (fp_b_sign_is_equal & fp_b_exponent_is_equal & fp_b_significand_is_equal) | (fp_b_is_zero & fp_a_is_zero)
     val fp_b_is_less = !fp_b_is_greater & !fp_b_is_equal
     val result_min = Wire(UInt(floatWidth.W))
     val result_max = Wire(UInt(floatWidth.W))
@@ -432,7 +432,7 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
         fp_a_is_NAN &  fp_b_is_NAN,
       ),
       Seq(
-        Mux(fp_b_is_less,fp_b_16_or_32,fp_a_16_or_32),
+        Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),fp_b_16_or_32,fp_a_16_or_32),
         fp_a_16_or_32,
         fp_b_16_or_32,
         out_NAN
@@ -446,7 +446,7 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
         fp_a_is_NAN &  fp_b_is_NAN,
       ),
       Seq(
-        Mux(fp_b_is_greater.asBool,fp_b_16_or_32,fp_a_16_or_32),
+        Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),fp_b_16_or_32,fp_a_16_or_32),
         fp_a_16_or_32,
         fp_b_16_or_32,
         out_NAN
@@ -1556,8 +1556,10 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
   val fp_b_is_SNAN       = Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !fp_b_to64(significandWidth-2)
   val fp_a_is_infinite   = Efp_a_is_all_one & (!fp_a_mantissa_isnot_zero)
   val fp_b_is_infinite   = Efp_b_is_all_one & (!fp_b_mantissa_isnot_zero)
-  val fp_a_is_zero_reg   = RegNext(Efp_a_is_zero & !fp_a_mantissa_isnot_zero)
-  val fp_b_is_zero_reg   = RegNext(Efp_b_is_zero & !fp_b_mantissa_isnot_zero)
+  val fp_a_is_zero = Efp_a_is_zero & !fp_a_mantissa_isnot_zero
+  val fp_b_is_zero = Efp_b_is_zero & !fp_b_mantissa_isnot_zero
+  val fp_a_is_zero_reg   = RegNext(fp_a_is_zero)
+  val fp_b_is_zero_reg   = RegNext(fp_b_is_zero)
   val res_widening_reg   = RegNext(io.res_widening)
 
   val is_far_path_reg     = RegNext(!EOP | absEaSubEb(absEaSubEb.getWidth - 1, 1).orR | (absEaSubEb === 1.U & (Efp_a_is_zero ^ Efp_b_is_zero)))
@@ -1612,9 +1614,9 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     val fp_b_significand_is_greater = !U_close_path.io.CS1.head(1) & (fp_a_mantissa =/= fp_b_mantissa)
     val fp_b_significand_is_equal   = fp_a_mantissa === fp_b_mantissa
     val fp_b_significand_is_smaller = !fp_b_significand_is_greater & !fp_b_significand_is_equal
-    val fp_b_is_greater = (!fp_b_sign & (fp_a_sign | fp_b_exponent_is_greater | (fp_b_exponent_is_equal & fp_b_significand_is_greater))) |
-                          (fp_b_sign & fp_a_sign & (fp_b_exponent_is_smaller | (fp_b_exponent_is_equal & fp_b_significand_is_smaller)))  
-    val fp_b_is_equal = fp_b_sign_is_equal & fp_b_exponent_is_equal & fp_b_significand_is_equal
+    val fp_b_is_greater = (!fp_b_sign & ((fp_a_sign & !(fp_b_is_zero & fp_a_is_zero)) | fp_b_exponent_is_greater | (fp_b_exponent_is_equal & fp_b_significand_is_greater))) |
+                          (fp_b_sign & fp_a_sign & (fp_b_exponent_is_smaller | (fp_b_exponent_is_equal & fp_b_significand_is_smaller)))
+    val fp_b_is_equal = (fp_b_sign_is_equal & fp_b_exponent_is_equal & fp_b_significand_is_equal) | (fp_b_is_zero & fp_a_is_zero)
     val fp_b_is_less = !fp_b_is_greater & !fp_b_is_equal
     val result_min = Wire(UInt(floatWidth.W))
     val result_max = Wire(UInt(floatWidth.W))
@@ -1639,7 +1641,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
         fp_a_is_NAN &  fp_b_is_NAN,
       ),
       Seq(
-        Mux(fp_b_is_less,io.fp_b,io.fp_a),
+        Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),io.fp_b,io.fp_a),
         io.fp_a,
         io.fp_b,
         out_NAN
@@ -1653,7 +1655,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
         fp_a_is_NAN &  fp_b_is_NAN,
       ),
       Seq(
-        Mux(fp_b_is_greater.asBool,io.fp_b,io.fp_a),
+        Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),io.fp_b,io.fp_a),
         io.fp_a,
         io.fp_b,
         out_NAN
@@ -2156,6 +2158,7 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
   val Efp_a_is_not_zero  = Efp_a.orR
   val Efp_b_is_not_zero  = Efp_b.orR
   val Efp_a_is_zero      = !Efp_a_is_not_zero
+  val Efp_b_is_zero      = !Efp_b_is_not_zero
   val Efp_a_is_all_one   = Efp_a.andR
   val Efp_b_is_all_one   = Efp_b.andR
   val absEaSubEb = U_far_path.io.absEaSubEb
@@ -2189,6 +2192,8 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
     float_adder_result := Mux(RegNext(is_far_path),U_far_path.io.fp_c,U_close_path.io.fp_c)
   }
   if (hasMinMaxCompare) {
+    val fp_a_is_zero = Efp_a_is_zero && !fp_a_mantissa_isnot_zero
+    val fp_b_is_zero = Efp_b_is_zero && !fp_b_mantissa_isnot_zero
     val is_add = io.op_code === VfaddOpCode.fadd
     val is_sub = io.op_code === VfaddOpCode.fsub
     val is_min = io.op_code === VfaddOpCode.fmin
@@ -2216,9 +2221,9 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
     val fp_b_significand_is_greater = !U_close_path.io.CS1.head(1) & (fp_a_mantissa =/= fp_b_mantissa)
     val fp_b_significand_is_equal   = fp_a_mantissa === fp_b_mantissa
     val fp_b_significand_is_smaller = !fp_b_significand_is_greater & !fp_b_significand_is_equal
-    val fp_b_is_greater = (!fp_b_sign & (fp_a_sign | fp_b_exponent_is_greater | (fp_b_exponent_is_equal & fp_b_significand_is_greater))) |
-                          (fp_b_sign & fp_a_sign & (fp_b_exponent_is_smaller | (fp_b_exponent_is_equal & fp_b_significand_is_smaller)))  
-    val fp_b_is_equal = fp_b_sign_is_equal & fp_b_exponent_is_equal & fp_b_significand_is_equal
+    val fp_b_is_greater = (!fp_b_sign & ((fp_a_sign & !(fp_b_is_zero & fp_a_is_zero)) | fp_b_exponent_is_greater | (fp_b_exponent_is_equal & fp_b_significand_is_greater))) |
+                          (fp_b_sign & fp_a_sign & (fp_b_exponent_is_smaller | (fp_b_exponent_is_equal & fp_b_significand_is_smaller)))
+    val fp_b_is_equal = (fp_b_sign_is_equal & fp_b_exponent_is_equal & fp_b_significand_is_equal) | (fp_b_is_zero & fp_a_is_zero)
     val fp_b_is_less = !fp_b_is_greater & !fp_b_is_equal
     val result_min = Wire(UInt(floatWidth.W))
     val result_max = Wire(UInt(floatWidth.W))
@@ -2243,7 +2248,7 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
         fp_a_is_NAN &  fp_b_is_NAN,
       ),
       Seq(
-        Mux(fp_b_is_less,io.fp_b,io.fp_a),
+        Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),io.fp_b,io.fp_a),
         io.fp_a,
         io.fp_b,
         out_NAN
@@ -2257,7 +2262,7 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
         fp_a_is_NAN &  fp_b_is_NAN,
       ),
       Seq(
-        Mux(fp_b_is_greater.asBool,io.fp_b,io.fp_a),
+        Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),io.fp_b,io.fp_a),
         io.fp_a,
         io.fp_b,
         out_NAN
