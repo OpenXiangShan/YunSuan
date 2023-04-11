@@ -61,7 +61,7 @@ package object yunsuan {
 
   object VialuFixType {
     // format:2bits   sign:1bit    opcode:5bits
-    def dummy                          = "b11111111".U(OpTypeWidth.W) // exu not implemented
+    def dummy                          = "b01111111".U(OpTypeWidth.W) // exu not implemented
     def vadd_vv                        = "b00000000".U(OpTypeWidth.W) // vd[i] = vs2[i] + vs1[i] vadd
     def vsub_vv                        = "b00000001".U(OpTypeWidth.W) // vd[i] = vs2[i] - vs1[i] vsub
     def vrsub_vv                       = "b11000001".U(OpTypeWidth.W) // vd[i] = vs1[i] - vs2[i] vsub
