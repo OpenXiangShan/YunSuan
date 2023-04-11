@@ -131,7 +131,7 @@ package object yunsuan {
     private def getOpcodeGeneral(fuOpType: UInt) = fuOpType(4,0)
     def getOpcode(fuOpType: UInt) = Mux(fuOpType(5,0) === vssra_vv(5,0), "b100000".U, Cat(0.U(1.W), getOpcodeGeneral(fuOpType))) // dirty code for opcode of vssra
     def getSrcVdType(fuOpType: UInt, sew:UInt) = {
-      val isSpecificOpcode = (getOpcodeGeneral(fuOpType) === getOpcodeGeneral(vssra_vv) 
+      val isSpecificOpcode = (fuOpType(6,0) === vssra_vv(6,0)
                           || getOpcodeGeneral(fuOpType) === getOpcodeGeneral(vmadc_vvm)
                           || getOpcodeGeneral(fuOpType) === getOpcodeGeneral(vmsbc_vvm))
       val sign = Mux(isSpecificOpcode, 0.U(1.W), fuOpType(5)) // dirty code for opcode of vssra vmadc vmsbc
