@@ -83,7 +83,7 @@ for (i<-0 until VLEN) {
 for (i<-0 until NLanes) {
   vmsof(i) := (~vmsbf(i)) & vmsif(i)
   nmask(i) := ~(vmask(i) | Fill(LaneWidth, vm))
-  vd_nmask(i)  := old_vd(i) & nmask(i)
+  vd_nmask(i)  := Mux(ma, ~0.U(LaneWidth.W), old_vd(i)) & nmask(i)
   sbf_mask(i)  := vmsbf(i) & (vmask(i) | Fill(LaneWidth, vm))
   sif_mask(i)  := vmsif(i) & (vmask(i) | Fill(LaneWidth, vm))
   sof_mask(i)  := vmsof(i) & (vmask(i) | Fill(LaneWidth, vm))
@@ -101,7 +101,7 @@ val slices = Seq.fill(NLanes)(Module(new VMaskSlice))
 for (i <- 0 until NLanes) {
    slices(i).io.ihasone := ihasone(i) 
    slices(i).io.vs2 := vs2m.slice(i*LaneWidth, (i+1)*LaneWidth) 
-   first(i)   := slices(i).io.first + (i*LaneWidth).S
+   first(i)   := Mux(slices(i).io.first(LaneWidth-1).asBool, -1.S, slices(i).io.first + (i*LaneWidth).S)
    vmsbf(i)   := slices(i).io.sbf  
    ohasone(i) := slices(i).io.ohasone 
 }
@@ -180,7 +180,7 @@ vid_tail_mask_vd := 0.U
 when ((vid_v || viota_m) && fire && !uopIdx(0)) {
   vid_tail_mask_vd := (vid_mask_vd & vmask_tail_bits) | vid_tail_vd
 } .elsewhen ((((vid_v || viota_m) && uopIdx(0)) || vcpop_m) && fire) {
-  vid_tail_mask_vd := one_cnt(vlenb) 
+  vid_tail_mask_vd := one_cnt(ele_cnt) 
 }
 
 val vd      = Wire(UInt(VLEN.W)) 

@@ -10,6 +10,7 @@
   *     Part of 12.4
   *     Part of 12.5
   *     15.1  vmand.mm, ...
+  *     16.1  vmv.s.x (only this one) (only supports XLEN=64)
   */
 package yunsuan.vector.alu
 
@@ -182,7 +183,7 @@ class VIntMisc64b extends Module {
   ))
   
   /**
-    * Integer Merge/Move
+    * Integer Merge/Move, vmv.s.x
     */
   // Adjust vmask. E.g., if sew==32: 000000ab -> aaaabbbb   
   val vmask_adjust = Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(k => 
@@ -192,7 +193,7 @@ class VIntMisc64b extends Module {
   for (i <- 0 until 8) {
     mergeResult(i) := Mux(vmask_adjust(i), vs1(8*i+7, 8*i), vs2(8*i+7, 8*i))
   }
-  val mergeMove = Mux(vm, vs1, mergeResult.asUInt)
+  val mergeMove = Mux(vm || opcode.isVmvsx, vs1, mergeResult.asUInt)
 
   // Output arbiter
   io.vd := Mux(opcode.isShift, shiftResult,

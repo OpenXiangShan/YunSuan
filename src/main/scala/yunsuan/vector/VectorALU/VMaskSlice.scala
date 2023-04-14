@@ -39,7 +39,7 @@ for (i<-0 until LaneWidth) {
  
 io.first := index(0)
 io.sbf := Mux(io.ihasone, 0.U, Cat(sbf.reverse))
-io.ohasone := io.sbf.orR | io.ihasone
+io.ohasone := flag(LaneWidth-1) | io.ihasone
 }
 
 
