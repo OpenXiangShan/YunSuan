@@ -64,7 +64,7 @@ object UIntToCont1s {
 
 // Tail generation: 16 bits. Note: uopIdx < 8
 object TailGen {
-  def apply(vl: UInt, uopIdx: UInt, eew: SewOH, narrow: Bool): UInt = {
+  def apply(vl: UInt, uopIdx: UInt, eew: SewOH, narrow: Bool = false.B): UInt = {
     val tail = Wire(UInt(16.W))
     // vl - uopIdx * 128/eew
     val nElemRemain = Cat(0.U(1.W), vl) - Mux1H(eew.oneHot, Seq(4,3,2,1).map(x => Cat(Mux(narrow, uopIdx(2,1), uopIdx(2,0)), 0.U(x.W))))
@@ -84,7 +84,7 @@ object TailGen {
 
 // Prestart generation: 16 bits. Note: uopIdx < 8
 object PrestartGen {
-  def apply(vstart: UInt, uopIdx: UInt, eew: SewOH, narrow: Bool): UInt = {
+  def apply(vstart: UInt, uopIdx: UInt, eew: SewOH, narrow: Bool = false.B): UInt = {
     val prestart = Wire(UInt(16.W))
     // vstart - uopIdx * 128/eew
     val nElemRemain = Cat(0.U(1.W), vstart) - Mux1H(eew.oneHot, Seq(4,3,2,1).map(x => Cat(Mux(narrow, uopIdx(2,1), uopIdx(2,0)), 0.U(x.W))))

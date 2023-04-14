@@ -7,7 +7,7 @@ import yunsuan.vector.alu.VAluOpcode._
 
 class VAluOpcode extends Bundle{
   val op = UInt(6.W)
-  
+  // Alu opcode:
   def isAddSub = op === vadd || op === vsub
   def isVext = op === vext
   def isAddWithCarry = op === vadc || op === vmadc || op === vsbc || op === vmsbc
@@ -35,7 +35,6 @@ class VAluOpcode extends Bundle{
   def isSignedShift = op === vsra || op === vssra
   def isShift = op === vsll || op === vsrl || op === vssrl || isSignedShift
   def isLeftShift = op === vsll
-  def isIntFixp = op < vredsum
   def isReduction = (op >= vredsum) && (op <= vredxor) 
   def isVredsum = op === vredsum
   def isVredmax = op === vredmax
@@ -50,7 +49,15 @@ class VAluOpcode extends Bundle{
   def isVmsof   = op === vmsof 
   def isViota   = op === viota 
   def isVid     = op === vid   
-
+  def isIntFixp = op < vredsum || op === vmvsx
+  def isVmvsx = op === vmvsx
+  // IMac opcode:
+  def op3b = op(2, 0)
+  def highHalf = op3b === 1.U
+  def isMacc = op3b === 2.U || op3b === 3.U || op3b === 4.U || op3b === 5.U
+  def isSub = op3b === 3.U || op3b === 5.U
+  def isFixP = op3b === 6.U
+  def overWriteMultiplicand = op3b === 4.U || op3b === 5.U
 }
 
 class VIFuInfo extends Bundle {

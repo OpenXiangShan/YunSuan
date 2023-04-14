@@ -8,7 +8,7 @@ import yunsuan.vector._
  *  
  *  Support these instructions: 11.10, 11.12, 11.13, 11.14, 12.3
  */
-class VIMac64b extends Module {
+class VIMac64b_noBooth extends Module {
   val io = IO(new Bundle {
     // val opcode = Input(new VIMacOpcode)
     val info = Input(new VIFuInfo)
@@ -38,83 +38,81 @@ class VIMac64b extends Module {
 
   /**
    *  First pipeline stage:
-   *    (1) Booth-recoding partial products generation (2) Wallace tree
+   *    (1) Partial products generation (2) Wallace tree
    */
-  // Booth recoding
-  class boothRecode(d: UInt) {
-    val positive = !d(2) && d(1,0) =/= 0.U
-    val negative = d(2) && d(1,0) =/= 3.U
-    val one = d(1) =/= d(0)
-    val double = d(2) =/= d(1) && d(1) === d(0)
+  val partProd = Wire(Vec(64, UInt(128.W)))
+  partProd(0) := Mux(!vs1(0), 0.U, Mux1H(sew.oneHot, Seq(8,16,32,64).map(k => 
+                 Cat(Fill(128-k, vs2_is_signed && vs2(k-1)), vs2(k-1, 0)))))
+  for (i <- 1 until 64) {
+    partProd(i) := Mux(!vs1(i), 0.U, Mux1H(sew.oneHot, Seq(8,16,32,64).map(k => 
+                   Cat(Fill(128-k-i-i/k*k, vs2_is_signed && vs2(i/k * k + k-1)), vs2(i/k * k + k-1, i/k * k), 0.U((i + i/k * k).W)))))
   }
-  val vs1Booth3b = Wire(Vec(32, UInt(3.W)))
-  vs1Booth3b(0) := Cat(vs1(1, 0), false.B)
-  for (i <- 1 until 32) {
-    if (i % 4 != 0) {
-      vs1Booth3b(i) := vs1(2*i+1, 2*i-1)
-    } else if (i == 16) {
-      vs1Booth3b(i) := Mux(sew.is64, vs1(2*i+1, 2*i-1), Cat(vs1(2*i+1, 2*i), false.B))
-    } else if (i % 8 == 0) {
-      vs1Booth3b(i) := Mux(sew.is64 || sew.is32, vs1(2*i+1, 2*i-1), Cat(vs1(2*i+1, 2*i), false.B))
+  // If the highest bit of signed vs1 element is 1, reverse partial product and +1 (+1 is handled in next next code block)
+  val partProdReverse = Wire(Vec(64, UInt(128.W)))
+  for (i <- 0 until 64) {
+    if (i % 8 != 7) {
+      partProdReverse(i) := partProd(i)
+    } else if (i == 63) {
+      partProdReverse(i) := Mux(vs1(i) && vs1_is_signed, ~partProd(i), partProd(i))
+    } else if (i == 31) {
+      partProdReverse(i) := Mux(vs1(i) && vs1_is_signed && !sew.is64, ~partProd(i), partProd(i))
+    } else if (i % 16 == 15) {
+      partProdReverse(i) := Mux(vs1(i) && vs1_is_signed && !sew.is64 && !sew.is32, ~partProd(i), partProd(i))
     } else {
-      vs1Booth3b(i) := Mux(!sew.is8, vs1(2*i+1, 2*i-1), Cat(vs1(2*i+1, 2*i), false.B))
+      partProdReverse(i) := Mux(vs1(i) && vs1_is_signed && sew.is8, ~partProd(i), partProd(i))
     }
   }
-  val vs1Booth = Seq.tabulate(32)(i => new boothRecode(vs1Booth3b(i)))
-  // Partial products
-  val partProd = Wire(Vec(32+2, UInt(128.W)))
-  def calcPartProd(i: Int, sew: Int) = {
-      val blockIdx = (2*i)/sew
-      val elementVs2 = UIntSplit(vs2, sew)(blockIdx)
-      val elementVs2L = BitsExtend(elementVs2, 2*sew, vs2_is_signed) // width: 2*sew
-      val boothDouble = Wire(UInt((2*sew).W))
-      boothDouble := Mux1H(Seq(vs1Booth(i).one    -> elementVs2L,
-                               vs1Booth(i).double -> (elementVs2L << 1)))
-      val boothResult = Mux1H(Seq(vs1Booth(i).positive -> boothDouble,
-                                  vs1Booth(i).negative -> (~boothDouble)))
-      val shiftBits = 2 * i - sew * blockIdx
-      val shifted = (boothResult << shiftBits)(2*sew-1, 0)
-      if (sew == 64) {shifted}
-      else if (blockIdx == 0) {Cat(0.U((128-(blockIdx+1)*sew*2).W), shifted)}
-      else if (blockIdx == 64/sew - 1) {Cat(shifted, 0.U((blockIdx*sew*2).W))}
-      else {Cat(0.U((128-(blockIdx+1)*sew*2).W), shifted, 0.U((blockIdx*sew*2).W))}
+  // Set zero zone to seperate different elements
+  val partProdSet0_sew8 = Wire(Vec(64, UInt(128.W)))
+  val partProdSet0_sew16 = Wire(Vec(64, UInt(128.W)))
+  val partProdSet0_sew32 = Wire(Vec(64, UInt(128.W)))
+  for (i <- 0 until 64) {
+    val eIdx8 = i / 8  // element idx
+    if (eIdx8 == 0) {partProdSet0_sew8(i) := Cat(0.U(112.W), partProdReverse(i)(15,0))}
+    else if (eIdx8 == 7) {partProdSet0_sew8(i) := Cat(partProdReverse(i)(127,112), 0.U(112.W))}
+    else {partProdSet0_sew8(i) := Cat(0.U((112-eIdx8*16).W), partProdReverse(i)(eIdx8*16+15, eIdx8*16), 0.U((eIdx8*16).W))}
+    val eIdx16 = i / 16  // element idx
+    if (eIdx16 == 0) {partProdSet0_sew16(i) := Cat(0.U(96.W), partProdReverse(i)(31,0))}
+    else if (eIdx16 == 3) {partProdSet0_sew16(i) := Cat(partProdReverse(i)(127,96), 0.U(96.W))}
+    else {partProdSet0_sew16(i) := Cat(0.U((96-eIdx16*32).W), partProdReverse(i)(eIdx16*32+31, eIdx16*32), 0.U((eIdx16*32).W))}
+    val eIdx32 = i / 32  // element idx
+    if (eIdx32 == 0) {partProdSet0_sew32(i) := Cat(0.U(64.W), partProdReverse(i)(63,0))}
+    else {partProdSet0_sew32(i) := Cat(partProdReverse(i)(127,64), 0.U(64.W))}
   }
-  for (i <- 0 until 32) {
-    partProd(i) := Mux1H(sew.oneHot, Seq(8,16,32,64).map(sew => calcPartProd(i, sew)))
+  val partProdSet0 = Mux1H(Seq(
+    sew.is8  -> partProdSet0_sew8,
+    sew.is16  -> partProdSet0_sew16,
+    sew.is32  -> partProdSet0_sew32,
+    sew.is64  -> partProdReverse
+  ))
+  // Handle +1 operation upon reverse result
+  val partProdFinal = Wire(Vec(65+2, UInt(128.W)))
+  for (i <- 0 until 64) {
+    if (i % 8 != 0 | i == 0) {
+      partProdFinal(i) := partProdSet0(i)
+    // } else {
+    } else if (i == 32) {
+      partProdFinal(i) := Mux(vs1(i-1) && vs1_is_signed && !sew.is64, partProdSet0(i) | 
+                              Mux1H(sew.oneHot.take(3), Seq(8, 16, 32).map(n => 1.U << (2*i - 2*n))), partProdSet0(i))
+    } else if (i % 16 == 0) {
+      partProdFinal(i) := Mux(vs1(i-1) && vs1_is_signed && (sew.is16 || sew.is8), partProdSet0(i) | 
+                              Mux1H(sew.oneHot.take(2), Seq(8, 16).map(n => 1.U << (2*i - 2*n))), partProdSet0(i))
+    } else {
+      partProdFinal(i) := Mux(vs1(i-1) && vs1_is_signed && sew.is8, partProdSet0(i) | 1.U << (2*i - 16), partProdSet0(i))
+    }
   }
-
-  // Generate an extra addend (partProd(32)) to:
-  // (1) Handle +1 for all negative numbers
-  // (2) Handle unsinged vs1
-  // (3) Handle +1 for negative old_vd (io.isSub)
-  def blockPlus1(sew: Int, booth_neg: UInt, highVs1: Bool, vs1_is_unsign: Bool, data: UInt, subOldVd: Bool): UInt = {
-    val hi = Wire(UInt(sew.W)) //Handle unsinged vs1
-    hi := Mux(highVs1 && vs1_is_unsign, data, 0.U)
-    val lo = Wire(UInt(sew.W)) //Handle +1 for all negative numbers
-    lo := VecInit(Seq.tabulate(sew/2)(i => Cat(false.B, booth_neg(i)))).asUInt
-    Cat(hi, Cat(lo(sew-1, 2), lo(1, 0) + subOldVd.asUInt))
-  }
-  val plus1sew64 = Wire(UInt(128.W))
-  val plus1sew32 = Wire(UInt(128.W))
-  val plus1sew16 = Wire(UInt(128.W))
-  val plus1sew8 = Wire(UInt(128.W))
-  val booth_neg = VecInit(vs1Booth.map(_.negative)).asUInt
-  plus1sew64 := blockPlus1(64, booth_neg, vs1(63), !vs1_is_signed, vs2, io.isSub)
-  plus1sew32 := VecInit(Seq.tabulate(2)(i => blockPlus1(32, UIntSplit(booth_neg, 16)(i),
-                            UIntSplit(vs1, 32)(i)(31), !vs1_is_signed, UIntSplit(vs2, 32)(i), io.isSub))).asUInt
-  plus1sew16 := VecInit(Seq.tabulate(4)(i => blockPlus1(16, UIntSplit(booth_neg, 8)(i),
-                            UIntSplit(vs1, 16)(i)(15), !vs1_is_signed, UIntSplit(vs2, 16)(i), io.isSub))).asUInt
-  plus1sew8 := VecInit(Seq.tabulate(8)(i => blockPlus1(8, UIntSplit(booth_neg, 4)(i),
-                            UIntSplit(vs1, 8)(i)(7), !vs1_is_signed, UIntSplit(vs2, 8)(i), io.isSub))).asUInt
-  partProd(32) := Mux1H(sew.oneHot, Seq(plus1sew8, plus1sew16, plus1sew32, plus1sew64))
-  // Old vd
-  val oldVdReorg = Mux1H(sew.oneHot, Seq(8,16,32,64).map(sew => 
-                   VecInit(UIntSplit(oldVd, sew).map(x => BitsExtend(x, 2*sew, false.B))).asUInt))
-  partProd(33) := Mux(io.isMacc, Mux(io.widen, Cat(oldVd, oldVd), Mux(io.isSub, ~oldVdReorg, oldVdReorg)), 0.U)
+  partProdFinal(64) := Mux(vs1(63) && vs1_is_signed, 
+    Mux1H(sew.oneHot, Seq(8, 16, 32, 64).map(n => 1.U << (128 - 2*n))), 0.U)
 
   /**
    *  Wallace tree
    */
+  // Add old_vd and its reverse+1 as an additional addend
+  val oldVdReorg = Mux1H(sew.oneHot, Seq(8,16,32,64).map(sew => 
+                   VecInit(UIntSplit(oldVd, sew).map(x => BitsExtend(x, 2*sew, false.B))).asUInt))
+  partProdFinal(65) := Mux(io.isMacc, Mux(io.widen, Cat(oldVd, oldVd), Mux(io.isSub, ~oldVdReorg, oldVdReorg)), 0.U)
+  partProdFinal(66) := Mux(io.isSub, Mux1H(sew.oneHot, Seq(8,16,32,64).map(sew =>
+                           Fill(64/sew, 1.U((2*sew).W)))), 0.U)
   // 3-bit full-adder
   def add3_UInt(a: UInt, b: UInt, c: UInt): (UInt, UInt) = {
     val cout = (a & b) | (b & c) | (a & c)
@@ -147,12 +145,12 @@ class VIMac64b extends Module {
       case n => n +: nAddendsSeqGen((n / 3) * 2 + n % 3)
     }
   }
-  val nAddendsSeq = nAddendsSeqGen(34)  // e.g., [33, 22, 15, ..., 3]
+  val nAddendsSeq = nAddendsSeqGen(67)  // e.g., [33, 22, 15, ..., 3]
 
   // Perform all wallace stages.
   def wallaceStage(stageIdx: Int): Seq[UInt] = {
     stageIdx match {
-      case 0 => reduce3to2(partProd)
+      case 0 => reduce3to2(partProdFinal)
       case k => reduce3to2(wallaceStage(k-1))
     }
   }
