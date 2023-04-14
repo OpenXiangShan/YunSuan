@@ -83,9 +83,20 @@ class VIntAdder64b extends Module {
     // Generate carry-in from sub and vmask(11.4 Add-with-Carry/Sub-with_Borrow)
     carryIn(i) := Mux(addWithCarry, Mux(vm, sub, vmask_adjust(i) ^ sub), sub)
     // Generate final carry-in: cin
-    cin(i) := Mux1H(Mux(opcode.isAddSub, eewVd.oneHot, eewVs1.oneHot), Seq(1, 2, 4, 8).map(n => 
-      if ((i % n) == 0) carryIn(i) else cout(i-1))
-    )
+    val eewCin = Wire(new SewOH)
+    eewCin.oneHot := Mux(opcode.isAddSub, eewVd.oneHot, eewVs1.oneHot)
+    if (i == 0) {
+      cin(i) := carryIn(i)
+    } else if (i == 4) {
+      cin(i) := Mux(eewCin.is64, cout(i-1), carryIn(i))
+    } else if (i % 2 == 0) {
+      cin(i) := Mux(eewCin.is64 || eewCin.is32, cout(i-1), carryIn(i))
+    } else {
+      cin(i) := Mux(eewCin.is8, carryIn(i), cout(i-1))
+    }
+    // cin(i) := Mux1H(Mux(opcode.isAddSub, eewVd.oneHot, eewVs1.oneHot), Seq(1, 2, 4, 8).map(n => 
+    //   if ((i % n) == 0) carryIn(i) else cout(i-1))
+    // )
     cout(i) := adder_8b.cout
     vd(i) := adder_8b.out
   }
@@ -140,7 +151,7 @@ class VIntAdder64b extends Module {
     eewVs1.is64 -> Cat(~(0.U(7.W)), cmpOut(7))
   ))
   io.cmpOut := Mux(addWithCarry, cmpOutAdjust,
-    Cat(Seq.tabulate(8)(i => Mux(!vm && !vmask(i), 1.U(1.W), cmpOutAdjust(i))).reverse))
+    Cat(Seq.tabulate(8)(i => Mux(!vm && !vmask(i), Mux(io.info.ma, true.B, io.oldVd(i)), cmpOutAdjust(i))).reverse))
 
   //---- To Fixed-Point unit ----
   for (i <- 0 until 8) {

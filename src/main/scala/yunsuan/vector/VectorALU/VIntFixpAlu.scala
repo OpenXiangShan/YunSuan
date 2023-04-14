@@ -240,7 +240,7 @@ class VIntFixpAlu extends Module {
    */
   //---- Tail gen ----
   // val tail = TailGen(vl, uopIdx, Mux(narrow, eewVs2, eewVd))
-  val tail = TailGen(vl, uopIdx, eewVd, narrow)
+  val tail = TailGen(Mux(opcode.isVmvsx, 1.U, vl), uopIdx, eewVd, narrow)
   val tailS1 = RegNext(tail)
   //---- Prestart gen ----
   // val prestart = PrestartGen(vstart, uopIdx, Mux(narrow, eewVs2, eewVd))
@@ -253,7 +253,6 @@ class VIntFixpAlu extends Module {
   val prestartReorg = MaskReorg.splash(prestartS1, eewVdS1)
   val mask16bReorg = MaskReorg.splash(mask16bS1, eewVdS1)
   val updateType = Wire(Vec(16, UInt(2.W))) // 00: keep result  10: old_vd  11: write 1s
-  // val isAddWithCarry = opcodeS1 === vadc || opcodeS1 === vsbc
   for (i <- 0 until 16) {
     when (prestartReorg(i) || vstart_gte_vl_S1) {
       updateType(i) := 2.U
