@@ -53,12 +53,6 @@ object VAluOpcode {
   val viota   = 44.U(6.W)
   val vid     = 45.U(6.W)
   val vmvsx   = 46.U(6.W)
-  // val vslideup    = 46.U(6.W)
-  // val vslidedown  = 47.U(6.W)
-  // val vslide1up   = 48.U(6.W)
-  // val vslide1down = 49.U(6.W)
-  // val vrgather    = 50.U(6.W)
-  // val vcompress   = 51.U(6.W)
 }
 
 import VAluOpcode._
