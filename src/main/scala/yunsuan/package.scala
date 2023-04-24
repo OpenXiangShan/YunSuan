@@ -231,30 +231,32 @@ package object yunsuan {
   }
 
   object VpermType {
-    // format:2bits   sign:1bit    opcode:5bits
+    // notNeedSew:1bit  isFp:1bit    opcode:5bits
     // 00 -> vvv
     def dummy              = "b11111111".U(OpTypeWidth.W) // exu not implemented
-    def vslideup           = "b00000000".U(OpTypeWidth.W) // 
-    def vslidedown         = "b00000001".U(OpTypeWidth.W) // 
+    def vslideup           = "b10000000".U(OpTypeWidth.W) // 
+    def vslidedown         = "b10000001".U(OpTypeWidth.W) // 
     def vslide1up          = "b00000010".U(OpTypeWidth.W) // vd[0]=f[rs1], vd[i+1] = vs2[i]
     def vfslide1up         = "b01000010".U(OpTypeWidth.W) // 
     def vslide1down        = "b00000011".U(OpTypeWidth.W) // 
     def vfslide1down       = "b01000011".U(OpTypeWidth.W) // 
     def vrgather           = "b00000100".U(OpTypeWidth.W) // 
-    def vrgather_vx        = "b00000101".U(OpTypeWidth.W) // 
+    def vrgatherei16       = "b00100100".U(OpTypeWidth.W) // 
+    def vrgather_vx        = "b10000101".U(OpTypeWidth.W) // 
     def vcompress          = "b00000110".U(OpTypeWidth.W) // 
     def vmvnr              = "b00000111".U(OpTypeWidth.W) // 
     def vfmv_s_f           = "b00001000".U(OpTypeWidth.W) // 
 
-    def getOpcode(fuOpType: UInt) = fuOpType(5,0)
+    def getOpcode(fuOpType: UInt) = Cat(0.U(1.W), fuOpType(4,0))
     def getSrcVdType(fuOpType: UInt, sew: UInt) = {
-      val sign = fuOpType(6)
-      val sSew =   Cat(sign ,sign,  sew(1,0))
-      val uSew =   Cat(1.U(1.W), 1.U(1.W), sew(1,0))
-      val format = Cat(uSew, sSew, uSew).asUInt()
+      val isFp = fuOpType(6)
+      val isvrgatherei16 = fuOpType(5)
+      val srcType1 =  Mux(isvrgatherei16, "b0001".U , Cat(isFp ,isFp,  sew(1,0))) 
+      val uSew =   Cat(0.U(1.W), 0.U(1.W), sew(1,0))
+      val format = Cat(uSew, srcType1, uSew).asUInt()
       format
     }
-    def isVsilde(fuOpType: UInt) = !fuOpType(7,1).orR
+    def notNeedSew(fuOpType: UInt) = fuOpType(7)
   }
 
   object VfaddOpCode {

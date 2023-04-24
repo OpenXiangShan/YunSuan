@@ -182,11 +182,13 @@ for (i<-(vlenb/2) until vlenb) {
 
 when ((vrgather || vrgather_vx) && fire) {
   for (i<-0 until vlenb) {
-    vrgather_vd(i) := old_vd((i+1)*8-1,i*8)
+    vrgather_vd(i) := Mux(ma, "hff".U, old_vd((i+1)*8-1,i*8))
     when ((vrgather_byte_sel(i) >= vs2_bytes_min) && (vrgather_byte_sel(i) < vs2_bytes_max) && vmask_byte_strb(i).asBool) {
       vrgather_vd(i) := vs2_bytes(vrgather_byte_sel(i.U)-vs2_bytes_min)
     } .elsewhen (first_gather && vmask_byte_strb(i).asBool) {
       vrgather_vd(i) := 0.U 
+    } .elsewhen (vmask_byte_strb(i).asBool) {
+      vrgather_vd(i) := old_vd(i*8+7, i*8)
     }
   }
 }
