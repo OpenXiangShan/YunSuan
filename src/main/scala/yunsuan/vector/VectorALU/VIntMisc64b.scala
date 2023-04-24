@@ -187,7 +187,7 @@ class VIntMisc64b extends Module {
     */
   // Adjust vmask. E.g., if sew==32: 000000ab -> aaaabbbb   
   val vmask_adjust = Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(k => 
-    Cat(Seq.tabulate(8/k)(i => Fill(k, io.vmask(k*i))).reverse)
+    Cat(Seq.tabulate(8/k)(i => Fill(k, io.vmask(i))).reverse)
   ))
   val mergeResult = Wire(Vec(8, UInt(8.W)))
   for (i <- 0 until 8) {
