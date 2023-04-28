@@ -330,7 +330,7 @@ for (i <-0 until (vlenb+1)) {
 }
 
 for (i <-0 until vlenb) {
-  cmprs_vd(i) := Mux(ta, "hff".U, old_vd(i*8+7, i*8))
+  cmprs_vd(i) := Mux(ta&&(i.U + base >= current_ones_sum(vlenb)), "hff".U, old_vd(i*8+7, i*8))
   res_idx(i) := 0.U
   res_valid(i) := false.B
 }
