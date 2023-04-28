@@ -159,6 +159,8 @@ trait VAluBehavior {
           genVAluInput(SrcBundle("h8bf2581d8bf2580879be01a579be0190", "h6789ab2d6789ab18555554b5555554a0"), vsub.copy(u64, u32, u32, vl=4, uopIdx=0)),
           genVAluInput(SrcBundle("h8bf2581d8bf2580879be01a579be0190", "h6789ab2d6789ab18555554b5555554a0"), vsub.copy(u64, u32, u32, vl=4, uopIdx=1)),
           // vwadd(u).wv vwsub(u).wv
+          genVAluInput(SrcBundle("h080fafe44aa23804cacde65e39bce220", "hed61d264223a7cc075a7129203311402", "h4b0f02011885df170c1445e2acd9a072", "h677f2cc6e11864dd3ba1ef10b39ec020"), 
+                       vadd.copy(u16, u16, s8, vl=16, uopIdx=1, vm=false, ta=false, ma=false)),
           genVAluInput(SrcBundle("hf809197ef8091968e5d4c306e5d4c2f0", "hd3a06c8ed3a06c78c16c1616c16c1600"), vadd.copy(s64, s64, s32, vl=4, uopIdx=0)),
           genVAluInput(SrcBundle("h1c71c66f1c71c6580a3d6ff70a3d6fe0", "hd3a06c8ed3a06c78c16c1616c16c1600"), vadd.copy(s64, s64, s32, vl=4, uopIdx=1)),
           genVAluInput(SrcBundle("h8d159d8c8d159d787ae147147ae14700", "h444443ac44444398320fed34320fed20"), vadd.copy(u32, u32, u16, vl=8, uopIdx=1)),
@@ -190,6 +192,7 @@ trait VAluBehavior {
           genVAluOutput("h000000002468acf0000000002468acf0"), //vwsubu 454
           genVAluOutput("h000000002468acf0000000002468acf0"), //vwsubu 454
           // vwadd(u).wv vwsub(u).wv
+          genVAluOutput("h07fcb0451885df170c1445e2acd9a072"),
           genVAluOutput("hf809197eb9752f7ee5d4c306a740d8f0"), //vwadd.wv 454
           genVAluOutput("h1c71c66ef01232e60a3d6ff6dddddc58"), //vwadd.wv 454
           genVAluOutput("h8d15e1d08d15e1247ae18b587ae18a98"), //vwaddu.wv 415
@@ -241,6 +244,8 @@ trait VAluBehavior {
                        vmerge.copy(u8, u8, u8, vl=16, vm=false)),
           genVAluInput(SrcBundle("h1a2b3b911a2b3b7807f6e51907f6e500", "hf5c28ea0f5c28e88e38e3828e38e3810", mask="hacf134c0acf134a89abcde489abcde30"), 
                        vmerge.copy(u32, u32, u32, vl=4, vm=false)),
+          genVAluInput(SrcBundle("hce2e258a5117c9b22ac57f6b96e60d9f", "h2ca6886dc1bde386bc299f61f0fdb287", mask="hb73b8d5c4de20129c1887e21212af65d"), 
+                       vmerge.copy(u32, u32, u32, vl=4, vm=false)),
           genVAluInput(SrcBundle("h1", "hca864116ca8640f8b851ea9eb851ea80"), 
                        vmv.copy(u32, u32, u32, vl=4)),
           genVAluInput(SrcBundle("h1", "hca864116ca8640f8b851ea9eb851ea80"), 
@@ -286,6 +291,7 @@ trait VAluBehavior {
           // vmerge
           genVAluOutput("h4567361b45d035f8339b32a3579bdf80"), //vmerge 441
           genVAluOutput("h1a2b3b911a2b3b7807f6e51907f6e500"), //vmerge 571
+          genVAluOutput("h2ca6886dc1bde3862ac57f6bf0fdb287"), //vmerge 755
           genVAluOutput("hca864116ca8640f8b851ea9eb851ea80"), //vmv
           genVAluOutput("hffffffffffffffffffffffffb851ea80"), //vmvsx handmade
           genVAluOutput("h1122"), //vmvsx handmade

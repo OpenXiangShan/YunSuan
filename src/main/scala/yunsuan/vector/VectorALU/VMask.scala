@@ -29,11 +29,14 @@ class VMask extends Module {
   val ma = io.in.bits.info.ma
   val ta = io.in.bits.info.ta
   val vlmul = io.in.bits.info.vlmul
+  val vstart = io.in.bits.info.vstart
   val vl = io.in.bits.info.vl
   val uopIdx = io.in.bits.info.uopIdx
   val fire = io.in.valid
 
   val vsew = vdType(1, 0)
+  val vsew_plus1 = Wire(UInt(3.W))
+  vsew_plus1 := Cat(0.U(1.W), ~vsew) + 1.U
   val signed = srcTypeVs2(3, 2) === 1.U
   val widen = vdType(1, 0) === (srcTypeVs2(1, 0) + 1.U)
   val vsew_bytes = 1.U << vsew
@@ -71,7 +74,7 @@ class VMask extends Module {
   val sof_mask = Wire(Vec(NLanes, UInt(LaneWidth.W)))
   val vs2m = Wire(Vec(VLEN, UInt(1.W)))
 
-  vlRemain := Mux((vl >= (ele_cnt * Mux(vcpop_m, uopIdx, uopIdx(5,1)))), (vl - (ele_cnt * Mux(vcpop_m, uopIdx, uopIdx(5,1)))), 0.U) 
+  vlRemain := Mux(vl >= Mux(vcpop_m, uopIdx << vsew_plus1, uopIdx(5, 1) << vsew_plus1), vl - Mux(vcpop_m, uopIdx << vsew_plus1, uopIdx(5, 1) << vsew_plus1), 0.U)
 
   for (i <- 0 until VLEN) {
     vs2m(i) := 0.U
@@ -83,7 +86,7 @@ class VMask extends Module {
   for (i <- 0 until NLanes) {
     vmsof(i) := (~vmsbf(i)) & vmsif(i)
     nmask(i) := ~(vmask(i) | Fill(LaneWidth, vm))
-    vd_nmask(i)  := Mux(ma, ~0.U(LaneWidth.W), old_vd(i)) & nmask(i)
+    vd_nmask(i) := Mux(ma, nmask(i), old_vd(i) & nmask(i))
     sbf_mask(i) := vmsbf(i) & (vmask(i) | Fill(LaneWidth, vm))
     sif_mask(i) := vmsif(i) & (vmask(i) | Fill(LaneWidth, vm))
     sof_mask(i) := vmsof(i) & (vmask(i) | Fill(LaneWidth, vm))
@@ -114,7 +117,7 @@ class VMask extends Module {
   }
 
   // viota/vid/vcpop
-  val vs2m_uop = Cat(vs2m.reverse) >> (ele_cnt * Mux(vcpop_m, uopIdx, uopIdx(5,1))) 
+  val vs2m_uop = Cat(vs2m.reverse) >> Mux(vcpop_m, uopIdx << vsew_plus1, uopIdx(5, 1) << vsew_plus1)
   val one_sum = vs1
   val one_cnt = Wire(Vec(vlenb + 1, UInt(64.W)))
   val vid_vd = Wire(Vec(vlenb, UInt(8.W)))
@@ -157,7 +160,7 @@ class VMask extends Module {
   val vmask_ones_vd = vd_mask & (~vmask_vd_bits)
   val vmask_vd = Mux(ma, vmask_ones_vd, vmask_old_vd)
 
-  vmask_bits := Cat(vmask.reverse) >> (ele_cnt * uopIdx(5,1))
+  vmask_bits := Cat(vmask.reverse) >> (uopIdx(5, 1) << vsew_plus1)
 
   for (i <- 0 until vlenb) {
     vmask_vd_bytes(i) := "hff".U
@@ -176,9 +179,17 @@ class VMask extends Module {
   val vid_tail_vd = Mux(ta, tail_ones_vd, tail_old_vd)
   val vid_tail_mask_vd = Wire(UInt(VLEN.W))
 
+  val vstartRemain = Wire(UInt(7.W))
+  vstartRemain := Mux(vid_v, Mux(vstart >= (uopIdx(5, 1) << vsew_plus1), (vstart - (uopIdx(5, 1) << vsew_plus1)), 0.U), 0.U)
+  val vstartRemainBytes = vstartRemain << vsew
+  val vstart_bytes = Mux(vstartRemainBytes >= vlenb.U, vlenb.U, vstartRemainBytes)
+  val vstart_bits = Cat(vstart_bytes, 0.U(3.W))
+  val vmask_vstart_bits = vd_mask << vstart_bits
+  val vstart_old_vd = Cat(old_vd.reverse) & (~vmask_vstart_bits)
+
   vid_tail_mask_vd := 0.U
   when((vid_v || viota_m) && fire && !uopIdx(0)) {
-    vid_tail_mask_vd := (vid_mask_vd & vmask_tail_bits) | vid_tail_vd
+    vid_tail_mask_vd := (vid_mask_vd & vmask_tail_bits & vmask_vstart_bits) | vid_tail_vd | vstart_old_vd
   }.elsewhen((((vid_v || viota_m) && uopIdx(0)) || vcpop_m) && fire) {
     vid_tail_mask_vd := one_cnt(ele_cnt)
   }

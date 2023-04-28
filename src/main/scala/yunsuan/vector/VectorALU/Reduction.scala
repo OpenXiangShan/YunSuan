@@ -35,6 +35,8 @@ class Reduction extends Module {
   val fire = io.in.valid
 
   val vsew = srcTypeVs2(1, 0)
+  val vsew_plus1 = Wire(UInt(3.W))
+  vsew_plus1 := Cat(0.U(1.W), ~vsew) + 1.U
   val signed = srcTypeVs2(3, 2) === 1.U
   val widen = vdType(1, 0) === (srcTypeVs2(1, 0) + 1.U)
   val vsew_bytes = 1.U << vsew
@@ -42,7 +44,6 @@ class Reduction extends Module {
   val vd_vsew = vdType(1, 0)
   val vd_vsew_bytes = 1.U << vd_vsew
   val vd_vsew_bits = 8.U << vd_vsew
-  val ele_cnt = vlenb.U/vsew_bytes
   val vlRemain = Wire(UInt(8.W))
   val vlRemainBytes = vlRemain << vsew
   val eewVs1 = SewOH(srcTypeVs1(1, 0))
@@ -84,7 +85,8 @@ class Reduction extends Module {
     }
   }
 
-  val shift = Mux(widen, ele_cnt * uopIdx, (2.U * ele_cnt * uopIdx))
+
+  val shift = Mux(widen, uopIdx << vsew_plus1, uopIdx << (vsew_plus1 +1.U))
   val vmask_bits = vmask >> shift
   vlRemain := Mux(vl >= shift, vl - shift, 0.U)
 
@@ -414,7 +416,7 @@ class Reduction extends Module {
   val red_vd_tail_one = (vd_mask << vd_vsew_bits) | (red_vd & (vd_mask >> (VLEN.U - vd_vsew_bits)))
   val red_vd_tail_vd = (old_vd & (vd_mask << vd_vsew_bits)) | (red_vd & (vd_mask >> (VLEN.U - vd_vsew_bits)))
 
-  val red_vd_tail = Mux(ta, red_vd_tail_one, red_vd_tail_vd)
+  val red_vd_tail = Mux(vl===0.U, old_vd, Mux(ta, red_vd_tail_one, red_vd_tail_vd))
   val vd_reg = RegInit(0.U(VLEN.W))
 
   when(vred_uop && fire) {

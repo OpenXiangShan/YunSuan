@@ -28,11 +28,14 @@ class Permutation extends Module {
   val ma = io.in.bits.info.ma
   val ta = io.in.bits.info.ta
   val vlmul = io.in.bits.info.vlmul
+  val vstart = io.in.bits.info.vstart
   val vl = io.in.bits.info.vl
   val uopIdx = io.in.bits.info.uopIdx
   val fire = io.in.valid
 
   val vsew = srcTypeVs2(1, 0)
+  val vsew_plus1 = Wire(UInt(3.W))
+  vsew_plus1 := Cat(0.U(1.W), ~vsew) + 1.U
   val signed = srcTypeVs2(3, 2) === 1.U
   val widen = vdType(1, 0) === (srcTypeVs2(1, 0) + 1.U)
   val vsew_bytes = 1.U << vsew
@@ -75,9 +78,9 @@ class Permutation extends Module {
   ) {
     vlRemain := Mux(vl >= ele_cnt, vl - ele_cnt, 0.U)
   }.elsewhen(vslide1up) {
-    vlRemain := Mux(vl >= ele_cnt*uopIdx, vl - ele_cnt*uopIdx, 0.U)
+    vlRemain := Mux(vl >= (uopIdx << vsew_plus1), vl - (uopIdx << vsew_plus1), 0.U)
   }.elsewhen(vslide1dn) {
-    vlRemain := Mux(vl >= ele_cnt*uopIdx(5,1), vl - ele_cnt*uopIdx(5,1), 0.U)
+    vlRemain := Mux(vl >= (uopIdx(5, 1) << vsew_plus1), vl - (uopIdx(5, 1) << vsew_plus1), 0.U)
   }
 
   vmask_uop := vmask0
@@ -89,9 +92,9 @@ class Permutation extends Module {
   ) {
     vmask_uop := vmask1
   }.elsewhen(vslide1up) {
-    vmask_uop := vmask >> (ele_cnt * uopIdx)
+    vmask_uop := vmask >> (uopIdx << vsew_plus1)
   }.elsewhen(vslide1dn) {
-    vmask_uop := vmask >> (ele_cnt * uopIdx(5,1))
+    vmask_uop := vmask >> (uopIdx(5, 1) << vsew_plus1)
   }
 
   when((vcompress && (uopIdx === 3.U)) ||
@@ -143,9 +146,21 @@ class Permutation extends Module {
         }.elsewhen(srcTypeVs2(1, 0) === 1.U) {
           vrgather_byte_sel(i) := Cat(vs1((i / 2 + 1) * 16 - 1, i / 2 * 16), 0.U(1.W)) + i.U % 2.U
         }.elsewhen(srcTypeVs2(1, 0) === 2.U) {
-          vrgather_byte_sel(i) := Cat(vs1((i / 2 + 1) * 16 - 1, i / 2 * 16), 0.U(2.W)) + i.U % 4.U
+          when(uopIdx(0).asBool) {
+            vrgather_byte_sel(i) := Cat(vs1((i / 4 + 1 + 4) * 16 - 1, (i / 4 + 4) * 16), 0.U(2.W)) + i.U % 4.U
+          }.otherwise {
+            vrgather_byte_sel(i) := Cat(vs1((i / 4 + 1) * 16 - 1, i / 4 * 16), 0.U(2.W)) + i.U % 4.U
+          }
         }.elsewhen(srcTypeVs2(1, 0) === 3.U) {
-          vrgather_byte_sel(i) := Cat(vs1((i / 2 + 1) * 16 - 1, i / 2 * 16), 0.U(3.W)) +i.U % 8.U
+          when(uopIdx(1, 0) === 0.U) {
+            vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1) * 16 - 1, (i / 8) * 16), 0.U(3.W)) + i.U % 8.U
+          }.elsewhen(uopIdx(1, 0) === 1.U) {
+            vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1 + 2) * 16 - 1, (i / 8 + 2) * 16), 0.U(3.W)) + i.U % 8.U
+          }.elsewhen(uopIdx(1, 0) === 2.U) {
+            vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1 + 4) * 16 - 1, (i / 8 + 4) * 16), 0.U(3.W)) + i.U % 8.U
+          }.otherwise {
+            vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1 + 6) * 16 - 1, (i / 8 + 6) * 16), 0.U(3.W)) + i.U % 8.U
+          }
         }
       }.elsewhen(srcTypeVs1(1, 0) === 2.U) {
         vrgather_byte_sel(i) := Cat(vs1((i / 4 + 1) * 32 - 1, i / 4 * 32), 0.U(2.W)) + i.U % 4.U
@@ -168,9 +183,21 @@ class Permutation extends Module {
         }.elsewhen(srcTypeVs2(1, 0) === 1.U) {
           vrgather_byte_sel(i) := Cat(vs1((i / 2 + 1) * 16 - 1, i / 2 * 16), 0.U(1.W)) + i.U % 2.U
         }.elsewhen(srcTypeVs2(1, 0) === 2.U) {
-          vrgather_byte_sel(i) := Cat(vs1(( i / 2 + 1) * 16 - 1, i / 2 * 16), 0.U(2.W)) +i.U % 4.U
+          when(uopIdx(0).asBool) {
+            vrgather_byte_sel(i) := Cat(vs1((i / 4 + 1 + 4) * 16 - 1, (i / 4 + 4) * 16), 0.U(2.W)) + i.U % 4.U
+          }.otherwise {
+            vrgather_byte_sel(i) := Cat(vs1((i / 4 + 1) * 16 - 1, i / 4 * 16), 0.U(2.W)) + i.U % 4.U
+          }
         }.elsewhen(srcTypeVs2(1, 0) === 3.U) {
-          vrgather_byte_sel(i) := Cat(vs1(( i / 2 + 1) * 16 - 1, i / 2 * 16), 0.U(3.W)) +i.U % 8.U
+          when(uopIdx(1, 0) === 0.U) {
+            vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1) * 16 - 1, (i / 8) * 16), 0.U(3.W)) + i.U % 8.U
+          }.elsewhen(uopIdx(1, 0) === 1.U) {
+            vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1 + 2) * 16 - 1, (i / 8 + 2) * 16), 0.U(3.W)) + i.U % 8.U
+          }.elsewhen(uopIdx(1, 0) === 2.U) {
+            vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1 + 4) * 16 - 1, (i / 8 + 4) * 16), 0.U(3.W)) + i.U % 8.U
+          }.otherwise {
+            vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1 + 6) * 16 - 1, (i / 8 + 6) * 16), 0.U(3.W)) + i.U % 8.U
+          }
         }
       }.elsewhen(srcTypeVs1(1, 0) === 2.U) {
         vrgather_byte_sel(i) := Cat(vs1((i / 4 + 1) * 32 - 1, i / 4 * 32), 0.U(2.W)) + i.U % 4.U
@@ -182,13 +209,15 @@ class Permutation extends Module {
 
   when((vrgather || vrgather_vx) && fire) {
     for (i <- 0 until vlenb) {
-      vrgather_vd(i) := Mux(ma, "hff".U, old_vd(( i + 1) * 8 - 1, i * 8))
-      when((vrgather_byte_sel(i) >= vs2_bytes_min) && (vrgather_byte_sel(i) < vs2_bytes_max) && vmask_byte_strb(i).asBool) {
-        vrgather_vd(i) := vs2_bytes(vrgather_byte_sel(i.U)-vs2_bytes_min)
-      }.elsewhen (first_gather && vmask_byte_strb(i).asBool) {
-        vrgather_vd(i) := 0.U 
-      }.elsewhen (vmask_byte_strb(i).asBool) {
-        vrgather_vd(i) := old_vd(i*8+7, i*8)
+      vrgather_vd(i) := old_vd((i + 1) * 8 - 1, i * 8)
+      when(vmask_byte_strb(i).asBool) {
+        when((vrgather_byte_sel(i) >= vs2_bytes_min) && (vrgather_byte_sel(i) < vs2_bytes_max)) {
+          vrgather_vd(i) := vs2_bytes(vrgather_byte_sel(i.U) - vs2_bytes_min)
+        }.elsewhen(first_gather) {
+          vrgather_vd(i) := 0.U
+        }.otherwise {
+          vrgather_vd(i) := Mux(ma, "hff".U, old_vd((i + 1) * 8 - 1, i * 8))
+        }
       }
     }
   }
@@ -217,14 +246,14 @@ class Permutation extends Module {
   }
 
   for (i <- 0 until vlenb) {
-    vslidedn_vd(i) := Mux(ma, "hff".U, old_vd(i*8+7, i*8))
+    vslidedn_vd(i) := old_vd(i * 8 + 7, i * 8)
     when(vmask_byte_strb(i) === 1.U) {
       when(((i.U + slide_bytes) >= base) && ((i.U + slide_bytes - base) < vlenb.U)) {
         vslidedn_vd(i) := vs2_bytes(i.U + slide_bytes - base)
       }.elsewhen(first_slidedn) {
         vslidedn_vd(i) := 0.U
       }.otherwise {
-        vslidedn_vd(i) := old_vd(i * 8 + 7, i * 8)
+        vslidedn_vd(i) := Mux(ma, "hff".U, old_vd(i * 8 + 7, i * 8))
       }
     }
   }
@@ -268,6 +297,26 @@ class Permutation extends Module {
   val perm_vd = Wire(Vec(vlenb, UInt(8.W)))
   val perm_tail_mask_vd = Wire(UInt(VLEN.W))
 
+  val vstartRemain = Wire(UInt(7.W))
+  val vstartRemainBytes = vstartRemain << vsew
+  val vstart_bytes = Mux(vstartRemainBytes >= vlenb.U, vlenb.U, vstartRemainBytes)
+  val vstart_bits = Cat(vstart_bytes, 0.U(3.W))
+  val vmask_vstart_bits = vd_mask << vstart_bits
+  val vstart_old_vd = old_vd & (~vmask_vstart_bits)
+
+  vstartRemain := vstart
+  when((vcompress && (uopIdx === 3.U)) ||
+    ((vslideup) && ((uopIdx === 1.U) || (uopIdx === 2.U))) ||
+    ((vslidedn) && (uopIdx === 2.U)) ||
+    (((vrgather && !vrgather16_sew8) || vrgather_vx) && (uopIdx >= 2.U)) ||
+    (vrgather16_sew8 && (uopIdx >= 4.U))
+  ) {
+    vstartRemain := Mux(vstart >= ele_cnt, vstart - ele_cnt, 0.U)
+  }.elsewhen(vslide1up) {
+    vstartRemain := Mux(vstart >= (uopIdx << vsew_plus1), vstart - (uopIdx << vsew_plus1), 0.U)
+  }.elsewhen(vslide1dn) {
+    vstartRemain := Mux(vstart >= (uopIdx(5, 1) << vsew_plus1), vstart - (uopIdx(5, 1) << vsew_plus1), 0.U)
+  }
 
   perm_vd := vslideup_vd
   when(vslideup && fire) {
@@ -287,7 +336,7 @@ class Permutation extends Module {
     (vslidedn && fire && (uopIdx =/= 0.U)) ||
     (vslide1up && fire) ||
     (vslide1dn && fire && (uopIdx(0) || load_rs1))) {
-    perm_tail_mask_vd := (Cat(perm_vd.reverse) & vmask_tail_bits) | tail_vd
+    perm_tail_mask_vd := (Cat(perm_vd.reverse) & vmask_tail_bits & vmask_vstart_bits) | tail_vd | vstart_old_vd
   }
 
   val in_previous_ones_sum = Wire(UInt(7.W))
