@@ -243,15 +243,20 @@ package object yunsuan {
     def vrgather           = "b00000100".U(OpTypeWidth.W) // 
     def vrgatherei16       = "b00100100".U(OpTypeWidth.W) // 
     def vrgather_vx        = "b10000101".U(OpTypeWidth.W) // 
-    def vcompress          = "b00000110".U(OpTypeWidth.W) // 
+    def vcompress          = "b00100110".U(OpTypeWidth.W) // 
     def vmvnr              = "b00000111".U(OpTypeWidth.W) // 
     def vfmv_s_f           = "b00001000".U(OpTypeWidth.W) // 
 
     def getOpcode(fuOpType: UInt) = Cat(0.U(1.W), fuOpType(4,0))
     def getSrcVdType(fuOpType: UInt, sew: UInt) = {
       val isFp = fuOpType(6)
-      val isvrgatherei16 = fuOpType(5)
-      val srcType1 =  Mux(isvrgatherei16, "b0001".U , Cat(isFp ,isFp,  sew(1,0))) 
+      val isvrgatherei16 = fuOpType(5) && !fuOpType(1)
+      val isvcompress = fuOpType(5) && fuOpType(1)
+      val srcType1 =  Mux1H(Seq(
+        isvrgatherei16                     -> "b0001".U,
+        isvcompress                        -> "b1111".U,
+        !(isvrgatherei16|isvrgatherei16)   -> Cat(isFp ,isFp,  sew(1,0)),
+      ))
       val uSew =   Cat(0.U(1.W), 0.U(1.W), sew(1,0))
       val format = Cat(uSew, srcType1, uSew).asUInt()
       format

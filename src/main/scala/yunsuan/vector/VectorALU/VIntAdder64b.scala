@@ -46,7 +46,7 @@ class VIntAdder64b extends Module {
   val vm = io.info.vm
   val uopIdx = io.info.uopIdx
   val sub = io.isSub
-  val signed = srcTypeVs2(3, 2) === 1.U
+  val signed = srcTypeVs1(3, 2) === 1.U
   val addWithCarry = opcode.isAddWithCarry
 
   // Widen vs1 & vs2
@@ -141,7 +141,6 @@ class VIntAdder64b extends Module {
   }
 
   io.vd := Mux(opcode.isVmin || opcode.isVmax, minMaxResult.asUInt, vd.asUInt)
-
 
   val cmpOut = Mux(addWithCarry, Mux(opcode.isVmsbc, ~(cout.asUInt), cout.asUInt), cmpResult)
   val cmpOutAdjust = Mux1H(Seq(
