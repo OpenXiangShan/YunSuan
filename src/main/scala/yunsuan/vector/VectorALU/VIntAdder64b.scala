@@ -142,7 +142,6 @@ class VIntAdder64b extends Module {
 
   io.vd := Mux(opcode.isVmin || opcode.isVmax, minMaxResult.asUInt, vd.asUInt)
 
-
   val cmpOut = Mux(addWithCarry, Mux(opcode.isVmsbc, ~(cout.asUInt), cout.asUInt), cmpResult)
   val cmpOutAdjust = Mux1H(Seq(
     eewVs1.is8  -> cmpOut,
