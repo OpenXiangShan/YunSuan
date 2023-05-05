@@ -264,6 +264,40 @@ package object yunsuan {
     def notNeedSew(fuOpType: UInt) = fuOpType(7)
   }
 
+  object VimacType {
+
+    // sign:3bits(vs2,vs1,vd) isWiden:1bit opcode:3bits
+    def dummy              = "b11111111".U(OpTypeWidth.W) // exu not implemented
+    def vmul               = "b0_110_0_000".U(OpTypeWidth.W) // vmul    vmul.vv/vmul.vx
+    def vwmul              = "b0_110_1_000".U(OpTypeWidth.W) // vmul    vwmul.vv/vwmul.vx
+    def vwmulu             = "b0_000_1_000".U(OpTypeWidth.W) // vmul    vwmulu.vv/vwmulu.vx
+    def vwmulsu            = "b0_100_1_000".U(OpTypeWidth.W) // vmul    vwmulsu.vv/vwmulsu.vx
+    def vmulh              = "b0_110_0_001".U(OpTypeWidth.W) // vmulh   vmulh.vv/vmulh.vx
+    def vmulhu             = "b0_000_0_001".U(OpTypeWidth.W) // vmulh   vmulhu.vv/vmulhu.vx
+    def vmulhsu            = "b0_100_0_001".U(OpTypeWidth.W) // vmulh   vmulhsu.vv/vmulhsu.vx
+    def vmacc              = "b0_110_0_010".U(OpTypeWidth.W) // vmacc   vmacc.vv/vmacc.vx
+    def vwmaccu            = "b0_000_1_010".U(OpTypeWidth.W) // vmacc   vwmaccu.vv/vwmaccu.vx
+    def vwmacc             = "b0_110_1_010".U(OpTypeWidth.W) // vmacc   vwmacc.vv/vwmacc.vx
+    def vwmaccsu           = "b0_010_1_010".U(OpTypeWidth.W) // vmacc   vwmaccsu.vv/vwmaccsu.vx
+    def vwmaccus           = "b0_100_1_010".U(OpTypeWidth.W) // vmacc   vwmaccus.vx
+    def vnmsac             = "b0_110_0_011".U(OpTypeWidth.W) // vnmsac  vnmsac.vv/vnmsac.vx
+    def vmadd              = "b0_011_0_100".U(OpTypeWidth.W) // vmadd   vmadd.vv/vmadd.vx
+    def vnmsub             = "b0_011_0_101".U(OpTypeWidth.W) // vnmsub  vnmsub.vv/vnmsub.vx
+    def vsmul              = "b0_110_0_110".U(OpTypeWidth.W) // vsmul   vsmul.vv/vsmul.vx
+
+    def getOpcode(fuOpType: UInt) = Cat(0.U(3.W), fuOpType(2,0))
+    def getSrcVdType(fuOpType: UInt, sew: UInt) = {
+      val vs2Sign = fuOpType(6)
+      val vs1Sign = fuOpType(5)
+      val vdSign  = fuOpType(4)
+      val vs2Type = Cat(0.U(1.W), vs2Sign, sew(1,0))
+      val vs1Type = Cat(0.U(1.W), vs1Sign, sew(1,0))
+      val vdType  = Cat(0.U(1.W), vdSign , sew(1,0))
+      val format = Cat(vs2Type, vs1Type, vdType).asUInt()
+      format
+    }
+  }
+
   object VfaddOpCode {
     def dummy   = "b11111".U(5.W)
     def fadd    = "b00000".U(5.W)
