@@ -287,12 +287,13 @@ package object yunsuan {
 
     def getOpcode(fuOpType: UInt) = Cat(0.U(3.W), fuOpType(2,0))
     def getSrcVdType(fuOpType: UInt, sew: UInt) = {
+      val isWiden = fuOpType(3)
       val vs2Sign = fuOpType(6)
       val vs1Sign = fuOpType(5)
       val vdSign  = fuOpType(4)
       val vs2Type = Cat(0.U(1.W), vs2Sign, sew(1,0))
       val vs1Type = Cat(0.U(1.W), vs1Sign, sew(1,0))
-      val vdType  = Cat(0.U(1.W), vdSign , sew(1,0))
+      val vdType  = Cat(0.U(1.W), vdSign , (sew(1,0)+isWiden))
       val format = Cat(vs2Type, vs1Type, vdType).asUInt()
       format
     }
