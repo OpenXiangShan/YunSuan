@@ -1,5 +1,6 @@
 import chisel3._
 import chisel3.util._
+import yunsuan.vector.alu.VAluOpcode
 
 package object yunsuan {
   def OpTypeWidth: Int = 8
@@ -127,13 +128,28 @@ package object yunsuan {
     def vmnor_mm                       = "b10001100".U(OpTypeWidth.W) // vnor
     def vmorn_mm                       = "b10001101".U(OpTypeWidth.W) // vorn
     def vmxnor_mm                      = "b10001110".U(OpTypeWidth.W) // vxnor
+    def vmv_s_x                        = "b00101110".U(OpTypeWidth.W) // vmvsx
 
     private def getOpcodeGeneral(fuOpType: UInt) = fuOpType(4,0)
-    def getOpcode(fuOpType: UInt) = Mux(fuOpType(5,0) === vssra_vv(5,0), "b100000".U, Cat(0.U(1.W), getOpcodeGeneral(fuOpType))) // dirty code for opcode of vssra
+    def getOpcode(fuOpType: UInt) = {
+      val isVssra = fuOpType(5,0) === vssra_vv(5,0)
+      val isVmvsx = fuOpType(5,0) === vmv_s_x(5,0)
+      val opcode = Mux1H(Seq(
+        isVssra -> VAluOpcode.vssra,
+        isVmvsx -> VAluOpcode.vmvsx,
+        (!(isVssra||isVmvsx)) -> Cat(0.U(1.W), getOpcodeGeneral(fuOpType)),
+      ))
+      opcode
+    }
     def getSrcVdType(fuOpType: UInt, sew:UInt) = {
-      val isSpecificOpcode = (fuOpType(6,0) === vssra_vv(6,0)
-                          || getOpcodeGeneral(fuOpType) === getOpcodeGeneral(vmadc_vvm)
-                          || getOpcodeGeneral(fuOpType) === getOpcodeGeneral(vmsbc_vvm))
+      val isVssra = fuOpType(5, 0) === vssra_vv(5, 0)
+      val isVmvsx = fuOpType(5, 0) === vmv_s_x(5, 0)
+      val isVmadc_vvm = fuOpType(5, 0) === vmadc_vvm(5, 0)
+      val isVmsbc_vvm = fuOpType(5, 0) === vmsbc_vvm(5, 0)
+      val isSpecificOpcode = (isVssra
+                          || isVmvsx
+                          || isVmadc_vvm
+                          || isVmsbc_vvm)
       val sign = Mux(isSpecificOpcode, 0.U(1.W), fuOpType(5)) // dirty code for opcode of vssra vmadc vmsbc
       val Sew = Cat(0.U(1.W) ,sign, sew(1,0))
       val Sew2 = Cat(0.U(1.W) ,sign, (sew(1,0) + 1.U))
@@ -158,7 +174,7 @@ package object yunsuan {
               (formatOH === "b01".U) -> Cat(Sewf4, Sewf4, Sew  ).asUInt(),
               (formatOH === "b10".U) -> Cat(Sewf8, Sewf8, Sew  ).asUInt(),
             )),
-          Mux1H(Seq( // format for general opcode : 00 vvv   01 vvm   10 mmm   11 wvv
+          Mux1H(Seq( // format for general opcode : 00 vvv/0xv   01 vvm   10 mmm   11 wvv
             (formatOH === "b00".U) -> Cat(Sew , Sew , Sew   ).asUInt(),
             (formatOH === "b01".U) -> Cat(Sew , Sew , Mask  ).asUInt(),
             (formatOH === "b10".U) -> Cat(Mask, Mask, Mask  ).asUInt(),
@@ -168,6 +184,7 @@ package object yunsuan {
     }
     def needReverse(fuOpType: UInt) = fuOpType === vrsub_vv
     def needClearMask(fuOpType: UInt) = fuOpType === vmadc_vv | fuOpType === vmsbc_vv
+    def notNeedSew(fuOpType: UInt) = fuOpType === vmv_s_x
   }
 
   object VipuType {
