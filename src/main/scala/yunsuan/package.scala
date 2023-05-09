@@ -248,23 +248,27 @@ package object yunsuan {
   }
 
   object VpermType {
-    // notNeedSew:1bit  isFp:1bit    opcode:5bits
+    // notNeedSew:1bit  isFp:1bit  specialSrcType1:1bit vmvn:2bits  opcode:3bits
     // 00 -> vvv
-    def dummy              = "b11111111".U(OpTypeWidth.W) // exu not implemented
-    def vslideup           = "b10000000".U(OpTypeWidth.W) // 
-    def vslidedown         = "b10000001".U(OpTypeWidth.W) // 
-    def vslide1up          = "b00000010".U(OpTypeWidth.W) // vd[0]=f[rs1], vd[i+1] = vs2[i]
-    def vfslide1up         = "b01000010".U(OpTypeWidth.W) // 
-    def vslide1down        = "b00000011".U(OpTypeWidth.W) // 
-    def vfslide1down       = "b01000011".U(OpTypeWidth.W) // 
-    def vrgather           = "b00000100".U(OpTypeWidth.W) // 
-    def vrgatherei16       = "b00100100".U(OpTypeWidth.W) // 
-    def vrgather_vx        = "b10000101".U(OpTypeWidth.W) // 
-    def vcompress          = "b00100110".U(OpTypeWidth.W) // 
-    def vmvnr              = "b00000111".U(OpTypeWidth.W) // 
-    def vfmv_s_f           = "b00001000".U(OpTypeWidth.W) // 
+    def dummy              = "b1_1_1_11_111".U(OpTypeWidth.W) // exu not implemented
+    def vslideup           = "b1_0_0_00_000".U(OpTypeWidth.W) // 
+    def vslidedown         = "b1_0_0_00_001".U(OpTypeWidth.W) // 
+    def vslide1up          = "b0_0_0_00_010".U(OpTypeWidth.W) // vd[0]=f[rs1], vd[i+1] = vs2[i]
+    def vfslide1up         = "b0_1_0_00_010".U(OpTypeWidth.W) // 
+    def vslide1down        = "b0_0_0_00_011".U(OpTypeWidth.W) // 
+    def vfslide1down       = "b0_1_0_00_011".U(OpTypeWidth.W) // 
+    def vrgather           = "b0_0_0_00_100".U(OpTypeWidth.W) // 
+    def vrgatherei16       = "b0_0_1_00_100".U(OpTypeWidth.W) // 
+    def vrgather_vx        = "b1_0_0_00_101".U(OpTypeWidth.W) // 
+    def vcompress          = "b0_0_1_00_110".U(OpTypeWidth.W) // 
+    def vmv1r              = "b0_0_0_00_111".U(OpTypeWidth.W) // vmvnr
+    def vmv2r              = "b0_0_0_01_111".U(OpTypeWidth.W) // vmvnr
+    def vmv4r              = "b0_0_0_10_111".U(OpTypeWidth.W) // vmvnr
+    def vmv8r              = "b0_0_0_11_111".U(OpTypeWidth.W) // vmvnr
 
-    def getOpcode(fuOpType: UInt) = Cat(0.U(1.W), fuOpType(4,0))
+    def getLmulVmvnr(fuOpType: UInt) = Cat(0.U(1.W), fuOpType(4,3))
+    def isVmvnr(fuOpType: UInt) = fuOpType(2,0).andR() && (!fuOpType(7,5).orR())
+    def getOpcode(fuOpType: UInt) = Cat(0.U(3.W), fuOpType(2,0))
     def getSrcVdType(fuOpType: UInt, sew: UInt) = {
       val isFp = fuOpType(6)
       val isvrgatherei16 = fuOpType(5) && !fuOpType(1)
