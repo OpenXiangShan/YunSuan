@@ -2,6 +2,7 @@ package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
+import yunsuan.vector.vfsqrt.fpsqrt_vector_r16
 
 class VectorFloatDivider() extends Module {
   val QDS_ARCH: Int = 2
@@ -18,6 +19,67 @@ class VectorFloatDivider() extends Module {
     val is_frs2_i = Input(Bool()) // if true, f[rs2] / vs1
     val is_frs1_i = Input(Bool()) // if true, vs2 / f[rs1]
     val is_sqrt_i = Input(Bool()) // must false, not support sqrt now
+    val rm_i = Input(UInt(3.W))
+    val is_vec_i = Input(Bool())
+
+    val finish_valid_o = Output(Bool())
+    val finish_ready_i = Input(Bool())
+    val fpdiv_res_o = Output(UInt(64.W))
+    val fflags_o = Output(UInt(20.W))
+  })
+  val is_sqrt_i = io.is_sqrt_i
+  val u_vector_float_sqrt_r16 = Module(new fpsqrt_vector_r16())
+  u_vector_float_sqrt_r16.start_valid_i := is_sqrt_i & io.start_valid_i
+  u_vector_float_sqrt_r16.flush_i := io.flush_i
+  u_vector_float_sqrt_r16.fp_format_i := io.fp_format_i - 1.U
+  u_vector_float_sqrt_r16.op_i := io.opa_i
+  u_vector_float_sqrt_r16.rm_i := io.rm_i
+  u_vector_float_sqrt_r16.vector_mode_i := io.is_vec_i
+  u_vector_float_sqrt_r16.finish_ready_i := io.finish_ready_i
+  val u_vector_float_divider_r64 = Module(new VectorFloatDividerR64())
+  u_vector_float_divider_r64.io.start_valid_i := !is_sqrt_i & io.start_valid_i
+  u_vector_float_divider_r64.io.flush_i := io.flush_i
+  u_vector_float_divider_r64.io.fp_format_i := io.fp_format_i
+  u_vector_float_divider_r64.io.opa_i := io.opa_i
+  u_vector_float_divider_r64.io.opb_i := io.opb_i
+  u_vector_float_divider_r64.io.frs2_i := io.frs2_i
+  u_vector_float_divider_r64.io.frs1_i := io.frs1_i
+  u_vector_float_divider_r64.io.is_frs2_i := io.is_frs2_i
+  u_vector_float_divider_r64.io.is_frs1_i := io.is_frs1_i
+  u_vector_float_divider_r64.io.rm_i := io.rm_i
+  u_vector_float_divider_r64.io.is_vec_i := io.is_vec_i
+  u_vector_float_divider_r64.io.finish_ready_i := io.finish_ready_i
+
+  io.start_ready_o := u_vector_float_divider_r64.io.start_ready_o & u_vector_float_sqrt_r16.start_ready_o
+  io.finish_valid_o := u_vector_float_divider_r64.io.finish_valid_o | u_vector_float_sqrt_r16.finish_valid_o
+  io.fpdiv_res_o := Mux1H(
+    Seq(
+      u_vector_float_divider_r64.io.finish_valid_o -> u_vector_float_divider_r64.io.fpdiv_res_o,
+      u_vector_float_sqrt_r16.finish_valid_o -> u_vector_float_sqrt_r16.fpsqrt_res_o
+    )
+  )
+  io.fflags_o := Mux1H(
+    Seq(
+      u_vector_float_divider_r64.io.finish_valid_o -> u_vector_float_divider_r64.io.fflags_o,
+      u_vector_float_sqrt_r16.finish_valid_o -> u_vector_float_sqrt_r16.fflags_o
+    )
+  )
+}
+
+class VectorFloatDividerR64() extends Module {
+  val QDS_ARCH: Int = 2
+  val S1_SPECULATIVE_QDS: Int = 1
+  val io = IO(new Bundle {
+    val start_valid_i = Input(Bool())
+    val start_ready_o = Output(Bool())
+    val flush_i = Input(Bool())
+    val fp_format_i = Input(UInt(2.W)) // b01->fp16,b10->fp32,b11->fp64
+    val opa_i = Input(UInt(64.W)) // vs2
+    val opb_i = Input(UInt(64.W)) // vs1
+    val frs2_i = Input(UInt(64.W)) // f[rs2]
+    val frs1_i = Input(UInt(64.W)) // f[rs1]
+    val is_frs2_i = Input(Bool()) // if true, f[rs2] / vs1
+    val is_frs1_i = Input(Bool()) // if true, vs2 / f[rs1]
     val rm_i = Input(UInt(3.W))
     val is_vec_i = Input(Bool())
 
