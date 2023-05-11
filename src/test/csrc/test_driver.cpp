@@ -61,7 +61,8 @@ uint8_t TestDriver::gen_random_optype() {
       break;
       }
     case VFloatDivider: {
-      return VFDIV;
+      uint8_t vfd_all_optype[VFD_NUM] = VFD_ALL_OPTYPES;
+      return vfd_all_optype[rand() % VFD_NUM];
       break;
     }
     case VIntegerALU: break;

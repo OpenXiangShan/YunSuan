@@ -224,9 +224,10 @@ extern "C"{
 #define VFF_ALL_OPTYPES {VFMUL,VFMACC,VFNMACC,VFMSAC,VFNMSAC,VFMADD,VFNMADD,VFMSUB,VFNMSUB}
 #define VFF_NEED_FRS1_OPTYPES {VFMUL,VFMACC,VFNMACC,VFMSAC,VFNMSAC,VFMADD,VFNMADD,VFMSUB,VFNMSUB}
 // vff funcop type
-#define VFD_NUM 1
+#define VFD_NUM 2
 #define VFDIV   (binstoi("0"))
 #define VFSQRT  (binstoi("1"))
+#define VFD_ALL_OPTYPES {VFDIV,VFSQRT}
 // rounding mode
 #define RM_RNE (0)
 #define RM_RTZ (1)

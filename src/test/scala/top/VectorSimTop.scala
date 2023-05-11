@@ -129,7 +129,7 @@ class SimTop() extends VPUTestModule {
     vfd_result_valid.map(_ := false.B)
   }
 
-  finish_uncertain := vfd_result_valid.reduce(_||_)
+  finish_uncertain := vfd_result_valid.reduce(_&&_)
 
   for (i <- 0 until (VLEN / XLEN)) {
     val (src1, src2, src3) = (in.src(0)(i), in.src(1)(i), in.src(2)(i))
@@ -172,7 +172,7 @@ class SimTop() extends VPUTestModule {
     vfd.io.frs1_i := in.src(1)(0) // VS1(63,0)
     vfd.io.is_frs2_i := is_frs2
     vfd.io.is_frs1_i := is_frs1
-    vfd.io.is_sqrt_i := false.B
+    vfd.io.is_sqrt_i := opcode
     vfd.io.rm_i := rm
     vfd.io.is_vec_i := true.B // TODO: check it
     vfd.io.finish_ready_i := !vfd_result_valid(i) && busy
