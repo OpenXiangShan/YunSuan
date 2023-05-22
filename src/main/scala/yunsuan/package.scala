@@ -90,10 +90,10 @@ package object yunsuan {
       // vs2(V), vs1(V), vd(M)          (sew, sew) -> mask
       def VVM   = "b01".U(width.W)
       // vs2(V), vs1(V), v0(M), vd(M) | (sew, sew) -> mask
-      def VVMM  = "b01".U(width.W)
+      def VVMM  = "b10".U(width.W)
 
       // mask-op                      | (mask, mask) -> mask
-      def MMM   = "b10".U(width.W)
+      def MMM   = "b11".U(width.W)
 
       // move
       // vmv.s.x only, Z = Zero       | (sew, sew) -> sew
