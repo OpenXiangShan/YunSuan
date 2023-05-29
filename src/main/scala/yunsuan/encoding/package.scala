@@ -16,4 +16,14 @@ package object encoding {
 
     def apply(): UInt = UInt(width.W)
   }
+
+  class Vs2Vs1VdType extends Bundle {
+    val vs2 = Vs2IntType()
+    val vs1 = Vs1IntType()
+    val vd  = VdType()
+  }
+  
+  object Vs2Vs1VdType {
+    def apply(): Vs2Vs1VdType = new Vs2Vs1VdType()
+  }
 }
