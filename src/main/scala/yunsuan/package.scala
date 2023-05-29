@@ -1,5 +1,7 @@
 import chisel3._
 import chisel3.util._
+import yunsuan.encoding.Opcode.VimacOpcode
+import yunsuan.util.LiteralCat
 import yunsuan.vector.alu.VAluOpcode
 
 package object yunsuan {
@@ -103,85 +105,77 @@ package object yunsuan {
 
     }
 
-    private def literalCat(dataVec: UInt*): UInt = {
-      var res = BigInt(0)
-      for (data <- dataVec) {
-        res <<= data.getWidth
-        res |= data.litValue.toInt
-      }
-      res.U
-    }
     private def SINT = "b1".U(1.W)
     private def UINT = "b0".U(1.W)
 
     // format:2bits   sign:1bit    opcode:6bits
     def dummy       = "b00_0_000000".U(OpTypeWidth.W) // exu not implemented
-    def vadd_vv     = literalCat(FMT.VVV  , SINT, VialuOpcode.vadd)   // "b00_0_000000".U(OpTypeWidth.W) // vadd
-    def vsub_vv     = literalCat(FMT.VVV  , SINT, VialuOpcode.vsub)   // "b00_0_000001".U(OpTypeWidth.W) // vsub
-    def vrsub_vv    = literalCat(FMT.VVV  , SINT, VialuOpcode.vsub)   // "b00_0_000001".U(OpTypeWidth.W) // vsub
-    def vwaddu_vv   = literalCat(FMT.VVW  , UINT, VialuOpcode.vadd)   // "b01_0_000000".U(OpTypeWidth.W) // vadd
-    def vwsubu_vv   = literalCat(FMT.VVW  , UINT, VialuOpcode.vsub)   // "b01_0_000001".U(OpTypeWidth.W) // vsub
-    def vwadd_vv    = literalCat(FMT.VVW  , SINT, VialuOpcode.vadd)   // "b01_1_000000".U(OpTypeWidth.W) // vadd
-    def vwsub_vv    = literalCat(FMT.VVW  , SINT, VialuOpcode.vsub)   // "b01_1_000001".U(OpTypeWidth.W) // vsub
-    def vwaddu_wv   = literalCat(FMT.WVW  , UINT, VialuOpcode.vadd)   // "b10_0_000000".U(OpTypeWidth.W) // vadd
-    def vwsubu_wv   = literalCat(FMT.WVW  , UINT, VialuOpcode.vsub)   // "b10_0_000001".U(OpTypeWidth.W) // vsub
-    def vwadd_wv    = literalCat(FMT.WVW  , SINT, VialuOpcode.vadd)   // "b10_1_000000".U(OpTypeWidth.W) // vadd
-    def vwsub_wv    = literalCat(FMT.WVW  , SINT, VialuOpcode.vsub)   // "b10_1_000001".U(OpTypeWidth.W) // vsub
-    def vzext_vf2   = literalCat(FMT.VF2  , UINT, VialuOpcode.vext)   // "b00_0_000010".U(OpTypeWidth.W) // vext
-    def vsext_vf2   = literalCat(FMT.VF2  , SINT, VialuOpcode.vext)   // "b00_1_000010".U(OpTypeWidth.W) // vext
-    def vzext_vf4   = literalCat(FMT.VF4  , UINT, VialuOpcode.vext)   // "b01_0_000010".U(OpTypeWidth.W) // vext
-    def vsext_vf4   = literalCat(FMT.VF4  , SINT, VialuOpcode.vext)   // "b01_1_000010".U(OpTypeWidth.W) // vext
-    def vzext_vf8   = literalCat(FMT.VF8  , UINT, VialuOpcode.vext)   // "b10_0_000010".U(OpTypeWidth.W) // vext
-    def vsext_vf8   = literalCat(FMT.VF8  , SINT, VialuOpcode.vext)   // "b10_1_000010".U(OpTypeWidth.W) // vext
-    def vadc_vvm    = literalCat(FMT.VVMV , UINT, VialuOpcode.vadc)   // "b00_0_000011".U(OpTypeWidth.W) // vadc
-    def vmadc_vvm   = literalCat(FMT.VVMM , UINT, VialuOpcode.vmadc)  // "b01_0_000100".U(OpTypeWidth.W) // vmadc
-    def vmadc_vv    = literalCat(FMT.VVM  , UINT, VialuOpcode.vmadc)  // "b10_0_000100".U(OpTypeWidth.W) // vmadc
-    def vsbc_vvm    = literalCat(FMT.VVMV , UINT, VialuOpcode.vsbc)   // "b00_0_000101".U(OpTypeWidth.W) // vsbc
-    def vmsbc_vvm   = literalCat(FMT.VVMM , UINT, VialuOpcode.vmsbc)  // "b01_0_000110".U(OpTypeWidth.W) // vmsbc
-    def vmsbc_vv    = literalCat(FMT.VVM  , UINT, VialuOpcode.vmsbc)  // "b10_0_000110".U(OpTypeWidth.W) // vmsbc
-    def vand_vv     = literalCat(FMT.VVV  , UINT, VialuOpcode.vand)   // "b00_0_000111".U(OpTypeWidth.W) // vand
-    def vor_vv      = literalCat(FMT.VVV  , UINT, VialuOpcode.vor)    // "b00_0_001011".U(OpTypeWidth.W) // vor
-    def vxor_vv     = literalCat(FMT.VVV  , UINT, VialuOpcode.vxor)   // "b00_0_001010".U(OpTypeWidth.W) // vxor
-    def vsll_vv     = literalCat(FMT.VVV  , UINT, VialuOpcode.vsll)   // "b00_0_001111".U(OpTypeWidth.W) // vsll
-    def vsrl_vv     = literalCat(FMT.VVV  , UINT, VialuOpcode.vsrl)   // "b00_0_010000".U(OpTypeWidth.W) // vsrl
-    def vsra_vv     = literalCat(FMT.VVV  , SINT, VialuOpcode.vsra)   // "b00_1_010001".U(OpTypeWidth.W) // vsra
-    def vnsrl_wv    = literalCat(FMT.WVV  , UINT, VialuOpcode.vsrl)   // "b11_0_010000".U(OpTypeWidth.W) // vsrl
-    def vnsra_wv    = literalCat(FMT.WVV  , SINT, VialuOpcode.vsra)   // "b11_1_010001".U(OpTypeWidth.W) // vsra
-    def vmseq_vv    = literalCat(FMT.VVM  , UINT, VialuOpcode.vmseq)  // "b01_0_010010".U(OpTypeWidth.W) // vmseq
-    def vmsne_vv    = literalCat(FMT.VVM  , UINT, VialuOpcode.vmsne)  // "b01_0_010011".U(OpTypeWidth.W) // vmsne
-    def vmsltu_vv   = literalCat(FMT.VVM  , UINT, VialuOpcode.vmslt)  // "b01_0_010100".U(OpTypeWidth.W) // vmslt
-    def vmslt_vv    = literalCat(FMT.VVM  , SINT, VialuOpcode.vmslt)  // "b01_1_010100".U(OpTypeWidth.W) // vmslt
-    def vmsleu_vv   = literalCat(FMT.VVM  , UINT, VialuOpcode.vmsle)  // "b01_0_010101".U(OpTypeWidth.W) // vmsle
-    def vmsle_vv    = literalCat(FMT.VVM  , SINT, VialuOpcode.vmsle)  // "b01_1_010101".U(OpTypeWidth.W) // vmsle
-    def vmsgtu_vv   = literalCat(FMT.VVM  , UINT, VialuOpcode.vmsgt)  // "b01_0_010110".U(OpTypeWidth.W) // vmsgt
-    def vmsgt_vv    = literalCat(FMT.VVM  , SINT, VialuOpcode.vmsgt)  // "b01_1_010110".U(OpTypeWidth.W) // vmsgt
-    def vminu_vv    = literalCat(FMT.VVV  , UINT, VialuOpcode.vmin)   // "b00_0_010111".U(OpTypeWidth.W) // vmin
-    def vmin_vv     = literalCat(FMT.VVV  , SINT, VialuOpcode.vmin)   // "b00_1_010111".U(OpTypeWidth.W) // vmin
-    def vmaxu_vv    = literalCat(FMT.VVV  , UINT, VialuOpcode.vmax)   // "b00_0_011000".U(OpTypeWidth.W) // vmax
-    def vmax_vv     = literalCat(FMT.VVV  , SINT, VialuOpcode.vmax)   // "b00_1_011000".U(OpTypeWidth.W) // vmax
-    def vmerge_vvm  = literalCat(FMT.VVMV , UINT, VialuOpcode.vmerge) // "b00_0_011001".U(OpTypeWidth.W) // vmerge
-    def vmv_v_v     = literalCat(FMT.ZVV  , UINT, VialuOpcode.vmv)    // "b00_0_011010".U(OpTypeWidth.W) // vmv
-    def vsaddu_vv   = literalCat(FMT.VVV  , UINT, VialuOpcode.vsadd)  // "b00_0_011011".U(OpTypeWidth.W) // vsadd
-    def vsadd_vv    = literalCat(FMT.VVV  , SINT, VialuOpcode.vsadd)  // "b00_1_011011".U(OpTypeWidth.W) // vsadd
-    def vssubu_vv   = literalCat(FMT.VVV  , UINT, VialuOpcode.vssub)  // "b00_0_011100".U(OpTypeWidth.W) // vssub
-    def vssub_vv    = literalCat(FMT.VVV  , SINT, VialuOpcode.vssub)  // "b00_1_011100".U(OpTypeWidth.W) // vssub
-    def vaaddu_vv   = literalCat(FMT.VVV  , UINT, VialuOpcode.vaadd)  // "b00_0_011101".U(OpTypeWidth.W) // vaadd
-    def vaadd_vv    = literalCat(FMT.VVV  , SINT, VialuOpcode.vaadd)  // "b00_1_011101".U(OpTypeWidth.W) // vaadd
-    def vasubu_vv   = literalCat(FMT.VVV  , UINT, VialuOpcode.vasub)  // "b00_0_011110".U(OpTypeWidth.W) // vasub
-    def vasub_vv    = literalCat(FMT.VVV  , SINT, VialuOpcode.vasub)  // "b00_1_011110".U(OpTypeWidth.W) // vasub
-    def vssrl_vv    = literalCat(FMT.VVV  , UINT, VialuOpcode.vssrl)  // "b00_0_011111".U(OpTypeWidth.W) // vssrl
-    def vssra_vv    = literalCat(FMT.VVV  , SINT, VialuOpcode.vssra)  // "b00_1_100000".U(OpTypeWidth.W) // vssra // Todo
-    def vnclipu_wv  = literalCat(FMT.WVV  , UINT, VialuOpcode.vssrl)  // "b11_0_011111".U(OpTypeWidth.W) // vssrl ---
-    def vnclip_wv   = literalCat(FMT.WVV  , SINT, VialuOpcode.vssra)  // "b11_1_100000".U(OpTypeWidth.W) // vssra
-    def vmand_mm    = literalCat(FMT.MMM  , UINT, VialuOpcode.vand)   // "b10_0_000111".U(OpTypeWidth.W) // vand
-    def vmnand_mm   = literalCat(FMT.MMM  , UINT, VialuOpcode.vnand)  // "b10_0_001000".U(OpTypeWidth.W) // vnand
-    def vmandn_mm   = literalCat(FMT.MMM  , UINT, VialuOpcode.vandn)  // "b10_0_001001".U(OpTypeWidth.W) // vandn
-    def vmxor_mm    = literalCat(FMT.MMM  , UINT, VialuOpcode.vxor)   // "b10_0_001010".U(OpTypeWidth.W) // vxor
-    def vmor_mm     = literalCat(FMT.MMM  , UINT, VialuOpcode.vor)    // "b10_0_001011".U(OpTypeWidth.W) // vor
-    def vmnor_mm    = literalCat(FMT.MMM  , UINT, VialuOpcode.vnor)   // "b10_0_001100".U(OpTypeWidth.W) // vnor
-    def vmorn_mm    = literalCat(FMT.MMM  , UINT, VialuOpcode.vorn)   // "b10_0_001101".U(OpTypeWidth.W) // vorn
-    def vmxnor_mm   = literalCat(FMT.MMM  , UINT, VialuOpcode.vxnor)  // "b10_0_001110".U(OpTypeWidth.W) // vxnor
-    def vmv_s_x     = literalCat(FMT.ZXV  , SINT, VialuOpcode.vmvsx)  // "b00_1_101110".U(OpTypeWidth.W) // vmvsx
+    def vadd_vv     = LiteralCat(FMT.VVV  , SINT, VialuOpcode.vadd)   // "b00_0_000000".U(OpTypeWidth.W) // vadd
+    def vsub_vv     = LiteralCat(FMT.VVV  , SINT, VialuOpcode.vsub)   // "b00_0_000001".U(OpTypeWidth.W) // vsub
+    def vrsub_vv    = LiteralCat(FMT.VVV  , SINT, VialuOpcode.vsub)   // "b00_0_000001".U(OpTypeWidth.W) // vsub
+    def vwaddu_vv   = LiteralCat(FMT.VVW  , UINT, VialuOpcode.vadd)   // "b01_0_000000".U(OpTypeWidth.W) // vadd
+    def vwsubu_vv   = LiteralCat(FMT.VVW  , UINT, VialuOpcode.vsub)   // "b01_0_000001".U(OpTypeWidth.W) // vsub
+    def vwadd_vv    = LiteralCat(FMT.VVW  , SINT, VialuOpcode.vadd)   // "b01_1_000000".U(OpTypeWidth.W) // vadd
+    def vwsub_vv    = LiteralCat(FMT.VVW  , SINT, VialuOpcode.vsub)   // "b01_1_000001".U(OpTypeWidth.W) // vsub
+    def vwaddu_wv   = LiteralCat(FMT.WVW  , UINT, VialuOpcode.vadd)   // "b10_0_000000".U(OpTypeWidth.W) // vadd
+    def vwsubu_wv   = LiteralCat(FMT.WVW  , UINT, VialuOpcode.vsub)   // "b10_0_000001".U(OpTypeWidth.W) // vsub
+    def vwadd_wv    = LiteralCat(FMT.WVW  , SINT, VialuOpcode.vadd)   // "b10_1_000000".U(OpTypeWidth.W) // vadd
+    def vwsub_wv    = LiteralCat(FMT.WVW  , SINT, VialuOpcode.vsub)   // "b10_1_000001".U(OpTypeWidth.W) // vsub
+    def vzext_vf2   = LiteralCat(FMT.VF2  , UINT, VialuOpcode.vext)   // "b00_0_000010".U(OpTypeWidth.W) // vext
+    def vsext_vf2   = LiteralCat(FMT.VF2  , SINT, VialuOpcode.vext)   // "b00_1_000010".U(OpTypeWidth.W) // vext
+    def vzext_vf4   = LiteralCat(FMT.VF4  , UINT, VialuOpcode.vext)   // "b01_0_000010".U(OpTypeWidth.W) // vext
+    def vsext_vf4   = LiteralCat(FMT.VF4  , SINT, VialuOpcode.vext)   // "b01_1_000010".U(OpTypeWidth.W) // vext
+    def vzext_vf8   = LiteralCat(FMT.VF8  , UINT, VialuOpcode.vext)   // "b10_0_000010".U(OpTypeWidth.W) // vext
+    def vsext_vf8   = LiteralCat(FMT.VF8  , SINT, VialuOpcode.vext)   // "b10_1_000010".U(OpTypeWidth.W) // vext
+    def vadc_vvm    = LiteralCat(FMT.VVMV , UINT, VialuOpcode.vadc)   // "b00_0_000011".U(OpTypeWidth.W) // vadc
+    def vmadc_vvm   = LiteralCat(FMT.VVMM , UINT, VialuOpcode.vmadc)  // "b01_0_000100".U(OpTypeWidth.W) // vmadc
+    def vmadc_vv    = LiteralCat(FMT.VVM  , UINT, VialuOpcode.vmadc)  // "b10_0_000100".U(OpTypeWidth.W) // vmadc
+    def vsbc_vvm    = LiteralCat(FMT.VVMV , UINT, VialuOpcode.vsbc)   // "b00_0_000101".U(OpTypeWidth.W) // vsbc
+    def vmsbc_vvm   = LiteralCat(FMT.VVMM , UINT, VialuOpcode.vmsbc)  // "b01_0_000110".U(OpTypeWidth.W) // vmsbc
+    def vmsbc_vv    = LiteralCat(FMT.VVM  , UINT, VialuOpcode.vmsbc)  // "b10_0_000110".U(OpTypeWidth.W) // vmsbc
+    def vand_vv     = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vand)   // "b00_0_000111".U(OpTypeWidth.W) // vand
+    def vor_vv      = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vor)    // "b00_0_001011".U(OpTypeWidth.W) // vor
+    def vxor_vv     = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vxor)   // "b00_0_001010".U(OpTypeWidth.W) // vxor
+    def vsll_vv     = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vsll)   // "b00_0_001111".U(OpTypeWidth.W) // vsll
+    def vsrl_vv     = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vsrl)   // "b00_0_010000".U(OpTypeWidth.W) // vsrl
+    def vsra_vv     = LiteralCat(FMT.VVV  , SINT, VialuOpcode.vsra)   // "b00_1_010001".U(OpTypeWidth.W) // vsra
+    def vnsrl_wv    = LiteralCat(FMT.WVV  , UINT, VialuOpcode.vsrl)   // "b11_0_010000".U(OpTypeWidth.W) // vsrl
+    def vnsra_wv    = LiteralCat(FMT.WVV  , SINT, VialuOpcode.vsra)   // "b11_1_010001".U(OpTypeWidth.W) // vsra
+    def vmseq_vv    = LiteralCat(FMT.VVM  , UINT, VialuOpcode.vmseq)  // "b01_0_010010".U(OpTypeWidth.W) // vmseq
+    def vmsne_vv    = LiteralCat(FMT.VVM  , UINT, VialuOpcode.vmsne)  // "b01_0_010011".U(OpTypeWidth.W) // vmsne
+    def vmsltu_vv   = LiteralCat(FMT.VVM  , UINT, VialuOpcode.vmslt)  // "b01_0_010100".U(OpTypeWidth.W) // vmslt
+    def vmslt_vv    = LiteralCat(FMT.VVM  , SINT, VialuOpcode.vmslt)  // "b01_1_010100".U(OpTypeWidth.W) // vmslt
+    def vmsleu_vv   = LiteralCat(FMT.VVM  , UINT, VialuOpcode.vmsle)  // "b01_0_010101".U(OpTypeWidth.W) // vmsle
+    def vmsle_vv    = LiteralCat(FMT.VVM  , SINT, VialuOpcode.vmsle)  // "b01_1_010101".U(OpTypeWidth.W) // vmsle
+    def vmsgtu_vv   = LiteralCat(FMT.VVM  , UINT, VialuOpcode.vmsgt)  // "b01_0_010110".U(OpTypeWidth.W) // vmsgt
+    def vmsgt_vv    = LiteralCat(FMT.VVM  , SINT, VialuOpcode.vmsgt)  // "b01_1_010110".U(OpTypeWidth.W) // vmsgt
+    def vminu_vv    = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vmin)   // "b00_0_010111".U(OpTypeWidth.W) // vmin
+    def vmin_vv     = LiteralCat(FMT.VVV  , SINT, VialuOpcode.vmin)   // "b00_1_010111".U(OpTypeWidth.W) // vmin
+    def vmaxu_vv    = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vmax)   // "b00_0_011000".U(OpTypeWidth.W) // vmax
+    def vmax_vv     = LiteralCat(FMT.VVV  , SINT, VialuOpcode.vmax)   // "b00_1_011000".U(OpTypeWidth.W) // vmax
+    def vmerge_vvm  = LiteralCat(FMT.VVMV , UINT, VialuOpcode.vmerge) // "b00_0_011001".U(OpTypeWidth.W) // vmerge
+    def vmv_v_v     = LiteralCat(FMT.ZVV  , UINT, VialuOpcode.vmv)    // "b00_0_011010".U(OpTypeWidth.W) // vmv
+    def vsaddu_vv   = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vsadd)  // "b00_0_011011".U(OpTypeWidth.W) // vsadd
+    def vsadd_vv    = LiteralCat(FMT.VVV  , SINT, VialuOpcode.vsadd)  // "b00_1_011011".U(OpTypeWidth.W) // vsadd
+    def vssubu_vv   = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vssub)  // "b00_0_011100".U(OpTypeWidth.W) // vssub
+    def vssub_vv    = LiteralCat(FMT.VVV  , SINT, VialuOpcode.vssub)  // "b00_1_011100".U(OpTypeWidth.W) // vssub
+    def vaaddu_vv   = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vaadd)  // "b00_0_011101".U(OpTypeWidth.W) // vaadd
+    def vaadd_vv    = LiteralCat(FMT.VVV  , SINT, VialuOpcode.vaadd)  // "b00_1_011101".U(OpTypeWidth.W) // vaadd
+    def vasubu_vv   = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vasub)  // "b00_0_011110".U(OpTypeWidth.W) // vasub
+    def vasub_vv    = LiteralCat(FMT.VVV  , SINT, VialuOpcode.vasub)  // "b00_1_011110".U(OpTypeWidth.W) // vasub
+    def vssrl_vv    = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vssrl)  // "b00_0_011111".U(OpTypeWidth.W) // vssrl
+    def vssra_vv    = LiteralCat(FMT.VVV  , SINT, VialuOpcode.vssra)  // "b00_1_100000".U(OpTypeWidth.W) // vssra // Todo
+    def vnclipu_wv  = LiteralCat(FMT.WVV  , UINT, VialuOpcode.vssrl)  // "b11_0_011111".U(OpTypeWidth.W) // vssrl ---
+    def vnclip_wv   = LiteralCat(FMT.WVV  , SINT, VialuOpcode.vssra)  // "b11_1_100000".U(OpTypeWidth.W) // vssra
+    def vmand_mm    = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vand)   // "b10_0_000111".U(OpTypeWidth.W) // vand
+    def vmnand_mm   = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vnand)  // "b10_0_001000".U(OpTypeWidth.W) // vnand
+    def vmandn_mm   = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vandn)  // "b10_0_001001".U(OpTypeWidth.W) // vandn
+    def vmxor_mm    = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vxor)   // "b10_0_001010".U(OpTypeWidth.W) // vxor
+    def vmor_mm     = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vor)    // "b10_0_001011".U(OpTypeWidth.W) // vor
+    def vmnor_mm    = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vnor)   // "b10_0_001100".U(OpTypeWidth.W) // vnor
+    def vmorn_mm    = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vorn)   // "b10_0_001101".U(OpTypeWidth.W) // vorn
+    def vmxnor_mm   = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vxnor)  // "b10_0_001110".U(OpTypeWidth.W) // vxnor
+    def vmv_s_x     = LiteralCat(FMT.ZXV  , SINT, VialuOpcode.vmvsx)  // "b00_1_101110".U(OpTypeWidth.W) // vmvsx
 
     def getOpcode(fuOpType: UInt) : UInt = fuOpType(5, 0)
 
@@ -343,26 +337,48 @@ package object yunsuan {
 
   object VimacType {
 
-    // sign:3bits(vs2,vs1,vd) isWiden:1bit opcode:3bits
-    def dummy              = "b11111111".U(OpTypeWidth.W) // exu not implemented
-    def vmul               = "b0_110_0_000".U(OpTypeWidth.W) // vmul    vmul.vv/vmul.vx
-    def vwmul              = "b0_110_1_000".U(OpTypeWidth.W) // vmul    vwmul.vv/vwmul.vx
-    def vwmulu             = "b0_000_1_000".U(OpTypeWidth.W) // vmul    vwmulu.vv/vwmulu.vx
-    def vwmulsu            = "b0_100_1_000".U(OpTypeWidth.W) // vmul    vwmulsu.vv/vwmulsu.vx
-    def vmulh              = "b0_110_0_001".U(OpTypeWidth.W) // vmulh   vmulh.vv/vmulh.vx
-    def vmulhu             = "b0_000_0_001".U(OpTypeWidth.W) // vmulh   vmulhu.vv/vmulhu.vx
-    def vmulhsu            = "b0_100_0_001".U(OpTypeWidth.W) // vmulh   vmulhsu.vv/vmulhsu.vx
-    def vmacc              = "b0_110_0_010".U(OpTypeWidth.W) // vmacc   vmacc.vv/vmacc.vx
-    def vwmaccu            = "b0_000_1_010".U(OpTypeWidth.W) // vmacc   vwmaccu.vv/vwmaccu.vx
-    def vwmacc             = "b0_110_1_010".U(OpTypeWidth.W) // vmacc   vwmacc.vv/vwmacc.vx
-    def vwmaccsu           = "b0_010_1_010".U(OpTypeWidth.W) // vmacc   vwmaccsu.vv/vwmaccsu.vx
-    def vwmaccus           = "b0_100_1_010".U(OpTypeWidth.W) // vmacc   vwmaccus.vx
-    def vnmsac             = "b0_110_0_011".U(OpTypeWidth.W) // vnmsac  vnmsac.vv/vnmsac.vx
-    def vmadd              = "b0_011_0_100".U(OpTypeWidth.W) // vmadd   vmadd.vv/vmadd.vx
-    def vnmsub             = "b0_011_0_101".U(OpTypeWidth.W) // vnmsub  vnmsub.vv/vnmsub.vx
-    def vsmul              = "b0_110_0_110".U(OpTypeWidth.W) // vsmul   vsmul.vv/vsmul.vx
+    object INT {
+      def width = 1
 
-    def getOpcode(fuOpType: UInt) = Cat(0.U(3.W), fuOpType(2,0))
+      def S = "b1".U(width.W)
+      def U = "b0".U(width.W)
+      def X = "b0".U(width.W)
+    }
+
+    object FMT {
+      def width = 1
+
+      def VVV = 0.U(width.W)
+      def VVW = 1.U(width.W)
+    }
+
+    // sign:3bits(vs2,vs1,vd) isWiden:1bit opcode:3bits
+    def dummy              = BitPat.Y(OpTypeWidth) // exu not implemented
+    //                                  pad       vs2   vs1  vd_old format   opcode
+    def vmul               = LiteralCat(0.U(2.W), INT.S, INT.S, INT.X, FMT.VVV, VimacOpcode.vmul)   // "b00_110_0_000".U(OpTypeWidth.W) // vmul    vmul.vv/vmul.vx
+    def vwmul              = LiteralCat(0.U(2.W), INT.S, INT.S, INT.X, FMT.VVW, VimacOpcode.vmul)   // "b00_110_1_000".U(OpTypeWidth.W) // vmul    vwmul.vv/vwmul.vx
+    def vwmulu             = LiteralCat(0.U(2.W), INT.U, INT.U, INT.X, FMT.VVW, VimacOpcode.vmul)   // "b00_000_1_000".U(OpTypeWidth.W) // vmul    vwmulu.vv/vwmulu.vx
+    def vwmulsu            = LiteralCat(0.U(2.W), INT.S, INT.U, INT.X, FMT.VVW, VimacOpcode.vmul)   // "b00_100_1_000".U(OpTypeWidth.W) // vmul    vwmulsu.vv/vwmulsu.vx
+    def vmulh              = LiteralCat(0.U(2.W), INT.S, INT.S, INT.X, FMT.VVV, VimacOpcode.vmulh)  // "b00_110_0_001".U(OpTypeWidth.W) // vmulh   vmulh.vv/vmulh.vx
+    def vmulhu             = LiteralCat(0.U(2.W), INT.U, INT.U, INT.X, FMT.VVV, VimacOpcode.vmulh)  // "b00_000_0_001".U(OpTypeWidth.W) // vmulh   vmulhu.vv/vmulhu.vx
+    def vmulhsu            = LiteralCat(0.U(2.W), INT.S, INT.U, INT.X, FMT.VVV, VimacOpcode.vmulh)  // "b00_100_0_001".U(OpTypeWidth.W) // vmulh   vmulhsu.vv/vmulhsu.vx
+    def vmacc              = LiteralCat(0.U(2.W), INT.S, INT.S, INT.S, FMT.VVV, VimacOpcode.vmacc)  // "b00_111_0_010".U(OpTypeWidth.W) // vmacc   vmacc.vv/vmacc.vx
+    def vwmaccu            = LiteralCat(0.U(2.W), INT.U, INT.U, INT.U, FMT.VVW, VimacOpcode.vmacc)  // "b00_000_1_010".U(OpTypeWidth.W) // vmacc   vwmaccu.vv/vwmaccu.vx
+    def vwmacc             = LiteralCat(0.U(2.W), INT.S, INT.S, INT.S, FMT.VVW, VimacOpcode.vmacc)  // "b00_111_1_010".U(OpTypeWidth.W) // vmacc   vwmacc.vv/vwmacc.vx
+    def vwmaccsu           = LiteralCat(0.U(2.W), INT.U, INT.S, INT.S, FMT.VVW, VimacOpcode.vmacc)  // "b00_011_1_010".U(OpTypeWidth.W) // vmacc   vwmaccsu.vv/vwmaccsu.vx
+    def vwmaccus           = LiteralCat(0.U(2.W), INT.S, INT.U, INT.S, FMT.VVW, VimacOpcode.vmacc)  // "b00_101_1_010".U(OpTypeWidth.W) // vmacc   vwmaccus.vx
+    def vnmsac             = LiteralCat(0.U(2.W), INT.S, INT.S, INT.S, FMT.VVV, VimacOpcode.vnmsac) // "b00_111_0_011".U(OpTypeWidth.W) // vnmsac  vnmsac.vv/vnmsac.vx
+    def vmadd              = LiteralCat(0.U(2.W), INT.S, INT.S, INT.S, FMT.VVV, VimacOpcode.vmadd)  // "b00_111_0_100".U(OpTypeWidth.W) // vmadd   vmadd.vv/vmadd.vx
+    def vnmsub             = LiteralCat(0.U(2.W), INT.S, INT.S, INT.S, FMT.VVV, VimacOpcode.vnmsub) // "b00_111_0_101".U(OpTypeWidth.W) // vnmsub  vnmsub.vv/vnmsub.vx
+    def vsmul              = LiteralCat(0.U(2.W), INT.S, INT.S, INT.X, FMT.VVV, VimacOpcode.vsmul)  // "b00_110_0_110".U(OpTypeWidth.W) // vsmul   vsmul.vv/vsmul.vx
+
+    def getOpcode(fuOpType: UInt) : UInt = fuOpType(2, 0)
+    def getFormat(fuOpType: UInt) : UInt = fuOpType(3)
+
+    def vs2Sign(fuOpType: UInt) = fuOpType(6)
+    def vs1Sign(fuOpType: UInt) = fuOpType(5)
+    def vdSign (fuOpType: UInt) = fuOpType(4)
+
     def getSrcVdType(fuOpType: UInt, sew: UInt) = {
       val isWiden = fuOpType(3)
       val vs2Sign = fuOpType(6)
@@ -370,8 +386,8 @@ package object yunsuan {
       val vdSign  = fuOpType(4)
       val vs2Type = Cat(0.U(1.W), vs2Sign, sew(1,0))
       val vs1Type = Cat(0.U(1.W), vs1Sign, sew(1,0))
-      val vdType  = Cat(0.U(1.W), vdSign , (sew(1,0)+isWiden))
-      val format = Cat(vs2Type, vs1Type, vdType).asUInt()
+      val vdType  = Cat(0.U(1.W), vdSign , sew(1,0) + isWiden)
+      val format  = Cat(vs2Type, vs1Type, vdType)
       format
     }
   }
