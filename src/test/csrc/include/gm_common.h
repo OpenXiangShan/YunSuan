@@ -125,5 +125,11 @@ class VGMIntegerALUF : public VPUGoldenModel {
     VecOutput  vialuF_calculation_vvm(VecInput input);
     VecOutput  vialuF_calculation_mmm(VecInput input);
 };
+class VGMIntegerDividier : public VPUGoldenModel{
+  virtual ElementOutput calculation_e8(ElementInput input);
+  virtual ElementOutput calculation_e16(ElementInput input);
+  virtual ElementOutput calculation_e32(ElementInput input);
+  virtual ElementOutput calculation_e64(ElementInput input); 
+};
 
 #endif

@@ -41,6 +41,7 @@ private:
   VGMIntegerALU valu;
   VGMPermutation vperm;
   VGMIntegerALUF vialuF;
+  VGMIntegerDividier vid;
 
 
 public:
@@ -61,6 +62,7 @@ public:
   void gen_random_vecinfo();
   void gen_random_uopidx();
   void gen_input_vperm();
+  void gen_random_idiv_input();
 
   void get_random_input();
   void get_expected_output();
@@ -81,7 +83,7 @@ public:
   void verbose_exec() {
     verbose = true;
     vfd.verbose_exec(); valu.verbose_exec();
-    vperm.verbose_exec();
+    vperm.verbose_exec();vid.verbose_exec();
   }
   void keep_input() { keepinput = true; }
 };

@@ -29,8 +29,8 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 void TestDriver::set_test_type() {
   test_type.pick_fuType = true;
   test_type.pick_fuOpType = false;
-  test_type.fuType = VPermutation;
-  test_type.fuOpType = VCOMPRESS;
+  test_type.fuType = VIntegerDivider;
+  test_type.fuOpType = VIDIV;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -74,6 +74,11 @@ uint8_t TestDriver::gen_random_optype() {
     case VIntegerALUV2: {
       uint8_t viaf_all_optype[VIAF_NUM] = VIAF_ALL_OPTYPES;
       return viaf_all_optype[rand() % VIAF_NUM];
+      break;
+    }
+    case VIntegerDivider:{
+      uint8_t vid_all_optype[VID_NUM] = VID_ALL_OPTYPES;
+      return vid_all_optype[rand() % VID_NUM];
       break;
     }
     default:
@@ -280,6 +285,38 @@ void TestDriver::gen_input_vperm() {
     }
   }
 }
+void TestDriver::gen_random_idiv_input() {
+  int sew_num[4] = {8,16,32,64};
+  int lzc_num[4] = {5,12,25,48};
+  int slice_num[4] = {8,4,2,1};
+  uint64_t mask[4] = {0xFF, 0xFFFF, 0xFFFFFFFF,0xFFFFFFFFFFFFFFFF };
+  uint64_t newsrc1[2]={0};
+  uint64_t newsrc2[2]={0};
+  for (int i = 0; i< slice_num[input.sew]; i++ ){
+    int lzc_x_num, lzc_d_num;
+    lzc_x_num = rand()%lzc_num[input.sew];
+    int random_lzc = rand()%16;
+    if (random_lzc < 14) {
+      lzc_d_num = rand()%(lzc_num[input.sew] - lzc_x_num) + lzc_x_num;
+    } else {
+      lzc_d_num = 0;
+    }
+    uint64_t slice1[2]={0};
+    uint64_t slice2[2]={0};
+    for (int j = 0; j<2; j++) {
+      slice1[j] = input.src1[j] >> (i * sew_num[input.sew]) & mask[input.sew];
+      slice2[j] = input.src2[j] >> (i * sew_num[input.sew]) & mask[input.sew];;
+      slice1[j] >>= lzc_x_num;
+      slice2[j] >>= lzc_d_num;
+      newsrc1[j] |= (uint64_t)slice1[j] << (i * sew_num[input.sew]);
+      newsrc2[j] |= (uint64_t)slice2[j] << (i * sew_num[input.sew]);
+    }
+  }
+  input.src1[0] = newsrc1[0];
+  input.src1[1] = newsrc1[1];
+  input.src2[0] = newsrc2[0];
+  input.src2[1] = newsrc2[1];
+}
 
 void TestDriver::get_random_input() {
   if (keepinput) { return; }
@@ -305,6 +342,10 @@ void TestDriver::get_random_input() {
   gen_random_vecinfo();
   gen_random_uopidx();
   gen_input_vperm();
+  
+  if (input.fuType == VIntegerDivider) {
+    gen_random_idiv_input();
+  }
   // input.is_frs1 = false;
   // input.sew = 3;
   // input.widen = true;
@@ -332,6 +373,9 @@ void TestDriver::get_expected_output() {
     case VIntegerALUV2:
       if (verbose) { printf("FuType:%d, choose VIntegerALUV2 %d\n", input.fuType, VIntegerALUV2); }
       expect_output = vialuF.get_expected_output(input); return;
+    case VIntegerDivider:
+      if (verbose) { printf("FuType:%d, choose VIntegerDivider %d\n", input.fuType, VIntegerDivider); }
+      expect_output = vid.get_expected_output(input); return;    
     default:
       printf("Unsupported FuType %d\n", input.fuType);
       exit(1);
