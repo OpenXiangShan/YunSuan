@@ -15,9 +15,9 @@ import firrtl.AnnotationSeq
 import firrtl.options.TargetDirAnnotation
 
 object GenTest extends App {
-  val path = """./generated/VectorFloatFMA"""
+  val path = """./generated/VectorIdiv"""
   (new ChiselStage).execute(Array("--emission-options=disableMemRandomization,disableRegisterRandomization",
-    "--target-dir", path), Seq(ChiselGeneratorAnnotation(() => new VectorFloatFMA())))
+    "--target-dir", path), Seq(ChiselGeneratorAnnotation(() => new VectorIdiv)))
 }
 
 trait HasTestAnnos {

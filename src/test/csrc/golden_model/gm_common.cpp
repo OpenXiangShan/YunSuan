@@ -16,13 +16,14 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
   
   VecOutput output;
   ElementOutput output_part[number];
+  uint64_t mask = 0;
   for(int i = 0; i < number; i++) {
     ElementInput element = select_element(input, i);
     switch (sew) {
-      case 0: output_part[i] = calculation_e8(element); break;
-      case 1: output_part[i] = calculation_e16(element); break;
-      case 2: output_part[i] = calculation_e32(element); break;
-      case 3: output_part[i] = calculation_e64(element); break;
+      case 0: output_part[i] = calculation_e8(element); mask = 0xFF; break;
+      case 1: output_part[i] = calculation_e16(element); mask = 0xFFFF; break;
+      case 2: output_part[i] = calculation_e32(element); mask = 0xFFFFFFFF; break;
+      case 3: output_part[i] = calculation_e64(element); mask = 0xFFFFFFFFFFFFFFFF; break;
       default:
         printf("VPU Golden Modle, bad sew %d\n", input.sew);
         exit(1);
@@ -36,8 +37,13 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
     output.result[i] = 0;
     output.fflags[i] = 0;
     for (int j = 0; j < half_number; j++) {
-      output.result[i] += (uint64_t)output_part[i*half_number+j].result << (j*result_shift_len);
-      output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << (j*5);
+      if(input.fuType == VIntegerDivider) {
+        output.result[i] += (uint64_t)(output_part[i*half_number+j].result&mask) << (j*result_shift_len);
+        output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << j;
+      } else {
+        output.result[i] += (uint64_t)output_part[i*half_number+j].result << (j*result_shift_len);
+        output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << (j*5);
+      }
       if (verbose) {
         printf("%s::%s ResultJoint i:%d j:%d result:%lx fflags:%x\n", typeid(this).name(), __func__,i,j,output.result[i], output.fflags[i]);
       }

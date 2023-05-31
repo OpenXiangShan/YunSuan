@@ -13,13 +13,14 @@ extern "C"{
 #define VLEN 128
 #define XLEN 64
 
-#define FU_NUM 5 // for random
+#define FU_NUM 7 // for random
 #define VFloatAdder (0)
 #define VFloatFMA   (1)
 #define VFloatDivider (2)
 #define VIntegerALU (3)
 #define VPermutation (4)
 #define VIntegerALUV2 (5)
+#define VIntegerDivider (6)
 #define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2}
 
 #define INT_ROUNDING(result, xrm, gb) \
@@ -228,6 +229,15 @@ extern "C"{
 #define VFDIV   (binstoi("0"))
 #define VFSQRT  (binstoi("1"))
 #define VFD_ALL_OPTYPES {VFDIV,VFSQRT}
+
+// vid funcop type
+#define VID_NUM 4
+#define VIDIVU (binstoi("00"))
+#define VIDIV  (binstoi("01"))
+#define VIREMU (binstoi("10"))
+#define VIREM  (binstoi("11"))
+#define VID_ALL_OPTYPES {VIDIVU, VIDIV, VIREMU, VIREM}
+
 // rounding mode
 #define RM_RNE (0)
 #define RM_RTZ (1)

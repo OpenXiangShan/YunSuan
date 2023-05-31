@@ -15,6 +15,7 @@ trait VSPParameter {
   val VFD_latency: Int = 99
   val VFA_latency: Int = 1
   val VPERM_latency: Int = 1
+  val VID_latency: Int = 99
 }
 
 object VPUTestFuType { // only use in test, difftest with xs
@@ -24,9 +25,10 @@ object VPUTestFuType { // only use in test, difftest with xs
   def via = "b0000_0011".U(8.W)
   def vperm = "b0000_0100".U(8.W)
   def viaf = "b0000_0101".U(8.W)
+  def vid = "b0000_0110".U(8.W)
 
   def unknown(typ: UInt) = {
-    (typ > 5.U)
+    (typ > 7.U)
   }
 }
 
@@ -97,7 +99,8 @@ class SimTop() extends VPUTestModule {
       VPUTestFuType.vfd -> VFD_latency.U,
       VPUTestFuType.via -> VIA_latency.U,
       VPUTestFuType.vperm -> VPERM_latency.U,
-      VPUTestFuType.viaf -> VIAF_latency.U
+      VPUTestFuType.viaf -> VIAF_latency.U,
+      VPUTestFuType.vid -> VID_latency.U
     )) // fuType --> latency, spec case for div
     assert(!VPUTestFuType.unknown(io.in.bits.fuType))
   }
@@ -107,7 +110,7 @@ class SimTop() extends VPUTestModule {
   when (busy) { counter := counter + 1.U }
   val finish_fixLatency = busy && (counter >= latency)
   val finish_uncertain = Wire(Bool())
-  val is_uncertain = (in.fuType === VPUTestFuType.vfd)
+  val is_uncertain = (in.fuType === VPUTestFuType.vfd) || (in.fuType === VPUTestFuType.vid)
 
   val (sew, uop_idx, rm, rm_s, fuType, opcode, src_widen, widen, is_frs1, is_frs2) = (
     in.sew, in.uop_idx, in.rm, in.rm_s, in.fuType, in.fuOpType,
@@ -125,11 +128,13 @@ class SimTop() extends VPUTestModule {
   val vperm_result = Wire(new VSTOutputIO)
   val viaf_result = Wire(new VSTOutputIO)
   val vfd_result_valid = RegInit(VecInit(Seq.fill(VLEN/XLEN)(false.B)))
+  val vid_result = Wire(new VSTOutputIO)
+  val vid_result_valid = Wire(Bool())
   when (io.in.fire() || io.out.fire()) {
     vfd_result_valid.map(_ := false.B)
   }
 
-  finish_uncertain := vfd_result_valid.reduce(_&&_)
+  finish_uncertain := Mux(in.fuType === VPUTestFuType.vid, vid_result_valid,vfd_result_valid.reduce(_&&_))
 
   for (i <- 0 until (VLEN / XLEN)) {
     val (src1, src2, src3) = (in.src(0)(i), in.src(1)(i), in.src(2)(i))
@@ -267,7 +272,38 @@ class SimTop() extends VPUTestModule {
   viaf_result.result.zipWithIndex.foreach { case (rs, i) => rs := viaf.io.out.bits.data(XLEN * (i + 1) - 1, XLEN * i) }
   viaf_result.fflags := 0.U.asTypeOf(viaf_result.fflags.cloneType) // DontCare
   viaf_result.vxsat := viaf.io.out.bits.vxsat
-
+  // vid
+  val vid_opcode = opcode
+  val vid_sign = vid_opcode(0)
+  val vid_rem = vid_opcode(1)
+  val vid = Module(new VectorIdiv)
+  val src1 = Cat(in.src(0)(1), in.src(0)(0))
+  val src2 = Cat(in.src(1)(1), in.src(1)(0))
+  vid.io.div_in_valid := busy && !has_issued && fuType === VPUTestFuType.vid
+  vid.io.sign := vid_sign
+  vid.io.dividend_v := src1
+  vid.io.divisor_v := src2
+  vid.io.flush := false.B
+  vid.io.sew := sew
+  vid.io.div_out_ready := busy
+  val vid_fflags_0 = LookupTreeDefault(sew, 0.U, List(
+    0.U -> vid.io.d_zero(7, 0),
+    1.U -> vid.io.d_zero(3, 0),
+    2.U -> vid.io.d_zero(1, 0),
+    3.U -> vid.io.d_zero(0, 0)
+  ))
+  val vid_fflags_1 = LookupTreeDefault(sew, 0.U, List(
+    0.U -> vid.io.d_zero(15, 8),
+    1.U -> vid.io.d_zero(15, 4),
+    2.U -> vid.io.d_zero(15, 2),
+    3.U -> vid.io.d_zero(15, 1)
+  ))
+  vid_result_valid := vid.io.div_out_valid
+  vid_result.result(0) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(XLEN - 1, 0)
+  vid_result.result(1) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(VLEN - 1, XLEN)
+  vid_result.fflags(0) := ZeroExt(vid_fflags_0, 20)
+  vid_result.fflags(1) := ZeroExt(vid_fflags_1, 20)
+  vid_result.vxsat := 0.U
 
   // arbiter
   io.out.valid := Mux(is_uncertain, finish_uncertain, finish_fixLatency)
@@ -277,7 +313,8 @@ class SimTop() extends VPUTestModule {
     VPUTestFuType.vfd -> vfd_result,
     VPUTestFuType.via -> via_result,
     VPUTestFuType.vperm -> vperm_result,
-    VPUTestFuType.viaf -> viaf_result
+    VPUTestFuType.viaf -> viaf_result,
+    VPUTestFuType.vid -> vid_result
   ))
 }
 
