@@ -182,3 +182,17 @@ class VCompressTest extends AnyFlatSpec with ChiselScalatestTester with Matchers
     }
   }
 }
+class VIntDividerTest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
+
+  behavior of "YunSuan VectorIntDivider"
+  it should "pass the syntax" in {
+    test(new VectorIdiv()).withAnnotations(Seq(
+      VerilatorBackendAnnotation,
+      VerilatorFlags(Seq()),
+      // WriteVcdAnnotation,
+      // TargetDirAnnotation("./build"),
+    )) { dut =>
+      dut.clock.step(10)
+    }
+  }
+}
