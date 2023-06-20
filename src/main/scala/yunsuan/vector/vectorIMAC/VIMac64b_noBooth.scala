@@ -93,10 +93,10 @@ class VIMac64b_noBooth extends Module {
     // } else {
     } else if (i == 32) {
       partProdFinal(i) := Mux(vs1(i-1) && vs1_is_signed && !sew.is64, partProdSet0(i) | 
-                              Mux1H(sew.oneHot.take(3), Seq(8, 16, 32).map(n => 1.U << (2*i - 2*n))), partProdSet0(i))
+                              Mux1H(sew.oneHot(2, 0), Seq(8, 16, 32).map(n => 1.U << (2*i - 2*n))), partProdSet0(i))
     } else if (i % 16 == 0) {
       partProdFinal(i) := Mux(vs1(i-1) && vs1_is_signed && (sew.is16 || sew.is8), partProdSet0(i) | 
-                              Mux1H(sew.oneHot.take(2), Seq(8, 16).map(n => 1.U << (2*i - 2*n))), partProdSet0(i))
+                              Mux1H(sew.oneHot(1, 0), Seq(8, 16).map(n => 1.U << (2*i - 2*n))), partProdSet0(i))
     } else {
       partProdFinal(i) := Mux(vs1(i-1) && vs1_is_signed && sew.is8, partProdSet0(i) | 1.U << (2*i - 16), partProdSet0(i))
     }

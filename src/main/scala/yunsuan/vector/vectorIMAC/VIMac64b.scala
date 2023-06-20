@@ -123,7 +123,8 @@ class VIMac64b extends Module {
   }
   // ---- Perform wallace reduction once (3 -> 2) ----
   // Input data: n x 128    Output: ([n/3]*2 + n%3) x 128
-  def reduce3to2(data: Seq[UInt]): Seq[UInt] = {
+  // def reduce3to2(data: Seq[UInt]): Seq[UInt] = {
+  def reduce3to2(data: Seq[UInt], sew: SewOH): Seq[UInt] = {
     val nAddends = data.size
     val n3Group = nAddends / 3
     val cout = Seq.fill(n3Group)(Wire(UInt(128.W)))
@@ -147,16 +148,22 @@ class VIMac64b extends Module {
       case n => n +: nAddendsSeqGen((n / 3) * 2 + n % 3)
     }
   }
-  val nAddendsSeq = nAddendsSeqGen(34)  // e.g., [33, 22, 15, ..., 3]
+  val nAddendsSeq = nAddendsSeqGen(34)
+  // println(nAddendsSeq) =  List(34, 23, 16, 11, 8, 6, 4, 3)
 
   // Perform all wallace stages.
   def wallaceStage(stageIdx: Int): Seq[UInt] = {
     stageIdx match {
-      case 0 => reduce3to2(partProd)
-      case k => reduce3to2(wallaceStage(k-1))
+      case 0 => reduce3to2(partProd, sew)
+      case k => reduce3to2(wallaceStage(k-1), sew)
     }
   }
-  val wallaceOut = wallaceStage(nAddendsSeq.size - 1)  // Seq(2)(UInt(128.W))
+  // val wallaceOut = wallaceStage(nAddendsSeq.size - 1)  // Seq(2)(UInt(128.W))
+  val wallaceOut_mid = wallaceStage(nAddendsSeq.size - 1 - 3)  // Seq(6)(UInt(128.W))
+  
+  //------ To alleviate timing, move last 3 steps of wallace into the second pipeline stage
+  val wallaceOut_mid_reg = RegNext(VecInit(wallaceOut_mid))
+  //-------------------------------------------------------------------------------------
 
   /**
    *  Second pipeline stage: 128 + 128
@@ -165,7 +172,9 @@ class VIMac64b extends Module {
   val highHalfS1 = RegNext(io.highHalf)
   val widenS1 = RegNext(io.widen)
   val uopIdxS1 = RegNext(uopIdx)
-  val wallaceOutReg = wallaceOut map {x => RegNext(x)}
+  // val wallaceOutReg = wallaceOut map {x => RegNext(x)}
+  val wallaceOutReg = reduce3to2(reduce3to2(reduce3to2(wallaceOut_mid_reg, sewS1), sewS1), sewS1) // Seq(2)(UInt(128.W))
+
   // Sum of final two 128b numbers
   class Adder_16b(in1: UInt, in2: UInt, cin: UInt) {
     private val bits = Cat(0.U(1.W), in1, cin) +  Cat(0.U(1.W), in2, cin)

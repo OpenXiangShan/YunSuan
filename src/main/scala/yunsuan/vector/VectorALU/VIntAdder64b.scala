@@ -51,10 +51,10 @@ class VIntAdder64b extends Module {
 
   // Widen vs1 & vs2
   val vs2_32b = Mux(uopIdx(0), vs2(63, 32), vs2(31, 0))
-  val vs2Widen = Mux1H(eewVs1.oneHot.take(3), Seq(8, 16, 32).map(sew => 
+  val vs2Widen = Mux1H(eewVs1.oneHot(2, 0), Seq(8, 16, 32).map(sew => 
                            Cat(UIntSplit(vs2_32b, sew).map(BitsExtend(_, 2*sew, signed)).reverse)))
   val vs1_32b = Mux(uopIdx(0), vs1(63, 32), vs1(31, 0))
-  val vs1Widen = Mux1H(eewVs1.oneHot.take(3), Seq(8, 16, 32).map(sew => 
+  val vs1Widen = Mux1H(eewVs1.oneHot(2,0), Seq(8, 16, 32).map(sew => 
                            Cat(UIntSplit(vs1_32b, sew).map(BitsExtend(_, 2*sew, signed)).reverse)))
   val vs2_adjust = Mux(io.widen_vs2, vs2Widen, vs2)
   // Subtract: bit negate
