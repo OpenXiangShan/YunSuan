@@ -41,7 +41,8 @@ class VIntFixpAlu64b extends Module {
     val srcType = Input(Vec(2, UInt(4.W)))
     val vdType  = Input(UInt(4.W))
     val vs1 = Input(UInt(64.W))
-    val vs2 = Input(UInt(64.W))
+    val vs2_adder = Input(UInt(64.W))
+    val vs2_misc = Input(UInt(64.W))
     val vmask = Input(UInt(8.W))
     val oldVd = Input(UInt(8.W))
     val narrow = Input(UInt(8.W))
@@ -65,7 +66,7 @@ class VIntFixpAlu64b extends Module {
   vIntAdder64b.io.srcType := io.srcType
   vIntAdder64b.io.vdType := io.vdType
   vIntAdder64b.io.vs1 := io.vs1
-  vIntAdder64b.io.vs2 := io.vs2
+  vIntAdder64b.io.vs2 := io.vs2_adder
   vIntAdder64b.io.vmask := io.vmask
   vIntAdder64b.io.oldVd := io.oldVd
   vIntAdder64b.io.isSub := io.isSub
@@ -78,7 +79,7 @@ class VIntFixpAlu64b extends Module {
   vIntMisc64b.io.srcType := io.srcType
   vIntMisc64b.io.vdType := io.vdType
   vIntMisc64b.io.vs1 := io.vs1
-  vIntMisc64b.io.vs2 := io.vs2
+  vIntMisc64b.io.vs2 := io.vs2_misc
   vIntMisc64b.io.vmask := io.vmask
   vIntMisc64b.io.narrow := io.narrow
 
@@ -140,7 +141,7 @@ class VIntFixpAlu extends Module {
   val vstart = io.in.info.vstart
   val signed = srcTypeVs2(3, 2) === 1.U
   val widen = opcode.isAddSub && srcTypeVs1(1, 0) =/= vdType(1, 0)
-  val widen_vs2 = widen && srcTypeVs2(1, 0) =/= vdType(1, 0)
+  val widen_vs2 = opcode.isAddSub && srcTypeVs2(1, 0) =/= vdType(1, 0)
 
   val truthTable = TruthTable(VIntFixpTable.table, VIntFixpTable.default)
   val decoderOut = decoder(QMCMinimizer, Cat(opcode.op), truthTable)
@@ -169,18 +170,25 @@ class VIntFixpAlu extends Module {
   val vf4 = vd_sub_srcType === 2.U && opcode.isVext
   val vf8 = vd_sub_srcType === 3.U && opcode.isVext
   // Rearrange vs2
-  when (vf2 || widen_vs2) {
-    vIntFixpAlu64bs(0).io.vs2 := Cat(vs2(95, 64), vs2(31, 0))
-    vIntFixpAlu64bs(1).io.vs2 := Cat(vs2(127, 96), vs2(63, 32))
-  }.elsewhen (vf4) {
-    vIntFixpAlu64bs(0).io.vs2 := Cat(vs2(111, 96), vs2(79, 64), vs2(47, 32), vs2(15, 0))
-    vIntFixpAlu64bs(1).io.vs2 := Cat(vs2(127, 112), vs2(95, 80), vs2(63, 48), vs2(31, 16))
-  }.elsewhen (vf8) {
-    vIntFixpAlu64bs(0).io.vs2 := Cat(Seq.tabulate(8)(i => vs2(16*i+7, 16*i)).reverse)
-    vIntFixpAlu64bs(1).io.vs2 := Cat(Seq.tabulate(8)(i => vs2(16*i+15, 16*i+8)).reverse)
+  when (widen_vs2) {
+    vIntFixpAlu64bs(0).io.vs2_adder := Cat(vs2(95, 64), vs2(31, 0))
+    vIntFixpAlu64bs(1).io.vs2_adder := Cat(vs2(127, 96), vs2(63, 32))
   }.otherwise {
-    vIntFixpAlu64bs(0).io.vs2 := vs2(63, 0)
-    vIntFixpAlu64bs(1).io.vs2 := vs2(127, 64)
+    vIntFixpAlu64bs(0).io.vs2_adder := vs2(63, 0)
+    vIntFixpAlu64bs(1).io.vs2_adder := vs2(127, 64)
+  }
+  when (vf2) {
+    vIntFixpAlu64bs(0).io.vs2_misc := Cat(vs2(95, 64), vs2(31, 0))
+    vIntFixpAlu64bs(1).io.vs2_misc := Cat(vs2(127, 96), vs2(63, 32))
+  }.elsewhen (vf4) {
+    vIntFixpAlu64bs(0).io.vs2_misc := Cat(vs2(111, 96), vs2(79, 64), vs2(47, 32), vs2(15, 0))
+    vIntFixpAlu64bs(1).io.vs2_misc := Cat(vs2(127, 112), vs2(95, 80), vs2(63, 48), vs2(31, 16))
+  }.elsewhen (vf8) {
+    vIntFixpAlu64bs(0).io.vs2_misc := Cat(Seq.tabulate(8)(i => vs2(16*i+7, 16*i)).reverse)
+    vIntFixpAlu64bs(1).io.vs2_misc := Cat(Seq.tabulate(8)(i => vs2(16*i+15, 16*i+8)).reverse)
+  }.otherwise {
+    vIntFixpAlu64bs(0).io.vs2_misc := vs2(63, 0)
+    vIntFixpAlu64bs(1).io.vs2_misc := vs2(127, 64)
   }
   // Rearrange vs1 (need concern the case of narrow)
   when (widen || narrow) {
