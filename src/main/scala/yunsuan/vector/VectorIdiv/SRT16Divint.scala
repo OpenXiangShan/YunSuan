@@ -22,17 +22,17 @@ import chisel3._
 import chisel3.util._
 import yunsuan.util._
 /**
-Integer division module using SRT radix-16 algorithm, supporting 8/16/32/64bit bitwidth
- parameters
- (mk:index) -1: 0 0 :1 1:2 2:3
- (u:index) -2: 0 ...
- (q:index) 2:0   -2 3 need to reverse u index here，because we search as -q for const
- sign (index, k) :(0, -1)  (1, 0) (2, 1) (3, 2)
-
- v2 Attempting to reduce the number of bits required for the sel module, currently sel 3+5, spec 3+6
- In this file, x+y represents the xbit integer and the ybit fractions
- rearrange the place of register
- **/
+ * Integer division module using SRT radix-16 algorithm, supporting 8/16/32/64bit bitwidth
+ * parameters
+ * (mk:index) -1: 0 0 :1 1:2 2:3
+ * (u:index) -2: 0 ...
+ * (q:index) 2:0   -2 3 need to reverse u index here，because we search as -q for const
+ * sign (index, k) :(0, -1)  (1, 0) (2, 1) (3, 2)
+ *
+ * v2 Attempting to reduce the number of bits required for the sel module, currently sel 3+5, spec 3+6
+ * In this file, x+y represents the xbit integer and the ybit fractions
+ * rearrange the place of register
+ */
 class SRT16Divint(bit_width: Int) extends Module {
   val io = IO(new Bundle() {
     val sign = Input(Bool())
@@ -58,7 +58,7 @@ class SRT16Divint(bit_width: Int) extends Module {
   })
 
   val w_width = bit_width + 6 // 6: 1bit for sign ，2bit for *4/4 shift，  3bit for ralign
-  val lzc_w = log2Up(bit_width) // lzc leading zero count 前导零，
+  val lzc_w = log2Up(bit_width) // lzc leading zero count
   val early_finish = Wire(Bool()) // handle special case
   val iter_finish = Wire(Bool()) // handle iteration finish
 
@@ -67,30 +67,53 @@ class SRT16Divint(bit_width: Int) extends Module {
     (UIntToOH(idle, 6), UIntToOH(pre_0, 6), UIntToOH(pre_1, 6), UIntToOH(iter, 6), UIntToOH(post, 6), UIntToOH(output, 6))
   // handshake
   val stateReg = RegInit((1 << idle.litValue.toInt).U(6.W))
+  val stateNext = WireInit(stateReg)
   val in_handshake = io.div_in_valid && io.div_ready
   val out_handshake = io.div_out_valid && io.div_out_ready
-  io.div_ready := stateReg(idle)
-  io.div_out_valid := stateReg(output)
+
   //  fsm
-  when(stateReg(idle) && in_handshake) {
-    stateReg := oh_pre_0
-  }.elsewhen(stateReg(pre_0)) {
-    stateReg := oh_pre_1
-  }.elsewhen(stateReg(pre_1)) {
-    stateReg := Mux(early_finish,oh_post,oh_iter)
-  }.elsewhen(stateReg(iter)) {
-    stateReg := Mux(iter_finish,oh_post, oh_iter)
-  }.elsewhen(stateReg(post)) {
-    stateReg := oh_output
-  }.elsewhen(stateReg(output) & io.div_out_ready) {
-    stateReg := oh_idle
-  }.elsewhen(io.flush){
+  // part1
+  when (io.flush) {
     stateReg := oh_idle
   }.otherwise {
-    stateReg :=stateReg
+    stateReg := stateNext
   }
-
-
+  // part2
+  switch(stateReg) {
+    is ((1 << idle.litValue.toInt).U(6.W)) {
+      when(in_handshake) {
+        stateNext := oh_pre_0
+      }
+    }
+    is ((1 << pre_0.litValue.toInt).U(6.W)) {
+      stateNext := oh_pre_1
+    }
+    is ((1 << pre_1.litValue.toInt).U(6.W)) {
+      when(early_finish) {
+        stateNext := oh_post
+      }.otherwise {
+        stateNext := oh_iter
+      }
+    }
+    is ((1 << iter.litValue.toInt).U(6.W)) {
+      when(iter_finish) {
+        stateNext := oh_post
+      }.otherwise {
+        stateNext := oh_iter
+      }
+    }
+    is ((1 << post.litValue.toInt).U(6.W)) {
+      stateNext := oh_output
+    }
+    is((1 << output.litValue.toInt).U(6.W)) {
+      when (io.div_out_ready) {
+        stateNext := oh_idle
+      }
+    }
+  }
+  // part 3
+  io.div_ready := stateReg(idle)
+  io.div_out_valid := stateReg(output)
 
   // before pre_0 stage
   val x = ZeroExt(io.dividend,64)  // x dividend
@@ -194,7 +217,7 @@ class SRT16Divint(bit_width: Int) extends Module {
   d_enc := PriorityEncoder(abs_d_reg(bit_width-1, 0).asBools().reverse)
 
   lzc_x := x_enc(lzc_w - 1, 0)
-  zero_x := ~abs_x_reg.orR() // error to check zero  cannot check with lzc_x(lzc_w)
+  zero_x := ~abs_x_reg.orR()
   lzc_d := d_enc(lzc_w - 1, 0)
   zero_d := ~abs_d_reg.orR()
   d_is_one := lzc_d(lzc_w - 1, 0).andR()
@@ -202,8 +225,7 @@ class SRT16Divint(bit_width: Int) extends Module {
   val lzc_diff = Cat(0.U(1.W),lzc_d) - Cat(0.U(1.W),lzc_x) // x d the diffenrence between lzc of x and lzc of d
   val lzc_x_ex = ZeroExt(lzc_x, 6) // Due to the possibility of multiple bit widths, it is necessary to uniformly zero expand lzc for easy storage
   val lzc_d_ex = ZeroExt(lzc_d, 6)
-  val lzc_diff_ex = SignExt(lzc_diff, 7) // err 1  sign ext not zero ext for
-  //  lzc_pre0_all := Cat(norm_d_part(bit_width),norm_x_part(bit_width)SRT16Divint.scala,zero_x,lzc_x_ex(1,0),zero_d,d_is_one,lzc_d_ex(1,0),lzc_diff_ex) // err2 forget to pass d_is_one
+  val lzc_diff_ex = SignExt(lzc_diff, 7)
   lzc_pre0_all := Cat(zero_x,lzc_x_ex(1,0),zero_d,d_is_one,lzc_d_ex(1,0),lzc_diff_ex)
   norm_x_part := abs_x_reg << Cat(lzc_x_ex(5,2),0.U(2.W)) //
   norm_d_part := abs_d_reg << Cat(lzc_d_ex(5,2),0.U(2.W))
@@ -386,7 +408,7 @@ class SRT16Divint(bit_width: Int) extends Module {
 
 
   w_iter_mul16_trunc_init := VecInit(Seq.tabulate(2){i => (w_align_init(i) << 2)(w_width - 1, w_width -9)}) // x.xxxx xxx.xxxx   lshift2 xx|xxx.xxx
-  w_iter_mul64_trunc_init := VecInit(Seq.tabulate(2){i => (w_align_init(i) << 4)(w_width - 1, w_width -9)}) // error just << 4 not 6 //trunc width err
+  w_iter_mul64_trunc_init := VecInit(Seq.tabulate(2){i => (w_align_init(i) << 4)(w_width - 1, w_width -9)})
 
   // q for iter
   val nxt_q_A = Wire(UInt(bit_width.W))
@@ -394,7 +416,7 @@ class SRT16Divint(bit_width: Int) extends Module {
 
 
   iter_q_A := Mux(stateReg(pre_0), norm_x_part(bit_width - 1, 0),Mux(stateReg(pre_1),init_q_A, nxt_q_A))
-  iter_q_B := Mux(stateReg(pre_0), norm_d_part(bit_width - 1, 0),Mux(stateReg(pre_1),init_q_B, nxt_q_B)) // error pre_0 pre_1 写错
+  iter_q_B := Mux(stateReg(pre_0), norm_d_part(bit_width - 1, 0),Mux(stateReg(pre_1),init_q_B, nxt_q_B))
   // iterblock
   val IterBlock = Module(new IterBlock_v4(bit_width, w_width))
   IterBlock.io.Sel_cons := sel_cons_reg
@@ -704,7 +726,8 @@ class Conversion(bit_width: Int) extends Module {
   io.nxt_q_A := Mux1H(io.q_j_1, new_q_A.toSeq)
   io.nxt_q_B := Mux1H(io.q_j_1, new_q_B.toSeq)
 }
-class Lzc_vary(bit_width:Int) extends Module { // this module is to caculate lzc may can replace priority encoder
+// this module is to caculate lzc may can replace priority encoder
+class Lzc_vary(bit_width:Int) extends Module {
   val io = IO(new Bundle() {
     val in_valid = Input(Bool())
     val X = Input(UInt(bit_width.W))
@@ -773,7 +796,7 @@ class SignDec extends Module{
   })
   val q_i = Wire(Vec(5,Bool())) // reverse for cons selection
   q_i(4) := io.sign(0) && io.sign(1)// u = -2(0)    k = -1(0 -) 0(1 -)
-  q_i(3) := !io.sign(0) && io.sign(1)// u = -1(1) k = 0 (1 -) -1( 0 +)  error 弄反了
+  q_i(3) := !io.sign(0) && io.sign(1)// u = -1(1) k = 0 (1 -) -1( 0 +)
   q_i(2) := !io.sign(1) && io.sign(2)// u = 0(2) k = 1(2 -) 0(1 +)
   q_i(1) := !io.sign(2) && io.sign(3)// u = 1(3) k = 2(3,-) 1(2,+)
   q_i(0) := !io.sign(2) && !io.sign(3)//u = 2(4) k = 2(3,+) 1(2,+)
