@@ -3,13 +3,15 @@ package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
-// 8bit div int module using SRT radix-4
-// parameters:
-// (mk:index) -1: 0 0 :1 1:2 2:3
-// (u:index) -2: 0 ...
-// (q:index) 2:0   -2 3  need to reverse u index here，because we search as -q for const
-// v2 try to reduce the number of registers
-// v3 try to reduce the bitwidth of selection const
+/**
+ * 8bit div int module using SRT radix-4
+ * parameters:
+ * (mk:index) -1: 0 0 :1 1:2 2:3
+ * (u:index) -2: 0 ...
+ * (q:index) 2:0   -2 3  need to reverse u index here，because we search as -q for const
+ * v2 try to reduce the number of registers
+ * v3 try to reduce the bitwidth of selection const
+ */
 class SRT4Divint8(bit_width: Int=8) extends Module {
   val io = IO(new Bundle() {
     val sign = Input(Bool())

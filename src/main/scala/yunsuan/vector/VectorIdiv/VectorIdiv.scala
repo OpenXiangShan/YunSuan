@@ -36,23 +36,41 @@ class VectorIdiv extends Module {
 
   // handshake
   val stateReg = RegInit((1<< idle.litValue.toInt).U(3.W))
+  val stateNext = WireInit(stateReg)
   val in_handshake = io.div_in_valid & io.div_in_ready
   val out_handshake = io.div_out_valid & io.div_out_ready
 
-  io.div_in_ready := stateReg(idle)
-  io.div_out_valid := stateReg(output)
-  //fsm
-  when(in_handshake) {
-    stateReg := oh_divide
-  }.elsewhen(stateReg(divide)) {
-    stateReg := Mux(finish, oh_output, oh_divide)
-  }.elsewhen(out_handshake) {
-    stateReg := oh_idle
-  }.elsewhen(io.flush) {
+
+  // fsm
+  // part 1
+  when (io.flush) {
     stateReg := oh_idle
   }.otherwise {
-    stateReg := stateReg
+    stateReg := stateNext
   }
+  // part 2
+  switch(stateReg) {
+    is((1<< idle.litValue.toInt).U(3.W)) {
+      when (in_handshake) {
+        stateNext := oh_divide
+      }
+    }
+    is((1<< divide.litValue.toInt).U(3.W)) {
+      when (finish) {
+        stateNext := oh_output
+      }.otherwise {
+        stateNext := oh_divide
+      }
+    }
+    is((1<< output.litValue.toInt).U(3.W)) {
+      when (out_handshake) {
+        stateNext := oh_idle
+      }
+    }
+  }
+  // part 3
+  io.div_in_ready := stateReg(idle)
+  io.div_out_valid := stateReg(output)
 
   val x_reg = RegEnable(io.dividend_v, in_handshake)
   val d_reg = RegEnable(io.divisor_v,in_handshake)
@@ -89,7 +107,7 @@ class VectorIdiv extends Module {
     divide_8_d_zero(i) := divide_8.io.d_zero
   }
   // I16
-  val divide_16_q_result = Wire(Vec(4,UInt(16.W)))// 额外一个域，存 I8，I16两种结果
+  val divide_16_q_result = Wire(Vec(4,UInt(16.W)))//additional field, storing both I8 and I16 results
   val divide_16_rem_result = Wire(Vec(4,UInt(16.W)))
   val divide_16_finish = Wire(Vec(4,Bool()))
   val divide_16_d_zero = Wire(Vec(4,Bool()))
@@ -118,12 +136,8 @@ class VectorIdiv extends Module {
     divide_16_rem_result(i) := divide_16.io.div_out_rem
     divide_16_finish(i) := divide_16.io.div_out_valid
     divide_16_d_zero(i) := divide_16.io.d_zero
-    //    when(finish){
-    //      printf("16: dividend %b, divisor %b, q %b, rem %b\n" , divide_16_dividend, divide_16_divisor, divide_16_q_result(i), divide_16_rem_result(i))
-    //    }
 
   }
-  //  val divide_16_I8_q = divide_16_q_result.map(_(Index_bound(0),0)).reduce(Cat(_,_))
   val divide_16_I8_q = Cat(divide_16_q_result(3)(Index_bound(0),0), divide_16_q_result(2)(Index_bound(0),0),divide_16_q_result(1)(Index_bound(0),0),divide_16_q_result(0)(Index_bound(0),0))
   val divide_16_I8_rem = Cat(divide_16_rem_result(3)(Index_bound(0),0), divide_16_rem_result(2)(Index_bound(0),0),divide_16_rem_result(1)(Index_bound(0),0),divide_16_rem_result(0)(Index_bound(0),0))
   val divide_16_I16_q = Cat(divide_16_q_result(3)(Index_bound(1),0), divide_16_q_result(2)(Index_bound(1),0),divide_16_q_result(1)(Index_bound(1),0),divide_16_q_result(0)(Index_bound(1),0))
@@ -161,9 +175,6 @@ class VectorIdiv extends Module {
     divide_32_rem_result(i) := divide_32.io.div_out_rem
     divide_32_finish(i) := divide_32.io.div_out_valid
     divide_32_d_zero(i) := divide_32.io.d_zero
-    //    when(finish) {
-    //      printf("32: dividend %b, divisor %b, q %b, rem %b\n", divide_32_dividend, divide_32_divisor, divide_32_q_result(i), divide_32_rem_result(i))
-    //    }
   }
   val divide_32_I8_q = Cat(divide_32_q_result(1)(Index_bound(0),0),divide_32_q_result(0)(Index_bound(0),0))
   val divide_32_I8_rem = Cat(divide_32_rem_result(1)(Index_bound(0),0),divide_32_rem_result(0)(Index_bound(0),0))
@@ -208,9 +219,6 @@ class VectorIdiv extends Module {
     divide_64_rem_result(i) := divide_64.io.div_out_rem
     divide_64_finish(i) := divide_64.io.div_out_valid
     divide_64_d_zero(i) := divide_64.io.d_zero
-    //    when(finish) {
-    //      printf("64: dividend %b, divisor %b, q %b, rem %b\n" , divide_64_dividend, divide_64_divisor, divide_64_q_result(i), divide_64_rem_result(i))
-    //    }
   }
   val divide_64_I8_q = Cat(divide_64_q_result(1)(Index_bound(0),0),divide_64_q_result(0)(Index_bound(0),0))
   val divide_64_I8_rem = Cat(divide_64_rem_result(1)(Index_bound(0),0),divide_64_rem_result(0)(Index_bound(0),0))
