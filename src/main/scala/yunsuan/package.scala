@@ -397,6 +397,32 @@ package object yunsuan {
     }
   }
 
+  object VfaluType {
+    // isWiden:1bit opcode:5bits
+    def dummy = BitPat.Y(OpTypeWidth) // exu not implemented
+    //                                  opb_isWiden,res_isWiden, opcode
+    def vfadd     = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fadd)
+    def vfwadd    = LiteralCat(0.U(1.W), 0.U(1.W), 1.U(1.W), VfaddOpCode.fadd)
+    def vfwadd_w  = LiteralCat(0.U(1.W), 1.U(1.W), 1.U(1.W), VfaddOpCode.fadd)
+    def vfsub     = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fsub)
+    def vfwsub    = LiteralCat(0.U(1.W), 0.U(1.W), 1.U(1.W), VfaddOpCode.fsub)
+    def vfwsub_w  = LiteralCat(0.U(1.W), 1.U(1.W), 1.U(1.W), VfaddOpCode.fsub)
+    def vfmin     = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmin)
+    def vfmax     = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmax)
+    def vfmerge   = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmerge)
+    def vfmv      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmove)
+    def vfsgnj    = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fsgnj)
+    def vfsgnjn   = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fsgnjn)
+    def vfsgnjx   = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fsgnjx)
+    def vfeq      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.feq)
+    def vfne      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fne)
+    def vflt      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.flt)
+    def vfle      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fle)
+    def vfgt      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fgt)
+    def vfge      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fge)
+    def vfclass   = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fclass)
+  }
+
   object VfaddOpCode {
     def dummy   = "b11111".U(5.W)
     def fadd    = "b00000".U(5.W)
@@ -420,6 +446,26 @@ package object yunsuan {
 //    def fmax_re   = "b10010".U(5.W)
   }
 
+  object VfmaType{
+    // isWiden:1bit opcode:5bits
+    def dummy = BitPat.Y(OpTypeWidth) // exu not implemented
+    //                                 res_isWiden, opcode
+    def vfmul     = LiteralCat(0.U(3.W), 0.U(1.W), VfmaOpCode.vfmul  )
+    def vfmul_w   = LiteralCat(0.U(3.W), 1.U(1.W), VfmaOpCode.vfmul  )
+    def vfmacc    = LiteralCat(0.U(3.W), 0.U(1.W), VfmaOpCode.vfmacc )
+    def vfmacc_w  = LiteralCat(0.U(3.W), 1.U(1.W), VfmaOpCode.vfmacc )
+    def vfnmacc   = LiteralCat(0.U(3.W), 0.U(1.W), VfmaOpCode.vfnmacc)
+    def vfnmacc_w = LiteralCat(0.U(3.W), 1.U(1.W), VfmaOpCode.vfnmacc)
+    def vfmsac    = LiteralCat(0.U(3.W), 0.U(1.W), VfmaOpCode.vfmsac )
+    def vfmsac_w  = LiteralCat(0.U(3.W), 1.U(1.W), VfmaOpCode.vfmsac )
+    def vfnmsac   = LiteralCat(0.U(3.W), 0.U(1.W), VfmaOpCode.vfnmsac)
+    def vfnmsac_w = LiteralCat(0.U(3.W), 1.U(1.W), VfmaOpCode.vfnmsac)
+    def vfmadd    = LiteralCat(0.U(3.W), 0.U(1.W), VfmaOpCode.vfmadd )
+    def vfnmadd   = LiteralCat(0.U(3.W), 0.U(1.W), VfmaOpCode.vfnmadd)
+    def vfmsub    = LiteralCat(0.U(3.W), 0.U(1.W), VfmaOpCode.vfmsub )
+    def vfnmsub   = LiteralCat(0.U(3.W), 0.U(1.W), VfmaOpCode.vfnmsub)
+  }
+
   object VfmaOpCode {
     def dummy   = "b1111".U(5.W)
     def vfmul   = "b0000".U(5.W)
@@ -431,6 +477,12 @@ package object yunsuan {
     def vfnmadd = "b0110".U(5.W)
     def vfmsub  = "b0111".U(5.W)
     def vfnmsub = "b1000".U(5.W)
+  }
+
+  object VfdivType {
+    def dummy= BitPat.Y(OpTypeWidth) // exu not implemented
+    def vfdiv    = LiteralCat(0.U(7.W), VfdivOpCode.vfdiv)
+    def vfsqrt   = LiteralCat(0.U(7.W), VfdivOpCode.vfsqrt)
   }
 
   object VfdivOpCode {
@@ -447,4 +499,4 @@ package object yunsuan {
 
     def apply() = UInt(width.W)
   }
-  }
+}
