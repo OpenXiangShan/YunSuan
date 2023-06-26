@@ -185,6 +185,7 @@ package object yunsuan {
 
     def needReverse(fuOpType: UInt) = fuOpType === vrsub_vv
     def needClearMask(fuOpType: UInt) = fuOpType === vmadc_vv | fuOpType === vmsbc_vv
+    def needNoMask(fuOpType: UInt) = Seq(vadc_vvm, vmadc_vvm, vmadc_vv, vsbc_vvm, vmsbc_vvm, vmsbc_vv, vmerge_vvm).map(_ === fuOpType).reduce(_ || _)
     def notNeedSew(fuOpType: UInt) = fuOpType === vmv_s_x
 
     private def getOpcodeGeneral(fuOpType: UInt) = fuOpType(5, 0)
