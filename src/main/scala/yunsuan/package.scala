@@ -184,6 +184,10 @@ package object yunsuan {
     def getFormat(fuOpType: UInt) : UInt = fuOpType(8, 7)
 
     def needReverse(fuOpType: UInt) = fuOpType === vrsub_vv
+    /**
+     * needClearMask: used when the input mask of fu should be all zeros
+     * needNoMask: used when the input mask of mgu should be all ones 
+     */
     def needClearMask(fuOpType: UInt) = fuOpType === vmadc_vv | fuOpType === vmsbc_vv
     def needNoMask(fuOpType: UInt) = Seq(vadc_vvm, vmadc_vvm, vmadc_vv, vsbc_vvm, vmsbc_vvm, vmsbc_vv, vmerge_vvm).map(_ === fuOpType).reduce(_ || _)
     def notNeedSew(fuOpType: UInt) = fuOpType === vmv_s_x
