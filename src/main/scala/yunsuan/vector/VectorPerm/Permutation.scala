@@ -308,10 +308,10 @@ class Permutation extends Module {
     }
   }
 
-  val vstartRemain = Wire(UInt(7.W))
+  val vstartRemain = Wire(UInt(8.W))
   val vstartRemainBytes = vstartRemain << vsew
 
-  val vslideup_vstart = Mux(vslideup & (slide_ele > vstart), slide_ele, vstart)
+  val vslideup_vstart = Mux(vslideup & (slide_ele > vstart), Mux(slide_ele > VLEN.U, VLEN.U, slide_ele), vstart)
   vstartRemain := vslideup_vstart
   when((vcompress && (uopIdx === 3.U)) ||
     ((vslideup) && ((uopIdx === 1.U) || (uopIdx === 2.U))) ||
@@ -395,7 +395,7 @@ class Permutation extends Module {
   val vstartRemainBytes_reg = vstartRemain_reg << vsew_reg
   val current_res_boundary = Mux(uopIdx_reg === 3.U, (2 * vlenb).U, vlenb.U)
 
-  vslideup_vl := Mux(vslideup & (slide_ele > vl), slide_ele, vl)
+  vslideup_vl := Mux(vslideup & (slide_ele > vl), Mux(slide_ele > VLEN.U, VLEN.U, slide_ele), vl)
   val tail_bytes = Mux((vlRemainBytes_reg >= vlenb.U), 0.U, vlenb.U - vlRemainBytes_reg)
   val tail_bits = Cat(tail_bytes, 0.U(3.W))
   val vmask_tail_bits = Wire(UInt(VLEN.W))
