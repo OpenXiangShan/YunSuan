@@ -225,9 +225,9 @@ class PermFsm extends Module {
   val rd_vd_idx = RegInit(0.U(4.W))
   val cmprs_rd_vd = RegInit(false.B)
   val cmprs_rd_vd_reg = RegInit(VecInit(Seq.fill(5)(false.B)))
-  val cmprs_rd_done = reg_vcompress && (rd_vd_idx === (Cat(0.U(1.W), vlmul_reg) + 1.U)) && rd_sent
-  val vrgather_rd_done = reg_vrgather && (wb_idx === vlmul_reg) && vrgather_wb_vld
-  val rd_done = Mux(reg_vcompress, cmprs_rd_done, Mux(reg_vrgather, vrgather_rd_done, (rd_sent_idx === vlmul_reg) && rd_sent))
+  // val cmprs_rd_done = reg_vcompress && (rd_vd_idx === (Cat(0.U(1.W), vlmul_reg) + 1.U)) && rd_sent
+  // val vrgather_rd_done = reg_vrgather && (wb_idx === vlmul_reg) && vrgather_wb_vld
+  val rd_done = (wb_idx === vlmul_reg) && wb_vld
   // val old_vd_idx = Mux(reg_vcompress, rd_vd_idx, Mux(reg_vrgather16_sew8, vs_idx(2, 1) + 1.U, Mux(vs_idx === vlmul_reg, vs_idx, vs_idx + 1.U)))
   val old_vd_idx = Mux(reg_vcompress, rd_vd_idx, Mux(vs_idx === vlmul_reg, vs_idx, vs_idx + 1.U)) //todo
   val rd_one_sum = RegInit(0.U(8.W))
@@ -255,7 +255,7 @@ class PermFsm extends Module {
     cmprs_rd_vd_wb_en := false.B
   }.elsewhen(rd_done) {
     cmprs_rd_vd_wb_en := false.B
-  }.elsewhen(reg_vcompress && cmprs_rd_vd && rd_sent) {
+  }.elsewhen(reg_vcompress && cmprs_rd_vd && rd_sent && !rd_wb) {
     cmprs_rd_vd_wb_en := true.B
   }
 
@@ -842,9 +842,9 @@ class PermFsm extends Module {
   when(br_flush_vld) {
     vlRemain := 0.U
   }.elsewhen(viq0_valid && (viq0_uop_idx === 0.U)) {
-    vlRemain := Mux(vslideup && (viq0_vs1 > viq0_vl), viq0_vs1, viq0_vl)
+    vlRemain := Mux(vslideup && (viq0_vs1 > viq0_vl), Mux(viq0_vs1 > VLEN.U, VLEN.U, viq0_vs1), viq0_vl)
   }.elsewhen(viq1_valid && (viq1_uop_idx === 0.U)) {
-    vlRemain := Mux(vslideup && (viq1_vs1 > viq1_vl), viq1_vs1, viq1_vl)
+    vlRemain := Mux(vslideup && (viq1_vs1 > viq1_vl), Mux(viq1_vs1 > VLEN.U, VLEN.U, viq1_vs1), viq1_vl)
   }.elsewhen(reg_vcompress && rd_sent_reg(3) && !rd_wb_reg(3)) {
     vlRemain := Mux(vlRemain >= (1.U << sew_shift), vlRemain - (1.U << sew_shift), 0.U)
   }.elsewhen(!reg_vrgather16_sew8 && !reg_vcompress && update_vl) {
@@ -959,10 +959,14 @@ class PermFsm extends Module {
             vrgather_byte_sel(i) := Cat(vs1((i / 4 + 1) * 16 - 1, i / 4 * 16), 0.U(2.W)) + i.U % 4.U
           }
         }.elsewhen(vsew_reg === 3.U) {
-          when(update_vl_cnt(0).asBool) {
+          when(update_vl_cnt(1, 0) === 0.U) {
             vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1) * 16 - 1, (i / 8) * 16), 0.U(3.W)) + i.U % 8.U
-          }.otherwise {
+          }.elsewhen(update_vl_cnt(1, 0) === 1.U) {
             vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1 + 2) * 16 - 1, (i / 8 + 2) * 16), 0.U(3.W)) + i.U % 8.U
+          }.elsewhen(update_vl_cnt(1, 0) === 2.U) {
+            vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1 + 4) * 16 - 1, (i / 8 + 4) * 16), 0.U(3.W)) + i.U % 8.U
+          }.elsewhen(update_vl_cnt(1, 0) === 3.U) {
+            vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1 + 6) * 16 - 1, (i / 8 + 6) * 16), 0.U(3.W)) + i.U % 8.U
           }
         }
       }.elsewhen(vs1_type === 2.U) {
@@ -999,10 +1003,14 @@ class PermFsm extends Module {
             vrgather_byte_sel(i) := Cat(vs1((i / 4 + 1) * 16 - 1, i / 4 * 16), 0.U(2.W)) + i.U % 4.U
           }
         }.elsewhen(vsew_reg === 3.U) {
-          when(update_vl_cnt(0).asBool) {
+          when(update_vl_cnt(1, 0) === 0.U) {
             vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1) * 16 - 1, (i / 8) * 16), 0.U(3.W)) + i.U % 8.U
-          }.otherwise {
+          }.elsewhen(update_vl_cnt(1, 0) === 1.U) {
             vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1 + 2) * 16 - 1, (i / 8 + 2) * 16), 0.U(3.W)) + i.U % 8.U
+          }.elsewhen(update_vl_cnt(1, 0) === 2.U) {
+            vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1 + 4) * 16 - 1, (i / 8 + 4) * 16), 0.U(3.W)) + i.U % 8.U
+          }.elsewhen(update_vl_cnt(1, 0) === 3.U) {
+            vrgather_byte_sel(i) := Cat(vs1((i / 8 + 1 + 6) * 16 - 1, (i / 8 + 6) * 16), 0.U(3.W)) + i.U % 8.U
           }
         }
       }.elsewhen(vs1_type === 2.U) {
@@ -1072,9 +1080,9 @@ class PermFsm extends Module {
 
   when(br_flush_vld) {
     one_sum := 0.U
-  }.elsewhen(cmprs_rd_vd_sent_reg(3)) {
+  }.elsewhen(cmprs_rd_vd_sent_reg(3) || calc_done || !fsm_busy) {
     one_sum := 0.U
-  }.elsewhen(rd_sent_reg(3) && !rd_wb_resent_reg(3)) {
+  }.elsewhen(rd_sent_reg(3) && !rd_wb_reg(3)) {
     one_sum := one_sum + current_vs_ones_sum
   }
 
@@ -1097,7 +1105,7 @@ class PermFsm extends Module {
   for (i <- 0 until vlenb) {
     current_uop_ones_sum(i) := 0.U
     current_ones_sum(i) := one_sum
-    when(rd_sent_reg(3) && !rd_wb_resent_reg(3)) {
+    when(rd_sent_reg(3)) {
       current_uop_ones_sum(i) := PopCount(Cat(vmask_byte_strb.reverse)(i, 0))
       current_ones_sum(i) := one_sum + current_uop_ones_sum(i)
     }
@@ -1146,9 +1154,9 @@ class PermFsm extends Module {
   when(br_flush_vld) {
     vstartRemain := 0.U
   }.elsewhen(viq0_valid && (viq0_uop_idx === 0.U)) {
-    vstartRemain := Mux(vslideup && (viq0_vs1 > viq0_vstart), viq0_vs1, viq0_vstart)
+    vstartRemain := Mux(vslideup && (viq0_vs1 > viq0_vstart), Mux(viq0_vs1 > VLEN.U, VLEN.U, viq0_vs1), viq0_vstart)
   }.elsewhen(viq1_valid && (viq1_uop_idx === 0.U)) {
-    vstartRemain := Mux(vslideup && (viq1_vs1 > viq1_vstart), viq1_vs1, viq1_vstart)
+    vstartRemain := Mux(vslideup && (viq1_vs1 > viq1_vstart), Mux(viq1_vs1 > VLEN.U, VLEN.U, viq1_vs1), viq1_vstart)
   }.elsewhen(reg_vcompress && rd_sent_reg(4) && !rd_wb_reg(4)) {
     vstartRemain := Mux(vstartRemain >= (1.U << sew_shift), vstartRemain - (1.U << sew_shift), 0.U)
   }.elsewhen(!reg_vrgather16_sew8 && !reg_vcompress && update_vd_idx) {
@@ -1267,7 +1275,7 @@ class PermFsm extends Module {
   io.out.fsm_wb_vld := Mux(reg_vrgather16_sew8, wb_vld && wb_idx(0), wb_vld)
   io.out.fsm_wb_preg_idx := vd_preg_idx(wb_idx)
   io.out.fsm_wb_data := perm_vd
-  io.out.fsm_busy := fsm_busy
+  io.out.fsm_busy := fsm_busy || rd_wb_resent_reg(4)
   io.out.fsm_rob_idx := rob_idx_reg
   io.out.fsm_lmul_4 := lmul_4_reg
 }
