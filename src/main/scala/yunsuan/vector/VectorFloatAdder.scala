@@ -99,7 +99,7 @@ class VectorFloatAdder() extends Module {
   U_F32_Mixed_1.io.fp_b := Mux(io.is_frs1,io.frs1(31,0),io.fp_b(63,32))
   U_F32_Mixed_1.io.widen_a := U_Widen_Fotmat.io.widen_a_f32_1
   U_F32_Mixed_1.io.widen_b := U_Widen_Fotmat.io.widen_b_f32_1
-  U_F32_Mixed_1.io.mask := Mux(fp_format === 2.U, io.mask(1), io.mask(2))
+  U_F32_Mixed_1.io.mask := Mux(fp_format === 1.U, io.mask(1), io.mask(2))
   U_F32_Mixed_1.io.uop_idx := io.uop_idx
   U_F32_Mixed_1.io.is_sub  := fast_is_sub
   U_F32_Mixed_1.io.round_mode   := io.round_mode
