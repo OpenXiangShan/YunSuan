@@ -467,16 +467,16 @@ package object yunsuan {
   }
 
   object VfmaOpCode {
-    def dummy   = "b1111".U(5.W)
-    def vfmul   = "b0000".U(5.W)
-    def vfmacc  = "b0001".U(5.W)
-    def vfnmacc = "b0010".U(5.W)
-    def vfmsac  = "b0011".U(5.W)
-    def vfnmsac = "b0100".U(5.W)
-    def vfmadd  = "b0101".U(5.W)
-    def vfnmadd = "b0110".U(5.W)
-    def vfmsub  = "b0111".U(5.W)
-    def vfnmsub = "b1000".U(5.W)
+    def dummy   = "b1111".U(4.W)
+    def vfmul   = "b0000".U(4.W)
+    def vfmacc  = "b0001".U(4.W)
+    def vfnmacc = "b0010".U(4.W)
+    def vfmsac  = "b0011".U(4.W)
+    def vfnmsac = "b0100".U(4.W)
+    def vfmadd  = "b0101".U(4.W)
+    def vfnmadd = "b0110".U(4.W)
+    def vfmsub  = "b0111".U(4.W)
+    def vfnmsub = "b1000".U(4.W)
   }
 
   object VfdivType {
