@@ -21,6 +21,8 @@ class VectorFloatDivider() extends Module {
     val is_sqrt_i = Input(Bool()) // must false, not support sqrt now
     val rm_i = Input(UInt(3.W))
     val is_vec_i = Input(Bool())
+    val fp_aIsFpCanonicalNAN = Input(Bool())
+    val fp_bIsFpCanonicalNAN = Input(Bool())
 
     val finish_valid_o = Output(Bool())
     val finish_ready_i = Input(Bool())
@@ -36,6 +38,7 @@ class VectorFloatDivider() extends Module {
   u_vector_float_sqrt_r16.rm_i := io.rm_i
   u_vector_float_sqrt_r16.vector_mode_i := io.is_vec_i
   u_vector_float_sqrt_r16.finish_ready_i := io.finish_ready_i
+  u_vector_float_sqrt_r16.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
   val u_vector_float_divider_r64 = Module(new VectorFloatDividerR64())
   u_vector_float_divider_r64.io.start_valid_i := !is_sqrt_i & io.start_valid_i
   u_vector_float_divider_r64.io.flush_i := io.flush_i
@@ -49,6 +52,8 @@ class VectorFloatDivider() extends Module {
   u_vector_float_divider_r64.io.rm_i := io.rm_i
   u_vector_float_divider_r64.io.is_vec_i := io.is_vec_i
   u_vector_float_divider_r64.io.finish_ready_i := io.finish_ready_i
+  u_vector_float_divider_r64.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
+  u_vector_float_divider_r64.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
 
   io.start_ready_o := u_vector_float_divider_r64.io.start_ready_o & u_vector_float_sqrt_r16.start_ready_o
   io.finish_valid_o := u_vector_float_divider_r64.io.finish_valid_o | u_vector_float_sqrt_r16.finish_valid_o
@@ -82,6 +87,8 @@ class VectorFloatDividerR64() extends Module {
     val is_frs1_i = Input(Bool()) // if true, vs2 / f[rs1]
     val rm_i = Input(UInt(3.W))
     val is_vec_i = Input(Bool())
+    val fp_aIsFpCanonicalNAN = Input(Bool())
+    val fp_bIsFpCanonicalNAN = Input(Bool())
 
     val finish_valid_o = Output(Bool())
     val finish_ready_i = Input(Bool())
@@ -391,22 +398,22 @@ class VectorFloatDividerR64() extends Module {
   val opb_is_qnan_f32_1 = opb_exp_is_max_f32_1 & opb_frac_f32_1.head(1).asBool
   val opb_is_qnan_f16_2 = opb_exp_is_max_f16_2 & opb_frac_f16_2.head(1).asBool
   val opb_is_qnan_f16_3 = opb_exp_is_max_f16_3 & opb_frac_f16_3.head(1).asBool
-  val opa_is_snan_f64_0 = opa_exp_is_max_f64_0 & !opa_frac_f64_0.head(1).asBool & !opa_frac_is_zero_f64_0
-  val opa_is_snan_f32_1 = opa_exp_is_max_f32_1 & !opa_frac_f32_1.head(1).asBool & !opa_frac_is_zero_f32_1
-  val opa_is_snan_f16_2 = opa_exp_is_max_f16_2 & !opa_frac_f16_2.head(1).asBool & !opa_frac_is_zero_f16_2
-  val opa_is_snan_f16_3 = opa_exp_is_max_f16_3 & !opa_frac_f16_3.head(1).asBool & !opa_frac_is_zero_f16_3
-  val opb_is_snan_f64_0 = opb_exp_is_max_f64_0 & !opb_frac_f64_0.head(1).asBool & !opb_frac_is_zero_f64_0
-  val opb_is_snan_f32_1 = opb_exp_is_max_f32_1 & !opb_frac_f32_1.head(1).asBool & !opb_frac_is_zero_f32_1
-  val opb_is_snan_f16_2 = opb_exp_is_max_f16_2 & !opb_frac_f16_2.head(1).asBool & !opb_frac_is_zero_f16_2
-  val opb_is_snan_f16_3 = opb_exp_is_max_f16_3 & !opb_frac_f16_3.head(1).asBool & !opb_frac_is_zero_f16_3
-  val opa_is_nan_f64_0 = opa_is_qnan_f64_0 | opa_is_snan_f64_0
-  val opa_is_nan_f32_1 = opa_is_qnan_f32_1 | opa_is_snan_f32_1
-  val opa_is_nan_f16_2 = opa_is_qnan_f16_2 | opa_is_snan_f16_2
-  val opa_is_nan_f16_3 = opa_is_qnan_f16_3 | opa_is_snan_f16_3
-  val opb_is_nan_f64_0 = opb_is_qnan_f64_0 | opb_is_snan_f64_0
-  val opb_is_nan_f32_1 = opb_is_qnan_f32_1 | opb_is_snan_f32_1
-  val opb_is_nan_f16_2 = opb_is_qnan_f16_2 | opb_is_snan_f16_2
-  val opb_is_nan_f16_3 = opb_is_qnan_f16_3 | opb_is_snan_f16_3
+  val opa_is_snan_f64_0 = io.fp_aIsFpCanonicalNAN |opa_exp_is_max_f64_0 & !opa_frac_f64_0.head(1).asBool & !opa_frac_is_zero_f64_0
+  val opa_is_snan_f32_1 = io.fp_aIsFpCanonicalNAN |opa_exp_is_max_f32_1 & !opa_frac_f32_1.head(1).asBool & !opa_frac_is_zero_f32_1
+  val opa_is_snan_f16_2 = io.fp_aIsFpCanonicalNAN |opa_exp_is_max_f16_2 & !opa_frac_f16_2.head(1).asBool & !opa_frac_is_zero_f16_2
+  val opa_is_snan_f16_3 = io.fp_aIsFpCanonicalNAN |opa_exp_is_max_f16_3 & !opa_frac_f16_3.head(1).asBool & !opa_frac_is_zero_f16_3
+  val opb_is_snan_f64_0 = io.fp_bIsFpCanonicalNAN |opb_exp_is_max_f64_0 & !opb_frac_f64_0.head(1).asBool & !opb_frac_is_zero_f64_0
+  val opb_is_snan_f32_1 = io.fp_bIsFpCanonicalNAN |opb_exp_is_max_f32_1 & !opb_frac_f32_1.head(1).asBool & !opb_frac_is_zero_f32_1
+  val opb_is_snan_f16_2 = io.fp_bIsFpCanonicalNAN |opb_exp_is_max_f16_2 & !opb_frac_f16_2.head(1).asBool & !opb_frac_is_zero_f16_2
+  val opb_is_snan_f16_3 = io.fp_bIsFpCanonicalNAN |opb_exp_is_max_f16_3 & !opb_frac_f16_3.head(1).asBool & !opb_frac_is_zero_f16_3
+  val opa_is_nan_f64_0 =  opa_is_qnan_f64_0 | opa_is_snan_f64_0
+  val opa_is_nan_f32_1 =  opa_is_qnan_f32_1 | opa_is_snan_f32_1
+  val opa_is_nan_f16_2 =  opa_is_qnan_f16_2 | opa_is_snan_f16_2
+  val opa_is_nan_f16_3 =  opa_is_qnan_f16_3 | opa_is_snan_f16_3
+  val opb_is_nan_f64_0 =  opb_is_qnan_f64_0 | opb_is_snan_f64_0
+  val opb_is_nan_f32_1 =  opb_is_qnan_f32_1 | opb_is_snan_f32_1
+  val opb_is_nan_f16_2 =  opb_is_qnan_f16_2 | opb_is_snan_f16_2
+  val opb_is_nan_f16_3 =  opb_is_qnan_f16_3 | opb_is_snan_f16_3
   val op_invalid_f64_0 = (opa_is_inf_f64_0 & opb_is_inf_f64_0) | (opa_is_zero_f64_0 & opb_is_zero_f64_0) | opa_is_snan_f64_0 | opb_is_snan_f64_0
   val op_invalid_f32_1 = (opa_is_inf_f32_1 & opb_is_inf_f32_1) | (opa_is_zero_f32_1 & opb_is_zero_f32_1) | opa_is_snan_f32_1 | opb_is_snan_f32_1
   val op_invalid_f16_2 = (opa_is_inf_f16_2 & opb_is_inf_f16_2) | (opa_is_zero_f16_2 & opb_is_zero_f16_2) | opa_is_snan_f16_2 | opb_is_snan_f16_2

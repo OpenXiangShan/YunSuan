@@ -23,6 +23,7 @@ class fpsqrt_vector_r16(
   val finish_ready_i = IO(Input(Bool()))
   val fpsqrt_res_o = IO(Output(UInt(64.W)))
   val fflags_o = IO(Output(UInt(20.W)))
+  val fp_aIsFpCanonicalNAN = IO(Input(Bool()))
 
   val F64_REM_W = 2 + 54
   val F32_REM_W = 2 + 26
@@ -601,10 +602,10 @@ class fpsqrt_vector_r16(
   op_is_qnan_1 := op_exp_is_max_1 & (Mux((fp_format_i === 0.U(2.W)), op_i(25), op_i(22)))
   op_is_qnan_2 := op_exp_is_max_2 & op_i(41)
   op_is_qnan_3 := op_exp_is_max_3 & op_i(9)
-  op_is_snan_0 := op_exp_is_max_0 & ~op_frac_is_zero_0 & (Mux((fp_format_i === 0.U(2.W)), ~op_i(57), Mux((fp_format_i === 1.U(2.W)), ~op_i(54), ~op_i(51))))
-  op_is_snan_1 := op_exp_is_max_1 & ~op_frac_is_zero_1 & (Mux((fp_format_i === 0.U(2.W)), ~op_i(25), ~op_i(22)))
-  op_is_snan_2 := op_exp_is_max_2 & ~op_frac_is_zero_2 & ~op_i(41)
-  op_is_snan_3 := op_exp_is_max_3 & ~op_frac_is_zero_3 & ~op_i(9)
+  op_is_snan_0 := fp_aIsFpCanonicalNAN | op_exp_is_max_0 & ~op_frac_is_zero_0 & (Mux((fp_format_i === 0.U(2.W)), ~op_i(57), Mux((fp_format_i === 1.U(2.W)), ~op_i(54), ~op_i(51))))
+  op_is_snan_1 := fp_aIsFpCanonicalNAN | op_exp_is_max_1 & ~op_frac_is_zero_1 & (Mux((fp_format_i === 0.U(2.W)), ~op_i(25), ~op_i(22)))
+  op_is_snan_2 := fp_aIsFpCanonicalNAN | op_exp_is_max_2 & ~op_frac_is_zero_2 & ~op_i(41)
+  op_is_snan_3 := fp_aIsFpCanonicalNAN | op_exp_is_max_3 & ~op_frac_is_zero_3 & ~op_i(9)
   op_is_nan_0 := (op_is_qnan_0 | op_is_snan_0)
   op_is_nan_1 := (op_is_qnan_1 | op_is_snan_1)
   op_is_nan_2 := (op_is_qnan_2 | op_is_snan_2)
