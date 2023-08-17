@@ -163,6 +163,8 @@ class SimTop() extends VPUTestModule {
     vfa.io.is_frs1 := is_frs1
     vfa.io.op_code      := opcode
     vfa.io.is_vec       := true.B // TODO: check it
+    vfa.io.fp_aIsFpCanonicalNAN := false.B
+    vfa.io.fp_bIsFpCanonicalNAN := false.B
     vfa_result.result(i) := vfa.io.fp_result
     vfa_result.fflags(i) := vfa.io.fflags
     vfa_result.vxsat := 0.U // DontCare
@@ -180,6 +182,8 @@ class SimTop() extends VPUTestModule {
     vfd.io.is_sqrt_i := opcode
     vfd.io.rm_i := rm
     vfd.io.is_vec_i := true.B // TODO: check it
+    vfd.io.fp_aIsFpCanonicalNAN := false.B
+    vfd.io.fp_bIsFpCanonicalNAN := false.B
     vfd.io.finish_ready_i := !vfd_result_valid(i) && busy
     // FIXME: do dual vfd result sync.
     when (vfd.io.finish_valid_o && vfd.io.finish_ready_i) {
@@ -225,6 +229,9 @@ class SimTop() extends VPUTestModule {
     vff.io.op_code := opcode
     vff.io.is_frs1  := is_frs1
     vff.io.is_vec := true.B // TODO: check it
+    vff.io.fp_aIsFpCanonicalNAN := false.B
+    vff.io.fp_bIsFpCanonicalNAN := false.B
+    vff.io.fp_cIsFpCanonicalNAN := false.B
     vff.io.res_widening := widen
     vff_result.result(i) := vff.io.fp_result
     vff_result.fflags(i) := vff.io.fflags

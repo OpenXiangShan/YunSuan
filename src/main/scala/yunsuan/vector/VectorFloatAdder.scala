@@ -42,7 +42,9 @@ class VectorFloatAdder() extends Module {
     val opb_widening  = Input (Bool())    // ture -> opb widening
     val res_widening  = Input (Bool())    // true -> widening operation
     val op_code       = Input (UInt(5.W))
-    
+    val fp_aIsFpCanonicalNAN = Input (Bool())
+    val fp_bIsFpCanonicalNAN = Input (Bool())
+
     val fp_result     = Output(UInt(floatWidth.W))
     val fflags        = Output(UInt(20.W))
   })
@@ -89,6 +91,8 @@ class VectorFloatAdder() extends Module {
   U_F32_Mixed_0.io.res_widening := io.res_widening
   U_F32_Mixed_0.io.opb_widening := io.opb_widening
   U_F32_Mixed_0.io.op_code      := io.op_code
+  U_F32_Mixed_0.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
+  U_F32_Mixed_0.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
   val U_F32_0_result = U_F32_Mixed_0.io.fp_c
   val U_F32_0_fflags = U_F32_Mixed_0.io.fflags
   val U_F16_0_result = U_F32_Mixed_0.io.fp_c(15,0)
@@ -107,6 +111,8 @@ class VectorFloatAdder() extends Module {
   U_F32_Mixed_1.io.res_widening := io.res_widening
   U_F32_Mixed_1.io.opb_widening := io.opb_widening
   U_F32_Mixed_1.io.op_code      := io.op_code
+  U_F32_Mixed_1.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
+  U_F32_Mixed_1.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
   val U_F32_1_result = U_F32_Mixed_1.io.fp_c
   val U_F32_1_fflags = U_F32_Mixed_1.io.fflags
   val U_F16_2_result = U_F32_Mixed_1.io.fp_c(15,0)
@@ -124,6 +130,8 @@ class VectorFloatAdder() extends Module {
   U_F64_Widen_0.io.res_widening := io.res_widening
   U_F64_Widen_0.io.opb_widening := io.opb_widening
   U_F64_Widen_0.io.op_code      := io.op_code
+  U_F64_Widen_0.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
+  U_F64_Widen_0.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
   val U_F64_Widen_0_result = U_F64_Widen_0.io.fp_c
   val U_F64_Widen_0_fflags = U_F64_Widen_0.io.fflags
 
@@ -134,6 +142,8 @@ class VectorFloatAdder() extends Module {
   U_F16_1.io.is_sub := fast_is_sub
   U_F16_1.io.round_mode := io.round_mode
   U_F16_1.io.op_code    := io.op_code
+  U_F16_1.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
+  U_F16_1.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
   val U_F16_1_result = U_F16_1.io.fp_c
   val U_F16_1_fflags = U_F16_1.io.fflags
 
@@ -144,6 +154,8 @@ class VectorFloatAdder() extends Module {
   U_F16_3.io.is_sub := fast_is_sub
   U_F16_3.io.round_mode := io.round_mode
   U_F16_3.io.op_code    := io.op_code
+  U_F16_3.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
+  U_F16_3.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
   val U_F16_3_result = U_F16_3.io.fp_c
   val U_F16_3_fflags = U_F16_3.io.fflags
 
@@ -259,6 +271,8 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     val opb_widening = Input (Bool())
     val res_widening = Input (Bool())
     val op_code = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
+    val fp_aIsFpCanonicalNAN = Input (Bool())
+    val fp_bIsFpCanonicalNAN = Input (Bool())
   })
   val res_is_f32 = io.fp_format(0).asBool
   val fp_a_16as32 = Cat(io.fp_a(15), Cat(0.U(3.W),io.fp_a(14,10)), Cat(io.fp_a(9,0),0.U(13.W)))
@@ -329,10 +343,10 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     Mux(io.res_widening, Efp_b === "b10001111".U, io.fp_b(14,10).andR),
     io.fp_b(30,23).andR
   )
-  val fp_a_is_NAN        = Efp_a_is_all_one & fp_a_mantissa_isnot_zero
-  val fp_a_is_SNAN       = Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !fp_a_to32(significandWidth-2)
-  val fp_b_is_NAN        = Efp_b_is_all_one & fp_b_mantissa_isnot_zero
-  val fp_b_is_SNAN       = Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !fp_b_to32(significandWidth-2)
+  val fp_a_is_NAN        = io.fp_aIsFpCanonicalNAN | Efp_a_is_all_one & fp_a_mantissa_isnot_zero
+  val fp_a_is_SNAN       = io.fp_aIsFpCanonicalNAN | Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !fp_a_to32(significandWidth-2)
+  val fp_b_is_NAN        = io.fp_bIsFpCanonicalNAN | Efp_b_is_all_one & fp_b_mantissa_isnot_zero
+  val fp_b_is_SNAN       = io.fp_bIsFpCanonicalNAN | Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !fp_b_to32(significandWidth-2)
   val fp_a_is_infinite   = Efp_a_is_all_one & (!fp_a_mantissa_isnot_zero)
   val fp_b_is_infinite   = Efp_b_is_all_one & (!fp_b_mantissa_isnot_zero)
   val fp_a_is_zero       = Efp_a_is_zero & !fp_a_mantissa_isnot_zero
@@ -407,32 +421,39 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     val result_fle = Wire(UInt(floatWidth.W))
     val result_fgt = Wire(UInt(floatWidth.W))
     val result_fge = Wire(UInt(floatWidth.W))
-    val result_fsgnj  = Mux(res_is_f32, Cat(fp_b_sign,io.fp_a(30,0)), Cat(0.U(16.W), Cat(fp_b_sign,io.fp_a(14,0))))
-    val result_fsgnjn = Mux(res_is_f32, Cat(~fp_b_sign,io.fp_a(30,0)), Cat(0.U(16.W), Cat(~fp_b_sign,io.fp_a(14,0))))
-    val result_fsgnjx = Mux(res_is_f32, Cat(fp_b_sign^fp_a_sign,io.fp_a(30,0)), Cat(0.U(16.W), Cat(fp_b_sign^fp_a_sign,io.fp_a(14,0))))
+    val in_NAN = Mux(res_is_f32, Cat(0.U(1.W),Fill(9, 1.U(1.W)),0.U(22.W)), Cat(0.U(17.W),Fill(6, 1.U(1.W)),0.U(9.W)))
+    val fp_aFix = Mux(io.fp_aIsFpCanonicalNAN, in_NAN, io.fp_a)
+    val fp_bFix = Mux(io.fp_bIsFpCanonicalNAN, in_NAN, io.fp_b)
+    val result_fsgnj  = Mux(res_is_f32, Cat(fp_bFix.head(1) , fp_aFix(30, 0)), Cat(0.U(16.W), Cat(fp_bFix.head(1) , fp_aFix(14, 0))))
+    val result_fsgnjn = Mux(res_is_f32, Cat(~fp_bFix.head(1), fp_aFix(30, 0)), Cat(0.U(16.W), Cat(~fp_bFix.head(1), fp_aFix(14, 0))))
+    val result_fsgnjx = Mux(
+      res_is_f32,
+      Cat(fp_bFix.head(1) ^ fp_aFix.head(1), fp_aFix(30, 0)),
+      Cat(0.U(16.W), Cat(fp_bFix(16) ^ fp_aFix(16), fp_bFix(14, 0)))
+    )
     val result_fclass = Wire(UInt(floatWidth.W))
     val result_fmerge = Mux(
       res_is_f32,
-      Mux(io.mask, io.fp_b, io.fp_a),
-      Mux(io.mask, Cat(0.U(16.W),io.fp_b(15,0)), Cat(0.U(16.W),io.fp_a(15,0)))
+      Mux(io.mask, fp_bFix, fp_aFix),
+      Mux(io.mask, Cat(0.U(16.W), fp_bFix(15, 0)), Cat(0.U(16.W), fp_aFix(15, 0)))
     )
     val result_fmove = Mux(
       res_is_f32,
-      io.fp_b,
-      Cat(0.U(16.W),io.fp_b(15,0))
+      fp_bFix,
+      Cat(0.U(16.W), fp_bFix(15, 0))
     )
     val out_NAN = Mux(res_is_f32, Cat(0.U,Fill(8,1.U),1.U,0.U(22.W)), Cat(0.U(17.W),Fill(5,1.U),1.U,0.U(9.W)))
-    val fp_a_16_or_32 = Mux(res_is_f32, io.fp_a(31,0), Cat(0.U(16.W), io.fp_a(15,0)))
-    val fp_b_16_or_32 = Mux(res_is_f32, io.fp_b(31,0), Cat(0.U(16.W), io.fp_b(15,0)))
+    val fp_a_16_or_32 = Mux(res_is_f32, fp_aFix(31, 0), Cat(0.U(16.W), fp_aFix(15, 0)))
+    val fp_b_16_or_32 = Mux(res_is_f32, fp_bFix(31, 0), Cat(0.U(16.W), fp_bFix(15, 0)))
     result_min := Mux1H(
       Seq(
         !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN &  fp_b_is_NAN,
+        !fp_a_is_NAN & fp_b_is_NAN,
         fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN &  fp_b_is_NAN,
+        fp_a_is_NAN & fp_b_is_NAN,
       ),
       Seq(
-        Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),fp_b_16_or_32,fp_a_16_or_32),
+        Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), fp_b_16_or_32, fp_a_16_or_32),
         fp_a_16_or_32,
         fp_b_16_or_32,
         out_NAN
@@ -441,24 +462,24 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     result_max := Mux1H(
       Seq(
         !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN &  fp_b_is_NAN,
+        !fp_a_is_NAN & fp_b_is_NAN,
         fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN &  fp_b_is_NAN,
+        fp_a_is_NAN & fp_b_is_NAN,
       ),
       Seq(
-        Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),fp_b_16_or_32,fp_a_16_or_32),
+        Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), fp_b_16_or_32, fp_a_16_or_32),
         fp_a_16_or_32,
         fp_b_16_or_32,
         out_NAN
       )
     )
-    result_feq := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_equal)
+    result_feq := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_equal)
     result_fne := !result_feq
-    result_flt := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_greater)
-    result_fle := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_greater | fp_b_is_equal)
-    result_fgt := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_less)
-    result_fge := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_less | fp_b_is_equal)
-    result_fclass := Reverse(Cat(
+    result_flt := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_greater)
+    result_fle := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_greater | fp_b_is_equal)
+    result_fgt := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_less)
+    result_fge := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_less | fp_b_is_equal)
+    result_fclass := Mux(io.fp_aIsFpCanonicalNAN, (1 << 8).U, Reverse(Cat(
       fp_a_sign & fp_a_is_infinite,
       fp_a_sign & !Efp_a_is_zero & !Efp_a_is_all_one,
       fp_a_sign & Efp_a_is_zero & fp_a_mantissa_isnot_zero,
@@ -469,7 +490,7 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
       ~fp_a_sign & fp_a_is_infinite,
       fp_a_is_SNAN,
       fp_a_is_NAN & !fp_a_is_SNAN
-    ))
+    )))
     val result_stage0 = Mux1H(
       Seq(
         is_min,
@@ -1497,6 +1518,8 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     val opb_widening = Input (Bool())
     val res_widening = Input (Bool())
     val op_code = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
+    val fp_aIsFpCanonicalNAN = Input(Bool())
+    val fp_bIsFpCanonicalNAN = Input(Bool())
   })
 //  val fp_a_to64_is_denormal = !io.widen_a(30,23).orR
 //  val fp_a_lshift = Wire(UInt(23.W))
@@ -1550,10 +1573,10 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
   val Efp_b_is_zero  = !Efp_b.orR | (fp_b_is_f32 & Efp_b==="b01101101001".U)
   val Efp_a_is_all_one   = Efp_a.andR | (fp_a_is_f32 & Efp_a==="b10001111111".U)
   val Efp_b_is_all_one   = Efp_b.andR | (fp_b_is_f32 & Efp_b==="b10001111111".U)
-  val fp_a_is_NAN        = Efp_a_is_all_one & fp_a_mantissa_isnot_zero
-  val fp_a_is_SNAN       = Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !fp_a_to64(significandWidth-2)
-  val fp_b_is_NAN        = Efp_b_is_all_one & fp_b_mantissa_isnot_zero
-  val fp_b_is_SNAN       = Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !fp_b_to64(significandWidth-2)
+  val fp_a_is_NAN        = io.fp_aIsFpCanonicalNAN | Efp_a_is_all_one & fp_a_mantissa_isnot_zero
+  val fp_a_is_SNAN       = io.fp_aIsFpCanonicalNAN | Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !fp_a_to64(significandWidth-2)
+  val fp_b_is_NAN        = io.fp_bIsFpCanonicalNAN | Efp_b_is_all_one & fp_b_mantissa_isnot_zero
+  val fp_b_is_SNAN       = io.fp_bIsFpCanonicalNAN | Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !fp_b_to64(significandWidth-2)
   val fp_a_is_infinite   = Efp_a_is_all_one & (!fp_a_mantissa_isnot_zero)
   val fp_b_is_infinite   = Efp_b_is_all_one & (!fp_b_mantissa_isnot_zero)
   val fp_a_is_zero = Efp_a_is_zero & !fp_a_mantissa_isnot_zero
@@ -1626,22 +1649,25 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     val result_fle = Wire(UInt(floatWidth.W))
     val result_fgt = Wire(UInt(floatWidth.W))
     val result_fge = Wire(UInt(floatWidth.W))
-    val result_fsgnj  = Cat(fp_b_sign, io.fp_a.tail(1))
-    val result_fsgnjn = Cat(~fp_b_sign, io.fp_a.tail(1))
-    val result_fsgnjx = Cat(fp_b_sign^fp_a_sign, io.fp_a.tail(1))
+    val in_NAN = Cat(0.U, Fill(exponentWidth, 1.U), 1.U, Fill(significandWidth - 2, 0.U))
+    val fp_aFix = Mux(io.fp_aIsFpCanonicalNAN, in_NAN, io.fp_a)
+    val fp_bFix = Mux(io.fp_bIsFpCanonicalNAN, in_NAN, io.fp_b)
+    val result_fsgnj = Cat(fp_bFix.head(1), fp_aFix.tail(1))
+    val result_fsgnjn = Cat(~fp_bFix.head(1), fp_aFix.tail(1))
+    val result_fsgnjx = Cat(fp_bFix.head(1) ^ fp_aFix.head(1), fp_aFix.tail(1))
     val result_fclass = Wire(UInt(floatWidth.W))
-    val result_fmerge = Mux(io.mask, io.fp_b, io.fp_a)
-    val result_fmove  = io.fp_b
-    val out_NAN = Cat(0.U,Fill(exponentWidth,1.U),1.U,Fill(significandWidth-2,0.U))
+    val result_fmerge = Mux(io.mask, fp_bFix, fp_aFix)
+    val result_fmove = fp_bFix
+    val out_NAN = Cat(0.U, Fill(exponentWidth, 1.U), 1.U, Fill(significandWidth - 2, 0.U))
     result_min := Mux1H(
       Seq(
         !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN &  fp_b_is_NAN,
+        !fp_a_is_NAN & fp_b_is_NAN,
         fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN &  fp_b_is_NAN,
+        fp_a_is_NAN & fp_b_is_NAN,
       ),
       Seq(
-        Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),io.fp_b,io.fp_a),
+        Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), io.fp_b, io.fp_a),
         io.fp_a,
         io.fp_b,
         out_NAN
@@ -1650,24 +1676,24 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     result_max := Mux1H(
       Seq(
         !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN &  fp_b_is_NAN,
+        !fp_a_is_NAN & fp_b_is_NAN,
         fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN &  fp_b_is_NAN,
+        fp_a_is_NAN & fp_b_is_NAN,
       ),
       Seq(
-        Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),io.fp_b,io.fp_a),
+        Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), io.fp_b, io.fp_a),
         io.fp_a,
         io.fp_b,
         out_NAN
       )
     )
-    result_feq := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_equal)
+    result_feq := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_equal)
     result_fne := !result_feq
-    result_flt := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_greater)
-    result_fle := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_greater | fp_b_is_equal)
-    result_fgt := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_less)
-    result_fge := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_less | fp_b_is_equal)
-    result_fclass := Reverse(Cat(
+    result_flt := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_greater)
+    result_fle := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_greater | fp_b_is_equal)
+    result_fgt := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_less)
+    result_fge := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_less | fp_b_is_equal)
+    result_fclass := Mux(io.fp_aIsFpCanonicalNAN, (1 << 8).U, Reverse(Cat(
       fp_a_sign & fp_a_is_infinite,
       fp_a_sign & !Efp_a_is_zero & !Efp_a_is_all_one,
       fp_a_sign & Efp_a_is_zero & fp_a_mantissa_isnot_zero,
@@ -1678,7 +1704,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
       ~fp_a_sign & fp_a_is_infinite,
       fp_a_is_SNAN,
       fp_a_is_NAN & !fp_a_is_SNAN
-    ))
+    )))
     val result_stage0 = Mux1H(
       Seq(
         is_min,
@@ -2142,6 +2168,8 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
     val round_mode  = Input (UInt(3.W))
     val fflags      = Output(UInt(5.W))
     val op_code     = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
+    val fp_aIsFpCanonicalNAN = Input(Bool())
+    val fp_bIsFpCanonicalNAN = Input(Bool())
   })
   val EOP = (io.fp_a.head(1) ^ io.is_sub ^ io.fp_b.head(1)).asBool
   val U_far_path = Module(new FarPathF16Pipeline(exponentWidth = exponentWidth,significandWidth = significandWidth, is_print = is_print, hasMinMaxCompare=hasMinMaxCompare))
@@ -2168,10 +2196,10 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
   val fp_b_mantissa            = io.fp_b.tail(1 + exponentWidth)
   val fp_a_mantissa_isnot_zero = io.fp_a.tail(1 + exponentWidth).orR
   val fp_b_mantissa_isnot_zero = io.fp_b.tail(1 + exponentWidth).orR
-  val fp_a_is_NAN        = Efp_a_is_all_one & fp_a_mantissa_isnot_zero
-  val fp_a_is_SNAN       = Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !io.fp_a(significandWidth-2)
-  val fp_b_is_NAN        = Efp_b_is_all_one & fp_b_mantissa_isnot_zero
-  val fp_b_is_SNAN       = Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !io.fp_b(significandWidth-2)
+  val fp_a_is_NAN        = io.fp_aIsFpCanonicalNAN | Efp_a_is_all_one & fp_a_mantissa_isnot_zero
+  val fp_a_is_SNAN       = io.fp_aIsFpCanonicalNAN | Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !io.fp_a(significandWidth-2)
+  val fp_b_is_NAN        = io.fp_bIsFpCanonicalNAN | Efp_b_is_all_one & fp_b_mantissa_isnot_zero
+  val fp_b_is_SNAN       = io.fp_bIsFpCanonicalNAN | Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !io.fp_b(significandWidth-2)
   val fp_a_is_infinite   = Efp_a_is_all_one & (!fp_a_mantissa_isnot_zero)
   val fp_b_is_infinite   = Efp_b_is_all_one & (!fp_b_mantissa_isnot_zero)
   val float_adder_fflags = Wire(UInt(5.W))
@@ -2233,12 +2261,15 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
     val result_fle = Wire(UInt(floatWidth.W))
     val result_fgt = Wire(UInt(floatWidth.W))
     val result_fge = Wire(UInt(floatWidth.W))
-    val result_fsgnj  = Cat(fp_b_sign, io.fp_a.tail(1))
-    val result_fsgnjn = Cat(~fp_b_sign, io.fp_a.tail(1))
-    val result_fsgnjx = Cat(fp_b_sign^fp_a_sign, io.fp_a.tail(1))
+    val in_NAN = Cat(0.U,Fill(exponentWidth,1.U),1.U,Fill(significandWidth-2,0.U))
+    val fp_aFix = Mux(io.fp_aIsFpCanonicalNAN, in_NAN, io.fp_a)
+    val fp_bFix = Mux(io.fp_bIsFpCanonicalNAN, in_NAN, io.fp_b)
+    val result_fsgnj  = Cat(fp_bFix.head(1), fp_aFix.tail(1))
+    val result_fsgnjn = Cat(~fp_bFix.head(1), fp_aFix.tail(1))
+    val result_fsgnjx = Cat(fp_bFix.head(1) ^ fp_aFix.head(1), fp_aFix.tail(1))
     val result_fclass = Wire(UInt(floatWidth.W))
-    val result_fmerge = Mux(io.mask, io.fp_b, io.fp_a)
-    val result_fmove  = io.fp_b
+    val result_fmerge = Mux(io.mask, fp_bFix, fp_aFix)
+    val result_fmove  = fp_bFix
     val out_NAN = Cat(0.U,Fill(exponentWidth,1.U),1.U,Fill(significandWidth-2,0.U))
     result_min := Mux1H(
       Seq(
@@ -2274,7 +2305,7 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
     result_fle := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_greater | fp_b_is_equal)
     result_fgt := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_less)
     result_fge := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_less | fp_b_is_equal)
-    result_fclass := Reverse(Cat(
+    result_fclass := Mux(io.fp_aIsFpCanonicalNAN, (1<<8).U, Reverse(Cat(
       fp_a_sign & fp_a_is_infinite,
       fp_a_sign & !Efp_a_is_zero & !Efp_a_is_all_one,
       fp_a_sign & Efp_a_is_zero & fp_a_mantissa_isnot_zero,
@@ -2285,7 +2316,7 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
       ~fp_a_sign & fp_a_is_infinite,
       fp_a_is_SNAN,
       fp_a_is_NAN & !fp_a_is_SNAN
-    ))
+    )))
     val result_stage0 = Mux1H(
       Seq(
         is_min,
