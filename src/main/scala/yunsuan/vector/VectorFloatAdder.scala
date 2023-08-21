@@ -57,8 +57,8 @@ class VectorFloatAdder() extends Module {
   val is_sub    = io.op_code === VfaddOpCode.fsub
   val is_min    = io.op_code === VfaddOpCode.fmin
   val is_max    = io.op_code === VfaddOpCode.fmax
-  val is_fmerge = io.op_code === VfaddOpCode.fmerge
-  val is_fmove  = io.op_code === VfaddOpCode.fmove
+  val is_fmerge = (io.op_code === VfaddOpCode.fmerge)
+  val is_fmove  = io.op_code === VfaddOpCode.fmove || (io.op_code === VfaddOpCode.fmv_f_s) || (io.op_code === VfaddOpCode.fmv_s_f)
   val is_fsgnj  = io.op_code === VfaddOpCode.fsgnj
   val is_fsgnjn = io.op_code === VfaddOpCode.fsgnjn
   val is_fsgnjx = io.op_code === VfaddOpCode.fsgnjx
@@ -397,7 +397,7 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     val is_fsgnjx = io.op_code === VfaddOpCode.fsgnjx
     val is_fclass = io.op_code === VfaddOpCode.fclass
     val is_fmerge = io.op_code === VfaddOpCode.fmerge
-    val is_fmove  = io.op_code === VfaddOpCode.fmove
+    val is_fmove  = (io.op_code === VfaddOpCode.fmove) || (io.op_code === VfaddOpCode.fmv_f_s) || (io.op_code === VfaddOpCode.fmv_s_f)
     val fp_a_sign = fp_a_to32.head(1)
     val fp_b_sign = fp_b_to32.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -424,12 +424,12 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     val in_NAN = Mux(res_is_f32, Cat(0.U(1.W),Fill(9, 1.U(1.W)),0.U(22.W)), Cat(0.U(17.W),Fill(6, 1.U(1.W)),0.U(9.W)))
     val fp_aFix = Mux(io.fp_aIsFpCanonicalNAN, in_NAN, io.fp_a)
     val fp_bFix = Mux(io.fp_bIsFpCanonicalNAN, in_NAN, io.fp_b)
-    val result_fsgnj  = Mux(res_is_f32, Cat(fp_bFix.head(1) , fp_aFix(30, 0)), Cat(0.U(16.W), Cat(fp_bFix.head(1) , fp_aFix(14, 0))))
-    val result_fsgnjn = Mux(res_is_f32, Cat(~fp_bFix.head(1), fp_aFix(30, 0)), Cat(0.U(16.W), Cat(~fp_bFix.head(1), fp_aFix(14, 0))))
+    val result_fsgnj  = Mux(res_is_f32, Cat(fp_bFix.head(1) , fp_aFix(30, 0)), Cat(0.U(16.W), Cat(fp_bFix(15) , fp_aFix(14, 0))))
+    val result_fsgnjn = Mux(res_is_f32, Cat(~fp_bFix.head(1), fp_aFix(30, 0)), Cat(0.U(16.W), Cat(~fp_bFix(15), fp_aFix(14, 0))))
     val result_fsgnjx = Mux(
       res_is_f32,
       Cat(fp_bFix.head(1) ^ fp_aFix.head(1), fp_aFix(30, 0)),
-      Cat(0.U(16.W), Cat(fp_bFix(16) ^ fp_aFix(16), fp_bFix(14, 0)))
+      Cat(0.U(16.W), Cat(fp_bFix(15) ^ fp_aFix(15), fp_bFix(14, 0)))
     )
     val result_fclass = Wire(UInt(floatWidth.W))
     val result_fmerge = Mux(
@@ -1625,7 +1625,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     val is_fsgnjx = io.op_code === VfaddOpCode.fsgnjx
     val is_fclass = io.op_code === VfaddOpCode.fclass
     val is_fmerge = io.op_code === VfaddOpCode.fmerge
-    val is_fmove  = io.op_code === VfaddOpCode.fmove
+    val is_fmove  = (io.op_code === VfaddOpCode.fmove) || (io.op_code === VfaddOpCode.fmv_f_s) || (io.op_code === VfaddOpCode.fmv_s_f)
     val fp_a_sign = io.fp_a.head(1)
     val fp_b_sign = io.fp_b.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -2237,7 +2237,7 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
     val is_fsgnjx = io.op_code === VfaddOpCode.fsgnjx
     val is_fclass = io.op_code === VfaddOpCode.fclass
     val is_fmerge = io.op_code === VfaddOpCode.fmerge
-    val is_fmove  = io.op_code === VfaddOpCode.fmove
+    val is_fmove  = (io.op_code === VfaddOpCode.fmove) || (io.op_code === VfaddOpCode.fmv_f_s) || (io.op_code === VfaddOpCode.fmv_s_f)
     val fp_a_sign = io.fp_a.head(1)
     val fp_b_sign = io.fp_b.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
