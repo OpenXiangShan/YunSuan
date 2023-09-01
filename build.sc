@@ -53,6 +53,10 @@ trait CommonYunSuan extends YSModule with SbtModule { m =>
 
   override def forkArgs = Seq("-Xmx128G", "-Xss256m")
 
+  val resourcesPATH = os.pwd.toString() + "/src/main/resources"
+  val envPATH = sys.env("PATH") + ":" + resourcesPATH
+  override def forkEnv = Map("PATH" -> envPATH)
+
   override def ivyDeps = super.ivyDeps() ++ Seq(ivys.chiseltest)
 
   override def moduleDeps = super.moduleDeps ++ Seq(
@@ -61,6 +65,8 @@ trait CommonYunSuan extends YSModule with SbtModule { m =>
   object test extends Tests with TestModule.ScalaTest {
 
     override def forkArgs = m.forkArgs
+
+    override def forkEnv = m.forkEnv
 
     override def ivyDeps = super.ivyDeps() ++ Agg(
       ivys.scalatest
