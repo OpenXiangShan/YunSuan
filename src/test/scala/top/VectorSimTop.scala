@@ -165,6 +165,7 @@ class SimTop() extends VPUTestModule {
     vfa.io.is_vec       := true.B // TODO: check it
     vfa.io.fp_aIsFpCanonicalNAN := false.B
     vfa.io.fp_bIsFpCanonicalNAN := false.B
+    vfa.io.maskForReduction := 0.U
     vfa_result.result(i) := vfa.io.fp_result
     vfa_result.fflags(i) := vfa.io.fflags
     vfa_result.vxsat := 0.U // DontCare
