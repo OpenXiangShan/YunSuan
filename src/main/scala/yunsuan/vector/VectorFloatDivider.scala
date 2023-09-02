@@ -1971,14 +1971,14 @@ class VectorFloatDividerR64() extends Module {
   )
   val quo_m1_pre_inc_f64_0 = Cat(
     quo_m1_pre_shift_f64_0(52, 25),
-    !fp_format_is_fp32 & quo_m1_pre_shift_f64_0(24),
+    !fp_format_q_is_fp32 & quo_m1_pre_shift_f64_0(24),
     quo_m1_pre_shift_f64_0(23, 12),
-    !fp_format_is_fp16 & quo_m1_pre_shift_f64_0(11),
+    !fp_format_q_is_fp16 & quo_m1_pre_shift_f64_0(11),
     quo_m1_pre_shift_f64_0(10, 1)
   )
   val quo_m1_pre_inc_f32_1 = Cat(
     quo_m1_pre_shift_f32_1(23, 12),
-    !fp_format_is_fp16 & quo_m1_pre_shift_f32_1(11),
+    !fp_format_q_is_fp16 & quo_m1_pre_shift_f32_1(11),
     quo_m1_pre_shift_f32_1(10, 1)
   )
   val quo_m1_pre_inc_f16_2 = quo_m1_pre_shift_f16_2(10, 1)
