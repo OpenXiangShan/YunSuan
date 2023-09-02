@@ -423,6 +423,9 @@ package object yunsuan {
     def vfclass   = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fclass)
     def vfmv_f_s  = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmv_f_s)
     def vfmv_s_f  = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmv_s_f)
+    def vfredusum = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fsum_ure)
+    def vfredmax  = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmax_re)
+    def vfredmin  = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmin_re)
   }
 
   object VfaddOpCode {
@@ -445,9 +448,9 @@ package object yunsuan {
     def fclass  = "b01111".U(5.W)
     def fmv_f_s = "b10001".U(5.W)
     def fmv_s_f = "b10010".U(5.W)
-//    def fsum_re   = "b10000".U(5.W) // unorder
-//    def fmin_re   = "b10001".U(5.W)
-//    def fmax_re   = "b10010".U(5.W)
+    def fsum_ure = "b10011".U(5.W) // unorder
+    def fmin_re = "b10100".U(5.W)
+    def fmax_re = "b10101".U(5.W)
   }
 
   object VfmaType{
