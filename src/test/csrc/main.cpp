@@ -8,6 +8,7 @@
 
 #include "include/emu.h"
 
+
 // junk, link for verilator
 std::function<double()> get_sc_time_stamp = []() -> double { return 0; };
 double sc_time_stamp() { return get_sc_time_stamp(); }
@@ -22,7 +23,7 @@ int main(int argc, const char** argv) {
 
   bool good_trap = emu->execute();
   delete emu;
-
+  
   gettimeofday(&end, NULL);
   int s = end.tv_sec - begin.tv_sec;
   int us = end.tv_usec - begin.tv_usec;

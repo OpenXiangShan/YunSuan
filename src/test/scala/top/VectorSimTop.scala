@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 import chisel3.util._
 import yunsuan.util._
+import yunsuan.vector.VectorConvert.VectorCvt
 import yunsuan.vector._
 
 trait VSPParameter {
@@ -16,6 +17,7 @@ trait VSPParameter {
   val VFA_latency: Int = 1
   val VPERM_latency: Int = 1
   val VID_latency: Int = 99
+  val VCVT_latency: Int = 0 // ??
 }
 
 object VPUTestFuType { // only use in test, difftest with xs
@@ -26,6 +28,7 @@ object VPUTestFuType { // only use in test, difftest with xs
   def vperm = "b0000_0100".U(8.W)
   def viaf = "b0000_0101".U(8.W)
   def vid = "b0000_0110".U(8.W)
+  def vcvt= "b0000_0111".U(8.W)
 
   def unknown(typ: UInt) = {
     (typ > 7.U)
@@ -100,7 +103,8 @@ class SimTop() extends VPUTestModule {
       VPUTestFuType.via -> VIA_latency.U,
       VPUTestFuType.vperm -> VPERM_latency.U,
       VPUTestFuType.viaf -> VIAF_latency.U,
-      VPUTestFuType.vid -> VID_latency.U
+      VPUTestFuType.vid -> VID_latency.U,
+      VPUTestFuType.vcvt -> VCVT_latency.U
     )) // fuType --> latency, spec case for div
     assert(!VPUTestFuType.unknown(io.in.bits.fuType))
   }
@@ -130,6 +134,7 @@ class SimTop() extends VPUTestModule {
   val vfd_result_valid = RegInit(VecInit(Seq.fill(VLEN/XLEN)(false.B)))
   val vid_result = Wire(new VSTOutputIO)
   val vid_result_valid = Wire(Bool())
+  val vcvt_result = Wire(new VSTOutputIO)
   when (io.in.fire() || io.out.fire()) {
     vfd_result_valid.map(_ := false.B)
   }
@@ -142,6 +147,7 @@ class SimTop() extends VPUTestModule {
     val vff = Module(new VectorFloatFMA)
     val vfd = Module(new VectorFloatDivider)
     val via = Module(new VectorIntAdder)
+    val vcvt = Module(new VectorCvt(XLEN))
 
     require(vfa.io.fp_a.getWidth == XLEN)
     vfa.io.fp_a := src1
@@ -237,6 +243,15 @@ class SimTop() extends VPUTestModule {
     vff_result.result(i) := vff.io.fp_result
     vff_result.fflags(i) := vff.io.fflags
     vff_result.vxsat := 0.U // DontCare
+
+    // connect vcvt‘s io
+    vcvt.io.sew := sew
+    vcvt.io.opType := opcode
+    vcvt.io.rm := rm
+    vcvt.io.src := src1 // 128 bit->vcvt
+    vcvt_result.vxsat := 0.U
+    vcvt_result.result(i) := vcvt.io.result
+    vcvt_result.fflags(i) := vcvt.io.fflags
   }
 
   val vperm = Module(new VPermTop)
@@ -322,7 +337,8 @@ class SimTop() extends VPUTestModule {
     VPUTestFuType.via -> via_result,
     VPUTestFuType.vperm -> vperm_result,
     VPUTestFuType.viaf -> viaf_result,
-    VPUTestFuType.vid -> vid_result
+    VPUTestFuType.vid -> vid_result,
+    VPUTestFuType.vcvt -> vcvt_result
   ))
 }
 

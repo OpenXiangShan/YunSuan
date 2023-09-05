@@ -46,6 +46,15 @@ class VGMFloatAdder : public VGMFloatBase {
   virtual ElementOutput calculation_e64(ElementInput input);
 };
 
+// VFCVT
+class VGMFloatCvt : public VGMFloatBase {
+  virtual ElementOutput calculation_e8(ElementInput input);
+  virtual ElementOutput calculation_e16(ElementInput input);
+  virtual ElementOutput calculation_e32(ElementInput input);
+  virtual ElementOutput calculation_e64(ElementInput input);
+};
+
+
 class VGMFloatFMA : public VGMFloatBase {
   virtual ElementOutput calculation_e16(ElementInput input);
   virtual ElementOutput calculation_e32(ElementInput input);
@@ -131,5 +140,6 @@ class VGMIntegerDividier : public VPUGoldenModel{
   virtual ElementOutput calculation_e32(ElementInput input);
   virtual ElementOutput calculation_e64(ElementInput input); 
 };
+
 
 #endif
