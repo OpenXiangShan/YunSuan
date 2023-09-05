@@ -71,5 +71,11 @@ emu: $(SOFTFLOAT) $(EMU)
 clean:
 	rm -rf build
 
+bsp:
+	mill -i mill.bsp.BSP/install
+
+idea:
+	mill -i mill.scalalib.GenIdea/idea
+
 test:
 	mill YunSuan.test.test

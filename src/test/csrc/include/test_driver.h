@@ -10,6 +10,13 @@
 #include "gm_common.h"
 #include "iotype.h"
 
+// 改这里来适应fu
+#define pickFuType VFloatCvt
+#define pickFuOptype VFRSQRT7
+#define pickSEW 3
+#define FRS1 false
+#define FRS2 false
+
 enum {
   // STATE_GOODTRAP = 0;
   STATE_BADTRAP = 1,
@@ -42,6 +49,7 @@ private:
   VGMPermutation vperm;
   VGMIntegerALUF vialuF;
   VGMIntegerDividier vid;
+  VGMFloatCvt vcvt;
 
 
 public:

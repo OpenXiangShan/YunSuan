@@ -13,7 +13,7 @@ extern "C"{
 #define VLEN 128
 #define XLEN 64
 
-#define FU_NUM 7 // for random
+#define FU_NUM 8 // for random
 #define VFloatAdder (0)
 #define VFloatFMA   (1)
 #define VFloatDivider (2)
@@ -21,7 +21,8 @@ extern "C"{
 #define VPermutation (4)
 #define VIntegerALUV2 (5)
 #define VIntegerDivider (6)
-#define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2}
+#define VFloatCvt (7)
+#define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt}
 
 #define INT_ROUNDING(result, xrm, gb) \
   do { \
@@ -252,6 +253,42 @@ extern "C"{
 #define FFLAGS_UF (0x02)
 #define FFLAGS_NX (0x01)
 
+
+// vconvert type 
+  #define VFCVT_NUM 23  // for random
+  #define VFCVT_XUFV       (binstoi("10000000")) 
+  #define VFCVT_XFV        (binstoi("10000001")) 
+  #define VFCVT_FXUV       (binstoi("01000010")) 
+  #define VFCVT_FXV        (binstoi("01000011")) 
+  #define VFCVT_RTZ_XUFV   (binstoi("10000110")) 
+  #define VFCVT_RTZ_XFV    (binstoi("10000111")) 
+
+  #define VFWCVT_XUFV      (binstoi("10001000")) 
+  #define VFWCVT_XFV       (binstoi("10001001")) 
+  #define VFWCVT_FXUV      (binstoi("01001010")) 
+  #define VFWCVT_FXV       (binstoi("01001011")) 
+  #define VFWCVT_FFV       (binstoi("11001100")) 
+  #define VFWCVT_RTZ_XUFV  (binstoi("10001110")) 
+  #define VFWCVT_RTZ_XFV   (binstoi("10001111")) 
+
+  #define VFNCVT_XUFW      (binstoi("10010000")) 
+  #define VFNCVT_XFW       (binstoi("10010001")) 
+  #define VFNCVT_FXUW      (binstoi("01010010")) 
+  #define VFNCVT_FXW       (binstoi("01010011")) 
+  #define VFNCVT_FFW       (binstoi("11010100")) 
+  #define VFNCVT_ROD_FFW   (binstoi("11010101")) 
+  #define VFNCVT_RTZ_XUFW  (binstoi("10010110")) 
+  #define VFNCVT_RTZ_XFW   (binstoi("10010111")) 
+
+  #define VFRSQRT7         (binstoi("11100000")) 
+  #define VFREC7           (binstoi("11100001")) 
+
+
+
+  #define VFCVT_ALL_OPTYPES {VFCVT_XUFV, VFCVT_XFV, VFCVT_FXUV, VFCVT_FXV, VFCVT_RTZ_XUFV, VFCVT_RTZ_XFV, \
+  VFWCVT_XUFV, VFWCVT_XFV, VFWCVT_FXUV, VFWCVT_FXV, VFWCVT_FFV, VFWCVT_RTZ_XUFV, VFWCVT_RTZ_XFV, \
+  VFNCVT_XUFW, VFNCVT_XFW, VFNCVT_FXUW, VFNCVT_FXW, VFNCVT_FFW, VFNCVT_ROD_FFW, VFNCVT_RTZ_XUFW ,VFNCVT_RTZ_XFW, VFRSQRT7, VFREC7}\   
+
 // pre-compile stoi
 constexpr uint8_t binstoi(const char str[]) {
   uint8_t num = 0;
@@ -266,5 +303,6 @@ constexpr uint8_t binstoi(const char str[]) {
 
 };
 #endif
+
 
 #endif

@@ -11,7 +11,7 @@ extern "C" {
 #include "include/test_driver.h"
 
 TestDriver::TestDriver():
-  issued(false), verbose(false), keepinput(false)
+  issued(false), verbose(true), keepinput(false)
 {
   // aviod random value
   set_test_type();
@@ -25,12 +25,12 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
   dut_ptr->io_in_valid = false;
   dut_ptr->io_out_ready = true;
 }
-
+// fix set_test_type to select fuType
 void TestDriver::set_test_type() {
   test_type.pick_fuType = true;
-  test_type.pick_fuOpType = false;
-  test_type.fuType = VIntegerDivider;
-  test_type.fuOpType = VIDIV;
+  test_type.pick_fuOpType = true;
+  test_type.fuType = pickFuType;
+  test_type.fuOpType = pickFuOptype;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -79,6 +79,11 @@ uint8_t TestDriver::gen_random_optype() {
     case VIntegerDivider:{
       uint8_t vid_all_optype[VID_NUM] = VID_ALL_OPTYPES;
       return vid_all_optype[rand() % VID_NUM];
+      break;
+    }
+    case VFloatCvt:{
+      uint8_t vid_all_optype[VFCVT_NUM] = VFCVT_ALL_OPTYPES;
+      return vid_all_optype[rand() % VFCVT_NUM];
       break;
     }
     default:
@@ -332,16 +337,22 @@ void TestDriver::get_random_input() {
   else { input.fuType = test_type.fuType; }
   if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
   else { input.fuOpType = test_type.fuOpType; }
-  input.sew = gen_random_sew();
-  input.widen = gen_random_widen();
-  input.src_widen = gen_random_src_widen();
-  input.is_frs1 = gen_random_is_frs1();
-  input.is_frs2 = gen_random_is_frs2();
+  // input.sew = gen_random_sew();
+  // input.widen = gen_random_widen();
+  // input.src_widen = gen_random_src_widen();
+  // input.is_frs1 = gen_random_is_frs1();
+  // input.is_frs2 = gen_random_is_frs2();
   input.rm = rand() % 5;
   input.rm_s = rand() % 5;
   gen_random_vecinfo();
   gen_random_uopidx();
   gen_input_vperm();
+
+  input.sew = pickSEW;
+  input.is_frs1 = FRS1;
+  input.is_frs2 = FRS2;
+  input.widen = 0;
+  input.src_widen =0;
   
   if (input.fuType == VIntegerDivider) {
     gen_random_idiv_input();
@@ -375,7 +386,10 @@ void TestDriver::get_expected_output() {
       expect_output = vialuF.get_expected_output(input); return;
     case VIntegerDivider:
       if (verbose) { printf("FuType:%d, choose VIntegerDivider %d\n", input.fuType, VIntegerDivider); }
-      expect_output = vid.get_expected_output(input); return;    
+      expect_output = vid.get_expected_output(input); return;
+    case VFloatCvt:
+      if (verbose) { printf("FuType:%d, choose VFloatCvt %d\n", input.fuType, VFloatCvt); }
+      expect_output = vcvt.get_expected_output(input); return;     
     default:
       printf("Unsupported FuType %d\n", input.fuType);
       exit(1);
@@ -422,6 +436,7 @@ bool TestDriver::assign_input_raising(VSimTop *dut_ptr) {
   dut_ptr->io_in_bits_vinfo_ta     = input.vinfo.ta;
   dut_ptr->io_in_bits_vinfo_ma     = input.vinfo.ma;
   // printf("fuType:%d fuOpType:%d inFuType:%d inFuOpType:%d\n", dut_ptr->io_in_bits_fuType,dut_ptr->io_in_bits_fuOpType,input.fuType,input.fuOpType);
+  // printf("dut_ptr->io_in_bits_src_0_0:%lx dut_ptr->io_in_bits_src_0_1:%lx\n", dut_ptr->io_in_bits_src_0_0, dut_ptr->io_in_bits_src_0_1);
   return  dut_ptr->io_in_valid;
 }
 
