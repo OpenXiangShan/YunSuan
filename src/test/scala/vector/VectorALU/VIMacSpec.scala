@@ -1,4 +1,3 @@
-
 package yunsuan.vectortest.mac
 
 import chiseltest._
@@ -25,7 +24,6 @@ class VIMacWrapper extends Module {
   io.in.ready := io.out.ready
 }
 
-
 trait VIMacBehavior {
   this: AnyFlatSpec with ChiselScalatestTester with BundleGenHelper =>
 
@@ -45,52 +43,173 @@ trait VIMacBehavior {
         //----- Input gen -----
         val inputSeq = Seq(
           // vmul
-          genVAluInput(SrcBundle("ha99702acb5fc066e1ebbc1a3e5ab2901", "ha29bce578540b0a4f6d1c874207311be"), vmul.copy(s8, s8, s8)),
-          genVAluInput(SrcBundle("hb6ccea5811a2dff1332ece3b3e4c8ac2", "h87ced08010a9ca844b980f150cb769fd", "h1e8c733e62ae5191c3f7569d8508e89e"),
-                       vmul.copy(s8, s8, s8, vl=8, ta=false)),
-          genVAluInput(SrcBundle("hb6ccea5811a2dff1332ece3b3e4c8ac2", "h87ced08010a9ca844b980f150cb769fd", "h1e8c733e62ae5191c3f7569d8508e89e"),
-                       vmul.copy(s8, s8, s8, vl=8)),
-          genVAluInput(SrcBundle("hdfe7ce8be2dc8a46ef01fd4dd36ab541", "ha0e8b8b086d5ec44472d250ef7a4143a"), vmul.copy(s16, s16, s16, vl=8)),
-          genVAluInput(SrcBundle("hd224ee34c8f84e4d140b02cc244b9ab5", "h98cc1bb8c3ae0d7326b742721ce36889", "h565e84cd903ed97b5fc46ddd2b781c69", "h48ae0702228282939ea9461c94d08831"),
-                       vmul.copy(s16, s16, s16, vl=8, vm=false)),
-          genVAluInput(SrcBundle("hd224ee34c8f84e4d140b02cc244b9ab5", "h98cc1bb8c3ae0d7326b742721ce36889", "h565e84cd903ed97b5fc46ddd2b781c69", "h48ae0702228282939ea9461c94d08831"),
-                       vmul.copy(s16, s16, s16, vl=8, vm=false, vstart=5)),
-          genVAluInput(SrcBundle("hd224ee34c8f84e4d140b02cc244b9ab5", "h98cc1bb8c3ae0d7326b742721ce36889", "h565e84cd903ed97b5fc46ddd2b781c69", "h48ae0702228282939ea9461c94d08831"),
-                       vmul.copy(s16, s16, s16, vl=8, vm=false, vstart=22)),
+          genVAluInput(
+            SrcBundle("ha99702acb5fc066e1ebbc1a3e5ab2901", "ha29bce578540b0a4f6d1c874207311be"),
+            vmul.copy(s8, s8, s8)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "hb6ccea5811a2dff1332ece3b3e4c8ac2",
+              "h87ced08010a9ca844b980f150cb769fd",
+              "h1e8c733e62ae5191c3f7569d8508e89e"
+            ),
+            vmul.copy(s8, s8, s8, vl = 8, ta = false)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "hb6ccea5811a2dff1332ece3b3e4c8ac2",
+              "h87ced08010a9ca844b980f150cb769fd",
+              "h1e8c733e62ae5191c3f7569d8508e89e"
+            ),
+            vmul.copy(s8, s8, s8, vl = 8)
+          ),
+          genVAluInput(
+            SrcBundle("hdfe7ce8be2dc8a46ef01fd4dd36ab541", "ha0e8b8b086d5ec44472d250ef7a4143a"),
+            vmul.copy(s16, s16, s16, vl = 8)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "hd224ee34c8f84e4d140b02cc244b9ab5",
+              "h98cc1bb8c3ae0d7326b742721ce36889",
+              "h565e84cd903ed97b5fc46ddd2b781c69",
+              "h48ae0702228282939ea9461c94d08831"
+            ),
+            vmul.copy(s16, s16, s16, vl = 8, vm = false)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "hd224ee34c8f84e4d140b02cc244b9ab5",
+              "h98cc1bb8c3ae0d7326b742721ce36889",
+              "h565e84cd903ed97b5fc46ddd2b781c69",
+              "h48ae0702228282939ea9461c94d08831"
+            ),
+            vmul.copy(s16, s16, s16, vl = 8, vm = false, vstart = 5)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "hd224ee34c8f84e4d140b02cc244b9ab5",
+              "h98cc1bb8c3ae0d7326b742721ce36889",
+              "h565e84cd903ed97b5fc46ddd2b781c69",
+              "h48ae0702228282939ea9461c94d08831"
+            ),
+            vmul.copy(s16, s16, s16, vl = 8, vm = false, vstart = 22)
+          ),
           // vmulh/vmulhu/vmulhsu
-          genVAluInput(SrcBundle("h0a6cc8cba9ee1beee18c9c9f8f7135ff", "hf1e36e523b9aeb0f474656f2130bce82", "h0ea95595340690ac4c0417b7b14f53bc", "h32caeb54925a9a5f3b37bffa60ef23ee"),
-                       vmulh.copy(s32, s32, s32, vl=4, vm=false)),
-          genVAluInput(SrcBundle("hbdded0a4eacea2a62d6ba241111133b6", "h058a93adbb20daa41ceff52f6da44e51", "h0ea95595340690ac4c0417b7b14f53bc", "h32caeb54925a9a5f3b37bffa60ef23ee"),
-                       vmulh.copy(s64, s64, s64, vl=2)),
-          genVAluInput(SrcBundle("hf6e61c133176a3301f900fe7e81c42a4", "he1b3ea73fb71e6f831dce7158ebfa011", "hdf2b0b9e3017c138372d29c056c7aa68", "h22dacf6bc8f13e557baae3912b40b2c8"),
-                       vmulh.copy(u8, u8, u8, vl=14, vm=false, ma=true, vstart=2)),
-          genVAluInput(SrcBundle("h31e91983fba8aa5b66f940cbde1ec2a3", "hcd519f57e36f7008004dd97ae1247e6a", "h0ea95595340690ac4c0417b7b14f53bc", "h32caeb54925a9a5f3b37bffa60ef23ee"),
-                       vmulh.copy(u64, u64, u64, vl=2)),
-          genVAluInput(SrcBundle("h50c07225c971dd003986e80a6eb8f4e0", "hbc32b85c6392ec234b7d8caf37c17e53", "hf038cee74a32b1132de33cfd821f685b", "hd6f321f416e19957cc337b61d81a7999"),
-                       vmulh.copy(s16, s16, u16, vl=29, vm=false, ta=false, vstart=25, uopIdx=3)),
-          genVAluInput(SrcBundle("h1f1c3162091158f6c76d72d6c06b1bbb", "h0881ef5fbaf21932aca060bf82b10c58", "hf038cee74a32b1132de33cfd821f685b", "hd6f321f416e19957cc337b61d81a7999"),
-                       vmulh.copy(s8, s8, u8, vl=16)),
+          genVAluInput(
+            SrcBundle(
+              "h0a6cc8cba9ee1beee18c9c9f8f7135ff",
+              "hf1e36e523b9aeb0f474656f2130bce82",
+              "h0ea95595340690ac4c0417b7b14f53bc",
+              "h32caeb54925a9a5f3b37bffa60ef23ee"
+            ),
+            vmulh.copy(s32, s32, s32, vl = 4, vm = false)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "hbdded0a4eacea2a62d6ba241111133b6",
+              "h058a93adbb20daa41ceff52f6da44e51",
+              "h0ea95595340690ac4c0417b7b14f53bc",
+              "h32caeb54925a9a5f3b37bffa60ef23ee"
+            ),
+            vmulh.copy(s64, s64, s64, vl = 2)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "hf6e61c133176a3301f900fe7e81c42a4",
+              "he1b3ea73fb71e6f831dce7158ebfa011",
+              "hdf2b0b9e3017c138372d29c056c7aa68",
+              "h22dacf6bc8f13e557baae3912b40b2c8"
+            ),
+            vmulh.copy(u8, u8, u8, vl = 14, vm = false, ma = true, vstart = 2)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h31e91983fba8aa5b66f940cbde1ec2a3",
+              "hcd519f57e36f7008004dd97ae1247e6a",
+              "h0ea95595340690ac4c0417b7b14f53bc",
+              "h32caeb54925a9a5f3b37bffa60ef23ee"
+            ),
+            vmulh.copy(u64, u64, u64, vl = 2)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h50c07225c971dd003986e80a6eb8f4e0",
+              "hbc32b85c6392ec234b7d8caf37c17e53",
+              "hf038cee74a32b1132de33cfd821f685b",
+              "hd6f321f416e19957cc337b61d81a7999"
+            ),
+            vmulh.copy(s16, s16, u16, vl = 29, vm = false, ta = false, vstart = 25, uopIdx = 3)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h1f1c3162091158f6c76d72d6c06b1bbb",
+              "h0881ef5fbaf21932aca060bf82b10c58",
+              "hf038cee74a32b1132de33cfd821f685b",
+              "hd6f321f416e19957cc337b61d81a7999"
+            ),
+            vmulh.copy(s8, s8, u8, vl = 16)
+          ),
           // widen
-          genVAluInput(SrcBundle("h7506671a882c38f56a9105cfa711362b", "h7171f89f06d39116418b9177515a36e5"),
-                       vmul.copy(s64, s32, s32, uopIdx=0)),
-          genVAluInput(SrcBundle("h7506671a882c38f56a9105cfa711362b", "h7171f89f06d39116418b9177515a36e5"),
-                       vmul.copy(s64, s32, s32, uopIdx=1)),
-          genVAluInput(SrcBundle("h670c16f883fd77a5bc8e322a5747daad", "hacb375ee75ba26596d6165daf8c43647"),
-                       vmul.copy(u16, u8, u8, vl=16, uopIdx=0)),
-          genVAluInput(SrcBundle("h670c16f883fd77a5bc8e322a5747daad", "hacb375ee75ba26596d6165daf8c43647"),
-                       vmul.copy(u16, u8, u8, vl=16, uopIdx=1)),
-          genVAluInput(SrcBundle("h0acc7b707568048a099adb0df95b39ae", "hc8e85b1c4d3d94ad9748042b8f1ab24a", "hae407980a1268ad6b8123ece61e2ec51", "h40f2452290756e10c7b375d8167db678"),
-                       vmul.copy(u16, u8, u8, vl=16, uopIdx=0, vm=false, ta=false)),
-          genVAluInput(SrcBundle("h0acc7b707568048a099adb0df95b39ae", "hc8e85b1c4d3d94ad9748042b8f1ab24a", "h0d0f18bb772a6bdb6a46a0c37e120044", "h40f2452290756e10c7b375d8167db678"),
-                       vmul.copy(u16, u8, u8, vl=16, uopIdx=1, vm=false, ta=false)),
-          genVAluInput(SrcBundle("hc49b283cd998002b9c1488cb90f69f4c", "h390d6ca162a0761d51ed74ccfb6c3ce7"),
-                       vmul.copy(s32, s16, u16, vl=16, uopIdx=0)),
-          genVAluInput(SrcBundle("hc49b283cd998002b9c1488cb90f69f4c", "h390d6ca162a0761d51ed74ccfb6c3ce7"),
-                       vmul.copy(s32, s16, u16, vl=16, uopIdx=1)),
-          genVAluInput(SrcBundle("hb53bb440761bb0d86d60578b8a2f41a4", "hc0e85eaf3b27c0b6d8d7a6a645dca86a", "h8690131317af49f2df3628389b0700cc", "h3afc9370814160044070a85057a911a7"),
-                       vmul.copy(u32, s16, u16, vl=7, uopIdx=0, vm=false, ta=false, vstart=1)),
-          genVAluInput(SrcBundle("hb53bb440761bb0d86d60578b8a2f41a4", "hc0e85eaf3b27c0b6d8d7a6a645dca86a", "h9187c29d03a9d508655deeeb4524d9b9", "h3afc9370814160044070a85057a911a7"),
-                       vmul.copy(u32, s16, u16, vl=7, uopIdx=1, vm=false, ta=false, vstart=1)),
+          genVAluInput(
+            SrcBundle("h7506671a882c38f56a9105cfa711362b", "h7171f89f06d39116418b9177515a36e5"),
+            vmul.copy(s64, s32, s32, uopIdx = 0)
+          ),
+          genVAluInput(
+            SrcBundle("h7506671a882c38f56a9105cfa711362b", "h7171f89f06d39116418b9177515a36e5"),
+            vmul.copy(s64, s32, s32, uopIdx = 1)
+          ),
+          genVAluInput(
+            SrcBundle("h670c16f883fd77a5bc8e322a5747daad", "hacb375ee75ba26596d6165daf8c43647"),
+            vmul.copy(u16, u8, u8, vl = 16, uopIdx = 0)
+          ),
+          genVAluInput(
+            SrcBundle("h670c16f883fd77a5bc8e322a5747daad", "hacb375ee75ba26596d6165daf8c43647"),
+            vmul.copy(u16, u8, u8, vl = 16, uopIdx = 1)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h0acc7b707568048a099adb0df95b39ae",
+              "hc8e85b1c4d3d94ad9748042b8f1ab24a",
+              "hae407980a1268ad6b8123ece61e2ec51",
+              "h40f2452290756e10c7b375d8167db678"
+            ),
+            vmul.copy(u16, u8, u8, vl = 16, uopIdx = 0, vm = false, ta = false)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h0acc7b707568048a099adb0df95b39ae",
+              "hc8e85b1c4d3d94ad9748042b8f1ab24a",
+              "h0d0f18bb772a6bdb6a46a0c37e120044",
+              "h40f2452290756e10c7b375d8167db678"
+            ),
+            vmul.copy(u16, u8, u8, vl = 16, uopIdx = 1, vm = false, ta = false)
+          ),
+          genVAluInput(
+            SrcBundle("hc49b283cd998002b9c1488cb90f69f4c", "h390d6ca162a0761d51ed74ccfb6c3ce7"),
+            vmul.copy(s32, s16, u16, vl = 16, uopIdx = 0)
+          ),
+          genVAluInput(
+            SrcBundle("hc49b283cd998002b9c1488cb90f69f4c", "h390d6ca162a0761d51ed74ccfb6c3ce7"),
+            vmul.copy(s32, s16, u16, vl = 16, uopIdx = 1)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "hb53bb440761bb0d86d60578b8a2f41a4",
+              "hc0e85eaf3b27c0b6d8d7a6a645dca86a",
+              "h8690131317af49f2df3628389b0700cc",
+              "h3afc9370814160044070a85057a911a7"
+            ),
+            vmul.copy(u32, s16, u16, vl = 7, uopIdx = 0, vm = false, ta = false, vstart = 1)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "hb53bb440761bb0d86d60578b8a2f41a4",
+              "hc0e85eaf3b27c0b6d8d7a6a645dca86a",
+              "h9187c29d03a9d508655deeeb4524d9b9",
+              "h3afc9370814160044070a85057a911a7"
+            ),
+            vmul.copy(u32, s16, u16, vl = 7, uopIdx = 1, vm = false, ta = false, vstart = 1)
+          )
         )
 
         //----- Output expectation -----
@@ -120,7 +239,7 @@ trait VIMacBehavior {
           genVAluOutput("he005d284c99cfdc492f259c8e8fe8d94"), // vwmulsu 1245
           genVAluOutput("hf2c37edf11129dbcf1342f000013d6df"), // vwmulsu 1245
           genVAluOutput("h8690131338fce622dfd96b649b0700cc"), // vwmulsu 1329
-          genVAluOutput("h9187c29d03a9d5081b4a371d4524d9b9"), // vwmulsu 1329
+          genVAluOutput("h9187c29d03a9d5081b4a371d4524d9b9") // vwmulsu 1329
         )
 
         fork {
@@ -141,62 +260,225 @@ trait VIMacBehavior {
         //----- Input gen -----
         val inputSeq = Seq(
           // 11.13 vmacc, ...
-          genVAluInput(SrcBundle("h7a4334867ced31bbe5cb33ee399c1115", "h0a1ebd943a0d3a2a0a006fa5c61b1db3", "he8c8539798746c1f3b2ab61001ae0f7c"),
-                       vmacc.copy(s16, s16, s16, vl=8)),
-          genVAluInput(SrcBundle("h7bcc2c42ce8be5465dfb087a7399bbd8", "hc59febb6d12ba8da300427bfdc4c5707", "ha6b8d9e5f6aa32dfd90b8aa1db644f66"),
-                       vmacc.copy(s64, s64, s64, vl=8)),
-          genVAluInput(SrcBundle("ha6ebda784168cd76af5c54421055884b", "h7092289c8d2c5a333916f5d221b8f6e2", "h517b1be0a23b5ff7ab0de19841294c17", "hdf6b8da5c18b705ad3f38ac62021d5a5"),
-                       vmacc.copy(s16, s16, s16, vl=6, vstart=1, vm=false, ta=true)),
-          genVAluInput(SrcBundle("h2330b5edb7c6b4acf4cb6f75115d7f2d", "hee3c56069c5985e6186ddf69d26981c6", "h1443ca33940e6979a8367181ab1eb67c"),
-                       vnmsac.copy(s8, s8, s8)),
-          genVAluInput(SrcBundle("h6a9542a271f7d8781f4fe502e25dff72", "h824a6b880a347247e4d8a077b482c8ff", "h3a7018baf93635f3bde8b5d321cfb60d", "hdb92a06ebb12475b5614ce82f8de4610"),
-                       vnmsac.copy(s8, s8, s8, vl=8, vm=false, ta=false)),
-          genVAluInput(SrcBundle("h322dd3732c9f2524aea99c89c35eca89", "h4ce5d0dfe38b9a9f93d7fd75e3c51f88", "h4541400537a0b174650cb6cb35fbc1ce", "h70403810f77fea75441612b7223ad31b"),
-                       vnmsac.copy(s32, s32, s32, vl=16, uopIdx=2)),
-          genVAluInput(SrcBundle("h35f383f5de3aa9be2581f197160841e8", "h397c4a87431448de5b8172a6f924e028", "hcb0e731241c03becf18e381f04b04e4a", "h78dac7e195c8180935f87ea138589a35"),
-                       vmadd.copy(s16, s16, s16, vl=8, vm=false, ta=false )),
-          genVAluInput(SrcBundle("h6605ab95dfe9c7d7e9c4d6392c91e3fc", "h876858858eb4ea21579b3b7f93d217b0", "h9c3b2995ce579904d0644125d7b570f5", "hb29b0586c7b24a856052de79ee31db1e"),
-                       vmadd.copy(s64, s64, s64, vl=2)),
-          genVAluInput(SrcBundle("hc479b82e1a8c40440ed2d8df0c32df40", "hf234025cccaf5b33b2062960963f34a8", "hd6dda0b26ba4a5d10a9e2749eadd36e7", "hdd0c3cf8efb8af11e3f5a7c5044c533e"),
-                       vnmsub.copy(s8, s8, s8, vl=16, vm=false, ta=false)),
-          genVAluInput(SrcBundle("h93857ffe6d4a1ebe155eaf7c852a2ffd", "h7132fa74d7ae59f9b30457337eceb470", "hb82219c3546b711f0adf48621807ebd9", "h52e6c1664262134453709b773396d56f"),
-                       vnmsub.copy(s32, s32, s32, vl=32)),
+          genVAluInput(
+            SrcBundle(
+              "h7a4334867ced31bbe5cb33ee399c1115",
+              "h0a1ebd943a0d3a2a0a006fa5c61b1db3",
+              "he8c8539798746c1f3b2ab61001ae0f7c"
+            ),
+            vmacc.copy(s16, s16, s16, vl = 8)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h7bcc2c42ce8be5465dfb087a7399bbd8",
+              "hc59febb6d12ba8da300427bfdc4c5707",
+              "ha6b8d9e5f6aa32dfd90b8aa1db644f66"
+            ),
+            vmacc.copy(s64, s64, s64, vl = 8)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "ha6ebda784168cd76af5c54421055884b",
+              "h7092289c8d2c5a333916f5d221b8f6e2",
+              "h517b1be0a23b5ff7ab0de19841294c17",
+              "hdf6b8da5c18b705ad3f38ac62021d5a5"
+            ),
+            vmacc.copy(s16, s16, s16, vl = 6, vstart = 1, vm = false, ta = true)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h2330b5edb7c6b4acf4cb6f75115d7f2d",
+              "hee3c56069c5985e6186ddf69d26981c6",
+              "h1443ca33940e6979a8367181ab1eb67c"
+            ),
+            vnmsac.copy(s8, s8, s8)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h6a9542a271f7d8781f4fe502e25dff72",
+              "h824a6b880a347247e4d8a077b482c8ff",
+              "h3a7018baf93635f3bde8b5d321cfb60d",
+              "hdb92a06ebb12475b5614ce82f8de4610"
+            ),
+            vnmsac.copy(s8, s8, s8, vl = 8, vm = false, ta = false)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h322dd3732c9f2524aea99c89c35eca89",
+              "h4ce5d0dfe38b9a9f93d7fd75e3c51f88",
+              "h4541400537a0b174650cb6cb35fbc1ce",
+              "h70403810f77fea75441612b7223ad31b"
+            ),
+            vnmsac.copy(s32, s32, s32, vl = 16, uopIdx = 2)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h35f383f5de3aa9be2581f197160841e8",
+              "h397c4a87431448de5b8172a6f924e028",
+              "hcb0e731241c03becf18e381f04b04e4a",
+              "h78dac7e195c8180935f87ea138589a35"
+            ),
+            vmadd.copy(s16, s16, s16, vl = 8, vm = false, ta = false)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h6605ab95dfe9c7d7e9c4d6392c91e3fc",
+              "h876858858eb4ea21579b3b7f93d217b0",
+              "h9c3b2995ce579904d0644125d7b570f5",
+              "hb29b0586c7b24a856052de79ee31db1e"
+            ),
+            vmadd.copy(s64, s64, s64, vl = 2)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "hc479b82e1a8c40440ed2d8df0c32df40",
+              "hf234025cccaf5b33b2062960963f34a8",
+              "hd6dda0b26ba4a5d10a9e2749eadd36e7",
+              "hdd0c3cf8efb8af11e3f5a7c5044c533e"
+            ),
+            vnmsub.copy(s8, s8, s8, vl = 16, vm = false, ta = false)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h93857ffe6d4a1ebe155eaf7c852a2ffd",
+              "h7132fa74d7ae59f9b30457337eceb470",
+              "hb82219c3546b711f0adf48621807ebd9",
+              "h52e6c1664262134453709b773396d56f"
+            ),
+            vnmsub.copy(s32, s32, s32, vl = 32)
+          ),
           // 11.14 vwmaccu, ...
-          genVAluInput(SrcBundle("hcb097cbd0ae9e323ba616caefefcfba5", "hf203cb1f52797a244e6df2336e4a158e", "hc0eb6d6bb199d9528626be69b0e33ac0", "h95b46c9dab109f383ade4e01d64ae284"),
-                       vmacc.copy(u32, u16, u16, vl=8)),
-          genVAluInput(SrcBundle("hcb097cbd0ae9e323ba616caefefcfba5", "hf203cb1f52797a244e6df2336e4a158e", "h0bac343b49fbe070bc837a274dfe8fad", "h95b46c9dab109f383ade4e01d64ae284"),
-                       vmacc.copy(u32, u16, u16, vl=8, uopIdx=1)),
-          genVAluInput(SrcBundle("h22892d91142feb24bfc629cde5b7039e", "he079fdca97df1fff5966f474d00e82a5", "hcdb62e2b63bb0d6df6841e97c078bf9b", "h2748306bf965b71e5473f7ccca6b3ee9"),
-                       vmacc.copy(s16, s8, s8, vl=16, vm=false, ta=false, uopIdx=0)),
-          genVAluInput(SrcBundle("h22892d91142feb24bfc629cde5b7039e", "he079fdca97df1fff5966f474d00e82a5", "h803c6e6867e54485d2901e4257cdd0e2", "h2748306bf965b71e5473f7ccca6b3ee9"),
-                       vmacc.copy(s16, s8, s8, vl=16, vm=false, ta=false, uopIdx=1)),
-          genVAluInput(SrcBundle("he32ab2a10ab5db6bc8dcd334c5bb8545", "h4c67d9f4f3a17e5bbdcf816b1cf7101a", "h46c25d9266656e095cd00e3e69497407", "h4d3731e5a47ac3cce8ccab1808292971"),
-                       vmacc.copy(s32, u16, s16, vl=8, uopIdx=0)),
-          genVAluInput(SrcBundle("he32ab2a10ab5db6bc8dcd334c5bb8545", "h4c67d9f4f3a17e5bbdcf816b1cf7101a", "hd860ad068164b7803578b0a02c795157", "h4d3731e5a47ac3cce8ccab1808292971"),
-                       vmacc.copy(s32, u16, s16, vl=8, uopIdx=1)),
-          genVAluInput(SrcBundle("h7bdff7b574e1c868bef8b57ef96cc960", "h12121212121212121212121212121212", "hdc5b1249e3f23cecf6550aa851cdef15", "h6d5ad696376b5cbba9675ddcdfb67b7f"),
-                       vmacc.copy(s16, s8, u8, vl=16, vm=false, ta=false, uopIdx=0)),
-          genVAluInput(SrcBundle("h7bdff7b574e1c868bef8b57ef96cc960", "h12121212121212121212121212121212", "h30df60b0251ef61ccdc93fe959bbbd60", "h6d5ad696376b5cbba9675ddcdfb67b7f"),
-                       vmacc.copy(s16, s8, u8, vl=16, vm=false, ta=false, uopIdx=1)),
+          genVAluInput(
+            SrcBundle(
+              "hcb097cbd0ae9e323ba616caefefcfba5",
+              "hf203cb1f52797a244e6df2336e4a158e",
+              "hc0eb6d6bb199d9528626be69b0e33ac0",
+              "h95b46c9dab109f383ade4e01d64ae284"
+            ),
+            vmacc.copy(u32, u16, u16, vl = 8)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "hcb097cbd0ae9e323ba616caefefcfba5",
+              "hf203cb1f52797a244e6df2336e4a158e",
+              "h0bac343b49fbe070bc837a274dfe8fad",
+              "h95b46c9dab109f383ade4e01d64ae284"
+            ),
+            vmacc.copy(u32, u16, u16, vl = 8, uopIdx = 1)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h22892d91142feb24bfc629cde5b7039e",
+              "he079fdca97df1fff5966f474d00e82a5",
+              "hcdb62e2b63bb0d6df6841e97c078bf9b",
+              "h2748306bf965b71e5473f7ccca6b3ee9"
+            ),
+            vmacc.copy(s16, s8, s8, vl = 16, vm = false, ta = false, uopIdx = 0)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h22892d91142feb24bfc629cde5b7039e",
+              "he079fdca97df1fff5966f474d00e82a5",
+              "h803c6e6867e54485d2901e4257cdd0e2",
+              "h2748306bf965b71e5473f7ccca6b3ee9"
+            ),
+            vmacc.copy(s16, s8, s8, vl = 16, vm = false, ta = false, uopIdx = 1)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "he32ab2a10ab5db6bc8dcd334c5bb8545",
+              "h4c67d9f4f3a17e5bbdcf816b1cf7101a",
+              "h46c25d9266656e095cd00e3e69497407",
+              "h4d3731e5a47ac3cce8ccab1808292971"
+            ),
+            vmacc.copy(s32, u16, s16, vl = 8, uopIdx = 0)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "he32ab2a10ab5db6bc8dcd334c5bb8545",
+              "h4c67d9f4f3a17e5bbdcf816b1cf7101a",
+              "hd860ad068164b7803578b0a02c795157",
+              "h4d3731e5a47ac3cce8ccab1808292971"
+            ),
+            vmacc.copy(s32, u16, s16, vl = 8, uopIdx = 1)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h7bdff7b574e1c868bef8b57ef96cc960",
+              "h12121212121212121212121212121212",
+              "hdc5b1249e3f23cecf6550aa851cdef15",
+              "h6d5ad696376b5cbba9675ddcdfb67b7f"
+            ),
+            vmacc.copy(s16, s8, u8, vl = 16, vm = false, ta = false, uopIdx = 0)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h7bdff7b574e1c868bef8b57ef96cc960",
+              "h12121212121212121212121212121212",
+              "h30df60b0251ef61ccdc93fe959bbbd60",
+              "h6d5ad696376b5cbba9675ddcdfb67b7f"
+            ),
+            vmacc.copy(s16, s8, u8, vl = 16, vm = false, ta = false, uopIdx = 1)
+          ),
           // vsmul
-          genVAluInput(SrcBundle("h8d761fc68afdbd08222b837d9cbfc066", "h6dd479e194eba80f0cf7ed586ce10e9d", "hbc6913a4392324175c94fd1f93170019", "he1ee2fb95096b8c97a6ad0b0c11ce5f1"),
-                       vsmul.copy(s32, s32, s32, vl=2, ta=false, vlmul=7, vxrm=0)),
-          genVAluInput(SrcBundle("h791a297724a32ae31ab5d8295fac8216", "h17b39c64af7a70f1ed94b3cb087c5a41", "h7874ec2e595608e90bdf03a748924295"),
-                       vsmul.copy(s8, s8, s8, vl=16, vxrm=1)),
-          genVAluInput(SrcBundle("h47e51219c39602abc5e6b089e8e08b20", "h176293fee6276406ea89532518c7fd7d", "ha340963e941e8e9591336c77d9691503"),
-                       vsmul.copy(s8, s8, s8, vl=16, vxrm=2)),
-          genVAluInput(SrcBundle("h540b1fe8fc7e6fc35b5f49a1027c11f7", "h9b5192736d6c4fe4be45a1ff9b4c4a0b", "hf1a106126e33623eb9ee8c048260fbc6"),
-                       vsmul.copy(s8, s8, s8, vl=16, vxrm=3)),
-          genVAluInput(SrcBundle("h0c2b49818dc1b9e4e700c3508a5a9f69", "h8a94d35972841fb81656a0205e179319", "h4dc36a2d1e9967a8b6d2dedd2c3ad39f", "h0c642070f3e354d84e75bf2efdeddaa6"),
-                       vsmul.copy(s16, s16, s16, vl=32, vm=false, ta=false, vxrm=3, uopIdx=2)),
-          genVAluInput(SrcBundle("h80000000000000008000000000000000", "h80000000000000008000000000000000"),
-                       vsmul.copy(s64, s64, s64, vl=2, vxrm=3, uopIdx=0)),
-          genVAluInput(SrcBundle("h80808080808080808080808080808080", "h80808080808080808080808080808080"),
-                       vsmul.copy(s8, s8, s8, vl=16, vxrm=1, uopIdx=0)),
-          genVAluInput(SrcBundle("h00000000000000008000000000000000", "h00000000000000008000000000000000"),
-                       vsmul.copy(s16, s16, s16, vl=8, vxrm=0, uopIdx=0)),
-          genVAluInput(SrcBundle("h00000000000080000000000000000000", "h00000000000080000000000000000000"),
-                       vsmul.copy(s16, s16, s16, vl=8, vxrm=0, uopIdx=0)),
+          genVAluInput(
+            SrcBundle(
+              "h8d761fc68afdbd08222b837d9cbfc066",
+              "h6dd479e194eba80f0cf7ed586ce10e9d",
+              "hbc6913a4392324175c94fd1f93170019",
+              "he1ee2fb95096b8c97a6ad0b0c11ce5f1"
+            ),
+            vsmul.copy(s32, s32, s32, vl = 2, ta = false, vlmul = 7, vxrm = 0)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h791a297724a32ae31ab5d8295fac8216",
+              "h17b39c64af7a70f1ed94b3cb087c5a41",
+              "h7874ec2e595608e90bdf03a748924295"
+            ),
+            vsmul.copy(s8, s8, s8, vl = 16, vxrm = 1)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h47e51219c39602abc5e6b089e8e08b20",
+              "h176293fee6276406ea89532518c7fd7d",
+              "ha340963e941e8e9591336c77d9691503"
+            ),
+            vsmul.copy(s8, s8, s8, vl = 16, vxrm = 2)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h540b1fe8fc7e6fc35b5f49a1027c11f7",
+              "h9b5192736d6c4fe4be45a1ff9b4c4a0b",
+              "hf1a106126e33623eb9ee8c048260fbc6"
+            ),
+            vsmul.copy(s8, s8, s8, vl = 16, vxrm = 3)
+          ),
+          genVAluInput(
+            SrcBundle(
+              "h0c2b49818dc1b9e4e700c3508a5a9f69",
+              "h8a94d35972841fb81656a0205e179319",
+              "h4dc36a2d1e9967a8b6d2dedd2c3ad39f",
+              "h0c642070f3e354d84e75bf2efdeddaa6"
+            ),
+            vsmul.copy(s16, s16, s16, vl = 32, vm = false, ta = false, vxrm = 3, uopIdx = 2)
+          ),
+          genVAluInput(
+            SrcBundle("h80000000000000008000000000000000", "h80000000000000008000000000000000"),
+            vsmul.copy(s64, s64, s64, vl = 2, vxrm = 3, uopIdx = 0)
+          ),
+          genVAluInput(
+            SrcBundle("h80808080808080808080808080808080", "h80808080808080808080808080808080"),
+            vsmul.copy(s8, s8, s8, vl = 16, vxrm = 1, uopIdx = 0)
+          ),
+          genVAluInput(
+            SrcBundle("h00000000000000008000000000000000", "h00000000000000008000000000000000"),
+            vsmul.copy(s16, s16, s16, vl = 8, vxrm = 0, uopIdx = 0)
+          ),
+          genVAluInput(
+            SrcBundle("h00000000000080000000000000000000", "h00000000000080000000000000000000"),
+            vsmul.copy(s16, s16, s16, vl = 8, vxrm = 0, uopIdx = 0)
+          )
         )
 
         //----- Output expectation -----
@@ -227,10 +509,10 @@ trait VIMacBehavior {
           genVAluOutput("h0cebf0ff0cdf01fc0a18ccddfb0e021f"), // vsmul 4241
           genVAluOutput("hbd07e5ebfd6b450dd133c901ff4909ff"), // vsmul 4255
           genVAluOutput("hf4d7e65b99cb67a8fba32d752c3a522d"), // vsmul 10639
-          genVAluOutput("h7fffffffffffffff7fffffffffffffff", vxsat=true), // handmade
-          genVAluOutput("h7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f", vxsat=true), // handmade
-          genVAluOutput("h00000000000000007fff000000000000", vxsat=true), // handmade
-          genVAluOutput("h0000000000007fff0000000000000000", vxsat=true), // handmade
+          genVAluOutput("h7fffffffffffffff7fffffffffffffff", vxsat = true), // handmade
+          genVAluOutput("h7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f", vxsat = true), // handmade
+          genVAluOutput("h00000000000000007fff000000000000", vxsat = true), // handmade
+          genVAluOutput("h0000000000007fff0000000000000000", vxsat = true) // handmade
         )
 
         fork {
@@ -245,7 +527,7 @@ trait VIMacBehavior {
 }
 
 class VIMacSpec extends AnyFlatSpec with ChiselScalatestTester with BundleGenHelper with VIMacBehavior {
-  behavior of "IMac test"
-  it should behave like vIMacTest0()
-  it should behave like vIMacTest1()
+  behavior.of("IMac test")
+  (it should behave).like(vIMacTest0())
+  (it should behave).like(vIMacTest1())
 }

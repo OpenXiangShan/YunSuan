@@ -1,4 +1,3 @@
-
 package yunsuan.vector.alu
 
 import chisel3._
@@ -27,8 +26,8 @@ class VIAlu extends Module {
   val mask = in.bits.mask
   val uopIdx = in.bits.info.uopIdx
   val narrow = srcTypeVs2(1, 0) === 3.U && vdType(1, 0) === 2.U ||
-               srcTypeVs2(1, 0) === 2.U && vdType(1, 0) === 1.U ||
-               srcTypeVs2(1, 0) === 1.U && vdType(1, 0) === 0.U
+    srcTypeVs2(1, 0) === 2.U && vdType(1, 0) === 1.U ||
+    srcTypeVs2(1, 0) === 1.U && vdType(1, 0) === 0.U
   val vstart_gte_vl = in.bits.info.vstart >= in.bits.info.vl
 
   val vIntFixpAlu = Module(new VIntFixpAlu)
@@ -49,11 +48,11 @@ class VIAlu extends Module {
   vMaskAlu.io.in := io.in
 
   /**
-   * Output stage
-   */
+    * Output stage
+    */
   val opcodeS1 = RegNext(in.bits.opcode)
-  val vdFinal = Mux(opcodeS1.isIntFixp, vIntFixpAlu.io.out.vd,
-                    Mux(opcodeS1.isReduction, vReduAlu.io.out.vd, vMaskAlu.io.out.vd))
+  val vdFinal =
+    Mux(opcodeS1.isIntFixp, vIntFixpAlu.io.out.vd, Mux(opcodeS1.isReduction, vReduAlu.io.out.vd, vMaskAlu.io.out.vd))
 
   io.out.bits.vd := vdFinal
   io.out.bits.vxsat := vIntFixpAlu.io.out.vxsat

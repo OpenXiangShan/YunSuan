@@ -1,4 +1,3 @@
-
 package yunsuan.vector
 
 import chisel3._
@@ -74,7 +73,6 @@ class VPermFsmInput extends Bundle {
   val rob_commit_rob_idx = UInt(9.W)
 
 }
-
 
 class VPermFsmOutput extends Bundle {
   val fsm_rd_vld_0 = Bool()

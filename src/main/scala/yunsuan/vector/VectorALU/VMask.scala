@@ -18,9 +18,9 @@ class VMask extends Module {
   })
 
   val vs1 = io.in.bits.vs1
-  val vs2 = VecInit(Seq.tabulate(NLanes)(i => (io.in.bits.vs2) ((i + 1) * LaneWidth - 1, i * LaneWidth)))
-  val old_vd = VecInit(Seq.tabulate(NLanes)(i => (io.in.bits.old_vd) ((i + 1) * LaneWidth - 1, i * LaneWidth)))
-  val vmask = VecInit(Seq.tabulate(NLanes)(i => (io.in.bits.mask) ((i + 1) * LaneWidth - 1, i * LaneWidth)))
+  val vs2 = VecInit(Seq.tabulate(NLanes)(i => (io.in.bits.vs2)((i + 1) * LaneWidth - 1, i * LaneWidth)))
+  val old_vd = VecInit(Seq.tabulate(NLanes)(i => (io.in.bits.old_vd)((i + 1) * LaneWidth - 1, i * LaneWidth)))
+  val vmask = VecInit(Seq.tabulate(NLanes)(i => (io.in.bits.mask)((i + 1) * LaneWidth - 1, i * LaneWidth)))
   val opcode = io.in.bits.opcode
   val srcTypeVs2 = io.in.bits.srcType(0)
   val srcTypeVs1 = io.in.bits.srcType(1)
@@ -60,7 +60,9 @@ class VMask extends Module {
   val first = Wire(Vec(NLanes, SInt(xLen.W)))
   val vmfirst = Wire(SInt(xLen.W))
   val vmsbf = Wire(Vec(NLanes, UInt(LaneWidth.W)))
-  val vmsif = VecInit(Seq.tabulate(NLanes)(i => Cat(Cat(vmsbf.reverse)(VLEN - 2, 0), 1.U)((i + 1) * LaneWidth - 1, i * LaneWidth)))
+  val vmsif = VecInit(
+    Seq.tabulate(NLanes)(i => Cat(Cat(vmsbf.reverse)(VLEN - 2, 0), 1.U)((i + 1) * LaneWidth - 1, i * LaneWidth))
+  )
   val vmsof = Wire(Vec(NLanes, UInt(LaneWidth.W)))
   val vd_vmsbf = Wire(Vec(NLanes, UInt(LaneWidth.W)))
   val vd_vmsif = Wire(Vec(NLanes, UInt(LaneWidth.W)))
@@ -74,7 +76,11 @@ class VMask extends Module {
   val sof_mask = Wire(Vec(NLanes, UInt(LaneWidth.W)))
   val vs2m = Wire(Vec(VLEN, UInt(1.W)))
 
-  vlRemain := Mux(vl >= Mux(vcpop_m, uopIdx << vsew_plus1, uopIdx(5, 1) << vsew_plus1), vl - Mux(vcpop_m, uopIdx << vsew_plus1, uopIdx(5, 1) << vsew_plus1), 0.U)
+  vlRemain := Mux(
+    vl >= Mux(vcpop_m, uopIdx << vsew_plus1, uopIdx(5, 1) << vsew_plus1),
+    vl - Mux(vcpop_m, uopIdx << vsew_plus1, uopIdx(5, 1) << vsew_plus1),
+    0.U
+  )
 
   for (i <- 0 until VLEN) {
     vs2m(i) := 0.U
@@ -180,7 +186,11 @@ class VMask extends Module {
   val vid_tail_mask_vd = Wire(UInt(VLEN.W))
 
   val vstartRemain = Wire(UInt(7.W))
-  vstartRemain := Mux(vid_v, Mux(vstart >= (uopIdx(5, 1) << vsew_plus1), (vstart - (uopIdx(5, 1) << vsew_plus1)), 0.U), 0.U)
+  vstartRemain := Mux(
+    vid_v,
+    Mux(vstart >= (uopIdx(5, 1) << vsew_plus1), (vstart - (uopIdx(5, 1) << vsew_plus1)), 0.U),
+    0.U
+  )
   val vstartRemainBytes = vstartRemain << vsew
   val vstart_bytes = Mux(vstartRemainBytes >= vlenb.U, vlenb.U, vstartRemainBytes)
   val vstart_bits = Cat(vstart_bytes, 0.U(3.W))

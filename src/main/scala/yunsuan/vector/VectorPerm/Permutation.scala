@@ -70,11 +70,12 @@ class Permutation extends Module {
   val vd_reg = RegInit(0.U(VLEN.W))
 
   vlRemain := vl
-  when((vcompress && (uopIdx === 3.U)) ||
-    ((vslideup) && ((uopIdx === 1.U) || (uopIdx === 2.U))) ||
-    ((vslidedn) && (uopIdx === 2.U)) ||
-    (((vrgather && !vrgather16_sew8) || vrgather_vx) && (uopIdx >= 2.U)) ||
-    (vrgather16_sew8 && (uopIdx >= 4.U))
+  when(
+    (vcompress && (uopIdx === 3.U)) ||
+      ((vslideup) && ((uopIdx === 1.U) || (uopIdx === 2.U))) ||
+      ((vslidedn) && (uopIdx === 2.U)) ||
+      (((vrgather && !vrgather16_sew8) || vrgather_vx) && (uopIdx >= 2.U)) ||
+      (vrgather16_sew8 && (uopIdx >= 4.U))
   ) {
     vlRemain := Mux(vl >= ele_cnt, vl - ele_cnt, 0.U)
   }.elsewhen(vslide1up) {
@@ -84,11 +85,12 @@ class Permutation extends Module {
   }
 
   vmask_uop := vmask0
-  when((vcompress && uopIdx(1)) ||
-    (vslideup && ((uopIdx === 1.U) || (uopIdx === 2.U))) ||
-    (vslidedn && (uopIdx === 2.U)) ||
-    (((vrgather && !vrgather16_sew8) || vrgather_vx) && (uopIdx >= 2.U)) ||
-    (vrgather16_sew8 && (uopIdx >= 4.U))
+  when(
+    (vcompress && uopIdx(1)) ||
+      (vslideup && ((uopIdx === 1.U) || (uopIdx === 2.U))) ||
+      (vslidedn && (uopIdx === 2.U)) ||
+      (((vrgather && !vrgather16_sew8) || vrgather_vx) && (uopIdx >= 2.U)) ||
+      (vrgather16_sew8 && (uopIdx >= 4.U))
   ) {
     vmask_uop := vmask1
   }.elsewhen(vslide1up) {
@@ -97,9 +99,10 @@ class Permutation extends Module {
     vmask_uop := vmask >> (uopIdx(5, 1) << vsew_plus1)
   }
 
-  when((vcompress && (uopIdx === 3.U)) ||
-    (vslideup && (uopIdx === 1.U)) ||
-    (vslidedn && (uopIdx === 0.U) && vlmul === 1.U)
+  when(
+    (vcompress && (uopIdx === 3.U)) ||
+      (vslideup && (uopIdx === 1.U)) ||
+      (vslidedn && (uopIdx === 0.U) && vlmul === 1.U)
   ) {
     base := vlenb.U
   }.otherwise {
@@ -123,9 +126,15 @@ class Permutation extends Module {
 
   // vrgather/vrgather16
   val vrgather_byte_sel = Wire(Vec(vlenb, UInt(64.W)))
-  val first_gather = (vlmul >= 4.U) || (vlmul === 0.U) || ((vlmul === 1.U) && (Mux(vrgather16_sew8, uopIdx(1), uopIdx(0)) === 0.U))
-  val vs2_bytes_min = Mux((vrgather16_sew8 && uopIdx(1)) || (((vrgather && !vrgather16_sew8) || vrgather_vx) && uopIdx(0)), vlenb.U, 0.U)
-  val vs2_bytes_max = Mux((vrgather16_sew8 && uopIdx(1)) || (((vrgather && !vrgather16_sew8) || vrgather_vx) && uopIdx(0)), Cat(vlenb.U, 0.U), vlenb.U)
+  val first_gather =
+    (vlmul >= 4.U) || (vlmul === 0.U) || ((vlmul === 1.U) && (Mux(vrgather16_sew8, uopIdx(1), uopIdx(0)) === 0.U))
+  val vs2_bytes_min =
+    Mux((vrgather16_sew8 && uopIdx(1)) || (((vrgather && !vrgather16_sew8) || vrgather_vx) && uopIdx(0)), vlenb.U, 0.U)
+  val vs2_bytes_max = Mux(
+    (vrgather16_sew8 && uopIdx(1)) || (((vrgather && !vrgather16_sew8) || vrgather_vx) && uopIdx(0)),
+    Cat(vlenb.U, 0.U),
+    vlenb.U
+  )
   val vrgather_vd = Wire(Vec(vlenb, UInt(8.W)))
 
   for (i <- 0 until vlenb) {
@@ -235,7 +244,11 @@ class Permutation extends Module {
     ((vlmul === 1.U) && (uopIdx === 2.U)) ||
     ((vlmul === 2.U) && (uopIdx === 6.U)) ||
     (uopIdx === 14.U)
-  val vslide1dn_vd = Mux((load_rs1 || uopIdx(0)), VecInit(Seq.tabulate(vlenb)(i => vslide1dn_vd_rs1((i + 1) * 8 - 1, i * 8))), vslide1dn_vd_wo_rs1)
+  val vslide1dn_vd = Mux(
+    (load_rs1 || uopIdx(0)),
+    VecInit(Seq.tabulate(vlenb)(i => vslide1dn_vd_rs1((i + 1) * 8 - 1, i * 8))),
+    vslide1dn_vd_wo_rs1
+  )
 
   for (i <- 0 until vlenb) { // offset old_vd
     val in_bounds_up = ((base + i.U) >= slide_bytes) && ((base + i.U - slide_bytes) < vlenb.U)
@@ -283,7 +296,10 @@ class Permutation extends Module {
   vslide1dn_vd_rs1 := old_vd
   when(load_rs1 || uopIdx(0)) {
     when((vlRemainBytes > 0.U) && (vlRemainBytes <= vlenb.U) && (vmask_byte_strb(vlRemainBytes - 1.U).asBool)) {
-      vslide1dn_vd_rs1 := (Cat(vslide1dn_vd_wo_rs1.reverse) & (vd_mask >> (VLEN.U - Cat((vlRemainBytes - vsew_bytes), 0.U(3.W))))) |
+      vslide1dn_vd_rs1 := (Cat(vslide1dn_vd_wo_rs1.reverse) & (vd_mask >> (VLEN.U - Cat(
+        (vlRemainBytes - vsew_bytes),
+        0.U(3.W)
+      )))) |
         (vs1 & (vd_mask << Cat((vlRemainBytes - vsew_bytes), 0.U(3.W))))
     }
   }
@@ -305,11 +321,12 @@ class Permutation extends Module {
   val vstart_old_vd = old_vd & (~vmask_vstart_bits)
 
   vstartRemain := vstart
-  when((vcompress && (uopIdx === 3.U)) ||
-    ((vslideup) && ((uopIdx === 1.U) || (uopIdx === 2.U))) ||
-    ((vslidedn) && (uopIdx === 2.U)) ||
-    (((vrgather && !vrgather16_sew8) || vrgather_vx) && (uopIdx >= 2.U)) ||
-    (vrgather16_sew8 && (uopIdx >= 4.U))
+  when(
+    (vcompress && (uopIdx === 3.U)) ||
+      ((vslideup) && ((uopIdx === 1.U) || (uopIdx === 2.U))) ||
+      ((vslidedn) && (uopIdx === 2.U)) ||
+      (((vrgather && !vrgather16_sew8) || vrgather_vx) && (uopIdx >= 2.U)) ||
+      (vrgather16_sew8 && (uopIdx >= 4.U))
   ) {
     vstartRemain := Mux(vstart >= ele_cnt, vstart - ele_cnt, 0.U)
   }.elsewhen(vslide1up) {
@@ -332,10 +349,12 @@ class Permutation extends Module {
   }
 
   perm_tail_mask_vd := Cat(perm_vd.reverse)
-  when((vslideup && fire && (uopIdx =/= 1.U)) ||
-    (vslidedn && fire && (uopIdx =/= 0.U)) ||
-    (vslide1up && fire) ||
-    (vslide1dn && fire && (uopIdx(0) || load_rs1))) {
+  when(
+    (vslideup && fire && (uopIdx =/= 1.U)) ||
+      (vslidedn && fire && (uopIdx =/= 0.U)) ||
+      (vslide1up && fire) ||
+      (vslide1dn && fire && (uopIdx(0) || load_rs1))
+  ) {
     perm_tail_mask_vd := (Cat(perm_vd.reverse) & vmask_tail_bits & vmask_vstart_bits) | tail_vd | vstart_old_vd
   }
 
@@ -347,12 +366,14 @@ class Permutation extends Module {
 
   val cmprs_vd = Wire(Vec(vlenb, UInt(8.W)))
 
-  out_previous_ones_sum := Mux1H(Seq(
-    eewVs2.is8 -> PopCount(vs1(15, 0)),
-    eewVs2.is16 -> Cat(PopCount(vs1(7, 0)), 0.U(1.W)),
-    eewVs2.is32 -> Cat(PopCount(vs1(3, 0)), 0.U(2.W)),
-    eewVs2.is64 -> Cat(PopCount(vs1(1, 0)), 0.U(3.W))
-  ))
+  out_previous_ones_sum := Mux1H(
+    Seq(
+      eewVs2.is8 -> PopCount(vs1(15, 0)),
+      eewVs2.is16 -> Cat(PopCount(vs1(7, 0)), 0.U(1.W)),
+      eewVs2.is32 -> Cat(PopCount(vs1(3, 0)), 0.U(2.W)),
+      eewVs2.is64 -> Cat(PopCount(vs1(1, 0)), 0.U(3.W))
+    )
+  )
 
   when(vcompress && fire) {
     when(uopIdx === 1.U) {
@@ -371,7 +392,6 @@ class Permutation extends Module {
   }.elsewhen(vmvnr && fire) {
     vd_reg := vs2
   }
-
 
   in_previous_ones_sum := vmask(6, 0)
 
@@ -404,5 +424,3 @@ object VerilogPer extends App {
   println("Generating the VPU CrossLane hardware")
   emitVerilog(new Permutation(), Array("--target-dir", "build/vifu"))
 }
-
-

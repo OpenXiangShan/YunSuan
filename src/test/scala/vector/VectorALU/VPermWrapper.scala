@@ -1,9 +1,8 @@
-
 package yunsuan.vectortest.perm
 
 import chisel3._
 import chisel3.util._
-import yunsuan.vector.{VIFuInfo, VPermInput, VIFuOutput}
+import yunsuan.vector.{VIFuInfo, VIFuOutput, VPermInput}
 import yunsuan.vector.perm.{Permutation}
 
 class VPermWrapper extends Module {
@@ -16,7 +15,6 @@ class VPermWrapper extends Module {
   vPerm.io.in.bits := io.in.bits
   io.out.bits.vd := vPerm.io.out.vd
   io.out.bits.vxsat := vPerm.io.out.vxsat
-
 
   vPerm.io.in.valid := io.in.valid
   io.out.valid := RegNext(io.in.valid)

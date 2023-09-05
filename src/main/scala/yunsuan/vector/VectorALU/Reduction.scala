@@ -1,4 +1,3 @@
-
 package yunsuan.vector.alu
 
 import chisel3._
@@ -85,8 +84,7 @@ class Reduction extends Module {
     }
   }
 
-
-  val shift = Mux(widen, uopIdx << vsew_plus1, uopIdx << (vsew_plus1 +1.U))
+  val shift = Mux(widen, uopIdx << vsew_plus1, uopIdx << (vsew_plus1 + 1.U))
   val vmask_bits = vmask >> shift
   vlRemain := Mux(vl >= shift, vl - shift, 0.U)
 
@@ -152,8 +150,10 @@ class Reduction extends Module {
   io.alu_in.bits.info.uopIdx := 0.U
   io.alu_in.bits.info.vxrm := 0.U
 
-  io.alu_in.bits.srcType(0) := Mux(widen && !widen_reduction_uop, Mux(signed, srcTypeVs2 - 3.U, srcTypeVs2 + 1.U), srcTypeVs2)
-  io.alu_in.bits.srcType(1) := Mux(widen && !widen_reduction_uop, Mux(signed, srcTypeVs2 - 3.U, srcTypeVs2 + 1.U), srcTypeVs2)
+  io.alu_in.bits
+    .srcType(0) := Mux(widen && !widen_reduction_uop, Mux(signed, srcTypeVs2 - 3.U, srcTypeVs2 + 1.U), srcTypeVs2)
+  io.alu_in.bits
+    .srcType(1) := Mux(widen && !widen_reduction_uop, Mux(signed, srcTypeVs2 - 3.U, srcTypeVs2 + 1.U), srcTypeVs2)
   io.alu_in.bits.vdType := Mux(widen && signed && !widen_reduction_uop, vdType - 4.U, vdType)
   io.alu_in.bits.vs1 := Mux(widen_reduction_uop, vs12m_bits(VLEN - 1, VLEN / 2), vs12m_bits(2 * VLEN - 1, VLEN))
   io.alu_in.bits.vs2 := Mux(widen_reduction_uop, vs12m_bits(VLEN / 2 - 1, 0), vs12m_bits(VLEN - 1, 0))
@@ -182,9 +182,15 @@ class Reduction extends Module {
 
   vs1_zero := Mux1H(eewVd.oneHot, Seq(8, 16, 32).map(n => Cat(Fill(xLen - n, 0.U), vs1(n - 1, 0))) :+ vs1(63, 0))
 
-  vs1_zero_logical := Mux1H(eewVd.oneHot, Seq(8, 16, 32).map(n => Cat(Fill(xLen - n, 0.U), vs1(n - 1, 0))) :+ vs1(63, 0))
+  vs1_zero_logical := Mux1H(
+    eewVd.oneHot,
+    Seq(8, 16, 32).map(n => Cat(Fill(xLen - n, 0.U), vs1(n - 1, 0))) :+ vs1(63, 0)
+  )
   when(vredand_vs) {
-    vs1_zero_logical := Mux1H(eewVd.oneHot, Seq(8, 16, 32).map(n => Cat(Fill(xLen - n, 1.U), vs1(n - 1, 0))) :+ vs1(63, 0))
+    vs1_zero_logical := Mux1H(
+      eewVd.oneHot,
+      Seq(8, 16, 32).map(n => Cat(Fill(xLen - n, 1.U), vs1(n - 1, 0))) :+ vs1(63, 0)
+    )
   }
 
   for (i <- 0 until 5) {
@@ -251,26 +257,27 @@ class Reduction extends Module {
   sel_lo(0) := less(0).map(_ === opcode.isVredmax)
 
   for (i <- 0 until 8) {
-    val sel0 = Mux1H(Seq(
-      eewVd.is8 -> sel_lo(0)(i),
-      eewVd.is16 -> sel_lo(0)((i / 2) * 2 + 1),
-      eewVd.is32 -> sel_lo(0)((i / 4) * 4 + 3),
-      eewVd.is64 -> sel_lo(0)(7),
-    ))
+    val sel0 = Mux1H(
+      Seq(
+        eewVd.is8 -> sel_lo(0)(i),
+        eewVd.is16 -> sel_lo(0)((i / 2) * 2 + 1),
+        eewVd.is32 -> sel_lo(0)((i / 4) * 4 + 3),
+        eewVd.is64 -> sel_lo(0)(7)
+      )
+    )
     vd_max(0)(i) := Mux(sel0, vs_lo(0)(8 * i + 7, 8 * i), vs_hi(0)(8 * i + 7, 8 * i))
   }
 
   for (i <- 0 until 8) {
     val adder_8b = new Adder_8b(vs_lo_adjust(0)(8 * i + 7, 8 * i), vs_hi(0)(8 * i + 7, 8 * i), cin0(i))
-    cin0(i) := Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(n =>
-      if ((i % n) == 0) sub else cout0(i - 1))
-    )
+    cin0(i) := Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(n => if ((i % n) == 0) sub else cout0(i - 1)))
     cout0(i) := adder_8b.cout
     vd(0)(i) := adder_8b.out
   }
 
   val data_max1 = Mux(sub, Cat(vd_max(0).reverse), Cat(vd(0).reverse))
-  val vi1 = Mux(vd_vsew === 3.U, Cat(vs1_zero, data_max1), Cat(0.U(32.W), data_max1(63, 32), 0.U(32.W), data_max1(31, 0)))
+  val vi1 =
+    Mux(vd_vsew === 3.U, Cat(vs1_zero, data_max1), Cat(0.U(32.W), data_max1(63, 32), 0.U(32.W), data_max1(31, 0)))
   val cin1 = Wire(Vec(8, Bool()))
   val cout1 = Wire(Vec(8, Bool()))
   vs_hi(1) := vi1(127, 64)
@@ -285,26 +292,30 @@ class Reduction extends Module {
   sel_lo(1) := less(1).map(_ === opcode.isVredmax)
 
   for (i <- 0 until 8) {
-    val sel1 = Mux1H(Seq(
-      eewVd.is8 -> sel_lo(1)(i),
-      eewVd.is16 -> sel_lo(1)((i / 2) * 2 + 1),
-      eewVd.is32 -> sel_lo(1)((i / 4) * 4 + 3),
-      eewVd.is64 -> sel_lo(1)(7),
-    ))
+    val sel1 = Mux1H(
+      Seq(
+        eewVd.is8 -> sel_lo(1)(i),
+        eewVd.is16 -> sel_lo(1)((i / 2) * 2 + 1),
+        eewVd.is32 -> sel_lo(1)((i / 4) * 4 + 3),
+        eewVd.is64 -> sel_lo(1)(7)
+      )
+    )
     vd_max(1)(i) := Mux(sel1, vs_lo(1)(8 * i + 7, 8 * i), vs_hi(1)(8 * i + 7, 8 * i))
   }
 
   for (i <- 0 until 8) {
     val adder_8b = new Adder_8b(vs_lo_adjust(1)(8 * i + 7, 8 * i), vs_hi(1)(8 * i + 7, 8 * i), cin1(i))
-    cin1(i) := Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(n =>
-      if ((i % n) == 0) sub else cout1(i - 1))
-    )
+    cin1(i) := Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(n => if ((i % n) == 0) sub else cout1(i - 1)))
     cout1(i) := adder_8b.cout
     vd(1)(i) := adder_8b.out
   }
 
   val data_max2 = Mux(sub, Cat(vd_max(1).reverse)(31, 0), Cat(vd(1).reverse)(31, 0))
-  val vi2 = Mux(vd_vsew === 2.U, Cat(vs1_zero(31, 0), data_max2), Cat(0.U(16.W), data_max2(31, 16), 0.U(16.W), data_max2(15, 0)))
+  val vi2 = Mux(
+    vd_vsew === 2.U,
+    Cat(vs1_zero(31, 0), data_max2),
+    Cat(0.U(16.W), data_max2(31, 16), 0.U(16.W), data_max2(15, 0))
+  )
   val cin2 = Wire(Vec(4, Bool()))
   val cout2 = Wire(Vec(4, Bool()))
   vs_hi(2) := vi2(63, 32)
@@ -319,25 +330,26 @@ class Reduction extends Module {
   sel_lo(2) := less(2).map(_ === opcode.isVredmax)
 
   for (i <- 0 until 4) {
-    val sel2 = Mux1H(Seq(
-      eewVd.is8 -> sel_lo(2)(i),
-      eewVd.is16 -> sel_lo(2)((i / 2) * 2 + 1),
-      eewVd.is32 -> sel_lo(2)((i / 4) * 4 + 3),
-    ))
+    val sel2 = Mux1H(
+      Seq(
+        eewVd.is8 -> sel_lo(2)(i),
+        eewVd.is16 -> sel_lo(2)((i / 2) * 2 + 1),
+        eewVd.is32 -> sel_lo(2)((i / 4) * 4 + 3)
+      )
+    )
     vd_max(2)(i) := Mux(sel2, vs_lo(2)(8 * i + 7, 8 * i), vs_hi(2)(8 * i + 7, 8 * i))
   }
 
   for (i <- 0 until 4) {
     val adder_8b = new Adder_8b(vs_lo_adjust(2)(8 * i + 7, 8 * i), vs_hi(2)(8 * i + 7, 8 * i), cin2(i))
-    cin2(i) := Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(n =>
-      if ((i % n) == 0) sub else cout2(i - 1))
-    )
+    cin2(i) := Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(n => if ((i % n) == 0) sub else cout2(i - 1)))
     cout2(i) := adder_8b.cout
     vd(2)(i) := adder_8b.out
   }
 
   val data_max3 = Mux(sub, Cat(vd_max(2).reverse)(15, 0), Cat(vd(2).reverse)(15, 0))
-  val vi3 = Mux(vd_vsew === 1.U, Cat(vs1_zero(15, 0), data_max3), Cat(0.U(8.W), data_max3(15, 8), 0.U(8.W), data_max3(7, 0)))
+  val vi3 =
+    Mux(vd_vsew === 1.U, Cat(vs1_zero(15, 0), data_max3), Cat(0.U(8.W), data_max3(15, 8), 0.U(8.W), data_max3(7, 0)))
   val cin3 = Wire(Vec(2, Bool()))
   val cout3 = Wire(Vec(2, Bool()))
   vs_hi(3) := vi3(31, 16)
@@ -352,18 +364,18 @@ class Reduction extends Module {
   sel_lo(3) := less(3).map(_ === opcode.isVredmax)
 
   for (i <- 0 until 2) {
-    val sel3 = Mux1H(Seq(
-      eewVd.is8 -> sel_lo(3)(i),
-      eewVd.is16 -> sel_lo(3)((i / 2) * 2 + 1),
-    ))
+    val sel3 = Mux1H(
+      Seq(
+        eewVd.is8 -> sel_lo(3)(i),
+        eewVd.is16 -> sel_lo(3)((i / 2) * 2 + 1)
+      )
+    )
     vd_max(3)(i) := Mux(sel3, vs_lo(3)(8 * i + 7, 8 * i), vs_hi(3)(8 * i + 7, 8 * i))
   }
 
   for (i <- 0 until 2) {
     val adder_8b = new Adder_8b(vs_lo_adjust(3)(8 * i + 7, 8 * i), vs_hi(3)(8 * i + 7, 8 * i), cin3(i))
-    cin3(i) := Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(n =>
-      if ((i % n) == 0) sub else cout3(i - 1))
-    )
+    cin3(i) := Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(n => if ((i % n) == 0) sub else cout3(i - 1)))
     cout3(i) := adder_8b.cout
     vd(3)(i) := adder_8b.out
   }
@@ -384,17 +396,17 @@ class Reduction extends Module {
   sel_lo(4) := less(4).map(_ === opcode.isVredmax)
 
   for (i <- 0 until 1) {
-    val sel4 = Mux1H(Seq(
-      eewVd.is8 -> sel_lo(4)(i),
-    ))
+    val sel4 = Mux1H(
+      Seq(
+        eewVd.is8 -> sel_lo(4)(i)
+      )
+    )
     vd_max(4)(i) := Mux(sel4, vs_lo(4)(8 * i + 7, 8 * i), vs_hi(4)(8 * i + 7, 8 * i))
   }
 
   for (i <- 0 until 1) {
     val adder_8b = new Adder_8b(vs_lo_adjust(4)(8 * i + 7, 8 * i), vs_hi(4)(8 * i + 7, 8 * i), cin4(i))
-    cin4(i) := Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(n =>
-      if ((i % n) == 0) sub else cout4(i - 1))
-    )
+    cin4(i) := Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(n => if ((i % n) == 0) sub else cout4(i - 1)))
     cout4(i) := adder_8b.cout
     vd(4)(i) := adder_8b.out
   }
@@ -416,7 +428,7 @@ class Reduction extends Module {
   val red_vd_tail_one = (vd_mask << vd_vsew_bits) | (red_vd & (vd_mask >> (VLEN.U - vd_vsew_bits)))
   val red_vd_tail_vd = (old_vd & (vd_mask << vd_vsew_bits)) | (red_vd & (vd_mask >> (VLEN.U - vd_vsew_bits)))
 
-  val red_vd_tail = Mux(vl===0.U, old_vd, Mux(ta, red_vd_tail_one, red_vd_tail_vd))
+  val red_vd_tail = Mux(vl === 0.U, old_vd, Mux(ta, red_vd_tail_one, red_vd_tail_vd))
   val vd_reg = RegInit(0.U(VLEN.W))
 
   when(vred_uop && fire) {
@@ -432,6 +444,3 @@ object VerilogRed extends App {
   println("Generating the VPU Reduction hardware")
   emitVerilog(new Reduction(), Array("--target-dir", "build/vifu"))
 }
-
-
-

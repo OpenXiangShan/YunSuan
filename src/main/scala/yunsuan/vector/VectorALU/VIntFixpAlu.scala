@@ -1,6 +1,6 @@
 /**
   * Integer and fixed-point (except mult and div)
-  *   
+  *
   * Perform below instructions:
   *     11.1  vadd, ...
   *     11.2  vwadd, ...
@@ -39,13 +39,13 @@ class VIntFixpAlu64b extends Module {
     val opcode = Input(new VAluOpcode)
     val info = Input(new VIFuInfo)
     val srcType = Input(Vec(2, UInt(4.W)))
-    val vdType  = Input(UInt(4.W))
+    val vdType = Input(UInt(4.W))
     val vs1 = Input(UInt(64.W))
     val vs2 = Input(UInt(64.W))
     val vmask = Input(UInt(8.W))
     val oldVd = Input(UInt(8.W))
     val narrow = Input(UInt(8.W))
-    val isSub = Input(Bool())  // subtract
+    val isSub = Input(Bool()) // subtract
     val isMisc = Input(Bool())
     val isFixp = Input(Bool())
     val widen = Input(Bool())
@@ -60,7 +60,7 @@ class VIntFixpAlu64b extends Module {
   val srcTypeVs2 = io.srcType(0)
 
   val vIntAdder64b = Module(new VIntAdder64b)
-  vIntAdder64b.io.opcode := io.opcode 
+  vIntAdder64b.io.opcode := io.opcode
   vIntAdder64b.io.info := io.info
   vIntAdder64b.io.srcType := io.srcType
   vIntAdder64b.io.vdType := io.vdType
@@ -73,7 +73,7 @@ class VIntFixpAlu64b extends Module {
   vIntAdder64b.io.widen_vs2 := io.widen_vs2
 
   val vIntMisc64b = Module(new VIntMisc64b)
-  vIntMisc64b.io.opcode := io.opcode 
+  vIntMisc64b.io.opcode := io.opcode
   vIntMisc64b.io.info := io.info
   vIntMisc64b.io.srcType := io.srcType
   vIntMisc64b.io.vdType := io.vdType
@@ -95,7 +95,7 @@ class VIntFixpAlu64b extends Module {
   vFixPoint64b.io.sew := RegNext(SewOH(io.vdType(1, 0)))
   vFixPoint64b.io.isSub := RegNext(io.isSub)
   vFixPoint64b.io.isSigned := RegNext(srcTypeVs2(3, 2) === 1.U)
-  vFixPoint64b.io.isNClip := RegNext(io.opcode.isScalingShift && io.vdType(1,0) =/= srcTypeVs2(1,0))
+  vFixPoint64b.io.isNClip := RegNext(io.opcode.isScalingShift && io.vdType(1, 0) =/= srcTypeVs2(1, 0))
   vFixPoint64b.io.fromAdder := RegNext(vIntAdder64b.io.toFixP)
   vFixPoint64b.io.fromMisc := RegNext(vIntMisc64b.io.toFixP)
 
@@ -105,14 +105,13 @@ class VIntFixpAlu64b extends Module {
   io.vxsat := vFixPoint64b.io.vxsat
 }
 
-
 class VIntFixpAlu extends Module {
   val io = IO(new Bundle {
     val in = Input(new Bundle {
       val opcode = Input(new VAluOpcode)
       val info = new VIFuInfo
       val srcType = Vec(2, UInt(4.W))
-      val vdType  = UInt(4.W)
+      val vdType = UInt(4.W)
       val vs1 = UInt(128.W)
       val vs2 = UInt(128.W)
       val old_vd = UInt(128.W)
@@ -169,21 +168,21 @@ class VIntFixpAlu extends Module {
   val vf4 = vd_sub_srcType === 2.U && opcode.isVext
   val vf8 = vd_sub_srcType === 3.U && opcode.isVext
   // Rearrange vs2
-  when (vf2 || widen_vs2) {
+  when(vf2 || widen_vs2) {
     vIntFixpAlu64bs(0).io.vs2 := Cat(vs2(95, 64), vs2(31, 0))
     vIntFixpAlu64bs(1).io.vs2 := Cat(vs2(127, 96), vs2(63, 32))
-  }.elsewhen (vf4) {
+  }.elsewhen(vf4) {
     vIntFixpAlu64bs(0).io.vs2 := Cat(vs2(111, 96), vs2(79, 64), vs2(47, 32), vs2(15, 0))
     vIntFixpAlu64bs(1).io.vs2 := Cat(vs2(127, 112), vs2(95, 80), vs2(63, 48), vs2(31, 16))
-  }.elsewhen (vf8) {
-    vIntFixpAlu64bs(0).io.vs2 := Cat(Seq.tabulate(8)(i => vs2(16*i+7, 16*i)).reverse)
-    vIntFixpAlu64bs(1).io.vs2 := Cat(Seq.tabulate(8)(i => vs2(16*i+15, 16*i+8)).reverse)
+  }.elsewhen(vf8) {
+    vIntFixpAlu64bs(0).io.vs2 := Cat(Seq.tabulate(8)(i => vs2(16 * i + 7, 16 * i)).reverse)
+    vIntFixpAlu64bs(1).io.vs2 := Cat(Seq.tabulate(8)(i => vs2(16 * i + 15, 16 * i + 8)).reverse)
   }.otherwise {
     vIntFixpAlu64bs(0).io.vs2 := vs2(63, 0)
     vIntFixpAlu64bs(1).io.vs2 := vs2(127, 64)
   }
   // Rearrange vs1 (need concern the case of narrow)
-  when (widen || narrow) {
+  when(widen || narrow) {
     vIntFixpAlu64bs(0).io.vs1 := Cat(vs1(95, 64), vs1(31, 0))
     vIntFixpAlu64bs(1).io.vs1 := Cat(vs1(127, 96), vs1(63, 32))
   }.otherwise {
@@ -194,15 +193,15 @@ class VIntFixpAlu extends Module {
   //---- Input mask extraction ----
   val eewVd_is_1b = vdType === 15.U
   for (i <- 0 until 2) {
-    vIntFixpAlu64bs(i).io.vmask := 
+    vIntFixpAlu64bs(i).io.vmask :=
       mask16_to_2x8(io.in.mask16b, Mux(eewVd_is_1b, eewVs1, eewVd))(i)
     vIntFixpAlu64bs(i).io.oldVd := // only for compare instrution
       mask16_to_2x8(MaskExtract(io.in.old_vd, io.in.info.uopIdx, eewVs1), eewVs1)(i)
   }
 
   /**
-   * Output stage
-   */
+    * Output stage
+    */
   val uopIdxS1 = RegNext(uopIdx)
   val opcodeS1 = RegNext(opcode)
   val old_vd_S1 = Wire(UInt(128.W))
@@ -219,16 +218,16 @@ class VIntFixpAlu extends Module {
   val vstartS1 = RegNext(vstart)
   //---- Narrowing vd rearrangement ----
   val catNarrowVd = Cat(vIntFixpAlu64bs(1).io.narrowVd, vIntFixpAlu64bs(0).io.narrowVd)
-  val vdOfNarrow = Mux(uopIdxS1(0), Cat(catNarrowVd, old_vd_S1(63, 0)),
-                       Cat(old_vd_S1(127, 64), catNarrowVd))
+  val vdOfNarrow = Mux(uopIdxS1(0), Cat(catNarrowVd, old_vd_S1(63, 0)), Cat(old_vd_S1(127, 64), catNarrowVd))
   //---- Compare/carry-out vd rearrangement ----
   val cmpOuts = vIntFixpAlu64bs.map(_.io.cmpOut)
-  val cmpOut128b = Mux1H(eewVs1S1.oneHot, Seq(8,4,2,1).map(
-                    k => Cat(0.U((128-2*k).W), cmpOuts(1)(k-1,0), cmpOuts(0)(k-1,0))))
-  val cmpOutOff128b = Mux1H(eewVs1S1.oneHot, Seq(8,4,2,1).map(
-                    k => Cat(0.U((128-2*k).W), ~0.U((2*k).W))))
+  val cmpOut128b = Mux1H(
+    eewVs1S1.oneHot,
+    Seq(8, 4, 2, 1).map(k => Cat(0.U((128 - 2 * k).W), cmpOuts(1)(k - 1, 0), cmpOuts(0)(k - 1, 0)))
+  )
+  val cmpOutOff128b = Mux1H(eewVs1S1.oneHot, Seq(8, 4, 2, 1).map(k => Cat(0.U((128 - 2 * k).W), ~0.U((2 * k).W))))
   val shiftCmpOut = Wire(UInt(7.W))
-  shiftCmpOut := Mux1H(eewVs1S1.oneHot, Seq(4,3,2,1).map(i => uopIdxS1(2, 0) << i))
+  shiftCmpOut := Mux1H(eewVs1S1.oneHot, Seq(4, 3, 2, 1).map(i => uopIdxS1(2, 0) << i))
   val cmpOutKeep = Wire(UInt(128.W))
   cmpOutKeep := cmpOut128b << shiftCmpOut
   val cmpOutOff = Wire(UInt(128.W))
@@ -236,8 +235,8 @@ class VIntFixpAlu extends Module {
   val cmpOutResult = old_vd_S1 & cmpOutOff | cmpOutKeep // Compare and carry-out
 
   /**
-   * Output tail/prestart/mask handling for eewVd >= 8
-   */
+    * Output tail/prestart/mask handling for eewVd >= 8
+    */
   //---- Tail gen ----
   // val tail = TailGen(vl, uopIdx, Mux(narrow, eewVs2, eewVd))
   val tail = TailGen(Mux(opcode.isVmvsx, 1.U, vl), uopIdx, eewVd, narrow)
@@ -254,13 +253,13 @@ class VIntFixpAlu extends Module {
   val mask16bReorg = MaskReorg.splash(mask16bS1, eewVdS1)
   val updateType = Wire(Vec(16, UInt(2.W))) // 00: keep result  10: old_vd  11: write 1s
   for (i <- 0 until 16) {
-    when (prestartReorg(i) || vstart_gte_vl_S1) {
+    when(prestartReorg(i) || vstart_gte_vl_S1) {
       updateType(i) := 2.U
-    }.elsewhen (tailReorg(i)) {
+    }.elsewhen(tailReorg(i)) {
       updateType(i) := Mux(taS1, 3.U, 2.U)
-    }.elsewhen (opcodeS1.isAddWithCarry || opcodeS1.isVmerge) {
+    }.elsewhen(opcodeS1.isAddWithCarry || opcodeS1.isVmerge) {
       updateType(i) := 0.U
-    }.elsewhen (!vmS1 && !mask16bReorg(i)) {
+    }.elsewhen(!vmS1 && !mask16bReorg(i)) {
       updateType(i) := Mux(maS1, 3.U, 2.U)
     }.otherwise {
       updateType(i) := 0.U
@@ -268,47 +267,54 @@ class VIntFixpAlu extends Module {
   }
   // finalResult = result & bitsKeep | bitsReplace   (all are 128 bits)
   val bitsKeep = Cat(updateType.map(x => Mux(x(1), 0.U(8.W), ~0.U(8.W))).reverse)
-  val bitsReplace = Cat(updateType.zipWithIndex.map({case (x, i) => 
-        Mux(!x(1), 0.U(8.W), Mux(x(0), ~0.U(8.W), UIntSplit(old_vd_S1, 8)(i)))}).reverse)
+  val bitsReplace = Cat(
+    updateType.zipWithIndex
+      .map({
+        case (x, i) =>
+          Mux(!x(1), 0.U(8.W), Mux(x(0), ~0.U(8.W), UIntSplit(old_vd_S1, 8)(i)))
+      })
+      .reverse
+  )
 
   /**
-   * Output tail/prestart/mask handling for eewVd == 1
-   */
-  val tail_1b_temp = UIntToCont0s(vl_S1(wVL-2, 0), wVL-1)
+    * Output tail/prestart/mask handling for eewVd == 1
+    */
+  val tail_1b_temp = UIntToCont0s(vl_S1(wVL - 2, 0), wVL - 1)
   require(tail_1b_temp.getWidth == 128)
   val tail_1b = Mux(vl_S1 === 128.U, 0.U(128.W), tail_1b_temp)
   val prestart_1b = UIntToCont1s(vstartS1, wVSTART)
   require(prestart_1b.getWidth == 128)
   val bitsKeep_1b = ~(prestart_1b | tail_1b)
-  val bitsReplace_1b = Mux(vstart_gte_vl_S1, old_vd_S1, 
-                       prestart_1b & old_vd_S1 | tail_1b)
+  val bitsReplace_1b = Mux(vstart_gte_vl_S1, old_vd_S1, prestart_1b & old_vd_S1 | tail_1b)
 
   val bitsKeepFinal = Mux(RegNext(eewVd_is_1b), bitsKeep_1b, bitsKeep)
   val bitsReplaceFinal = Mux(RegNext(eewVd_is_1b), bitsReplace_1b, bitsReplace)
 
-  val vdResult = Mux(narrowS1, vdOfNarrow, 
-              Mux(cmpFlagS1, cmpOutResult, Cat(vIntFixpAlu64bs.map(_.io.vd).reverse)))
+  val vdResult = Mux(narrowS1, vdOfNarrow, Mux(cmpFlagS1, cmpOutResult, Cat(vIntFixpAlu64bs.map(_.io.vd).reverse)))
   io.out.vd := vdResult & bitsKeepFinal | bitsReplaceFinal
-  when (!narrowS1) {
+  when(!narrowS1) {
     io.out.vxsat := (Cat(vIntFixpAlu64bs.map(_.io.vxsat).reverse) &
-                     Cat(updateType.map(_(1) === false.B).reverse)).orR
+      Cat(updateType.map(_(1) === false.B).reverse)).orR
   }.otherwise {
-    io.out.vxsat := (Cat(vIntFixpAlu64bs.map(_.io.vxsat(VLENB/4 - 1, 0)).reverse) &
-                     Mux(uopIdxS1(0), Cat(updateType.drop(VLENB/2).map(_(1) === false.B).reverse),
-                                      Cat(updateType.take(VLENB/2).map(_(1) === false.B).reverse))
-                     ).orR
+    io.out.vxsat := (Cat(vIntFixpAlu64bs.map(_.io.vxsat(VLENB / 4 - 1, 0)).reverse) &
+      Mux(
+        uopIdxS1(0),
+        Cat(updateType.drop(VLENB / 2).map(_(1) === false.B).reverse),
+        Cat(updateType.take(VLENB / 2).map(_(1) === false.B).reverse)
+      )).orR
   }
-
 
   //---- Some methods ----
   def mask16_to_2x8(maskIn: UInt, sew: SewOH): Seq[UInt] = {
     require(maskIn.getWidth == 16)
-    val result16 = Mux1H(Seq(
-      sew.is8  -> maskIn,
-      sew.is16 -> Cat(0.U(4.W), maskIn(7, 4), 0.U(4.W), maskIn(3, 0)),
-      sew.is32 -> Cat(0.U(6.W), maskIn(3, 2), 0.U(6.W), maskIn(1, 0)),
-      sew.is64 -> Cat(0.U(7.W), maskIn(1), 0.U(7.W), maskIn(0)),
-    ))
+    val result16 = Mux1H(
+      Seq(
+        sew.is8 -> maskIn,
+        sew.is16 -> Cat(0.U(4.W), maskIn(7, 4), 0.U(4.W), maskIn(3, 0)),
+        sew.is32 -> Cat(0.U(6.W), maskIn(3, 2), 0.U(6.W), maskIn(1, 0)),
+        sew.is64 -> Cat(0.U(7.W), maskIn(1), 0.U(7.W), maskIn(0))
+      )
+    )
     Seq(result16(7, 0), result16(15, 8))
   }
 }

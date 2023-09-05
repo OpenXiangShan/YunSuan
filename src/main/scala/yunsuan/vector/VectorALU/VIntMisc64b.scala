@@ -1,4 +1,3 @@
-
 /**
   * Perform below instructions:
   *     11.3  vzext, ...
@@ -24,7 +23,7 @@ class VIntMisc64b extends Module {
     val opcode = Input(new VAluOpcode)
     val info = Input(new VIFuInfo)
     val srcType = Input(Vec(2, UInt(4.W)))
-    val vdType  = Input(UInt(4.W))
+    val vdType = Input(UInt(4.W))
     val vs1 = Input(UInt(64.W))
     val vs2 = Input(UInt(64.W))
     val vmask = Input(UInt(8.W))
@@ -49,35 +48,46 @@ class VIntMisc64b extends Module {
   val expdIdx = io.info.uopIdx(2, 0)
 
   //---- Extension instructions ----
-  val extSign = signed  // 0: z   1: s
+  val extSign = signed // 0: z   1: s
   val vf2 = vd_sub_srcType === 1.U
   val vf4 = vd_sub_srcType === 2.U
   val expdIdxOH_vf2 = Seq.tabulate(2)(i => expdIdx(0) === i.U)
-  val expdIdxOH_vf4 = Seq.tabulate(4)(i => expdIdx(1,0) === i.U)
+  val expdIdxOH_vf4 = Seq.tabulate(4)(i => expdIdx(1, 0) === i.U)
   val expdIdxOH_vf8 = Seq.tabulate(8)(i => expdIdx === i.U)
   val extResult = Wire(UInt(64.W))
-  when (vf2) {  // sew = 16/32/64
-    extResult := Mux(eewVd.is16, BitsExtend.vector(Mux1H(expdIdxOH_vf2.take(2), UIntSplit(vs2, 32)), 64, extSign, 8),
-                 Mux(eewVd.is32, BitsExtend.vector(Mux1H(expdIdxOH_vf2.take(2), UIntSplit(vs2, 32)), 64, extSign, 16),
-                               BitsExtend.vector(Mux1H(expdIdxOH_vf2.take(2), UIntSplit(vs2, 32)), 64, extSign, 32)))
-  }.elsewhen (vf4) {  // sew = 32/64
-    extResult := Mux(eewVd.is32, BitsExtend.vector(Mux1H(expdIdxOH_vf4.take(4), UIntSplit(vs2, 16)), 64, extSign, 8),
-                               BitsExtend.vector(Mux1H(expdIdxOH_vf4.take(4), UIntSplit(vs2, 16)), 64, extSign, 16))
-  }.otherwise {  //vf8  sew = 64
+  when(vf2) { // sew = 16/32/64
+    extResult := Mux(
+      eewVd.is16,
+      BitsExtend.vector(Mux1H(expdIdxOH_vf2.take(2), UIntSplit(vs2, 32)), 64, extSign, 8),
+      Mux(
+        eewVd.is32,
+        BitsExtend.vector(Mux1H(expdIdxOH_vf2.take(2), UIntSplit(vs2, 32)), 64, extSign, 16),
+        BitsExtend.vector(Mux1H(expdIdxOH_vf2.take(2), UIntSplit(vs2, 32)), 64, extSign, 32)
+      )
+    )
+  }.elsewhen(vf4) { // sew = 32/64
+    extResult := Mux(
+      eewVd.is32,
+      BitsExtend.vector(Mux1H(expdIdxOH_vf4.take(4), UIntSplit(vs2, 16)), 64, extSign, 8),
+      BitsExtend.vector(Mux1H(expdIdxOH_vf4.take(4), UIntSplit(vs2, 16)), 64, extSign, 16)
+    )
+  }.otherwise { //vf8  sew = 64
     extResult := BitsExtend(Mux1H(expdIdxOH_vf8, UIntSplit(vs2, 8)), 64, extSign)
   }
 
   //---- Bitwise Logical instructions ----
-  val bitLogical = Mux1H(Seq(
-    (opcode.isVand) -> (vs2 & vs1),
-    (opcode.isVnand) -> ~(vs2 & vs1),
-    (opcode.isVandn) -> (vs2 & ~vs1),
-    (opcode.isVxor) -> (vs2 ^ vs1),
-    (opcode.isVor) -> (vs2 | vs1),
-    (opcode.isVnor) -> ~(vs2 | vs1),
-    (opcode.isVorn) -> (vs2 | ~vs1),
-    (opcode.isVxnor) -> ~(vs2 ^ vs1),
-  ))
+  val bitLogical = Mux1H(
+    Seq(
+      (opcode.isVand) -> (vs2 & vs1),
+      (opcode.isVnand) -> ~(vs2 & vs1),
+      (opcode.isVandn) -> (vs2 & ~vs1),
+      (opcode.isVxor) -> (vs2 ^ vs1),
+      (opcode.isVor) -> (vs2 | vs1),
+      (opcode.isVnor) -> ~(vs2 | vs1),
+      (opcode.isVorn) -> (vs2 | ~vs1),
+      (opcode.isVxnor) -> ~(vs2 ^ vs1)
+    )
+  )
 
   /**
     * Shift: vsll, vsrl, vsra, vnsrl, vnsra (vssrl, vssra and vnclipu/vnclip)
@@ -86,10 +96,10 @@ class VIntMisc64b extends Module {
   def shiftOnce(n: Int, data: UInt): (UInt, Bool, Bool) = { // n: number of shift bits
     val len = data.getWidth
     require(len > n)
-    val rnd_high = data(n-1)
-    val rnd_tail = if (n == 1) true.B else {data(n-2, 0) === 0.U}
+    val rnd_high = data(n - 1)
+    val rnd_tail = if (n == 1) true.B else { data(n - 2, 0) === 0.U }
     //             result of bit-shift                     v[d-1]   v[d-2:0] == 0
-    (Cat(Fill(n, data(len-1) && signed_shift), data(len-1, n)), rnd_high, rnd_tail)
+    (Cat(Fill(n, data(len - 1) && signed_shift), data(len - 1, n)), rnd_high, rnd_tail)
   }
   // Shift amount is dynamic
   def dynamicShift(shiftAmount: UInt, data: UInt): (UInt, Bool, Bool) = {
@@ -115,7 +125,7 @@ class VIntMisc64b extends Module {
       case 8  => dynamicShift(shiftAmount(2, 0), data)
       case 16 => dynamicShift(shiftAmount(3, 0), data)
       case 32 => dynamicShift(shiftAmount(4, 0), data)
-      case 64 => {  // For sew=64, the uimm should perform zero-extending
+      case 64 => { // For sew=64, the uimm should perform zero-extending
         // val shiftAmount_uimm = Cat(Mux(uop.ctrl.vi, false.B, shiftAmount(5)), shiftAmount(4, 0))
         dynamicShift(shiftAmount(5, 0), data)
       }
@@ -126,26 +136,29 @@ class VIntMisc64b extends Module {
   val leftShift = opcode.isLeftShift
   val vs2_reverse = Cat(vs2.asBools) // bit reverse
   val vs2_adjust = Mux(leftShift, vs2_reverse, vs2)
-  val vs1_revsByElem = MuxCase(vs1, Seq(  // reverse vs1 by element when left-shift
-    (leftShift && eewVd.is32) -> Cat(UIntSplit(vs1, 32)),
-    (leftShift && eewVd.is16) -> Cat(UIntSplit(vs1, 16)),
-    (leftShift && eewVd.is8)  -> Cat(UIntSplit(vs1, 8))
-  ))
+  val vs1_revsByElem = MuxCase(
+    vs1,
+    Seq( // reverse vs1 by element when left-shift
+      (leftShift && eewVd.is32) -> Cat(UIntSplit(vs1, 32)),
+      (leftShift && eewVd.is16) -> Cat(UIntSplit(vs1, 16)),
+      (leftShift && eewVd.is8) -> Cat(UIntSplit(vs1, 8))
+    )
+  )
   // Handle narrow instruction
   val vs1Split = UIntSplit(vs1_revsByElem, 8)
   val vs1_adjust = Wire(UInt(64.W))
   // val narrow = is_shift && srcTypeVs2(1, 0) =/= io.vdType(1, 0)
   val narrow = io.narrow
-  when (narrow && !expdIdx(0)) {
+  when(narrow && !expdIdx(0)) {
     vs1_adjust := Cat(0.U(8.W), vs1Split(3), 0.U(8.W), vs1Split(2), 0.U(8.W), vs1Split(1), 0.U(8.W), vs1Split(0))
-  }.elsewhen (narrow && expdIdx(0)) {
+  }.elsewhen(narrow && expdIdx(0)) {
     vs1_adjust := Cat(0.U(8.W), vs1Split(7), 0.U(8.W), vs1Split(6), 0.U(8.W), vs1Split(5), 0.U(8.W), vs1Split(4))
   }.otherwise {
     vs1_adjust := vs1_revsByElem
   }
-  
+
   def shift(sew: Int): Seq[(UInt, Bool, Bool)] = {
-    UIntSplit(vs2_adjust, sew) zip UIntSplit(vs1_adjust, sew) map {case (vs2, vs1) => shiftOneElement(vs1, vs2, sew)}
+    UIntSplit(vs2_adjust, sew).zip(UIntSplit(vs1_adjust, sew)).map { case (vs2, vs1) => shiftOneElement(vs1, vs2, sew) }
   }
   // val shiftOut = MuxCase(shift(64), Seq(
   //   Mux(uop.ctrl.narrow, sew.is16, sew.is32) -> shift(32),
@@ -153,18 +166,28 @@ class VIntMisc64b extends Module {
   //   Mux(uop.ctrl.narrow, false.B,  sew.is8)  -> shift(8)
   // ))
 
-  val (shift64, shift32, shift16, shift8) = (shift(64), shift(32),shift(16), shift(8))
+  val (shift64, shift32, shift16, shift8) = (shift(64), shift(32), shift(16), shift(8))
   val shiftOut = Wire(UInt(64.W))
   // Different SEW cases
-  when (Mux(narrow, eewVd.is16, eewVd.is32)) {
+  when(Mux(narrow, eewVd.is16, eewVd.is32)) {
     shiftOut := Cat(shift32.map(_._1).reverse)
     io.toFixP.rnd_high := Cat(Fill(4, shift32(1)._2), Fill(4, shift32(0)._2))
     io.toFixP.rnd_tail := Cat(Fill(4, shift32(1)._3), Fill(4, shift32(0)._3))
-  }.elsewhen (Mux(narrow, eewVd.is8,  eewVd.is16)) {
+  }.elsewhen(Mux(narrow, eewVd.is8, eewVd.is16)) {
     shiftOut := Cat(shift16.map(_._1).reverse)
-    io.toFixP.rnd_high := Cat(Fill(2, shift16(3)._2), Fill(2, shift16(2)._2), Fill(2, shift16(1)._2), Fill(2, shift16(0)._2))
-    io.toFixP.rnd_tail := Cat(Fill(2, shift16(3)._3), Fill(2, shift16(2)._3), Fill(2, shift16(1)._3), Fill(2, shift16(0)._3))
-  }.elsewhen (Mux(narrow, false.B,  eewVd.is8)) {
+    io.toFixP.rnd_high := Cat(
+      Fill(2, shift16(3)._2),
+      Fill(2, shift16(2)._2),
+      Fill(2, shift16(1)._2),
+      Fill(2, shift16(0)._2)
+    )
+    io.toFixP.rnd_tail := Cat(
+      Fill(2, shift16(3)._3),
+      Fill(2, shift16(2)._3),
+      Fill(2, shift16(1)._3),
+      Fill(2, shift16(0)._3)
+    )
+  }.elsewhen(Mux(narrow, false.B, eewVd.is8)) {
     shiftOut := Cat(shift8.map(_._1).reverse)
     io.toFixP.rnd_high := Cat(shift8.map(_._2).reverse)
     io.toFixP.rnd_tail := Cat(shift8.map(_._3).reverse)
@@ -174,29 +197,32 @@ class VIntMisc64b extends Module {
     io.toFixP.rnd_tail := Fill(8, shift64(0)._3)
   }
   io.toFixP.shiftOut := shiftOut
-  
+
   val shiftResult = Mux(leftShift, Cat(shiftOut.asBools), shiftOut)
-  io.narrowVd := Mux1H(Seq(
-    eewVd.is32 -> shiftOut(31, 0),
-    eewVd.is16 -> Cat(shiftOut(47, 32), shiftOut(15, 0)),
-    eewVd.is8  -> Cat(shiftOut(55, 48), shiftOut(39, 32), shiftOut(23, 16), shiftOut(7, 0))
-  ))
-  
+  io.narrowVd := Mux1H(
+    Seq(
+      eewVd.is32 -> shiftOut(31, 0),
+      eewVd.is16 -> Cat(shiftOut(47, 32), shiftOut(15, 0)),
+      eewVd.is8 -> Cat(shiftOut(55, 48), shiftOut(39, 32), shiftOut(23, 16), shiftOut(7, 0))
+    )
+  )
+
   /**
     * Integer Merge/Move, vmv.s.x
     */
-  // Adjust vmask. E.g., if sew==32: 000000ab -> aaaabbbb   
-  val vmask_adjust = Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(k => 
-    Cat(Seq.tabulate(8/k)(i => Fill(k, io.vmask(i))).reverse)
-  ))
+  // Adjust vmask. E.g., if sew==32: 000000ab -> aaaabbbb
+  val vmask_adjust =
+    Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(k => Cat(Seq.tabulate(8 / k)(i => Fill(k, io.vmask(i))).reverse)))
   val mergeResult = Wire(Vec(8, UInt(8.W)))
   for (i <- 0 until 8) {
-    mergeResult(i) := Mux(vmask_adjust(i), vs1(8*i+7, 8*i), vs2(8*i+7, 8*i))
+    mergeResult(i) := Mux(vmask_adjust(i), vs1(8 * i + 7, 8 * i), vs2(8 * i + 7, 8 * i))
   }
   val mergeMove = Mux(vm || opcode.isVmvsx, vs1, mergeResult.asUInt)
 
   // Output arbiter
-  io.vd := Mux(opcode.isShift, shiftResult,
-               Mux(opcode.isVext, extResult,
-               Mux(opcode.isBitLogical, bitLogical, mergeMove)))
+  io.vd := Mux(
+    opcode.isShift,
+    shiftResult,
+    Mux(opcode.isVext, extResult, Mux(opcode.isBitLogical, bitLogical, mergeMove))
+  )
 }

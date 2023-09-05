@@ -1,4 +1,3 @@
-
 package yunsuan.vector
 
 import chisel3._
@@ -48,16 +47,16 @@ class VIAluFWrapper extends Module {
   vIntFixpAlu.io.in.info.uopIdx := in.info.uopIdx
 
   vIntFixpAlu.io.in.info.vxrm := in.info.vxrm
-  val srcVdType = Wire(new Bundle{
+  val srcVdType = Wire(new Bundle {
     val srcType2 = UInt(4.W)
     val srcType1 = UInt(4.W)
     val vdType = UInt(4.W)
   })
-  srcVdType := VialuFixType.getSrcVdType(in.fuOpType, in.vsew(1,0)).asTypeOf(srcVdType.cloneType)
+  srcVdType := VialuFixType.getSrcVdType(in.fuOpType, in.vsew(1, 0)).asTypeOf(srcVdType.cloneType)
   vIntFixpAlu.io.in.srcType(0) := srcVdType.srcType2
   vIntFixpAlu.io.in.srcType(1) := srcVdType.srcType1
   vIntFixpAlu.io.in.vdType := srcVdType.vdType
-  val needReverse  = VialuFixType.needReverse(in.fuOpType)
+  val needReverse = VialuFixType.needReverse(in.fuOpType)
   val needClearMask = VialuFixType.needClearMask(in.fuOpType)
   val vs1 = Mux(needReverse, in.src(1), in.src(0))
   val vs2 = Mux(needReverse, in.src(0), in.src(1))

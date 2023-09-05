@@ -5,13 +5,13 @@ import chisel3.util._
 import yunsuan.vector.vfsqrt._
 
 class fpsqrt_r16_block(
-                        S0_CSA_SPECULATIVE: Int = 0,
-                        S0_CSA_MERGED: Int = 1,
-                        S1_QDS_SPECULATIVE: Int = 1,
-                        S1_CSA_SPECULATIVE: Int = 1,
-                        S1_CSA_MERGED: Int = 0,
-                        RT_DIG_W: Int = 5
-                      ) extends Module {
+  S0_CSA_SPECULATIVE: Int = 0,
+  S0_CSA_MERGED:      Int = 1,
+  S1_QDS_SPECULATIVE: Int = 1,
+  S1_CSA_SPECULATIVE: Int = 1,
+  S1_CSA_MERGED:      Int = 0,
+  RT_DIG_W:           Int = 5)
+    extends Module {
 
   val REM_W = if ((S0_CSA_SPECULATIVE == 0) & (S0_CSA_MERGED == 1)) 70 else 64
   val fp_fmt_i = IO(Input(UInt(3.W)))
@@ -316,19 +316,32 @@ class fpsqrt_r16_block(
   val adder_7b_res_for_s1_qds_3 = Wire(UInt(7.W))
   mask_csa_ext(0) := Cat(
     "b0".U(2.W),
-    "b0".U(3.W), mask_i(12),
-    "b0".U(3.W), mask_i(11),
-    "b0".U(3.W), mask_i(10),
-    "b0".U(3.W), mask_i(9),
-    "b0".U(3.W), mask_i(8),
-    "b0".U(3.W), mask_i(7),
-    "b0".U(3.W), mask_i(6),
-    "b0".U(3.W), mask_i(5),
-    "b0".U(3.W), mask_i(4),
-    "b0".U(3.W), mask_i(3),
-    "b0".U(3.W), mask_i(2),
-    "b0".U(3.W), mask_i(1),
-    "b0".U(3.W), mask_i(0),
+    "b0".U(3.W),
+    mask_i(12),
+    "b0".U(3.W),
+    mask_i(11),
+    "b0".U(3.W),
+    mask_i(10),
+    "b0".U(3.W),
+    mask_i(9),
+    "b0".U(3.W),
+    mask_i(8),
+    "b0".U(3.W),
+    mask_i(7),
+    "b0".U(3.W),
+    mask_i(6),
+    "b0".U(3.W),
+    mask_i(5),
+    "b0".U(3.W),
+    mask_i(4),
+    "b0".U(3.W),
+    mask_i(3),
+    "b0".U(3.W),
+    mask_i(2),
+    "b0".U(3.W),
+    mask_i(1),
+    "b0".U(3.W),
+    mask_i(0),
     "b0".U(2.W)
   )
   mask_csa_neg_2(0) := (mask_csa_ext(0) << 2) | (mask_csa_ext(0) << 3)
@@ -538,10 +551,22 @@ class fpsqrt_r16_block(
     Mux(fp_fmt_i(1), "b1".U(1.W), nxt_f_r_c_pre_spec_s0_0(0)(28)),
     nxt_f_r_c_pre_spec_s0_0(0)(27, 0)
   )
-  sqrt_csa_val_neg_2_1(0) := (Cat("b0".U(1.W), rt_m1_for_csa_1(0)) << 2) | mask_csa_neg_2(0)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1)
-  sqrt_csa_val_neg_1_1(0) := (Cat("b0".U(1.W), rt_m1_for_csa_1(0)) << 1) | mask_csa_neg_1(0)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1)
-  sqrt_csa_val_pos_1_1(0) := ~((Cat("b0".U(1.W), rt_for_csa_1(0)) << 1) | mask_csa_pos_1(0)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1))
-  sqrt_csa_val_pos_2_1(0) := ~((Cat("b0".U(1.W), rt_for_csa_1(0)) << 2) | mask_csa_pos_2(0)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1))
+  sqrt_csa_val_neg_2_1(0) := (Cat("b0".U(1.W), rt_m1_for_csa_1(0)) << 2) | mask_csa_neg_2(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F32_REM_W + 1
+  )
+  sqrt_csa_val_neg_1_1(0) := (Cat("b0".U(1.W), rt_m1_for_csa_1(0)) << 1) | mask_csa_neg_1(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F32_REM_W + 1
+  )
+  sqrt_csa_val_pos_1_1(0) := ~((Cat("b0".U(1.W), rt_for_csa_1(0)) << 1) | mask_csa_pos_1(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F32_REM_W + 1
+  ))
+  sqrt_csa_val_pos_2_1(0) := ~((Cat("b0".U(1.W), rt_for_csa_1(0)) << 2) | mask_csa_pos_2(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F32_REM_W + 1
+  ))
   sqrt_csa_val_1(0) :=
     (Fill(F32_REM_W, nxt_rt_dig_1(0)(4)) & sqrt_csa_val_neg_2_1(0)) |
       (Fill(F32_REM_W, nxt_rt_dig_1(0)(3)) & sqrt_csa_val_neg_1_1(0)) |
@@ -622,10 +647,22 @@ class fpsqrt_r16_block(
     Mux(fp_fmt_i(0), "b1".U(1.W), nxt_f_r_c_pre_spec_s0_1(0)(12)),
     nxt_f_r_c_pre_spec_s0_1(0)(11, 0)
   )
-  sqrt_csa_val_neg_2_2(0) := (Cat("b0".U(1.W), rt_m1_2) << 2) | mask_csa_neg_2(0)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1)
-  sqrt_csa_val_neg_1_2(0) := (Cat("b0".U(1.W), rt_m1_2) << 1) | mask_csa_neg_1(0)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1)
-  sqrt_csa_val_pos_1_2(0) := ~((Cat("b0".U(1.W), rt_2) << 1) | mask_csa_pos_1(0)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1))
-  sqrt_csa_val_pos_2_2(0) := ~((Cat("b0".U(1.W), rt_2) << 2) | mask_csa_pos_2(0)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1))
+  sqrt_csa_val_neg_2_2(0) := (Cat("b0".U(1.W), rt_m1_2) << 2) | mask_csa_neg_2(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  )
+  sqrt_csa_val_neg_1_2(0) := (Cat("b0".U(1.W), rt_m1_2) << 1) | mask_csa_neg_1(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  )
+  sqrt_csa_val_pos_1_2(0) := ~((Cat("b0".U(1.W), rt_2) << 1) | mask_csa_pos_1(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  ))
+  sqrt_csa_val_pos_2_2(0) := ~((Cat("b0".U(1.W), rt_2) << 2) | mask_csa_pos_2(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  ))
   sqrt_csa_val_2(0) :=
     (Fill(F16_REM_W, nxt_rt_dig_2(0)(4)) & sqrt_csa_val_neg_2_2(0)) |
       (Fill(F16_REM_W, nxt_rt_dig_2(0)(3)) & sqrt_csa_val_neg_1_2(0)) |
@@ -680,10 +717,22 @@ class fpsqrt_r16_block(
     "b1".U(1.W)
   )
   nxt_f_r_c_spec_s0_2(0) := nxt_f_r_c_pre_spec_s0_2(0)
-  sqrt_csa_val_neg_2_3(0) := (Cat("b0".U(1.W), rt_m1_3) << 2) | mask_csa_neg_2(0)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1)
-  sqrt_csa_val_neg_1_3(0) := (Cat("b0".U(1.W), rt_m1_3) << 1) | mask_csa_neg_1(0)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1)
-  sqrt_csa_val_pos_1_3(0) := ~((Cat("b0".U(1.W), rt_3) << 1) | mask_csa_pos_1(0)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1))
-  sqrt_csa_val_pos_2_3(0) := ~((Cat("b0".U(1.W), rt_3) << 2) | mask_csa_pos_2(0)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1))
+  sqrt_csa_val_neg_2_3(0) := (Cat("b0".U(1.W), rt_m1_3) << 2) | mask_csa_neg_2(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  )
+  sqrt_csa_val_neg_1_3(0) := (Cat("b0".U(1.W), rt_m1_3) << 1) | mask_csa_neg_1(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  )
+  sqrt_csa_val_pos_1_3(0) := ~((Cat("b0".U(1.W), rt_3) << 1) | mask_csa_pos_1(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  ))
+  sqrt_csa_val_pos_2_3(0) := ~((Cat("b0".U(1.W), rt_3) << 2) | mask_csa_pos_2(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  ))
   sqrt_csa_val_3(0) :=
     (Fill(F16_REM_W, nxt_rt_dig_3(0)(4)) & sqrt_csa_val_neg_2_3(0)) |
       (Fill(F16_REM_W, nxt_rt_dig_3(0)(3)) & sqrt_csa_val_neg_1_3(0)) |
@@ -738,26 +787,74 @@ class fpsqrt_r16_block(
     "b1".U(1.W)
   )
   nxt_f_r_c_spec_s0_3(0) := nxt_f_r_c_pre_spec_s0_3(0)
-  adder_9b_for_s1_qds_spec_0(4) := nr_f_r_9b_for_nxt_cycle_s1_qds_0_i + sqrt_csa_val_neg_2_0(0)(F64_REM_W - 1, F64_REM_W - 1 - 9 + 1)
-  adder_9b_for_s1_qds_spec_0(3) := nr_f_r_9b_for_nxt_cycle_s1_qds_0_i + sqrt_csa_val_neg_1_0(0)(F64_REM_W - 1, F64_REM_W - 1 - 9 + 1)
+  adder_9b_for_s1_qds_spec_0(4) := nr_f_r_9b_for_nxt_cycle_s1_qds_0_i + sqrt_csa_val_neg_2_0(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - 9 + 1
+  )
+  adder_9b_for_s1_qds_spec_0(3) := nr_f_r_9b_for_nxt_cycle_s1_qds_0_i + sqrt_csa_val_neg_1_0(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - 9 + 1
+  )
   adder_9b_for_s1_qds_spec_0(2) := nr_f_r_9b_for_nxt_cycle_s1_qds_0_i
-  adder_9b_for_s1_qds_spec_0(1) := nr_f_r_9b_for_nxt_cycle_s1_qds_0_i + sqrt_csa_val_pos_1_0(0)(F64_REM_W - 1, F64_REM_W - 1 - 9 + 1)
-  adder_9b_for_s1_qds_spec_0(0) := nr_f_r_9b_for_nxt_cycle_s1_qds_0_i + sqrt_csa_val_pos_2_0(0)(F64_REM_W - 1, F64_REM_W - 1 - 9 + 1)
-  adder_9b_for_s1_qds_spec_1(4) := nr_f_r_9b_for_nxt_cycle_s1_qds_1_i + sqrt_csa_val_neg_2_1(0)(F32_REM_W - 1, F32_REM_W - 1 - 9 + 1)
-  adder_9b_for_s1_qds_spec_1(3) := nr_f_r_9b_for_nxt_cycle_s1_qds_1_i + sqrt_csa_val_neg_1_1(0)(F32_REM_W - 1, F32_REM_W - 1 - 9 + 1)
+  adder_9b_for_s1_qds_spec_0(1) := nr_f_r_9b_for_nxt_cycle_s1_qds_0_i + sqrt_csa_val_pos_1_0(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - 9 + 1
+  )
+  adder_9b_for_s1_qds_spec_0(0) := nr_f_r_9b_for_nxt_cycle_s1_qds_0_i + sqrt_csa_val_pos_2_0(0)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - 9 + 1
+  )
+  adder_9b_for_s1_qds_spec_1(4) := nr_f_r_9b_for_nxt_cycle_s1_qds_1_i + sqrt_csa_val_neg_2_1(0)(
+    F32_REM_W - 1,
+    F32_REM_W - 1 - 9 + 1
+  )
+  adder_9b_for_s1_qds_spec_1(3) := nr_f_r_9b_for_nxt_cycle_s1_qds_1_i + sqrt_csa_val_neg_1_1(0)(
+    F32_REM_W - 1,
+    F32_REM_W - 1 - 9 + 1
+  )
   adder_9b_for_s1_qds_spec_1(2) := nr_f_r_9b_for_nxt_cycle_s1_qds_1_i
-  adder_9b_for_s1_qds_spec_1(1) := nr_f_r_9b_for_nxt_cycle_s1_qds_1_i + sqrt_csa_val_pos_1_1(0)(F32_REM_W - 1, F32_REM_W - 1 - 9 + 1)
-  adder_9b_for_s1_qds_spec_1(0) := nr_f_r_9b_for_nxt_cycle_s1_qds_1_i + sqrt_csa_val_pos_2_1(0)(F32_REM_W - 1, F32_REM_W - 1 - 9 + 1)
-  adder_9b_for_s1_qds_spec_2(4) := nr_f_r_9b_for_nxt_cycle_s1_qds_2_i + sqrt_csa_val_neg_2_2(0)(F16_REM_W - 1, F16_REM_W - 1 - 9 + 1)
-  adder_9b_for_s1_qds_spec_2(3) := nr_f_r_9b_for_nxt_cycle_s1_qds_2_i + sqrt_csa_val_neg_1_2(0)(F16_REM_W - 1, F16_REM_W - 1 - 9 + 1)
+  adder_9b_for_s1_qds_spec_1(1) := nr_f_r_9b_for_nxt_cycle_s1_qds_1_i + sqrt_csa_val_pos_1_1(0)(
+    F32_REM_W - 1,
+    F32_REM_W - 1 - 9 + 1
+  )
+  adder_9b_for_s1_qds_spec_1(0) := nr_f_r_9b_for_nxt_cycle_s1_qds_1_i + sqrt_csa_val_pos_2_1(0)(
+    F32_REM_W - 1,
+    F32_REM_W - 1 - 9 + 1
+  )
+  adder_9b_for_s1_qds_spec_2(4) := nr_f_r_9b_for_nxt_cycle_s1_qds_2_i + sqrt_csa_val_neg_2_2(0)(
+    F16_REM_W - 1,
+    F16_REM_W - 1 - 9 + 1
+  )
+  adder_9b_for_s1_qds_spec_2(3) := nr_f_r_9b_for_nxt_cycle_s1_qds_2_i + sqrt_csa_val_neg_1_2(0)(
+    F16_REM_W - 1,
+    F16_REM_W - 1 - 9 + 1
+  )
   adder_9b_for_s1_qds_spec_2(2) := nr_f_r_9b_for_nxt_cycle_s1_qds_2_i
-  adder_9b_for_s1_qds_spec_2(1) := nr_f_r_9b_for_nxt_cycle_s1_qds_2_i + sqrt_csa_val_pos_1_2(0)(F16_REM_W - 1, F16_REM_W - 1 - 9 + 1)
-  adder_9b_for_s1_qds_spec_2(0) := nr_f_r_9b_for_nxt_cycle_s1_qds_2_i + sqrt_csa_val_pos_2_2(0)(F16_REM_W - 1, F16_REM_W - 1 - 9 + 1)
-  adder_9b_for_s1_qds_spec_3(4) := nr_f_r_9b_for_nxt_cycle_s1_qds_3_i + sqrt_csa_val_neg_2_3(0)(F16_REM_W - 1, F16_REM_W - 1 - 9 + 1)
-  adder_9b_for_s1_qds_spec_3(3) := nr_f_r_9b_for_nxt_cycle_s1_qds_3_i + sqrt_csa_val_neg_1_3(0)(F16_REM_W - 1, F16_REM_W - 1 - 9 + 1)
+  adder_9b_for_s1_qds_spec_2(1) := nr_f_r_9b_for_nxt_cycle_s1_qds_2_i + sqrt_csa_val_pos_1_2(0)(
+    F16_REM_W - 1,
+    F16_REM_W - 1 - 9 + 1
+  )
+  adder_9b_for_s1_qds_spec_2(0) := nr_f_r_9b_for_nxt_cycle_s1_qds_2_i + sqrt_csa_val_pos_2_2(0)(
+    F16_REM_W - 1,
+    F16_REM_W - 1 - 9 + 1
+  )
+  adder_9b_for_s1_qds_spec_3(4) := nr_f_r_9b_for_nxt_cycle_s1_qds_3_i + sqrt_csa_val_neg_2_3(0)(
+    F16_REM_W - 1,
+    F16_REM_W - 1 - 9 + 1
+  )
+  adder_9b_for_s1_qds_spec_3(3) := nr_f_r_9b_for_nxt_cycle_s1_qds_3_i + sqrt_csa_val_neg_1_3(0)(
+    F16_REM_W - 1,
+    F16_REM_W - 1 - 9 + 1
+  )
   adder_9b_for_s1_qds_spec_3(2) := nr_f_r_9b_for_nxt_cycle_s1_qds_3_i
-  adder_9b_for_s1_qds_spec_3(1) := nr_f_r_9b_for_nxt_cycle_s1_qds_3_i + sqrt_csa_val_pos_1_3(0)(F16_REM_W - 1, F16_REM_W - 1 - 9 + 1)
-  adder_9b_for_s1_qds_spec_3(0) := nr_f_r_9b_for_nxt_cycle_s1_qds_3_i + sqrt_csa_val_pos_2_3(0)(F16_REM_W - 1, F16_REM_W - 1 - 9 + 1)
+  adder_9b_for_s1_qds_spec_3(1) := nr_f_r_9b_for_nxt_cycle_s1_qds_3_i + sqrt_csa_val_pos_1_3(0)(
+    F16_REM_W - 1,
+    F16_REM_W - 1 - 9 + 1
+  )
+  adder_9b_for_s1_qds_spec_3(0) := nr_f_r_9b_for_nxt_cycle_s1_qds_3_i + sqrt_csa_val_pos_2_3(0)(
+    F16_REM_W - 1,
+    F16_REM_W - 1 - 9 + 1
+  )
   nxt_rt_spec_s0_0(4) := rt_m1_0 | mask_rt_neg_2(0)
   nxt_rt_spec_s0_0(3) := rt_m1_0 | mask_rt_neg_1(0)
   nxt_rt_spec_s0_0(2) := rt_0
@@ -1107,8 +1204,7 @@ class fpsqrt_r16_block(
         (Fill(F16_REM_W, nxt_rt_dig_3(0)(2)) & nxt_f_r_c_spec_s0_3(2)) |
         (Fill(F16_REM_W, nxt_rt_dig_3(0)(1)) & nxt_f_r_c_spec_s0_3(1)) |
         (Fill(F16_REM_W, nxt_rt_dig_3(0)(0)) & nxt_f_r_c_spec_s0_3(0))
-  }
-  else if (S0_CSA_MERGED == 0) {
+  } else if (S0_CSA_MERGED == 0) {
     nxt_f_r_s_0(0) :=
       f_r_s_for_csa_0(0) ^
         f_r_c_for_csa_0(0) ^
@@ -1163,8 +1259,7 @@ class fpsqrt_r16_block(
       nxt_rt_dig_3(0)(0) | nxt_rt_dig_3(0)(1)
     )
     nxt_f_r_c_3(0) := nxt_f_r_c_pre_3(0)
-  }
-  else {
+  } else {
     f_r_s_for_csa_merged(0) := Cat(f_r_s_i((REM_W - 2) - 1, 0), "b0".U(2.W))
     f_r_c_for_csa_merged(0) := Cat(f_r_c_i((REM_W - 2) - 1, 0), "b0".U(2.W))
     sqrt_csa_val_merged(0) :=
@@ -1177,7 +1272,13 @@ class fpsqrt_r16_block(
         "b00".U(2.W),
         sqrt_csa_val_3(0)
       )) |
-        (Fill(REM_W, fp_fmt_i(1)) & Cat(sqrt_csa_val_0(0)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1), "b0".U(6.W), "b0".U(2.W), sqrt_csa_val_1(0), "b0".U(6.W))) |
+        (Fill(REM_W, fp_fmt_i(1)) & Cat(
+          sqrt_csa_val_0(0)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1),
+          "b0".U(6.W),
+          "b0".U(2.W),
+          sqrt_csa_val_1(0),
+          "b0".U(6.W)
+        )) |
         (Fill(REM_W, fp_fmt_i(2)) & Cat(sqrt_csa_val_0(0), "b0".U(14.W)))
     nxt_f_r_s_merged(0) :=
       f_r_s_for_csa_merged(0) ^
@@ -1212,7 +1313,11 @@ class fpsqrt_r16_block(
           nxt_rt_dig_1(0)(1) | nxt_rt_dig_1(0)(0),
           "b0".U(6.W)
         )) |
-        (Fill(REM_W, fp_fmt_i(2)) & Cat(nxt_f_r_c_merged_pre(0)(69, 15), nxt_rt_dig_0(0)(1) | nxt_rt_dig_0(0)(0), "b0".U(14.W)))
+        (Fill(REM_W, fp_fmt_i(2)) & Cat(
+          nxt_f_r_c_merged_pre(0)(69, 15),
+          nxt_rt_dig_0(0)(1) | nxt_rt_dig_0(0)(0),
+          "b0".U(14.W)
+        ))
   }
 
   adder_7b_res_for_s1_qds_0 :=
@@ -1354,11 +1459,23 @@ class fpsqrt_r16_block(
       (Fill(F32_FULL_RT_W, nxt_rt_dig_1(0)(1)) & nxt_rt_spec_s0_1(1)) |
       (Fill(F32_FULL_RT_W, nxt_rt_dig_1(0)(0)) & nxt_rt_spec_s0_1(0))
   nxt_rt_m1_1(0) :=
-    (Fill(F32_FULL_RT_W, nxt_rt_dig_1(0)(4)) & (rt_m1_1 | mask_rt_m1_neg_2(0)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1))) |
-      (Fill(F32_FULL_RT_W, nxt_rt_dig_1(0)(3)) & (rt_m1_1 | mask_rt_m1_neg_1(0)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1))) |
-      (Fill(F32_FULL_RT_W, nxt_rt_dig_1(0)(2)) & (rt_m1_1 | mask_rt_m1_neg_0(0)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1))) |
+    (Fill(F32_FULL_RT_W, nxt_rt_dig_1(0)(4)) & (rt_m1_1 | mask_rt_m1_neg_2(0)(
+      F64_FULL_RT_W - 1,
+      F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1
+    ))) |
+      (Fill(F32_FULL_RT_W, nxt_rt_dig_1(0)(3)) & (rt_m1_1 | mask_rt_m1_neg_1(0)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1
+      ))) |
+      (Fill(F32_FULL_RT_W, nxt_rt_dig_1(0)(2)) & (rt_m1_1 | mask_rt_m1_neg_0(0)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1
+      ))) |
       (Fill(F32_FULL_RT_W, nxt_rt_dig_1(0)(1)) & rt_1) |
-      (Fill(F32_FULL_RT_W, nxt_rt_dig_1(0)(0)) & (rt_1 | mask_rt_m1_pos_2(0)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1)))
+      (Fill(F32_FULL_RT_W, nxt_rt_dig_1(0)(0)) & (rt_1 | mask_rt_m1_pos_2(0)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1
+      )))
   rt_for_csa_0(1) := Cat(
     nxt_rt_0(0)(54, 40),
     Mux(fp_fmt_i(0), "b0".U(2.W), nxt_rt_0(0)(39, 38)),
@@ -1390,11 +1507,23 @@ class fpsqrt_r16_block(
       (Fill(F16_FULL_RT_W, nxt_rt_dig_2(0)(1)) & nxt_rt_spec_s0_2(1)) |
       (Fill(F16_FULL_RT_W, nxt_rt_dig_2(0)(0)) & nxt_rt_spec_s0_2(0))
   nxt_rt_m1_2(0) :=
-    (Fill(F16_FULL_RT_W, nxt_rt_dig_2(0)(4)) & (rt_m1_2 | mask_rt_m1_neg_2(0)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1))) |
-      (Fill(F16_FULL_RT_W, nxt_rt_dig_2(0)(3)) & (rt_m1_2 | mask_rt_m1_neg_1(0)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1))) |
-      (Fill(F16_FULL_RT_W, nxt_rt_dig_2(0)(2)) & (rt_m1_2 | mask_rt_m1_neg_0(0)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1))) |
+    (Fill(F16_FULL_RT_W, nxt_rt_dig_2(0)(4)) & (rt_m1_2 | mask_rt_m1_neg_2(0)(
+      F64_FULL_RT_W - 1,
+      F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+    ))) |
+      (Fill(F16_FULL_RT_W, nxt_rt_dig_2(0)(3)) & (rt_m1_2 | mask_rt_m1_neg_1(0)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+      ))) |
+      (Fill(F16_FULL_RT_W, nxt_rt_dig_2(0)(2)) & (rt_m1_2 | mask_rt_m1_neg_0(0)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+      ))) |
       (Fill(F16_FULL_RT_W, nxt_rt_dig_2(0)(1)) & rt_2) |
-      (Fill(F16_FULL_RT_W, nxt_rt_dig_2(0)(0)) & (rt_2 | mask_rt_m1_pos_2(0)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1)))
+      (Fill(F16_FULL_RT_W, nxt_rt_dig_2(0)(0)) & (rt_2 | mask_rt_m1_pos_2(0)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+      )))
   nxt_rt_3(0) :=
     (Fill(F16_FULL_RT_W, nxt_rt_dig_3(0)(4)) & nxt_rt_spec_s0_3(4)) |
       (Fill(F16_FULL_RT_W, nxt_rt_dig_3(0)(3)) & nxt_rt_spec_s0_3(3)) |
@@ -1402,11 +1531,23 @@ class fpsqrt_r16_block(
       (Fill(F16_FULL_RT_W, nxt_rt_dig_3(0)(1)) & nxt_rt_spec_s0_3(1)) |
       (Fill(F16_FULL_RT_W, nxt_rt_dig_3(0)(0)) & nxt_rt_spec_s0_3(0))
   nxt_rt_m1_3(0) :=
-    (Fill(F16_FULL_RT_W, nxt_rt_dig_3(0)(4)) & (rt_m1_3 | mask_rt_m1_neg_2(0)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1))) |
-      (Fill(F16_FULL_RT_W, nxt_rt_dig_3(0)(3)) & (rt_m1_3 | mask_rt_m1_neg_1(0)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1))) |
-      (Fill(F16_FULL_RT_W, nxt_rt_dig_3(0)(2)) & (rt_m1_3 | mask_rt_m1_neg_0(0)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1))) |
+    (Fill(F16_FULL_RT_W, nxt_rt_dig_3(0)(4)) & (rt_m1_3 | mask_rt_m1_neg_2(0)(
+      F64_FULL_RT_W - 1,
+      F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+    ))) |
+      (Fill(F16_FULL_RT_W, nxt_rt_dig_3(0)(3)) & (rt_m1_3 | mask_rt_m1_neg_1(0)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+      ))) |
+      (Fill(F16_FULL_RT_W, nxt_rt_dig_3(0)(2)) & (rt_m1_3 | mask_rt_m1_neg_0(0)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+      ))) |
       (Fill(F16_FULL_RT_W, nxt_rt_dig_3(0)(1)) & rt_3) |
-      (Fill(F16_FULL_RT_W, nxt_rt_dig_3(0)(0)) & (rt_3 | mask_rt_m1_pos_2(0)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1)))
+      (Fill(F16_FULL_RT_W, nxt_rt_dig_3(0)(0)) & (rt_3 | mask_rt_m1_pos_2(0)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+      )))
   sqrt_csa_val_neg_2_0(1) := (Cat("b0".U(1.W), rt_m1_for_csa_0(1)) << 2) | mask_csa_neg_2(1)
   sqrt_csa_val_neg_1_0(1) := (Cat("b0".U(1.W), rt_m1_for_csa_0(1)) << 1) | mask_csa_neg_1(1)
   sqrt_csa_val_pos_1_0(1) := ~((Cat("b0".U(1.W), rt_for_csa_0(1)) << 1) | mask_csa_pos_1(1))
@@ -1433,8 +1574,7 @@ class fpsqrt_r16_block(
       nxt_f_r_c_merged(0)(37, 14),
       "b00".U(2.W)
     )
-  }
-  else {
+  } else {
     f_r_s_for_csa_0(1) := Cat(
       nxt_f_r_s_0(0)(53, 40),
       Mux(fp_fmt_i(0), "b00".U(2.W), nxt_f_r_s_0(0)(39, 38)),
@@ -1524,10 +1664,22 @@ class fpsqrt_r16_block(
     Mux(fp_fmt_i(1), "b1".U(1.W), nxt_f_r_c_pre_spec_s1_0(0)(28)),
     nxt_f_r_c_pre_spec_s1_0(0)(27, 0)
   )
-  sqrt_csa_val_neg_2_1(1) := (Cat("b0".U(1.W), rt_m1_for_csa_1(1)) << 2) | mask_csa_neg_2(1)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1)
-  sqrt_csa_val_neg_1_1(1) := (Cat("b0".U(1.W), rt_m1_for_csa_1(1)) << 1) | mask_csa_neg_1(1)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1)
-  sqrt_csa_val_pos_1_1(1) := ~((Cat("b0".U(1.W), rt_for_csa_1(1)) << 1) | mask_csa_pos_1(1)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1))
-  sqrt_csa_val_pos_2_1(1) := ~((Cat("b0".U(1.W), rt_for_csa_1(1)) << 2) | mask_csa_pos_2(1)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1))
+  sqrt_csa_val_neg_2_1(1) := (Cat("b0".U(1.W), rt_m1_for_csa_1(1)) << 2) | mask_csa_neg_2(1)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F32_REM_W + 1
+  )
+  sqrt_csa_val_neg_1_1(1) := (Cat("b0".U(1.W), rt_m1_for_csa_1(1)) << 1) | mask_csa_neg_1(1)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F32_REM_W + 1
+  )
+  sqrt_csa_val_pos_1_1(1) := ~((Cat("b0".U(1.W), rt_for_csa_1(1)) << 1) | mask_csa_pos_1(1)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F32_REM_W + 1
+  ))
+  sqrt_csa_val_pos_2_1(1) := ~((Cat("b0".U(1.W), rt_for_csa_1(1)) << 2) | mask_csa_pos_2(1)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F32_REM_W + 1
+  ))
   sqrt_csa_val_1(1) :=
     (Fill(F32_REM_W, nxt_rt_dig_1(1)(4)) & sqrt_csa_val_neg_2_1(1)) |
       (Fill(F32_REM_W, nxt_rt_dig_1(1)(3)) & sqrt_csa_val_neg_1_1(1)) |
@@ -1546,8 +1698,7 @@ class fpsqrt_r16_block(
       nxt_f_r_c_merged(0)(15, 6),
       "b00".U(2.W)
     )
-  }
-  else {
+  } else {
     f_r_s_for_csa_1(1) := Cat(
       nxt_f_r_s_1(0)(25, 12),
       Mux(fp_fmt_i(0), "b00".U(2.W), nxt_f_r_s_1(0)(11, 10)),
@@ -1625,10 +1776,22 @@ class fpsqrt_r16_block(
     Mux(fp_fmt_i(0), "b1".U(1.W), nxt_f_r_c_pre_spec_s1_1(0)(12)),
     nxt_f_r_c_pre_spec_s1_1(0)(11, 0)
   )
-  sqrt_csa_val_neg_2_2(1) := (Cat("b0".U(1.W), nxt_rt_m1_2(0)) << 2) | mask_csa_neg_2(1)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1)
-  sqrt_csa_val_neg_1_2(1) := (Cat("b0".U(1.W), nxt_rt_m1_2(0)) << 1) | mask_csa_neg_1(1)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1)
-  sqrt_csa_val_pos_1_2(1) := ~((Cat("b0".U(1.W), nxt_rt_2(0)) << 1) | mask_csa_pos_1(1)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1))
-  sqrt_csa_val_pos_2_2(1) := ~((Cat("b0".U(1.W), nxt_rt_2(0)) << 2) | mask_csa_pos_2(1)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1))
+  sqrt_csa_val_neg_2_2(1) := (Cat("b0".U(1.W), nxt_rt_m1_2(0)) << 2) | mask_csa_neg_2(1)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  )
+  sqrt_csa_val_neg_1_2(1) := (Cat("b0".U(1.W), nxt_rt_m1_2(0)) << 1) | mask_csa_neg_1(1)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  )
+  sqrt_csa_val_pos_1_2(1) := ~((Cat("b0".U(1.W), nxt_rt_2(0)) << 1) | mask_csa_pos_1(1)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  ))
+  sqrt_csa_val_pos_2_2(1) := ~((Cat("b0".U(1.W), nxt_rt_2(0)) << 2) | mask_csa_pos_2(1)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  ))
   sqrt_csa_val_2(1) :=
     (Fill(F16_REM_W, nxt_rt_dig_2(1)(4)) & sqrt_csa_val_neg_2_2(1)) |
       (Fill(F16_REM_W, nxt_rt_dig_2(1)(3)) & sqrt_csa_val_neg_1_2(1)) |
@@ -1637,8 +1800,7 @@ class fpsqrt_r16_block(
   if (S0_CSA_IS_MERGED == 1) {
     f_r_s_for_csa_2(1) := Cat(nxt_f_r_s_merged(0)(49, 36), "b00".U(2.W))
     f_r_c_for_csa_2(1) := Cat(nxt_f_r_c_merged(0)(49, 36), "b00".U(2.W))
-  }
-  else {
+  } else {
     f_r_s_for_csa_2(1) := Cat(nxt_f_r_s_2(0)(13, 0), "b00".U(2.W))
     f_r_c_for_csa_2(1) := Cat(nxt_f_r_c_2(0)(13, 0), "b00".U(2.W))
   }
@@ -1690,10 +1852,22 @@ class fpsqrt_r16_block(
     "b1".U(1.W)
   )
   nxt_f_r_c_spec_s1_2(0) := nxt_f_r_c_pre_spec_s1_2(0)
-  sqrt_csa_val_neg_2_3(1) := (Cat("b0".U(1.W), nxt_rt_m1_3(0)) << 2) | mask_csa_neg_2(1)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1)
-  sqrt_csa_val_neg_1_3(1) := (Cat("b0".U(1.W), nxt_rt_m1_3(0)) << 1) | mask_csa_neg_1(1)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1)
-  sqrt_csa_val_pos_1_3(1) := ~((Cat("b0".U(1.W), nxt_rt_3(0)) << 1) | mask_csa_pos_1(1)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1))
-  sqrt_csa_val_pos_2_3(1) := ~((Cat("b0".U(1.W), nxt_rt_3(0)) << 2) | mask_csa_pos_2(1)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1))
+  sqrt_csa_val_neg_2_3(1) := (Cat("b0".U(1.W), nxt_rt_m1_3(0)) << 2) | mask_csa_neg_2(1)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  )
+  sqrt_csa_val_neg_1_3(1) := (Cat("b0".U(1.W), nxt_rt_m1_3(0)) << 1) | mask_csa_neg_1(1)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  )
+  sqrt_csa_val_pos_1_3(1) := ~((Cat("b0".U(1.W), nxt_rt_3(0)) << 1) | mask_csa_pos_1(1)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  ))
+  sqrt_csa_val_pos_2_3(1) := ~((Cat("b0".U(1.W), nxt_rt_3(0)) << 2) | mask_csa_pos_2(1)(
+    F64_REM_W - 1,
+    F64_REM_W - 1 - F16_REM_W + 1
+  ))
   sqrt_csa_val_3(1) :=
     (Fill(F16_REM_W, nxt_rt_dig_3(1)(4)) & sqrt_csa_val_neg_2_3(1)) |
       (Fill(F16_REM_W, nxt_rt_dig_3(1)(3)) & sqrt_csa_val_neg_1_3(1)) |
@@ -1702,8 +1876,7 @@ class fpsqrt_r16_block(
   if (S0_CSA_IS_MERGED == 1) {
     f_r_s_for_csa_3(1) := Cat(nxt_f_r_s_merged(0)(13, 0), "b00".U(2.W))
     f_r_c_for_csa_3(1) := Cat(nxt_f_r_c_merged(0)(13, 0), "b00".U(2.W))
-  }
-  else {
+  } else {
     f_r_s_for_csa_3(1) := Cat(nxt_f_r_s_3(0)(13, 0), "b00".U(2.W))
     f_r_c_for_csa_3(1) := Cat(nxt_f_r_c_3(0)(13, 0), "b00".U(2.W))
   }
@@ -1908,8 +2081,7 @@ class fpsqrt_r16_block(
       nxt_f_r_s_merged(0)(15 - 2 - 2, 15 - 2 - 2 - 10 + 1) +&
         nxt_f_r_c_merged(0)(15 - 2 - 2, 15 - 2 - 2 - 10 + 1) +&
         sqrt_csa_val_pos_2_3(1)(F16_REM_W - 1 - 2, F16_REM_W - 1 - 2 - 10 + 1)
-  }
-  else {
+  } else {
     adder_9b_for_nxt_cycle_s0_qds_spec_0(4) :=
       nxt_f_r_s_0(0)(F64_REM_W - 1 - 2, F64_REM_W - 1 - 2 - 9 + 1) +&
         nxt_f_r_c_0(0)(F64_REM_W - 1 - 2, F64_REM_W - 1 - 2 - 9 + 1) +&
@@ -2482,8 +2654,7 @@ class fpsqrt_r16_block(
     u_r4_qds_s1_3.prev_rt_dig_i <> nxt_rt_dig_3(0)
     u_r4_qds_s1_3.rt_dig_o <> nxt_rt_dig_3(1)
 
-  }
-  else {
+  } else {
 
     val u_r4_qds_s1_0 = Module(new r4_qds())
     u_r4_qds_s1_0.rem_i <> adder_7b_res_for_s1_qds_0
@@ -2682,11 +2853,23 @@ class fpsqrt_r16_block(
       (Fill(F32_FULL_RT_W, nxt_rt_dig_1(1)(1)) & nxt_rt_spec_s1_1(1)) |
       (Fill(F32_FULL_RT_W, nxt_rt_dig_1(1)(0)) & nxt_rt_spec_s1_1(0))
   nxt_rt_m1_1(1) :=
-    (Fill(F32_FULL_RT_W, nxt_rt_dig_1(1)(4)) & (nxt_rt_m1_1(0) | mask_rt_m1_neg_2(1)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1))) |
-      (Fill(F32_FULL_RT_W, nxt_rt_dig_1(1)(3)) & (nxt_rt_m1_1(0) | mask_rt_m1_neg_1(1)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1))) |
-      (Fill(F32_FULL_RT_W, nxt_rt_dig_1(1)(2)) & (nxt_rt_m1_1(0) | mask_rt_m1_neg_0(1)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1))) |
+    (Fill(F32_FULL_RT_W, nxt_rt_dig_1(1)(4)) & (nxt_rt_m1_1(0) | mask_rt_m1_neg_2(1)(
+      F64_FULL_RT_W - 1,
+      F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1
+    ))) |
+      (Fill(F32_FULL_RT_W, nxt_rt_dig_1(1)(3)) & (nxt_rt_m1_1(0) | mask_rt_m1_neg_1(1)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1
+      ))) |
+      (Fill(F32_FULL_RT_W, nxt_rt_dig_1(1)(2)) & (nxt_rt_m1_1(0) | mask_rt_m1_neg_0(1)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1
+      ))) |
       (Fill(F32_FULL_RT_W, nxt_rt_dig_1(1)(1)) & nxt_rt_1(0)) |
-      (Fill(F32_FULL_RT_W, nxt_rt_dig_1(1)(0)) & (nxt_rt_1(0) | mask_rt_m1_pos_2(1)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1)))
+      (Fill(F32_FULL_RT_W, nxt_rt_dig_1(1)(0)) & (nxt_rt_1(0) | mask_rt_m1_pos_2(1)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F32_FULL_RT_W + 1
+      )))
   nxt_rt_2(1) :=
     (Fill(F16_FULL_RT_W, nxt_rt_dig_2(1)(4)) & nxt_rt_spec_s1_2(4)) |
       (Fill(F16_FULL_RT_W, nxt_rt_dig_2(1)(3)) & nxt_rt_spec_s1_2(3)) |
@@ -2694,11 +2877,23 @@ class fpsqrt_r16_block(
       (Fill(F16_FULL_RT_W, nxt_rt_dig_2(1)(1)) & nxt_rt_spec_s1_2(1)) |
       (Fill(F16_FULL_RT_W, nxt_rt_dig_2(1)(0)) & nxt_rt_spec_s1_2(0))
   nxt_rt_m1_2(1) :=
-    (Fill(F16_FULL_RT_W, nxt_rt_dig_2(1)(4)) & (nxt_rt_m1_2(0) | mask_rt_m1_neg_2(1)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1))) |
-      (Fill(F16_FULL_RT_W, nxt_rt_dig_2(1)(3)) & (nxt_rt_m1_2(0) | mask_rt_m1_neg_1(1)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1))) |
-      (Fill(F16_FULL_RT_W, nxt_rt_dig_2(1)(2)) & (nxt_rt_m1_2(0) | mask_rt_m1_neg_0(1)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1))) |
+    (Fill(F16_FULL_RT_W, nxt_rt_dig_2(1)(4)) & (nxt_rt_m1_2(0) | mask_rt_m1_neg_2(1)(
+      F64_FULL_RT_W - 1,
+      F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+    ))) |
+      (Fill(F16_FULL_RT_W, nxt_rt_dig_2(1)(3)) & (nxt_rt_m1_2(0) | mask_rt_m1_neg_1(1)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+      ))) |
+      (Fill(F16_FULL_RT_W, nxt_rt_dig_2(1)(2)) & (nxt_rt_m1_2(0) | mask_rt_m1_neg_0(1)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+      ))) |
       (Fill(F16_FULL_RT_W, nxt_rt_dig_2(1)(1)) & nxt_rt_2(0)) |
-      (Fill(F16_FULL_RT_W, nxt_rt_dig_2(1)(0)) & (nxt_rt_2(0) | mask_rt_m1_pos_2(1)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1)))
+      (Fill(F16_FULL_RT_W, nxt_rt_dig_2(1)(0)) & (nxt_rt_2(0) | mask_rt_m1_pos_2(1)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+      )))
   nxt_rt_3(1) :=
     (Fill(F16_FULL_RT_W, nxt_rt_dig_3(1)(4)) & nxt_rt_spec_s1_3(4)) |
       (Fill(F16_FULL_RT_W, nxt_rt_dig_3(1)(3)) & nxt_rt_spec_s1_3(3)) |
@@ -2706,11 +2901,23 @@ class fpsqrt_r16_block(
       (Fill(F16_FULL_RT_W, nxt_rt_dig_3(1)(1)) & nxt_rt_spec_s1_3(1)) |
       (Fill(F16_FULL_RT_W, nxt_rt_dig_3(1)(0)) & nxt_rt_spec_s1_3(0))
   nxt_rt_m1_3(1) :=
-    (Fill(F16_FULL_RT_W, nxt_rt_dig_3(1)(4)) & (nxt_rt_m1_3(0) | mask_rt_m1_neg_2(1)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1))) |
-      (Fill(F16_FULL_RT_W, nxt_rt_dig_3(1)(3)) & (nxt_rt_m1_3(0) | mask_rt_m1_neg_1(1)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1))) |
-      (Fill(F16_FULL_RT_W, nxt_rt_dig_3(1)(2)) & (nxt_rt_m1_3(0) | mask_rt_m1_neg_0(1)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1))) |
+    (Fill(F16_FULL_RT_W, nxt_rt_dig_3(1)(4)) & (nxt_rt_m1_3(0) | mask_rt_m1_neg_2(1)(
+      F64_FULL_RT_W - 1,
+      F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+    ))) |
+      (Fill(F16_FULL_RT_W, nxt_rt_dig_3(1)(3)) & (nxt_rt_m1_3(0) | mask_rt_m1_neg_1(1)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+      ))) |
+      (Fill(F16_FULL_RT_W, nxt_rt_dig_3(1)(2)) & (nxt_rt_m1_3(0) | mask_rt_m1_neg_0(1)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+      ))) |
       (Fill(F16_FULL_RT_W, nxt_rt_dig_3(1)(1)) & nxt_rt_3(0)) |
-      (Fill(F16_FULL_RT_W, nxt_rt_dig_3(1)(0)) & (nxt_rt_3(0) | mask_rt_m1_pos_2(1)(F64_FULL_RT_W - 1, F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1)))
+      (Fill(F16_FULL_RT_W, nxt_rt_dig_3(1)(0)) & (nxt_rt_3(0) | mask_rt_m1_pos_2(1)(
+        F64_FULL_RT_W - 1,
+        F64_FULL_RT_W - 1 - F16_FULL_RT_W + 1
+      )))
   nxt_rt_o :=
     (Fill(56, fp_fmt_i(0)) & Cat(
       nxt_rt_0(1)(53, 40),
@@ -2779,8 +2986,7 @@ class fpsqrt_r16_block(
         (Fill(F16_REM_W, nxt_rt_dig_3(1)(2)) & nxt_f_r_c_spec_s1_3(2)) |
         (Fill(F16_REM_W, nxt_rt_dig_3(1)(1)) & nxt_f_r_c_spec_s1_3(1)) |
         (Fill(F16_REM_W, nxt_rt_dig_3(1)(0)) & nxt_f_r_c_spec_s1_3(0))
-  }
-  else if (S1_CSA_MERGED == 0) {
+  } else if (S1_CSA_MERGED == 0) {
     nxt_f_r_s_0(1) :=
       f_r_s_for_csa_0(1) ^
         f_r_c_for_csa_0(1) ^
@@ -2847,7 +3053,13 @@ class fpsqrt_r16_block(
         "b0".U(2.W),
         nxt_f_r_s_3(1)
       )) |
-        (Fill(REM_W, fp_fmt_i(1)) & Cat(nxt_f_r_s_0(1)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1), "b0".U(6.W), "b0".U(2.W), nxt_f_r_s_1(1), "b0".U(6.W))) |
+        (Fill(REM_W, fp_fmt_i(1)) & Cat(
+          nxt_f_r_s_0(1)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1),
+          "b0".U(6.W),
+          "b0".U(2.W),
+          nxt_f_r_s_1(1),
+          "b0".U(6.W)
+        )) |
         (Fill(REM_W, fp_fmt_i(2)) & Cat(nxt_f_r_s_0(1), "b0".U(14.W)))
     nxt_f_r_c_o :=
       (Fill(REM_W, fp_fmt_i(0)) & Cat(
@@ -2859,10 +3071,15 @@ class fpsqrt_r16_block(
         "b0".U(2.W),
         nxt_f_r_c_3(1)
       )) |
-        (Fill(REM_W, fp_fmt_i(1)) & Cat(nxt_f_r_c_0(1)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1), "b0".U(6.W), "b0".U(2.W), nxt_f_r_c_1(1), "b0".U(6.W))) |
+        (Fill(REM_W, fp_fmt_i(1)) & Cat(
+          nxt_f_r_c_0(1)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1),
+          "b0".U(6.W),
+          "b0".U(2.W),
+          nxt_f_r_c_1(1),
+          "b0".U(6.W)
+        )) |
         (Fill(REM_W, fp_fmt_i(2)) & Cat(nxt_f_r_c_0(1), "b0".U(14.W)))
-  }
-  else {
+  } else {
     nxt_f_r_s_o :=
       (Fill(REM_W, fp_fmt_i(0)) & Cat(
         nxt_f_r_s_0(1)(F64_REM_W - 1, F64_REM_W - 1 - F16_REM_W + 1),
@@ -2870,7 +3087,12 @@ class fpsqrt_r16_block(
         nxt_f_r_s_1(1)(F32_REM_W - 1, F32_REM_W - 1 - F16_REM_W + 1),
         nxt_f_r_s_3(1)
       )) |
-        (Fill(REM_W, fp_fmt_i(1)) & Cat(nxt_f_r_s_0(1)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1), "b0".U(4.W), nxt_f_r_s_1(1), "b0".U(4.W))) |
+        (Fill(REM_W, fp_fmt_i(1)) & Cat(
+          nxt_f_r_s_0(1)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1),
+          "b0".U(4.W),
+          nxt_f_r_s_1(1),
+          "b0".U(4.W)
+        )) |
         (Fill(REM_W, fp_fmt_i(2)) & Cat(nxt_f_r_s_0(1), "b0".U(8.W)))
     nxt_f_r_c_o :=
       (Fill(REM_W, fp_fmt_i(0)) & Cat(
@@ -2879,7 +3101,12 @@ class fpsqrt_r16_block(
         nxt_f_r_c_1(1)(F32_REM_W - 1, F32_REM_W - 1 - F16_REM_W + 1),
         nxt_f_r_c_3(1)
       )) |
-        (Fill(REM_W, fp_fmt_i(1)) & Cat(nxt_f_r_c_0(1)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1), "b0".U(4.W), nxt_f_r_c_1(1), "b0".U(4.W))) |
+        (Fill(REM_W, fp_fmt_i(1)) & Cat(
+          nxt_f_r_c_0(1)(F64_REM_W - 1, F64_REM_W - 1 - F32_REM_W + 1),
+          "b0".U(4.W),
+          nxt_f_r_c_1(1),
+          "b0".U(4.W)
+        )) |
         (Fill(REM_W, fp_fmt_i(2)) & Cat(nxt_f_r_c_0(1), "b0".U(8.W)))
   }
 

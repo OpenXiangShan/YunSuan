@@ -4,6 +4,7 @@ import mill.define.Sources
 import mill.modules.Util
 import mill.scalalib.TestModule.ScalaTest
 import scalalib._
+import mill.scalalib.scalafmt._
 // support BSP
 import mill.bsp._
 import publish._
@@ -48,7 +49,7 @@ trait YSModule extends ScalaModule with PublishModule {
   )
 }
 
-trait CommonYunSuan extends YSModule with SbtModule { m =>
+trait CommonYunSuan extends YSModule with SbtModule with ScalafmtModule{ m =>
     override def millSourcePath = os.pwd
 
   override def forkArgs = Seq("-Xmx128G", "-Xss256m")
@@ -62,7 +63,7 @@ trait CommonYunSuan extends YSModule with SbtModule { m =>
   override def moduleDeps = super.moduleDeps ++ Seq(
   )
 
-  object test extends Tests with TestModule.ScalaTest {
+  object test extends Tests with TestModule.ScalaTest with ScalafmtModule{
 
     override def forkArgs = m.forkArgs
 
@@ -74,5 +75,5 @@ trait CommonYunSuan extends YSModule with SbtModule { m =>
   }
 }
 
-object YunSuan extends CommonYunSuan {
+object YunSuan extends CommonYunSuan  {
 }

@@ -65,15 +65,24 @@ class PermFsm extends Module {
   val rob_commit_vld = io.in.rob_commit_vld
   val rob_commit_rob_idx = io.in.rob_commit_rob_idx
 
-  val vslideup = (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVslideup) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVslideup)
-  val vslidedn = (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVslidedn) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVslidedn)
-  val vrgather_vv = (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVrgather) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVrgather)
-  val vrgather_vx = (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVrgather_vx) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVrgather_vx)
-  val vrgather16 = (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVrgather16) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVrgather16)
-  val vcompress = (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVcompress) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVcompress)
-  val vrgather16_sew8 = (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVrgather16 && (viq0_sew === 0.U)) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVrgather16 && (viq1_sew === 0.U))
-  val vrgather16_sew32 = (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVrgather16 && (viq0_sew === 2.U)) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVrgather16 && (viq1_sew === 2.U))
-  val vrgather16_sew64 = (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVrgather16 && (viq0_sew === 3.U)) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVrgather16 && (viq1_sew === 3.U))
+  val vslideup =
+    (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVslideup) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVslideup)
+  val vslidedn =
+    (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVslidedn) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVslidedn)
+  val vrgather_vv =
+    (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVrgather) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVrgather)
+  val vrgather_vx =
+    (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVrgather_vx) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVrgather_vx)
+  val vrgather16 =
+    (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVrgather16) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVrgather16)
+  val vcompress =
+    (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVcompress) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVcompress)
+  val vrgather16_sew8 =
+    (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVrgather16 && (viq0_sew === 0.U)) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVrgather16 && (viq1_sew === 0.U))
+  val vrgather16_sew32 =
+    (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVrgather16 && (viq0_sew === 2.U)) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVrgather16 && (viq1_sew === 2.U))
+  val vrgather16_sew64 =
+    (viq0_uop_vld && !viq0_uop_flush_vld && viq0_opcode.isVrgather16 && (viq0_sew === 3.U)) || (viq1_uop_vld && !viq1_uop_flush_vld && viq1_opcode.isVrgather16 && (viq1_sew === 3.U))
   val vslide = vslideup || vslidedn
   val vrgather = vrgather_vv || vrgather_vx || vrgather16
 
@@ -81,7 +90,11 @@ class PermFsm extends Module {
   val viq01_valid = (viq0_uop_vld && !viq0_uop_flush_vld) && (viq1_uop_vld && !viq1_uop_flush_vld)
   val viq0_valid = viq0_uop_vld && !viq0_uop_flush_vld
   val viq1_valid = viq1_uop_vld && !viq1_uop_flush_vld
-  val vlmul = Mux(((viq0_uop_vld && !viq0_uop_flush_vld && !viq0_lmul_4) || (viq1_uop_vld && !viq1_uop_flush_vld && !viq1_lmul_4) || vrgather16_sew8), 7.U, 3.U)
+  val vlmul = Mux(
+    ((viq0_uop_vld && !viq0_uop_flush_vld && !viq0_lmul_4) || (viq1_uop_vld && !viq1_uop_flush_vld && !viq1_lmul_4) || vrgather16_sew8),
+    7.U,
+    3.U
+  )
   val uop_cnt = RegInit(0.U(3.W))
   val rec_done = Mux(viq01_valid, (uop_cnt === vlmul - 1.U), (uop_cnt === vlmul)) && uop_valid
   val vs_idx = RegInit(0.U(3.W))
@@ -171,12 +184,14 @@ class PermFsm extends Module {
 
   val base = Wire(UInt(7.W))
   val eewVs2 = SewOH(vsew_reg)
-  val current_vs_ones_sum = Mux1H(Seq(
-    eewVs2.is8 -> PopCount(vmask_reg(15, 0)),
-    eewVs2.is16 -> Cat(PopCount(vmask_reg(7, 0)), 0.U(1.W)),
-    eewVs2.is32 -> Cat(PopCount(vmask_reg(3, 0)), 0.U(2.W)),
-    eewVs2.is64 -> Cat(PopCount(vmask_reg(1, 0)), 0.U(3.W))
-  ))
+  val current_vs_ones_sum = Mux1H(
+    Seq(
+      eewVs2.is8 -> PopCount(vmask_reg(15, 0)),
+      eewVs2.is16 -> Cat(PopCount(vmask_reg(7, 0)), 0.U(1.W)),
+      eewVs2.is32 -> Cat(PopCount(vmask_reg(3, 0)), 0.U(2.W)),
+      eewVs2.is64 -> Cat(PopCount(vmask_reg(1, 0)), 0.U(3.W))
+    )
+  )
 
   val total_one_sum = RegInit(0.U(8.W))
 
@@ -184,19 +199,23 @@ class PermFsm extends Module {
     total_one_sum := 0.U
   }.elsewhen(rec_done) {
     when(lmul_4_reg) {
-      total_one_sum := Mux1H(Seq(
-        eewVs2.is8 -> PopCount(vmask_reg(63, 0)),
-        eewVs2.is16 -> Cat(PopCount(vmask_reg(31, 0)), 0.U(1.W)),
-        eewVs2.is32 -> Cat(PopCount(vmask_reg(15, 0)), 0.U(2.W)),
-        eewVs2.is64 -> Cat(PopCount(vmask_reg(7, 0)), 0.U(3.W))
-      ))
+      total_one_sum := Mux1H(
+        Seq(
+          eewVs2.is8 -> PopCount(vmask_reg(63, 0)),
+          eewVs2.is16 -> Cat(PopCount(vmask_reg(31, 0)), 0.U(1.W)),
+          eewVs2.is32 -> Cat(PopCount(vmask_reg(15, 0)), 0.U(2.W)),
+          eewVs2.is64 -> Cat(PopCount(vmask_reg(7, 0)), 0.U(3.W))
+        )
+      )
     }.otherwise {
-      total_one_sum := Mux1H(Seq(
-        eewVs2.is8 -> PopCount(vmask_reg(127, 0)),
-        eewVs2.is16 -> Cat(PopCount(vmask_reg(63, 0)), 0.U(1.W)),
-        eewVs2.is32 -> Cat(PopCount(vmask_reg(31, 0)), 0.U(2.W)),
-        eewVs2.is64 -> Cat(PopCount(vmask_reg(15, 0)), 0.U(3.W))
-      ))
+      total_one_sum := Mux1H(
+        Seq(
+          eewVs2.is8 -> PopCount(vmask_reg(127, 0)),
+          eewVs2.is16 -> Cat(PopCount(vmask_reg(63, 0)), 0.U(1.W)),
+          eewVs2.is32 -> Cat(PopCount(vmask_reg(31, 0)), 0.U(2.W)),
+          eewVs2.is64 -> Cat(PopCount(vmask_reg(15, 0)), 0.U(3.W))
+        )
+      )
     }
   }
 
@@ -214,17 +233,23 @@ class PermFsm extends Module {
   val cmprs_rd_vd_reg = RegInit(VecInit(Seq.fill(5)(false.B)))
   val cmprs_rd_done = (rd_vd_idx === (vlmul_reg + 1.U)) || ((rd_vd_idx === vlmul_reg) && cmprs_rd_vd)
   val rd_done = Mux(reg_vcompress, cmprs_rd_done, (vs_idx === vlmul_reg) && update_vs_idx)
-  val old_vd_idx = Mux(reg_vcompress, rd_vd_idx, Mux(reg_vrgather16_sew8, vs_idx(2, 1) + 1.U, Mux(vs_idx === vlmul_reg, vs_idx, vs_idx + 1.U)))
+  val old_vd_idx = Mux(
+    reg_vcompress,
+    rd_vd_idx,
+    Mux(reg_vrgather16_sew8, vs_idx(2, 1) + 1.U, Mux(vs_idx === vlmul_reg, vs_idx, vs_idx + 1.U))
+  )
   val rd_one_sum = RegInit(0.U(8.W))
   val rd_wb = Wire(Bool())
   val cmprs_wb_vld = RegNext(rd_wb || cmprs_rd_vd)
 
-  val current_rd_vs_ones_sum = Mux1H(Seq(
-    eewVs2.is8 -> PopCount(old_vd(15, 0)),
-    eewVs2.is16 -> Cat(PopCount(old_vd(7, 0)), 0.U(1.W)),
-    eewVs2.is32 -> Cat(PopCount(old_vd(3, 0)), 0.U(2.W)),
-    eewVs2.is64 -> Cat(PopCount(old_vd(1, 0)), 0.U(3.W))
-  ))
+  val current_rd_vs_ones_sum = Mux1H(
+    Seq(
+      eewVs2.is8 -> PopCount(old_vd(15, 0)),
+      eewVs2.is16 -> Cat(PopCount(old_vd(7, 0)), 0.U(1.W)),
+      eewVs2.is32 -> Cat(PopCount(old_vd(3, 0)), 0.U(2.W)),
+      eewVs2.is64 -> Cat(PopCount(old_vd(1, 0)), 0.U(3.W))
+    )
+  )
 
   when(br_flush_vld) {
     rd_one_sum := 0.U
@@ -329,14 +354,20 @@ class PermFsm extends Module {
     when(vrgather16_sew32) {
       when(uop_idx(0)) {
         for (i <- vlenb / 2 until vlenb) {
-          table_idx(i) := Mux1H(sew.oneHot, Seq(8, 16, 32, 64).map(n => vs1((i / (n / 8) + 1) * n - 1, i / (n / 8) * n))) >> shift
+          table_idx(i) := Mux1H(
+            sew.oneHot,
+            Seq(8, 16, 32, 64).map(n => vs1((i / (n / 8) + 1) * n - 1, i / (n / 8) * n))
+          ) >> shift
           when(table_idx(i) <= vlmul) {
             access_table(table_idx(i)) := 1.U
           }
         }
       }.otherwise {
         for (i <- 0 until vlenb / 2) {
-          table_idx(i) := Mux1H(sew.oneHot, Seq(8, 16, 32, 64).map(n => vs1((i / (n / 8) + 1) * n - 1, i / (n / 8) * n))) >> shift
+          table_idx(i) := Mux1H(
+            sew.oneHot,
+            Seq(8, 16, 32, 64).map(n => vs1((i / (n / 8) + 1) * n - 1, i / (n / 8) * n))
+          ) >> shift
           when(table_idx(i) <= vlmul) {
             access_table(table_idx(i)) := 1.U
           }
@@ -345,28 +376,40 @@ class PermFsm extends Module {
     }.elsewhen(vrgather16_sew64) {
       when(uop_idx(1, 0) === 0.U) {
         for (i <- 0 until vlenb / 4) {
-          table_idx(i) := Mux1H(sew.oneHot, Seq(8, 16, 32, 64).map(n => vs1((i / (n / 8) + 1) * n - 1, i / (n / 8) * n))) >> shift
+          table_idx(i) := Mux1H(
+            sew.oneHot,
+            Seq(8, 16, 32, 64).map(n => vs1((i / (n / 8) + 1) * n - 1, i / (n / 8) * n))
+          ) >> shift
           when(table_idx(i) <= vlmul) {
             access_table(table_idx(i)) := 1.U
           }
         }
       }.elsewhen(uop_idx(1, 0) === 1.U) {
         for (i <- vlenb / 4 until vlenb / 2) {
-          table_idx(i) := Mux1H(sew.oneHot, Seq(8, 16, 32, 64).map(n => vs1((i / (n / 8) + 1) * n - 1, i / (n / 8) * n))) >> shift
+          table_idx(i) := Mux1H(
+            sew.oneHot,
+            Seq(8, 16, 32, 64).map(n => vs1((i / (n / 8) + 1) * n - 1, i / (n / 8) * n))
+          ) >> shift
           when(table_idx(i) <= vlmul) {
             access_table(table_idx(i)) := 1.U
           }
         }
       }.elsewhen(uop_idx(1, 0) === 2.U) {
         for (i <- vlenb / 2 until 3 * vlenb / 4) {
-          table_idx(i) := Mux1H(sew.oneHot, Seq(8, 16, 32, 64).map(n => vs1((i / (n / 8) + 1) * n - 1, i / (n / 8) * n))) >> shift
+          table_idx(i) := Mux1H(
+            sew.oneHot,
+            Seq(8, 16, 32, 64).map(n => vs1((i / (n / 8) + 1) * n - 1, i / (n / 8) * n))
+          ) >> shift
           when(table_idx(i) <= vlmul) {
             access_table(table_idx(i)) := 1.U
           }
         }
       }.otherwise {
         for (i <- 3 * vlenb / 4 until vlenb) {
-          table_idx(i) := Mux1H(sew.oneHot, Seq(8, 16, 32, 64).map(n => vs1((i / (n / 8) + 1) * n - 1, i / (n / 8) * n))) >> shift
+          table_idx(i) := Mux1H(
+            sew.oneHot,
+            Seq(8, 16, 32, 64).map(n => vs1((i / (n / 8) + 1) * n - 1, i / (n / 8) * n))
+          ) >> shift
           when(table_idx(i) <= vlmul) {
             access_table(table_idx(i)) := 1.U
           }
@@ -377,7 +420,10 @@ class PermFsm extends Module {
         when(vrgather_vx) {
           table_idx(i) := vs1(63, 0) >> shift
         }.otherwise {
-          table_idx(i) := Mux1H(sew.oneHot, Seq(8, 16, 32, 64).map(n => vs1((i / (n / 8) + 1) * n - 1, i / (n / 8) * n))) >> shift
+          table_idx(i) := Mux1H(
+            sew.oneHot,
+            Seq(8, 16, 32, 64).map(n => vs1((i / (n / 8) + 1) * n - 1, i / (n / 8) * n))
+          ) >> shift
         }
         when(table_idx(i) <= Mux(vrgather16_sew8, 7.U, vlmul)) {
           access_table(table_idx(i)) := 1.U
@@ -451,7 +497,9 @@ class PermFsm extends Module {
     rd_idx_1 := vs_idx
   }
 
-  when(((reg_vrgather && table_lo.orR) || (reg_vcompress && !cmprs_rd_vd) || (reg_vslide && src_lo_valid)) && (perm_state === rd_vs)) {
+  when(
+    ((reg_vrgather && table_lo.orR) || (reg_vcompress && !cmprs_rd_vd) || (reg_vslide && src_lo_valid)) && (perm_state === rd_vs)
+  ) {
     fsm_rd_vld_1 := true.B
     fsm_rd_preg_idx_1 := vs2_preg_idx(rd_idx_1)
   }
@@ -928,7 +976,9 @@ class PermFsm extends Module {
   // vslide
   val vslide_offset = vslide_bytes(3, 0)
   for (i <- 0 until vlenb) {
-    when((i.U >= vslide_offset) && (i.U < vlenb.U) && vmask_byte_strb(i.U - vslide_offset).asBool && src_lo_valid_reg(4)) {
+    when(
+      (i.U >= vslide_offset) && (i.U < vlenb.U) && vmask_byte_strb(i.U - vslide_offset).asBool && src_lo_valid_reg(4)
+    ) {
       vslideup_vd(i.U - vslide_offset) := vs2_lo_bytes(i)
     }.elsewhen((i.U < vslide_offset) && vmask_byte_strb(i.U + vlenb.U - vslide_offset).asBool && src_hi_valid_reg(4)) {
       vslideup_vd(i.U + vlenb.U - vslide_offset) := vs2_hi_bytes(i)
@@ -955,7 +1005,11 @@ class PermFsm extends Module {
   io.out.fsm_rd_preg_idx_1 := fsm_rd_preg_idx_1
   io.out.fsm_rd_preg_idx_2 := fsm_rd_preg_idx_2
   io.out.fsm_rd_preg_idx_3 := fsm_rd_preg_idx_3
-  io.out.fsm_wb_vld := Mux(reg_vcompress, cmprs_wb_vld, Mux(reg_vrgather16_sew8, update_vs_idx_reg(0) && vs_idx_reg(0)(0), update_vs_idx_reg(0)))
+  io.out.fsm_wb_vld := Mux(
+    reg_vcompress,
+    cmprs_wb_vld,
+    Mux(reg_vrgather16_sew8, update_vs_idx_reg(0) && vs_idx_reg(0)(0), update_vs_idx_reg(0))
+  )
   io.out.fsm_wb_preg_idx := vd_preg_idx(vs_idx_reg(0))
   io.out.fsm_wb_data := vd_reg
   io.out.fsm_busy := fsm_busy
@@ -967,5 +1021,3 @@ object VerilogPerFsm extends App {
   println("Generating the VPU Permutation FSM hardware")
   emitVerilog(new PermFsm(), Array("--target-dir", "build/vifu"))
 }
-
-

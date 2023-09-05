@@ -7,15 +7,15 @@ import yunsuan.util._
 import yunsuan.vector._
 
 trait VSPParameter {
-  val VLEN       : Int = 128
-  val XLEN       : Int = 64
-  val VIA_latency: Int = 0 // TODO: change to 1
-  val VIAF_latency: Int = 1 // TODO:
-  val VFF_latency: Int = 3 // TODO: check only mul and mul+add, different or not
-  val VFD_latency: Int = 99
-  val VFA_latency: Int = 1
+  val VLEN:          Int = 128
+  val XLEN:          Int = 64
+  val VIA_latency:   Int = 0 // TODO: change to 1
+  val VIAF_latency:  Int = 1 // TODO:
+  val VFF_latency:   Int = 3 // TODO: check only mul and mul+add, different or not
+  val VFD_latency:   Int = 99
+  val VFA_latency:   Int = 1
   val VPERM_latency: Int = 1
-  val VID_latency: Int = 99
+  val VID_latency:   Int = 99
 }
 
 object VPUTestFuType { // only use in test, difftest with xs
@@ -36,17 +36,17 @@ class VPUTestBundle extends Bundle with VSPParameter
 class VPUTestModule extends Module with VSPParameter
 
 class VecInfoBundle extends VPUTestBundle {
-  val vstart    = UInt(7.W)     // 0-127
-  val vl        = UInt(8.W)     // 0-128
-  val vlmul     = UInt(3.W)
+  val vstart = UInt(7.W) // 0-127
+  val vl = UInt(8.W) // 0-128
+  val vlmul = UInt(3.W)
 
-  val vm        = Bool()        // 0: masked, 1: unmasked
-  val ta        = Bool()        // 0: undisturbed, 1: agnostic
-  val ma        = Bool()        // 0: undisturbed, 1: agnostic
+  val vm = Bool() // 0: masked, 1: unmasked
+  val ta = Bool() // 0: undisturbed, 1: agnostic
+  val ma = Bool() // 0: undisturbed, 1: agnostic
 }
 
 class VSTInputIO extends VPUTestBundle {
-  val src = Vec(4, Vec(VLEN/XLEN, UInt(XLEN.W)))
+  val src = Vec(4, Vec(VLEN / XLEN, UInt(XLEN.W)))
   val fuType = UInt(5.W)
   val fuOpType = UInt(8.W)
   val sew = UInt(2.W)
@@ -64,8 +64,8 @@ class VSTInputIO extends VPUTestBundle {
 }
 
 class VSTOutputIO extends VPUTestBundle {
-  val result = Vec(VLEN/XLEN, UInt(XLEN.W))
-  val fflags = Vec(VLEN/XLEN, UInt((5*(XLEN/16)).W))
+  val result = Vec(VLEN / XLEN, UInt(XLEN.W))
+  val fflags = Vec(VLEN / XLEN, UInt((5 * (XLEN / 16)).W))
   val vxsat = Bool()
 }
 
@@ -89,36 +89,53 @@ class SimTop() extends VPUTestModule {
   io.out.bits := out
 
   has_issued := busy
-  when (io.in.fire()) {
+  when(io.in.fire()) {
     counter := 0.U
     busy := true.B
     in := io.in.bits
-    latency := LookupTreeDefault(io.in.bits.fuType, 999.U, List(
-      VPUTestFuType.vfa -> VFA_latency.U,
-      VPUTestFuType.vff -> VFF_latency.U,
-      VPUTestFuType.vfd -> VFD_latency.U,
-      VPUTestFuType.via -> VIA_latency.U,
-      VPUTestFuType.vperm -> VPERM_latency.U,
-      VPUTestFuType.viaf -> VIAF_latency.U,
-      VPUTestFuType.vid -> VID_latency.U
-    )) // fuType --> latency, spec case for div
+    latency := LookupTreeDefault(
+      io.in.bits.fuType,
+      999.U,
+      List(
+        VPUTestFuType.vfa -> VFA_latency.U,
+        VPUTestFuType.vff -> VFF_latency.U,
+        VPUTestFuType.vfd -> VFD_latency.U,
+        VPUTestFuType.via -> VIA_latency.U,
+        VPUTestFuType.vperm -> VPERM_latency.U,
+        VPUTestFuType.viaf -> VIAF_latency.U,
+        VPUTestFuType.vid -> VID_latency.U
+      )
+    ) // fuType --> latency, spec case for div
     assert(!VPUTestFuType.unknown(io.in.bits.fuType))
   }
   when(io.out.fire()) {
     busy := false.B
   }
-  when (busy) { counter := counter + 1.U }
+  when(busy) { counter := counter + 1.U }
   val finish_fixLatency = busy && (counter >= latency)
   val finish_uncertain = Wire(Bool())
   val is_uncertain = (in.fuType === VPUTestFuType.vfd) || (in.fuType === VPUTestFuType.vid)
 
   val (sew, uop_idx, rm, rm_s, fuType, opcode, src_widen, widen, is_frs1, is_frs2) = (
-    in.sew, in.uop_idx, in.rm, in.rm_s, in.fuType, in.fuOpType,
-    in.src_widen, in.widen, in.is_frs1, in.is_frs2
+    in.sew,
+    in.uop_idx,
+    in.rm,
+    in.rm_s,
+    in.fuType,
+    in.fuOpType,
+    in.src_widen,
+    in.widen,
+    in.is_frs1,
+    in.is_frs2
   )
 
   val (vstart, vl, vlmul, vm, ta, ma) = (
-    in.vinfo.vstart, in.vinfo.vl, in.vinfo.vlmul, in.vinfo.vm, in.vinfo.ta, in.vinfo.ma
+    in.vinfo.vstart,
+    in.vinfo.vl,
+    in.vinfo.vlmul,
+    in.vinfo.vm,
+    in.vinfo.ta,
+    in.vinfo.ma
   )
 
   val vfa_result = Wire(new VSTOutputIO)
@@ -127,14 +144,14 @@ class SimTop() extends VPUTestModule {
   val via_result = Wire(new VSTOutputIO)
   val vperm_result = Wire(new VSTOutputIO)
   val viaf_result = Wire(new VSTOutputIO)
-  val vfd_result_valid = RegInit(VecInit(Seq.fill(VLEN/XLEN)(false.B)))
+  val vfd_result_valid = RegInit(VecInit(Seq.fill(VLEN / XLEN)(false.B)))
   val vid_result = Wire(new VSTOutputIO)
   val vid_result_valid = Wire(Bool())
-  when (io.in.fire() || io.out.fire()) {
+  when(io.in.fire() || io.out.fire()) {
     vfd_result_valid.map(_ := false.B)
   }
 
-  finish_uncertain := Mux(in.fuType === VPUTestFuType.vid, vid_result_valid,vfd_result_valid.reduce(_&&_))
+  finish_uncertain := Mux(in.fuType === VPUTestFuType.vid, vid_result_valid, vfd_result_valid.reduce(_ && _))
 
   for (i <- 0 until (VLEN / XLEN)) {
     val (src1, src2, src3) = (in.src(0)(i), in.src(1)(i), in.src(2)(i))
@@ -148,12 +165,12 @@ class SimTop() extends VPUTestModule {
     vfa.io.fp_b := src2
     //io.widen_a Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
     //io.widen_b Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
-    vfa.io.widen_a := Cat(in.src(0)(1)(31+i*32,0+i*32),in.src(0)(0)(31+i*32,0+i*32))
-    vfa.io.widen_b := Cat(in.src(1)(1)(31+i*32,0+i*32),in.src(1)(0)(31+i*32,0+i*32))
-    vfa.io.frs1  := in.src(1)(0) // VS1(63,0)
+    vfa.io.widen_a := Cat(in.src(0)(1)(31 + i * 32, 0 + i * 32), in.src(0)(0)(31 + i * 32, 0 + i * 32))
+    vfa.io.widen_b := Cat(in.src(1)(1)(31 + i * 32, 0 + i * 32), in.src(1)(0)(31 + i * 32, 0 + i * 32))
+    vfa.io.frs1 := in.src(1)(0) // VS1(63,0)
     vfa.io.fp_b := src2
     // TODO: change mask
-    vfa.io.mask := Cat(src3(48),src3(32),src3(16),src3(0))
+    vfa.io.mask := Cat(src3(48), src3(32), src3(16), src3(0))
     vfa.io.uop_idx := uop_idx(0)
     // TODO: which module to handle dest's original value
     vfa.io.round_mode := rm
@@ -161,8 +178,8 @@ class SimTop() extends VPUTestModule {
     vfa.io.opb_widening := src_widen
     vfa.io.res_widening := widen
     vfa.io.is_frs1 := is_frs1
-    vfa.io.op_code      := opcode
-    vfa.io.is_vec       := true.B // TODO: check it
+    vfa.io.op_code := opcode
+    vfa.io.is_vec := true.B // TODO: check it
     vfa.io.fp_aIsFpCanonicalNAN := false.B
     vfa.io.fp_bIsFpCanonicalNAN := false.B
     vfa.io.maskForReduction := 0.U
@@ -187,7 +204,7 @@ class SimTop() extends VPUTestModule {
     vfd.io.fp_bIsFpCanonicalNAN := false.B
     vfd.io.finish_ready_i := !vfd_result_valid(i) && busy
     // FIXME: do dual vfd result sync.
-    when (vfd.io.finish_valid_o && vfd.io.finish_ready_i) {
+    when(vfd.io.finish_valid_o && vfd.io.finish_ready_i) {
       vfd_result_valid(i) := true.B
       vfd_result.result(i) := vfd.io.fpdiv_res_o
       vfd_result.fflags(i) := vfd.io.fflags_o
@@ -221,14 +238,14 @@ class SimTop() extends VPUTestModule {
     vff.io.fp_c := src3
     //io.widen_a Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
     //io.widen_b Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
-    vff.io.widen_a := Cat(in.src(0)(1)(31+i*32,0+i*32),in.src(0)(0)(31+i*32,0+i*32))
-    vff.io.widen_b := Cat(in.src(1)(1)(31+i*32,0+i*32),in.src(1)(0)(31+i*32,0+i*32))
+    vff.io.widen_a := Cat(in.src(0)(1)(31 + i * 32, 0 + i * 32), in.src(0)(0)(31 + i * 32, 0 + i * 32))
+    vff.io.widen_b := Cat(in.src(1)(1)(31 + i * 32, 0 + i * 32), in.src(1)(0)(31 + i * 32, 0 + i * 32))
     vff.io.uop_idx := uop_idx(0)
-    vff.io.frs1  := in.src(1)(0) // VS1(63,0)
+    vff.io.frs1 := in.src(1)(0) // VS1(63,0)
     vff.io.round_mode := rm
     vff.io.fp_format := sew
     vff.io.op_code := opcode
-    vff.io.is_frs1  := is_frs1
+    vff.io.is_frs1 := is_frs1
     vff.io.is_vec := true.B // TODO: check it
     vff.io.fp_aIsFpCanonicalNAN := false.B
     vff.io.fp_bIsFpCanonicalNAN := false.B
@@ -256,8 +273,8 @@ class SimTop() extends VPUTestModule {
   vperm.io.vm := vm
   vperm.io.ta := ta
   vperm.io.ma := ma
-  vperm_result.result(0) := vperm.io.res_vd(XLEN-1, 0)
-  vperm_result.result(1) := vperm.io.res_vd(VLEN-1, XLEN)
+  vperm_result.result(0) := vperm.io.res_vd(XLEN - 1, 0)
+  vperm_result.result(1) := vperm.io.res_vd(VLEN - 1, XLEN)
   vperm_result.fflags(0) := 0.U
   vperm_result.fflags(1) := 0.U
   vperm_result.vxsat := 0.U
@@ -294,18 +311,26 @@ class SimTop() extends VPUTestModule {
   vid.io.flush := false.B
   vid.io.sew := sew
   vid.io.div_out_ready := busy
-  val vid_fflags_0 = LookupTreeDefault(sew, 0.U, List(
-    0.U -> vid.io.d_zero(7, 0),
-    1.U -> vid.io.d_zero(3, 0),
-    2.U -> vid.io.d_zero(1, 0),
-    3.U -> vid.io.d_zero(0, 0)
-  ))
-  val vid_fflags_1 = LookupTreeDefault(sew, 0.U, List(
-    0.U -> vid.io.d_zero(15, 8),
-    1.U -> vid.io.d_zero(15, 4),
-    2.U -> vid.io.d_zero(15, 2),
-    3.U -> vid.io.d_zero(15, 1)
-  ))
+  val vid_fflags_0 = LookupTreeDefault(
+    sew,
+    0.U,
+    List(
+      0.U -> vid.io.d_zero(7, 0),
+      1.U -> vid.io.d_zero(3, 0),
+      2.U -> vid.io.d_zero(1, 0),
+      3.U -> vid.io.d_zero(0, 0)
+    )
+  )
+  val vid_fflags_1 = LookupTreeDefault(
+    sew,
+    0.U,
+    List(
+      0.U -> vid.io.d_zero(15, 8),
+      1.U -> vid.io.d_zero(15, 4),
+      2.U -> vid.io.d_zero(15, 2),
+      3.U -> vid.io.d_zero(15, 1)
+    )
+  )
   vid_result_valid := vid.io.div_out_valid
   vid_result.result(0) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(XLEN - 1, 0)
   vid_result.result(1) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(VLEN - 1, XLEN)
@@ -315,22 +340,28 @@ class SimTop() extends VPUTestModule {
 
   // arbiter
   io.out.valid := Mux(is_uncertain, finish_uncertain, finish_fixLatency)
-  io.out.bits := LookupTreeDefault(in.fuType, 0.U.asTypeOf(new VSTOutputIO), List(
-    VPUTestFuType.vfa -> vfa_result,
-    VPUTestFuType.vff -> vff_result,
-    VPUTestFuType.vfd -> vfd_result,
-    VPUTestFuType.via -> via_result,
-    VPUTestFuType.vperm -> vperm_result,
-    VPUTestFuType.viaf -> viaf_result,
-    VPUTestFuType.vid -> vid_result
-  ))
+  io.out.bits := LookupTreeDefault(
+    in.fuType,
+    0.U.asTypeOf(new VSTOutputIO),
+    List(
+      VPUTestFuType.vfa -> vfa_result,
+      VPUTestFuType.vff -> vff_result,
+      VPUTestFuType.vfd -> vfd_result,
+      VPUTestFuType.via -> via_result,
+      VPUTestFuType.vperm -> vperm_result,
+      VPUTestFuType.viaf -> viaf_result,
+      VPUTestFuType.vid -> vid_result
+    )
+  )
 }
-
 
 object SimTop extends App {
   override def main(args: Array[String]): Unit = {
-    (new ChiselStage).execute(args, Seq(
-      ChiselGeneratorAnnotation(() => new SimTop())
-    ))
+    (new ChiselStage).execute(
+      args,
+      Seq(
+        ChiselGeneratorAnnotation(() => new SimTop())
+      )
+    )
   }
 }

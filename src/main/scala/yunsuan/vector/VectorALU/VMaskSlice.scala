@@ -1,4 +1,3 @@
-
 package yunsuan.vector.alu
 
 import chisel3._

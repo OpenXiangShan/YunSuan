@@ -68,6 +68,18 @@ clean-softfloat:
 
 emu: $(SOFTFLOAT) $(EMU)
 
+bsp:
+	mill -i mill.bsp.BSP/install
+
+idea:
+	mill -i mill.scalalib.GenIdea/idea
+
+reformat:
+	mill -i __.reformat
+
+checkformat:
+	mill -i __.checkFormat 
+
 clean:
 	rm -rf build
 

@@ -5,12 +5,12 @@ import chisel3.util._
 import yunsuan.vector.vfsqrt._
 
 class fpsqrt_vector_r16(
-                         S0_CSA_SPECULATIVE: Int = 1,
-                         S0_CSA_MERGED: Int = 1,
-                         S1_QDS_SPECULATIVE: Int = 1,
-                         S1_CSA_SPECULATIVE: Int = 1,
-                         S1_CSA_MERGED: Int = 0
-                       ) extends Module {
+  S0_CSA_SPECULATIVE: Int = 1,
+  S0_CSA_MERGED:      Int = 1,
+  S1_QDS_SPECULATIVE: Int = 1,
+  S1_CSA_SPECULATIVE: Int = 1,
+  S1_CSA_MERGED:      Int = 0)
+    extends Module {
 
   val start_valid_i = IO(Input(Bool()))
   val start_ready_o = IO(Output(Bool()))
@@ -270,7 +270,15 @@ class fpsqrt_vector_r16(
   f_r_s_iter_init_17_16 := 0.U
   f_r_s_iter_init_15_0 := 0.U
   val f_r_s_iter_init = Wire(UInt(REM_W.W))
-  f_r_s_iter_init := Cat(f_r_s_iter_init_69_54, f_r_s_iter_init_53_52, f_r_s_iter_init_51_36, f_r_s_iter_init_35_34, f_r_s_iter_init_33_18, f_r_s_iter_init_17_16, f_r_s_iter_init_15_0)
+  f_r_s_iter_init := Cat(
+    f_r_s_iter_init_69_54,
+    f_r_s_iter_init_53_52,
+    f_r_s_iter_init_51_36,
+    f_r_s_iter_init_35_34,
+    f_r_s_iter_init_33_18,
+    f_r_s_iter_init_17_16,
+    f_r_s_iter_init_15_0
+  )
 
   val f_r_c_iter_init_69_54 = Wire(UInt(16.W))
   val f_r_c_iter_init_53_52 = Wire(UInt(2.W))
@@ -287,7 +295,15 @@ class fpsqrt_vector_r16(
   f_r_c_iter_init_17_16 := 0.U
   f_r_c_iter_init_15_0 := 0.U
   val f_r_c_iter_init = Wire(UInt(REM_W.W))
-  f_r_c_iter_init := Cat(f_r_c_iter_init_69_54, f_r_c_iter_init_53_52, f_r_c_iter_init_51_36, f_r_c_iter_init_35_34, f_r_c_iter_init_33_18, f_r_c_iter_init_17_16, f_r_c_iter_init_15_0)
+  f_r_c_iter_init := Cat(
+    f_r_c_iter_init_69_54,
+    f_r_c_iter_init_53_52,
+    f_r_c_iter_init_51_36,
+    f_r_c_iter_init_35_34,
+    f_r_c_iter_init_33_18,
+    f_r_c_iter_init_17_16,
+    f_r_c_iter_init_15_0
+  )
   val nxt_f_r_s = Wire(UInt(REM_W.W))
   val nxt_f_r_c = Wire(UInt(REM_W.W))
   val nr_f_r_7b_for_nxt_cycle_s0_qds_0_en = Wire(Bool())
@@ -574,11 +590,20 @@ class fpsqrt_vector_r16(
   op_sign_2 := op_i(47)
   op_sign_3 := op_i(15)
   op_exp_0 :=
-    (Fill(F64_EXP_W, fp_format_i === 0.U(2.W)) & Cat(Fill(F64_EXP_W - F16_EXP_W, "b0".U(1.W)), op_i(62, 62 - F16_EXP_W + 1))) |
-      (Fill(F64_EXP_W, fp_format_i === 1.U(2.W)) & Cat(Fill(F64_EXP_W - F32_EXP_W, "b0".U(1.W)), op_i(62, 62 - F32_EXP_W + 1))) |
+    (Fill(F64_EXP_W, fp_format_i === 0.U(2.W)) & Cat(
+      Fill(F64_EXP_W - F16_EXP_W, "b0".U(1.W)),
+      op_i(62, 62 - F16_EXP_W + 1)
+    )) |
+      (Fill(F64_EXP_W, fp_format_i === 1.U(2.W)) & Cat(
+        Fill(F64_EXP_W - F32_EXP_W, "b0".U(1.W)),
+        op_i(62, 62 - F32_EXP_W + 1)
+      )) |
       (Fill(F64_EXP_W, fp_format_i === 2.U(2.W)) & Cat(op_i(62, 62 - F64_EXP_W + 1)))
   op_exp_1 :=
-    (Fill(F32_EXP_W, fp_format_i === 0.U(2.W)) & Cat(Fill(F32_EXP_W - F16_EXP_W, "b0".U(1.W)), op_i(30, 30 - F16_EXP_W + 1))) |
+    (Fill(F32_EXP_W, fp_format_i === 0.U(2.W)) & Cat(
+      Fill(F32_EXP_W - F16_EXP_W, "b0".U(1.W)),
+      op_i(30, 30 - F16_EXP_W + 1)
+    )) |
       (Fill(F32_EXP_W, fp_format_i === 1.U(2.W)) & Cat(op_i(30, 30 - F32_EXP_W + 1)))
   op_exp_2 := op_i(46, 46 - F16_EXP_W + 1)
   op_exp_3 := op_i(14, 14 - F16_EXP_W + 1)
@@ -586,7 +611,11 @@ class fpsqrt_vector_r16(
   op_exp_is_zero_1 := (op_exp_1 === 0.U)
   op_exp_is_zero_2 := (op_exp_2 === 0.U)
   op_exp_is_zero_3 := (op_exp_3 === 0.U)
-  op_exp_is_max_0 := (op_exp_0 === (Mux((fp_format_i === 0.U(2.W)), 31.U(11.W), Mux((fp_format_i === 1.U(2.W)), 255.U(11.W), 2047.U(11.W)))))
+  op_exp_is_max_0 := (op_exp_0 === (Mux(
+    (fp_format_i === 0.U(2.W)),
+    31.U(11.W),
+    Mux((fp_format_i === 1.U(2.W)), 255.U(11.W), 2047.U(11.W))
+  )))
   op_exp_is_max_1 := (op_exp_1 === (Mux((fp_format_i === 0.U(2.W)), 31.U(8.W), 255.U(8.W))))
   op_exp_is_max_2 := (op_exp_2 === 31.U(5.W))
   op_exp_is_max_3 := (op_exp_3 === 31.U(5.W))
@@ -598,12 +627,24 @@ class fpsqrt_vector_r16(
   op_is_inf_1 := op_exp_is_max_1 & op_frac_is_zero_1
   op_is_inf_2 := op_exp_is_max_2 & op_frac_is_zero_2
   op_is_inf_3 := op_exp_is_max_3 & op_frac_is_zero_3
-  op_is_qnan_0 := op_exp_is_max_0 & (Mux((fp_format_i === 0.U(2.W)), op_i(57), Mux((fp_format_i === 1.U(2.W)), op_i(54), op_i(51))))
+  op_is_qnan_0 := op_exp_is_max_0 & (Mux(
+    (fp_format_i === 0.U(2.W)),
+    op_i(57),
+    Mux((fp_format_i === 1.U(2.W)), op_i(54), op_i(51))
+  ))
   op_is_qnan_1 := op_exp_is_max_1 & (Mux((fp_format_i === 0.U(2.W)), op_i(25), op_i(22)))
   op_is_qnan_2 := op_exp_is_max_2 & op_i(41)
   op_is_qnan_3 := op_exp_is_max_3 & op_i(9)
-  op_is_snan_0 := fp_aIsFpCanonicalNAN | op_exp_is_max_0 & ~op_frac_is_zero_0 & (Mux((fp_format_i === 0.U(2.W)), ~op_i(57), Mux((fp_format_i === 1.U(2.W)), ~op_i(54), ~op_i(51))))
-  op_is_snan_1 := fp_aIsFpCanonicalNAN | op_exp_is_max_1 & ~op_frac_is_zero_1 & (Mux((fp_format_i === 0.U(2.W)), ~op_i(25), ~op_i(22)))
+  op_is_snan_0 := fp_aIsFpCanonicalNAN | op_exp_is_max_0 & ~op_frac_is_zero_0 & (Mux(
+    (fp_format_i === 0.U(2.W)),
+    ~op_i(57),
+    Mux((fp_format_i === 1.U(2.W)), ~op_i(54), ~op_i(51))
+  ))
+  op_is_snan_1 := fp_aIsFpCanonicalNAN | op_exp_is_max_1 & ~op_frac_is_zero_1 & (Mux(
+    (fp_format_i === 0.U(2.W)),
+    ~op_i(25),
+    ~op_i(22)
+  ))
   op_is_snan_2 := fp_aIsFpCanonicalNAN | op_exp_is_max_2 & ~op_frac_is_zero_2 & ~op_i(41)
   op_is_snan_3 := fp_aIsFpCanonicalNAN | op_exp_is_max_3 & ~op_frac_is_zero_3 & ~op_i(9)
   op_is_nan_0 := (op_is_qnan_0 | op_is_snan_0)
@@ -641,36 +682,56 @@ class fpsqrt_vector_r16(
     (Fill(1, fp_format_i === 0.U(2.W)) & op_frac_is_zero_3 & ~op_exp_3(0)) |
       (Fill(1, fp_format_i === 1.U(2.W)) & op_frac_is_zero_1 & ~op_exp_1(0)) |
       (Fill(1, fp_format_i === 2.U(2.W)) & op_frac_is_zero_0 & ~op_exp_0(0))
-    )
+  )
   early_finish :=
-    Mux((fp_format_i === 2.U(2.W)), (res_is_nan_0_d | res_is_inf_0_d | res_is_exact_zero_0_d | op_frac_is_zero_0),
+    Mux(
+      (fp_format_i === 2.U(2.W)),
+      (res_is_nan_0_d | res_is_inf_0_d | res_is_exact_zero_0_d | op_frac_is_zero_0),
       (~vector_mode_i & (
-        Mux((fp_format_i === 0.U(2.W)), (res_is_nan_3_d | res_is_inf_3_d | res_is_exact_zero_3_d | op_frac_is_zero_3),
+        Mux(
+          (fp_format_i === 0.U(2.W)),
+          (res_is_nan_3_d | res_is_inf_3_d | res_is_exact_zero_3_d | op_frac_is_zero_3),
           (res_is_nan_1_d | res_is_inf_1_d | res_is_exact_zero_1_d | op_frac_is_zero_1)
-        ))))
+        )
+      ))
+    )
   need_2_cycles_init :=
-    Mux((fp_format_i === 2.U(2.W)), op_exp_is_zero_0,
-      (vector_mode_i | (Mux((fp_format_i === 0.U(2.W)), op_exp_is_zero_3, op_exp_is_zero_1))))
+    Mux(
+      (fp_format_i === 2.U(2.W)),
+      op_exp_is_zero_0,
+      (vector_mode_i | (Mux((fp_format_i === 0.U(2.W)), op_exp_is_zero_3, op_exp_is_zero_1)))
+    )
   op_frac_pre_shifted_0 :=
-    (Fill(F64_FRAC_W, fp_format_i === 0.U(2.W)) & Cat("b0".U(1.W), op_i(48 + F16_FRAC_W - 1 - 1, 48), Fill(F64_FRAC_W - F16_FRAC_W, "b0".U(1.W)))) |
-      (Fill(F64_FRAC_W, fp_format_i === 1.U(2.W)) & Cat("b0".U(1.W), op_i(32 + F32_FRAC_W - 1 - 1, 32), Fill(F64_FRAC_W - F32_FRAC_W, "b0".U(1.W)))) |
+    (Fill(F64_FRAC_W, fp_format_i === 0.U(2.W)) & Cat(
+      "b0".U(1.W),
+      op_i(48 + F16_FRAC_W - 1 - 1, 48),
+      Fill(F64_FRAC_W - F16_FRAC_W, "b0".U(1.W))
+    )) |
+      (Fill(F64_FRAC_W, fp_format_i === 1.U(2.W)) & Cat(
+        "b0".U(1.W),
+        op_i(32 + F32_FRAC_W - 1 - 1, 32),
+        Fill(F64_FRAC_W - F32_FRAC_W, "b0".U(1.W))
+      )) |
       (Fill(F64_FRAC_W, fp_format_i === 2.U(2.W)) & Cat("b0".U(1.W), op_i(0 + F64_FRAC_W - 1 - 1, 0)))
-  val u_lzc_0 = Module(new lzc(
-    WIDTH = F64_FRAC_W,
-    MODE = 1.U))
+  val u_lzc_0 = Module(new lzc(WIDTH = F64_FRAC_W, MODE = 1.U))
   u_lzc_0.in_i <> op_frac_pre_shifted_0
   u_lzc_0.cnt_o <> op_l_shift_num_pre_0
   u_lzc_0.empty_o <> op_frac_is_zero_0
 
   op_l_shift_num_0 := Fill(log2Ceil(F64_FRAC_W), op_exp_is_zero_0) & op_l_shift_num_pre_0
-  op_frac_l_shifted_s5_to_s2 := op_frac_pre_shifted_0(0 + F64_FRAC_W - 1 - 1, 0) << Cat(op_l_shift_num_0(5, 2), "b0".U(2.W))
+  op_frac_l_shifted_s5_to_s2 := op_frac_pre_shifted_0(0 + F64_FRAC_W - 1 - 1, 0) << Cat(
+    op_l_shift_num_0(5, 2),
+    "b0".U(2.W)
+  )
   op_frac_l_shifted_0 := rt_m1_q(0 + F64_FRAC_W - 1 - 1, 0) << iter_num_q(1, 0)
   op_frac_pre_shifted_1 :=
-    (Fill(F32_FRAC_W, fp_format_i === 0.U(2.W)) & Cat("b0".U(1.W), op_i(16 + F16_FRAC_W - 1 - 1, 16), Fill(F32_FRAC_W - F16_FRAC_W, "b0".U(1.W)))) |
+    (Fill(F32_FRAC_W, fp_format_i === 0.U(2.W)) & Cat(
+      "b0".U(1.W),
+      op_i(16 + F16_FRAC_W - 1 - 1, 16),
+      Fill(F32_FRAC_W - F16_FRAC_W, "b0".U(1.W))
+    )) |
       (Fill(F32_FRAC_W, fp_format_i === 1.U(2.W)) & Cat("b0".U(1.W), op_i(0 + F32_FRAC_W - 1 - 1, 0)))
-  val u_lzc_1 = Module(new lzc(
-    WIDTH = F32_FRAC_W,
-    MODE = 1.U))
+  val u_lzc_1 = Module(new lzc(WIDTH = F32_FRAC_W, MODE = 1.U))
   u_lzc_1.in_i <> op_frac_pre_shifted_1
   u_lzc_1.cnt_o <> op_l_shift_num_pre_1
   u_lzc_1.empty_o <> op_frac_is_zero_1
@@ -678,9 +739,7 @@ class fpsqrt_vector_r16(
   op_l_shift_num_1 := Fill(log2Ceil(F32_FRAC_W), op_exp_is_zero_1) & op_l_shift_num_pre_1
   op_frac_l_shifted_1 := op_frac_pre_shifted_1(0 + F32_FRAC_W - 1 - 1, 0) << op_l_shift_num_1
   op_frac_pre_shifted_2 := Cat("b0".U(1.W), op_i(32 + F16_FRAC_W - 1 - 1, 32))
-  val u_lzc_2 = Module(new lzc(
-    WIDTH = F16_FRAC_W,
-    MODE = 1.U))
+  val u_lzc_2 = Module(new lzc(WIDTH = F16_FRAC_W, MODE = 1.U))
   u_lzc_2.in_i <> op_frac_pre_shifted_2
   u_lzc_2.cnt_o <> op_l_shift_num_pre_2
   u_lzc_2.empty_o <> op_frac_is_zero_2
@@ -688,9 +747,7 @@ class fpsqrt_vector_r16(
   op_l_shift_num_2 := Fill(log2Ceil(F16_FRAC_W), op_exp_is_zero_2) & op_l_shift_num_pre_2
   op_frac_l_shifted_2 := op_frac_pre_shifted_2(0 + F16_FRAC_W - 1 - 1, 0) << op_l_shift_num_2
   op_frac_pre_shifted_3 := Cat("b0".U(1.W), op_i(0 + F16_FRAC_W - 1 - 1, 0))
-  val u_lzc_3 = Module(new lzc(
-    WIDTH = F16_FRAC_W,
-    MODE = 1.U))
+  val u_lzc_3 = Module(new lzc(WIDTH = F16_FRAC_W, MODE = 1.U))
   u_lzc_3.in_i <> op_frac_pre_shifted_3
   u_lzc_3.cnt_o <> op_l_shift_num_pre_3
   u_lzc_3.empty_o <> op_frac_is_zero_3
@@ -710,13 +767,24 @@ class fpsqrt_vector_r16(
       (Fill(3, fp_format_i === 1.U(2.W)) & Cat("b11".U(2.W), ~op_l_shift_num_1(4))),
     ~op_l_shift_num_1(3, 0)
   )
-  out_exp_pre_2 := Cat("b0".U(1.W), op_exp_2(4, 1), op_exp_2(0) | op_exp_is_zero_2) + Cat("b0".U(2.W), ~op_l_shift_num_2(3, 0))
-  out_exp_pre_3 := Cat("b0".U(1.W), op_exp_3(4, 1), op_exp_3(0) | op_exp_is_zero_3) + Cat("b0".U(2.W), ~op_l_shift_num_3(3, 0))
+  out_exp_pre_2 := Cat("b0".U(1.W), op_exp_2(4, 1), op_exp_2(0) | op_exp_is_zero_2) + Cat(
+    "b0".U(2.W),
+    ~op_l_shift_num_2(3, 0)
+  )
+  out_exp_pre_3 := Cat("b0".U(1.W), op_exp_3(4, 1), op_exp_3(0) | op_exp_is_zero_3) + Cat(
+    "b0".U(2.W),
+    ~op_l_shift_num_3(3, 0)
+  )
   exp_is_odd_pre_0_0 := Mux(op_exp_is_zero_0, op_l_shift_num_0(0), ~op_exp_0(0))
   current_exp_is_odd_0 := Mux(fsm_q(FSM_PRE_0_BIT), exp_is_odd_pre_0_0, mask_q(0))
-  current_frac_0 := Mux(fsm_q(FSM_PRE_0_BIT), op_frac_pre_shifted_0(0 + F64_FRAC_W - 1 - 1, 0), op_frac_l_shifted_0(0 + F64_FRAC_W - 1 - 1, 0))
+  current_frac_0 := Mux(
+    fsm_q(FSM_PRE_0_BIT),
+    op_frac_pre_shifted_0(0 + F64_FRAC_W - 1 - 1, 0),
+    op_frac_l_shifted_0(0 + F64_FRAC_W - 1 - 1, 0)
+  )
   rt_1st_0(0) := (Cat(current_exp_is_odd_0, current_frac_0(F64_FRAC_W - 2)) === "b00".U(2.W))
-  rt_1st_0(1) := (Cat(current_exp_is_odd_0, current_frac_0(F64_FRAC_W - 2)) === "b01".U(2.W)) | (Cat(current_exp_is_odd_0, current_frac_0(F64_FRAC_W - 2)) === "b10".U(2.W))
+  rt_1st_0(1) := (Cat(current_exp_is_odd_0, current_frac_0(F64_FRAC_W - 2)) === "b01"
+    .U(2.W)) | (Cat(current_exp_is_odd_0, current_frac_0(F64_FRAC_W - 2)) === "b10".U(2.W))
   rt_1st_0(2) := (Cat(current_exp_is_odd_0, current_frac_0(F64_FRAC_W - 2)) === "b11".U(2.W))
   rt_iter_init_0 :=
     (Fill(F64_FULL_RT_W, rt_1st_0(0)) & Cat("b010".U(3.W), Fill(F64_FULL_RT_W - 3, "b0".U(1.W)))) |
@@ -726,7 +794,14 @@ class fpsqrt_vector_r16(
     (Fill(F64_FULL_RT_W, rt_1st_0(0)) & Cat("b001".U(3.W), Fill(F64_FULL_RT_W - 3, "b0".U(1.W)))) |
       (Fill(F64_FULL_RT_W, rt_1st_0(1)) & Cat("b010".U(3.W), Fill(F64_FULL_RT_W - 3, "b0".U(1.W)))) |
       (Fill(F64_FULL_RT_W, rt_1st_0(2)) & Cat("b011".U(3.W), Fill(F64_FULL_RT_W - 3, "b0".U(1.W))))
-  f_r_s_iter_init_pre_0 := Cat("b11".U(2.W), Mux(current_exp_is_odd_0, Cat("b1".U(1.W), current_frac_0, "b0".U(1.W)), Cat("b0".U(1.W), "b1".U(1.W), current_frac_0)))
+  f_r_s_iter_init_pre_0 := Cat(
+    "b11".U(2.W),
+    Mux(
+      current_exp_is_odd_0,
+      Cat("b1".U(1.W), current_frac_0, "b0".U(1.W)),
+      Cat("b0".U(1.W), "b1".U(1.W), current_frac_0)
+    )
+  )
   f_r_s_iter_init_0 := Cat(f_r_s_iter_init_pre_0((F64_REM_W - 1) - 2, 0), "b0".U(2.W))
   f_r_c_iter_init_0 :=
     (Fill(F64_REM_W, rt_1st_0(0)) & Cat("b11".U(2.W), Fill(F64_REM_W - 2, "b0".U(1.W)))) |
@@ -734,9 +809,14 @@ class fpsqrt_vector_r16(
       (Fill(F64_REM_W, rt_1st_0(2)) & Fill(F64_REM_W, "b0".U(1.W)))
   exp_is_odd_pre_0_1 := Mux(op_exp_is_zero_1, op_l_shift_num_1(0), ~op_exp_1(0))
   current_exp_is_odd_1 := Mux(fsm_q(FSM_PRE_0_BIT), exp_is_odd_pre_0_1, mask_q(1))
-  current_frac_1 := Mux(fsm_q(FSM_PRE_0_BIT), op_frac_pre_shifted_1(0 + F32_FRAC_W - 1 - 1, 0), rt_q(0 + F32_FRAC_W - 1 - 1, 0))
+  current_frac_1 := Mux(
+    fsm_q(FSM_PRE_0_BIT),
+    op_frac_pre_shifted_1(0 + F32_FRAC_W - 1 - 1, 0),
+    rt_q(0 + F32_FRAC_W - 1 - 1, 0)
+  )
   rt_1st_1(0) := (Cat(current_exp_is_odd_1, current_frac_1(F32_FRAC_W - 2)) === "b00".U(2.W))
-  rt_1st_1(1) := (Cat(current_exp_is_odd_1, current_frac_1(F32_FRAC_W - 2)) === "b01".U(2.W)) | (Cat(current_exp_is_odd_1, current_frac_1(F32_FRAC_W - 2)) === "b10".U(2.W))
+  rt_1st_1(1) := (Cat(current_exp_is_odd_1, current_frac_1(F32_FRAC_W - 2)) === "b01"
+    .U(2.W)) | (Cat(current_exp_is_odd_1, current_frac_1(F32_FRAC_W - 2)) === "b10".U(2.W))
   rt_1st_1(2) := (Cat(current_exp_is_odd_1, current_frac_1(F32_FRAC_W - 2)) === "b11".U(2.W))
   rt_iter_init_1 :=
     (Fill(F32_FULL_RT_W, rt_1st_1(0)) & Cat("b010".U(3.W), Fill(F32_FULL_RT_W - 3, "b0".U(1.W)))) |
@@ -746,7 +826,14 @@ class fpsqrt_vector_r16(
     (Fill(F32_FULL_RT_W, rt_1st_1(0)) & Cat("b001".U(3.W), Fill(F32_FULL_RT_W - 3, "b0".U(1.W)))) |
       (Fill(F32_FULL_RT_W, rt_1st_1(1)) & Cat("b010".U(3.W), Fill(F32_FULL_RT_W - 3, "b0".U(1.W)))) |
       (Fill(F32_FULL_RT_W, rt_1st_1(2)) & Cat("b011".U(3.W), Fill(F32_FULL_RT_W - 3, "b0".U(1.W))))
-  f_r_s_iter_init_pre_1 := Cat("b11".U(2.W), Mux(current_exp_is_odd_1, Cat("b1".U(1.W), current_frac_1, "b0".U(2.W)), Cat("b0".U(1.W), "b1".U(1.W), current_frac_1, "b0".U(1.W))))
+  f_r_s_iter_init_pre_1 := Cat(
+    "b11".U(2.W),
+    Mux(
+      current_exp_is_odd_1,
+      Cat("b1".U(1.W), current_frac_1, "b0".U(2.W)),
+      Cat("b0".U(1.W), "b1".U(1.W), current_frac_1, "b0".U(1.W))
+    )
+  )
   f_r_s_iter_init_1 := Cat(f_r_s_iter_init_pre_1((F32_REM_W - 1) - 2, 0), "b0".U(2.W))
   f_r_c_iter_init_1 :=
     (Fill(F32_REM_W, rt_1st_1(0)) & Cat("b11".U(2.W), Fill(F32_REM_W - 2, "b0".U(1.W)))) |
@@ -754,9 +841,14 @@ class fpsqrt_vector_r16(
       (Fill(F32_REM_W, rt_1st_1(2)) & Fill(F32_REM_W, "b0".U(1.W)))
   exp_is_odd_pre_0_2 := Mux(op_exp_is_zero_2, op_l_shift_num_2(0), ~op_exp_2(0))
   current_exp_is_odd_2 := Mux(fsm_q(FSM_PRE_0_BIT), exp_is_odd_pre_0_2, mask_q(2))
-  current_frac_2 := Mux(fsm_q(FSM_PRE_0_BIT), op_frac_pre_shifted_2(0 + F16_FRAC_W - 1 - 1, 0), rt_q(23 + F16_FRAC_W - 1 - 1, 23))
+  current_frac_2 := Mux(
+    fsm_q(FSM_PRE_0_BIT),
+    op_frac_pre_shifted_2(0 + F16_FRAC_W - 1 - 1, 0),
+    rt_q(23 + F16_FRAC_W - 1 - 1, 23)
+  )
   rt_1st_2(0) := (Cat(current_exp_is_odd_2, current_frac_2(F16_FRAC_W - 2)) === "b00".U(2.W))
-  rt_1st_2(1) := (Cat(current_exp_is_odd_2, current_frac_2(F16_FRAC_W - 2)) === "b01".U(2.W)) | (Cat(current_exp_is_odd_2, current_frac_2(F16_FRAC_W - 2)) === "b10".U(2.W))
+  rt_1st_2(1) := (Cat(current_exp_is_odd_2, current_frac_2(F16_FRAC_W - 2)) === "b01"
+    .U(2.W)) | (Cat(current_exp_is_odd_2, current_frac_2(F16_FRAC_W - 2)) === "b10".U(2.W))
   rt_1st_2(2) := (Cat(current_exp_is_odd_2, current_frac_2(F16_FRAC_W - 2)) === "b11".U(2.W))
   rt_iter_init_2 :=
     (Fill(F16_FULL_RT_W, rt_1st_2(0)) & Cat("b010".U(3.W), Fill(F16_FULL_RT_W - 3, "b0".U(1.W)))) |
@@ -766,7 +858,14 @@ class fpsqrt_vector_r16(
     (Fill(F16_FULL_RT_W, rt_1st_2(0)) & Cat("b001".U(3.W), Fill(F16_FULL_RT_W - 3, "b0".U(1.W)))) |
       (Fill(F16_FULL_RT_W, rt_1st_2(1)) & Cat("b010".U(3.W), Fill(F16_FULL_RT_W - 3, "b0".U(1.W)))) |
       (Fill(F16_FULL_RT_W, rt_1st_2(2)) & Cat("b011".U(3.W), Fill(F16_FULL_RT_W - 3, "b0".U(1.W))))
-  f_r_s_iter_init_pre_2 := Cat("b11".U(2.W), Mux(current_exp_is_odd_2, Cat("b1".U(1.W), current_frac_2, "b0".U(3.W)), Cat("b0".U(1.W), "b1".U(1.W), current_frac_2, "b0".U(2.W))))
+  f_r_s_iter_init_pre_2 := Cat(
+    "b11".U(2.W),
+    Mux(
+      current_exp_is_odd_2,
+      Cat("b1".U(1.W), current_frac_2, "b0".U(3.W)),
+      Cat("b0".U(1.W), "b1".U(1.W), current_frac_2, "b0".U(2.W))
+    )
+  )
   f_r_s_iter_init_2 := Cat(f_r_s_iter_init_pre_2((F16_REM_W - 1) - 2, 0), "b0".U(2.W))
   f_r_c_iter_init_2 :=
     (Fill(F16_REM_W, rt_1st_2(0)) & Cat("b11".U(2.W), Fill(F16_REM_W - 2, "b0".U(1.W)))) |
@@ -774,9 +873,14 @@ class fpsqrt_vector_r16(
       (Fill(F16_REM_W, rt_1st_2(2)) & Fill(F16_REM_W, "b0".U(1.W)))
   exp_is_odd_pre_0_3 := Mux(op_exp_is_zero_3, op_l_shift_num_3(0), ~op_exp_3(0))
   current_exp_is_odd_3 := Mux(fsm_q(FSM_PRE_0_BIT), exp_is_odd_pre_0_3, mask_q(3))
-  current_frac_3 := Mux(fsm_q(FSM_PRE_0_BIT), op_frac_pre_shifted_3(0 + F16_FRAC_W - 1 - 1, 0), rt_q(33 + F16_FRAC_W - 1 - 1, 33))
+  current_frac_3 := Mux(
+    fsm_q(FSM_PRE_0_BIT),
+    op_frac_pre_shifted_3(0 + F16_FRAC_W - 1 - 1, 0),
+    rt_q(33 + F16_FRAC_W - 1 - 1, 33)
+  )
   rt_1st_3(0) := (Cat(current_exp_is_odd_3, current_frac_3(F16_FRAC_W - 2)) === "b00".U(2.W))
-  rt_1st_3(1) := (Cat(current_exp_is_odd_3, current_frac_3(F16_FRAC_W - 2)) === "b01".U(2.W)) | (Cat(current_exp_is_odd_3, current_frac_3(F16_FRAC_W - 2)) === "b10".U(2.W))
+  rt_1st_3(1) := (Cat(current_exp_is_odd_3, current_frac_3(F16_FRAC_W - 2)) === "b01"
+    .U(2.W)) | (Cat(current_exp_is_odd_3, current_frac_3(F16_FRAC_W - 2)) === "b10".U(2.W))
   rt_1st_3(2) := (Cat(current_exp_is_odd_3, current_frac_3(F16_FRAC_W - 2)) === "b11".U(2.W))
   rt_iter_init_3 :=
     (Fill(F16_FULL_RT_W, rt_1st_3(0)) & Cat("b010".U(3.W), Fill(F16_FULL_RT_W - 3, "b0".U(1.W)))) |
@@ -786,7 +890,14 @@ class fpsqrt_vector_r16(
     (Fill(F16_FULL_RT_W, rt_1st_3(0)) & Cat("b001".U(3.W), Fill(F16_FULL_RT_W - 3, "b0".U(1.W)))) |
       (Fill(F16_FULL_RT_W, rt_1st_3(1)) & Cat("b010".U(3.W), Fill(F16_FULL_RT_W - 3, "b0".U(1.W)))) |
       (Fill(F16_FULL_RT_W, rt_1st_3(2)) & Cat("b011".U(3.W), Fill(F16_FULL_RT_W - 3, "b0".U(1.W))))
-  f_r_s_iter_init_pre_3 := Cat("b11".U(2.W), Mux(current_exp_is_odd_3, Cat("b1".U(1.W), current_frac_3, "b0".U(3.W)), Cat("b0".U(1.W), "b1".U(1.W), current_frac_3, "b0".U(2.W))))
+  f_r_s_iter_init_pre_3 := Cat(
+    "b11".U(2.W),
+    Mux(
+      current_exp_is_odd_3,
+      Cat("b1".U(1.W), current_frac_3, "b0".U(3.W)),
+      Cat("b0".U(1.W), "b1".U(1.W), current_frac_3, "b0".U(2.W))
+    )
+  )
   f_r_s_iter_init_3 := Cat(f_r_s_iter_init_pre_3((F16_REM_W - 1) - 2, 0), "b0".U(2.W))
   f_r_c_iter_init_3 :=
     (Fill(F16_REM_W, rt_1st_3(0)) & Cat("b11".U(2.W), Fill(F16_REM_W - 2, "b0".U(1.W)))) |
@@ -795,99 +906,205 @@ class fpsqrt_vector_r16(
   rt_iter_init := Cat(
     rt_iter_init_0(F64_FULL_RT_W - 2, F64_FULL_RT_W - 2 - 2 + 1),
     "b0".U(12.W),
-    Fill(2, Mux(fsm_q(FSM_PRE_0_BIT), (fp_format_i === 0.U(2.W)), fp_fmt_q(0))) & rt_iter_init_2(F16_FULL_RT_W - 2, F16_FULL_RT_W - 2 - 2 + 1),
+    Fill(2, Mux(fsm_q(FSM_PRE_0_BIT), (fp_format_i === 0.U(2.W)), fp_fmt_q(0))) & rt_iter_init_2(
+      F16_FULL_RT_W - 2,
+      F16_FULL_RT_W - 2 - 2 + 1
+    ),
     "b0".U(12.W),
-    Fill(2, Mux(fsm_q(FSM_PRE_0_BIT), ((fp_format_i === 0.U(2.W)) | (fp_format_i === 1.U(2.W))), (fp_fmt_q(0) | fp_fmt_q(1)))) & rt_iter_init_1(F32_FULL_RT_W - 2, F32_FULL_RT_W - 2 - 2 + 1),
+    Fill(
+      2,
+      Mux(fsm_q(FSM_PRE_0_BIT), ((fp_format_i === 0.U(2.W)) | (fp_format_i === 1.U(2.W))), (fp_fmt_q(0) | fp_fmt_q(1)))
+    ) & rt_iter_init_1(F32_FULL_RT_W - 2, F32_FULL_RT_W - 2 - 2 + 1),
     "b0".U(12.W),
-    Fill(2, Mux(fsm_q(FSM_PRE_0_BIT), (fp_format_i === 0.U(2.W)), fp_fmt_q(0))) & rt_iter_init_3(F16_FULL_RT_W - 2, F16_FULL_RT_W - 2 - 2 + 1),
+    Fill(2, Mux(fsm_q(FSM_PRE_0_BIT), (fp_format_i === 0.U(2.W)), fp_fmt_q(0))) & rt_iter_init_3(
+      F16_FULL_RT_W - 2,
+      F16_FULL_RT_W - 2 - 2 + 1
+    ),
     "b0".U(12.W)
   )
   rt_d := Mux(
-    fsm_q(FSM_PRE_0_BIT), (Mux(need_2_cycles_init, Cat(
-      rt_q(55, 43),
-      op_frac_l_shifted_3(0 + F16_FRAC_W - 1 - 1, 0),
-      op_frac_l_shifted_2(0 + F16_FRAC_W - 1 - 1, 0),
-      op_frac_l_shifted_1(0 + F32_FRAC_W - 1 - 1, 0)
-    ), rt_iter_init)), Mux(
-      fsm_q(FSM_PRE_1_BIT), rt_iter_init,
-      nxt_rt))
+    fsm_q(FSM_PRE_0_BIT),
+    (
+      Mux(
+        need_2_cycles_init,
+        Cat(
+          rt_q(55, 43),
+          op_frac_l_shifted_3(0 + F16_FRAC_W - 1 - 1, 0),
+          op_frac_l_shifted_2(0 + F16_FRAC_W - 1 - 1, 0),
+          op_frac_l_shifted_1(0 + F32_FRAC_W - 1 - 1, 0)
+        ),
+        rt_iter_init
+      )
+    ),
+    Mux(fsm_q(FSM_PRE_1_BIT), rt_iter_init, nxt_rt)
+  )
   rt_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
   rt_m1_iter_init := Cat(
     rt_m1_iter_init_0(F64_FULL_RT_W - 3),
     "b0".U(12.W),
     Fill(1, Mux(fsm_q(FSM_PRE_0_BIT), (fp_format_i === 0.U(2.W)), fp_fmt_q(0))) & rt_m1_iter_init_2(F16_FULL_RT_W - 3),
     "b0".U(12.W),
-    Fill(1, Mux(fsm_q(FSM_PRE_0_BIT), ((fp_format_i === 0.U(2.W)) | (fp_format_i === 1.U(2.W))), (fp_fmt_q(0) | fp_fmt_q(1)))) & rt_m1_iter_init_1(F32_FULL_RT_W - 3),
+    Fill(
+      1,
+      Mux(fsm_q(FSM_PRE_0_BIT), ((fp_format_i === 0.U(2.W)) | (fp_format_i === 1.U(2.W))), (fp_fmt_q(0) | fp_fmt_q(1)))
+    ) & rt_m1_iter_init_1(F32_FULL_RT_W - 3),
     "b0".U(12.W),
     Fill(1, Mux(fsm_q(FSM_PRE_0_BIT), (fp_format_i === 0.U(2.W)), fp_fmt_q(0))) & rt_m1_iter_init_3(F16_FULL_RT_W - 3),
     "b0".U(12.W),
     "b0".U(1.W)
   )
   rt_m1_d := Mux(
-    fsm_q(FSM_PRE_0_BIT), (Mux(need_2_cycles_init, Cat(rt_m1_q(52), op_frac_l_shifted_s5_to_s2), rt_m1_iter_init)), Mux(
-      fsm_q(FSM_PRE_1_BIT), rt_m1_iter_init,
-      nxt_rt_m1))
+    fsm_q(FSM_PRE_0_BIT),
+    (Mux(need_2_cycles_init, Cat(rt_m1_q(52), op_frac_l_shifted_s5_to_s2), rt_m1_iter_init)),
+    Mux(fsm_q(FSM_PRE_1_BIT), rt_m1_iter_init, nxt_rt_m1)
+  )
   rt_m1_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
   mask_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
   mask_d := Mux(
-    fsm_q(FSM_PRE_0_BIT), (Mux(need_2_cycles_init, Cat(
-      mask_q(12, 4),
-      exp_is_odd_pre_0_3,
-      exp_is_odd_pre_0_2,
-      exp_is_odd_pre_0_1,
-      exp_is_odd_pre_0_0
-    ), Cat("b1".U(1.W), "b0".U(12.W)))), Mux(
-      fsm_q(FSM_PRE_1_BIT), Cat("b1".U(1.W), "b0".U(12.W)),
-      (mask_q >> 1)))
+    fsm_q(FSM_PRE_0_BIT),
+    (Mux(
+      need_2_cycles_init,
+      Cat(
+        mask_q(12, 4),
+        exp_is_odd_pre_0_3,
+        exp_is_odd_pre_0_2,
+        exp_is_odd_pre_0_1,
+        exp_is_odd_pre_0_0
+      ),
+      Cat("b1".U(1.W), "b0".U(12.W))
+    )),
+    Mux(fsm_q(FSM_PRE_1_BIT), Cat("b1".U(1.W), "b0".U(12.W)), (mask_q >> 1))
+  )
   if (S0_CSA_IS_MERGED == 1) {
     f_r_s_iter_init_69_54 := f_r_s_iter_init_0(55, 40)
     f_r_s_iter_init_53_52 := f_r_s_iter_init_0(39, 38)
-    f_r_s_iter_init_51_36 := Mux((fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0)), f_r_s_iter_init_2(15, 0), f_r_s_iter_init_0(37, 22))
+    f_r_s_iter_init_51_36 := Mux(
+      (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0)),
+      f_r_s_iter_init_2(15, 0),
+      f_r_s_iter_init_0(37, 22)
+    )
     f_r_s_iter_init_35_34 := f_r_s_iter_init_0(21, 20)
     f_r_s_iter_init_33_18 :=
-      (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))) & f_r_s_iter_init_0(19, 4)) |
-        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i =/= 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & ~fp_fmt_q(2))) & f_r_s_iter_init_1(27, 12))
+      (Fill(
+        16,
+        (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))
+      ) & f_r_s_iter_init_0(19, 4)) |
+        (Fill(
+          16,
+          (fsm_q(FSM_PRE_0_BIT) & (fp_format_i =/= 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & ~fp_fmt_q(2))
+        ) & f_r_s_iter_init_1(27, 12))
     f_r_s_iter_init_17_16 :=
-      (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))) & f_r_s_iter_init_0(3, 2)) |
-        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i =/= 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & ~fp_fmt_q(2))) & f_r_s_iter_init_1(11, 10))
+      (Fill(
+        16,
+        (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))
+      ) & f_r_s_iter_init_0(3, 2)) |
+        (Fill(
+          16,
+          (fsm_q(FSM_PRE_0_BIT) & (fp_format_i =/= 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & ~fp_fmt_q(2))
+        ) & f_r_s_iter_init_1(11, 10))
     f_r_s_iter_init_15_0 :=
-      (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 0.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0))) & f_r_s_iter_init_3(15, 0)) |
-        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 1.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(1))) & Cat(f_r_s_iter_init_1(9, 0), "b0".U(6.W))) |
-        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))) & Cat(f_r_s_iter_init_0(1, 0), "b0".U(14.W)))
+      (Fill(
+        16,
+        (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 0.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0))
+      ) & f_r_s_iter_init_3(15, 0)) |
+        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 1.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(1))) & Cat(
+          f_r_s_iter_init_1(9, 0),
+          "b0".U(6.W)
+        )) |
+        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))) & Cat(
+          f_r_s_iter_init_0(1, 0),
+          "b0".U(14.W)
+        ))
     f_r_c_iter_init_69_54 := f_r_c_iter_init_0(55, 40)
     f_r_c_iter_init_53_52 := f_r_c_iter_init_0(39, 38)
-    f_r_c_iter_init_51_36 := Mux((fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0)), f_r_c_iter_init_2(15, 0), f_r_c_iter_init_0(37, 22))
+    f_r_c_iter_init_51_36 := Mux(
+      (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0)),
+      f_r_c_iter_init_2(15, 0),
+      f_r_c_iter_init_0(37, 22)
+    )
     f_r_c_iter_init_35_34 := f_r_c_iter_init_0(21, 20)
     f_r_c_iter_init_33_18 :=
-      (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))) & f_r_c_iter_init_0(19, 4)) |
-        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i =/= 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & ~fp_fmt_q(2))) & f_r_c_iter_init_1(27, 12))
+      (Fill(
+        16,
+        (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))
+      ) & f_r_c_iter_init_0(19, 4)) |
+        (Fill(
+          16,
+          (fsm_q(FSM_PRE_0_BIT) & (fp_format_i =/= 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & ~fp_fmt_q(2))
+        ) & f_r_c_iter_init_1(27, 12))
     f_r_c_iter_init_17_16 :=
-      (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))) & f_r_c_iter_init_0(3, 2)) |
-        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i =/= 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & ~fp_fmt_q(2))) & f_r_c_iter_init_1(11, 10))
+      (Fill(
+        16,
+        (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))
+      ) & f_r_c_iter_init_0(3, 2)) |
+        (Fill(
+          16,
+          (fsm_q(FSM_PRE_0_BIT) & (fp_format_i =/= 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & ~fp_fmt_q(2))
+        ) & f_r_c_iter_init_1(11, 10))
     f_r_c_iter_init_15_0 :=
-      (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 0.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0))) & f_r_c_iter_init_3(15, 0)) |
-        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 1.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(1))) & Cat(f_r_c_iter_init_1(9, 0), "b0".U(6.W))) |
-        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))) & Cat(f_r_c_iter_init_0(1, 0), "b0".U(14.W)))
-  }
-  else {
+      (Fill(
+        16,
+        (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 0.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0))
+      ) & f_r_c_iter_init_3(15, 0)) |
+        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 1.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(1))) & Cat(
+          f_r_c_iter_init_1(9, 0),
+          "b0".U(6.W)
+        )) |
+        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))) & Cat(
+          f_r_c_iter_init_0(1, 0),
+          "b0".U(14.W)
+        ))
+  } else {
     val f_r_s_iter_init_63_48 = f_r_s_iter_init_0(55, 40)
-    val f_r_s_iter_init_47_32 = Mux((fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0)), f_r_s_iter_init_2(15, 0), f_r_s_iter_init_0(39, 24))
+    val f_r_s_iter_init_47_32 =
+      Mux((fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0)), f_r_s_iter_init_2(15, 0), f_r_s_iter_init_0(39, 24))
     val f_r_s_iter_init_31_16 =
-      (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))) & f_r_s_iter_init_0(23, 8)) |
-        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i =/= 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & ~fp_fmt_q(2))) & f_r_s_iter_init_1(27, 12))
+      (Fill(
+        16,
+        (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))
+      ) & f_r_s_iter_init_0(23, 8)) |
+        (Fill(
+          16,
+          (fsm_q(FSM_PRE_0_BIT) & (fp_format_i =/= 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & ~fp_fmt_q(2))
+        ) & f_r_s_iter_init_1(27, 12))
     f_r_s_iter_init_15_0 :=
-      (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 0.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0))) & f_r_s_iter_init_3(15, 0)) |
-        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 1.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(1))) & Cat(f_r_s_iter_init_1(11, 0), "b0".U(4.W))) |
-        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))) & Cat(f_r_s_iter_init_0(7, 0), "b0".U(8.W)))
+      (Fill(
+        16,
+        (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 0.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0))
+      ) & f_r_s_iter_init_3(15, 0)) |
+        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 1.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(1))) & Cat(
+          f_r_s_iter_init_1(11, 0),
+          "b0".U(4.W)
+        )) |
+        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))) & Cat(
+          f_r_s_iter_init_0(7, 0),
+          "b0".U(8.W)
+        ))
     val f_r_c_iter_init_63_48 = f_r_c_iter_init_0(55, 40)
-    val f_r_c_iter_init_47_32 = Mux((fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0)), f_r_c_iter_init_2(15, 0), f_r_c_iter_init_0(39, 24))
+    val f_r_c_iter_init_47_32 =
+      Mux((fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0)), f_r_c_iter_init_2(15, 0), f_r_c_iter_init_0(39, 24))
     val f_r_c_iter_init_31_16 =
-      (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))) & f_r_c_iter_init_0(23, 8)) |
-        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i =/= 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & ~fp_fmt_q(2))) & f_r_c_iter_init_1(27, 12))
+      (Fill(
+        16,
+        (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))
+      ) & f_r_c_iter_init_0(23, 8)) |
+        (Fill(
+          16,
+          (fsm_q(FSM_PRE_0_BIT) & (fp_format_i =/= 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & ~fp_fmt_q(2))
+        ) & f_r_c_iter_init_1(27, 12))
     f_r_c_iter_init_15_0 :=
-      (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 0.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0))) & f_r_c_iter_init_3(15, 0)) |
-        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 1.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(1))) & Cat(f_r_c_iter_init_1(11, 0), "b0".U(4.W))) |
-        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))) & Cat(f_r_c_iter_init_0(7, 0), "b0".U(8.W)))
+      (Fill(
+        16,
+        (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 0.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(0))
+      ) & f_r_c_iter_init_3(15, 0)) |
+        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 1.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(1))) & Cat(
+          f_r_c_iter_init_1(11, 0),
+          "b0".U(4.W)
+        )) |
+        (Fill(16, (fsm_q(FSM_PRE_0_BIT) & (fp_format_i === 2.U(2.W))) | (fsm_q(FSM_PRE_1_BIT) & fp_fmt_q(2))) & Cat(
+          f_r_c_iter_init_0(7, 0),
+          "b0".U(8.W)
+        ))
     f_r_c_iter_init := Cat(f_r_c_iter_init_63_48, f_r_c_iter_init_47_32, f_r_c_iter_init_31_16, f_r_c_iter_init_15_0)
     f_r_s_iter_init := Cat(f_r_s_iter_init_63_48, f_r_s_iter_init_47_32, f_r_s_iter_init_31_16, f_r_s_iter_init_15_0)
   }
@@ -898,42 +1115,121 @@ class fpsqrt_vector_r16(
   f_r_c_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), f_r_c_iter_init, nxt_f_r_c)
   iter_num_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | (fsm_q(FSM_ITER_BIT) & ~final_iter)
   iter_num_d := Mux(
-    fsm_q(FSM_PRE_0_BIT), (Mux(need_2_cycles_init, Cat(iter_num_q(3, 2), op_l_shift_num_0(1, 0)), Cat(
-      (Fill(4, fp_format_i === 0.U(2.W)) & 2.U(4.W)) |
-        (Fill(4, fp_format_i === 1.U(2.W)) & 5.U(4.W)) |
-        (Fill(4, fp_format_i === 2.U(2.W)) & 12.U(4.W))
-    ))), Mux(
-      fsm_q(FSM_PRE_1_BIT), (
+    fsm_q(FSM_PRE_0_BIT),
+    (
+      Mux(
+        need_2_cycles_init,
+        Cat(iter_num_q(3, 2), op_l_shift_num_0(1, 0)),
+        Cat(
+          (Fill(4, fp_format_i === 0.U(2.W)) & 2.U(4.W)) |
+            (Fill(4, fp_format_i === 1.U(2.W)) & 5.U(4.W)) |
+            (Fill(4, fp_format_i === 2.U(2.W)) & 12.U(4.W))
+        )
+      )
+    ),
+    Mux(
+      fsm_q(FSM_PRE_1_BIT),
+      (
         (Fill(4, fp_fmt_q(0)) & 2.U(4.W)) |
           (Fill(4, fp_fmt_q(1)) & 5.U(4.W)) |
           (Fill(4, fp_fmt_q(2)) & 12.U(4.W))
-        ),
-      (iter_num_q - 1.U(4.W))))
+      ),
+      (iter_num_q - 1.U(4.W))
+    )
+  )
   final_iter := (iter_num_q === 0.U(4.W))
-  adder_8b_iter_init_0 := Cat(f_r_s_iter_init_0(F64_REM_W - 1, F64_REM_W - 1 - 4 + 1) + f_r_c_iter_init_0(F64_REM_W - 1, F64_REM_W - 1 - 4 + 1), f_r_s_iter_init_0(F64_REM_W - 1 - 4, F64_REM_W - 1 - 4 - 4 + 1))
+  adder_8b_iter_init_0 := Cat(
+    f_r_s_iter_init_0(F64_REM_W - 1, F64_REM_W - 1 - 4 + 1) + f_r_c_iter_init_0(F64_REM_W - 1, F64_REM_W - 1 - 4 + 1),
+    f_r_s_iter_init_0(F64_REM_W - 1 - 4, F64_REM_W - 1 - 4 - 4 + 1)
+  )
   nr_f_r_7b_for_nxt_cycle_s0_qds_0_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  nr_f_r_7b_for_nxt_cycle_s0_qds_0_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), adder_8b_iter_init_0(7, 1), adder_7b_res_for_nxt_cycle_s0_qds_0)
-  adder_8b_iter_init_1 := Cat(f_r_s_iter_init_1(F32_REM_W - 1, F32_REM_W - 1 - 4 + 1) + f_r_c_iter_init_1(F32_REM_W - 1, F32_REM_W - 1 - 4 + 1), f_r_s_iter_init_1(F32_REM_W - 1 - 4, F32_REM_W - 1 - 4 - 4 + 1))
+  nr_f_r_7b_for_nxt_cycle_s0_qds_0_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    adder_8b_iter_init_0(7, 1),
+    adder_7b_res_for_nxt_cycle_s0_qds_0
+  )
+  adder_8b_iter_init_1 := Cat(
+    f_r_s_iter_init_1(F32_REM_W - 1, F32_REM_W - 1 - 4 + 1) + f_r_c_iter_init_1(F32_REM_W - 1, F32_REM_W - 1 - 4 + 1),
+    f_r_s_iter_init_1(F32_REM_W - 1 - 4, F32_REM_W - 1 - 4 - 4 + 1)
+  )
   nr_f_r_7b_for_nxt_cycle_s0_qds_1_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  nr_f_r_7b_for_nxt_cycle_s0_qds_1_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), adder_8b_iter_init_1(7, 1), adder_7b_res_for_nxt_cycle_s0_qds_1)
-  adder_8b_iter_init_2 := Cat(f_r_s_iter_init_2(F16_REM_W - 1, F16_REM_W - 1 - 4 + 1) + f_r_c_iter_init_2(F16_REM_W - 1, F16_REM_W - 1 - 4 + 1), f_r_s_iter_init_2(F16_REM_W - 1 - 4, F16_REM_W - 1 - 4 - 4 + 1))
+  nr_f_r_7b_for_nxt_cycle_s0_qds_1_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    adder_8b_iter_init_1(7, 1),
+    adder_7b_res_for_nxt_cycle_s0_qds_1
+  )
+  adder_8b_iter_init_2 := Cat(
+    f_r_s_iter_init_2(F16_REM_W - 1, F16_REM_W - 1 - 4 + 1) + f_r_c_iter_init_2(F16_REM_W - 1, F16_REM_W - 1 - 4 + 1),
+    f_r_s_iter_init_2(F16_REM_W - 1 - 4, F16_REM_W - 1 - 4 - 4 + 1)
+  )
   nr_f_r_7b_for_nxt_cycle_s0_qds_2_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  nr_f_r_7b_for_nxt_cycle_s0_qds_2_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), adder_8b_iter_init_2(7, 1), adder_7b_res_for_nxt_cycle_s0_qds_2)
-  adder_8b_iter_init_3 := Cat(f_r_s_iter_init_3(F16_REM_W - 1, F16_REM_W - 1 - 4 + 1) + f_r_c_iter_init_3(F16_REM_W - 1, F16_REM_W - 1 - 4 + 1), f_r_s_iter_init_3(F16_REM_W - 1 - 4, F16_REM_W - 1 - 4 - 4 + 1))
+  nr_f_r_7b_for_nxt_cycle_s0_qds_2_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    adder_8b_iter_init_2(7, 1),
+    adder_7b_res_for_nxt_cycle_s0_qds_2
+  )
+  adder_8b_iter_init_3 := Cat(
+    f_r_s_iter_init_3(F16_REM_W - 1, F16_REM_W - 1 - 4 + 1) + f_r_c_iter_init_3(F16_REM_W - 1, F16_REM_W - 1 - 4 + 1),
+    f_r_s_iter_init_3(F16_REM_W - 1 - 4, F16_REM_W - 1 - 4 - 4 + 1)
+  )
   nr_f_r_7b_for_nxt_cycle_s0_qds_3_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  nr_f_r_7b_for_nxt_cycle_s0_qds_3_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), adder_8b_iter_init_3(7, 1), adder_7b_res_for_nxt_cycle_s0_qds_3)
-  adder_9b_iter_init_0 := Cat(f_r_s_iter_init_0(F64_REM_W - 1 - 2, F64_REM_W - 1 - 2 - 2 + 1) + f_r_c_iter_init_0(F64_REM_W - 1 - 2, F64_REM_W - 1 - 2 - 2 + 1), f_r_s_iter_init_0(F64_REM_W - 1 - 2 - 2, F64_REM_W - 1 - 2 - 2 - 7 + 1))
+  nr_f_r_7b_for_nxt_cycle_s0_qds_3_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    adder_8b_iter_init_3(7, 1),
+    adder_7b_res_for_nxt_cycle_s0_qds_3
+  )
+  adder_9b_iter_init_0 := Cat(
+    f_r_s_iter_init_0(F64_REM_W - 1 - 2, F64_REM_W - 1 - 2 - 2 + 1) + f_r_c_iter_init_0(
+      F64_REM_W - 1 - 2,
+      F64_REM_W - 1 - 2 - 2 + 1
+    ),
+    f_r_s_iter_init_0(F64_REM_W - 1 - 2 - 2, F64_REM_W - 1 - 2 - 2 - 7 + 1)
+  )
   nr_f_r_9b_for_nxt_cycle_s1_qds_0_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  nr_f_r_9b_for_nxt_cycle_s1_qds_0_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), adder_9b_iter_init_0, adder_9b_res_for_nxt_cycle_s1_qds_0)
-  adder_9b_iter_init_1 := Cat(f_r_s_iter_init_1(F32_REM_W - 1 - 2, F32_REM_W - 1 - 2 - 2 + 1) + f_r_c_iter_init_1(F32_REM_W - 1 - 2, F32_REM_W - 1 - 2 - 2 + 1), f_r_s_iter_init_1(F32_REM_W - 1 - 2 - 2, F32_REM_W - 1 - 2 - 2 - 7 + 1))
+  nr_f_r_9b_for_nxt_cycle_s1_qds_0_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    adder_9b_iter_init_0,
+    adder_9b_res_for_nxt_cycle_s1_qds_0
+  )
+  adder_9b_iter_init_1 := Cat(
+    f_r_s_iter_init_1(F32_REM_W - 1 - 2, F32_REM_W - 1 - 2 - 2 + 1) + f_r_c_iter_init_1(
+      F32_REM_W - 1 - 2,
+      F32_REM_W - 1 - 2 - 2 + 1
+    ),
+    f_r_s_iter_init_1(F32_REM_W - 1 - 2 - 2, F32_REM_W - 1 - 2 - 2 - 7 + 1)
+  )
   nr_f_r_9b_for_nxt_cycle_s1_qds_1_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  nr_f_r_9b_for_nxt_cycle_s1_qds_1_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), adder_9b_iter_init_1, adder_9b_res_for_nxt_cycle_s1_qds_1)
-  adder_9b_iter_init_2 := Cat(f_r_s_iter_init_2(F16_REM_W - 1 - 2, F16_REM_W - 1 - 2 - 2 + 1) + f_r_c_iter_init_2(F16_REM_W - 1 - 2, F16_REM_W - 1 - 2 - 2 + 1), f_r_s_iter_init_2(F16_REM_W - 1 - 2 - 2, F16_REM_W - 1 - 2 - 2 - 7 + 1))
+  nr_f_r_9b_for_nxt_cycle_s1_qds_1_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    adder_9b_iter_init_1,
+    adder_9b_res_for_nxt_cycle_s1_qds_1
+  )
+  adder_9b_iter_init_2 := Cat(
+    f_r_s_iter_init_2(F16_REM_W - 1 - 2, F16_REM_W - 1 - 2 - 2 + 1) + f_r_c_iter_init_2(
+      F16_REM_W - 1 - 2,
+      F16_REM_W - 1 - 2 - 2 + 1
+    ),
+    f_r_s_iter_init_2(F16_REM_W - 1 - 2 - 2, F16_REM_W - 1 - 2 - 2 - 7 + 1)
+  )
   nr_f_r_9b_for_nxt_cycle_s1_qds_2_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  nr_f_r_9b_for_nxt_cycle_s1_qds_2_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), adder_9b_iter_init_2, adder_9b_res_for_nxt_cycle_s1_qds_2)
-  adder_9b_iter_init_3 := Cat(f_r_s_iter_init_3(F16_REM_W - 1 - 2, F16_REM_W - 1 - 2 - 2 + 1) + f_r_c_iter_init_3(F16_REM_W - 1 - 2, F16_REM_W - 1 - 2 - 2 + 1), f_r_s_iter_init_3(F16_REM_W - 1 - 2 - 2, F16_REM_W - 1 - 2 - 2 - 7 + 1))
+  nr_f_r_9b_for_nxt_cycle_s1_qds_2_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    adder_9b_iter_init_2,
+    adder_9b_res_for_nxt_cycle_s1_qds_2
+  )
+  adder_9b_iter_init_3 := Cat(
+    f_r_s_iter_init_3(F16_REM_W - 1 - 2, F16_REM_W - 1 - 2 - 2 + 1) + f_r_c_iter_init_3(
+      F16_REM_W - 1 - 2,
+      F16_REM_W - 1 - 2 - 2 + 1
+    ),
+    f_r_s_iter_init_3(F16_REM_W - 1 - 2 - 2, F16_REM_W - 1 - 2 - 2 - 7 + 1)
+  )
   nr_f_r_9b_for_nxt_cycle_s1_qds_3_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  nr_f_r_9b_for_nxt_cycle_s1_qds_3_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), adder_9b_iter_init_3, adder_9b_res_for_nxt_cycle_s1_qds_3)
+  nr_f_r_9b_for_nxt_cycle_s1_qds_3_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    adder_9b_iter_init_3,
+    adder_9b_res_for_nxt_cycle_s1_qds_3
+  )
   a0_iter_init_0 := rt_iter_init_0(F64_FULL_RT_W - 1)
   a2_iter_init_0 := rt_iter_init_0(F64_FULL_RT_W - 3)
   a3_iter_init_0 := rt_iter_init_0(F64_FULL_RT_W - 4)
@@ -991,44 +1287,111 @@ class fpsqrt_vector_r16(
   u_r4_qds_cg_iter_init_3.m_pos_2_o <> m_pos_2_iter_init_3
 
   m_neg_1_for_nxt_cycle_s0_qds_0_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_neg_1_for_nxt_cycle_s0_qds_0_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_neg_1_iter_init_0(4, 0), m_neg_1_to_nxt_cycle_0(4, 0))
+  m_neg_1_for_nxt_cycle_s0_qds_0_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_neg_1_iter_init_0(4, 0),
+    m_neg_1_to_nxt_cycle_0(4, 0)
+  )
   m_neg_1_for_nxt_cycle_s0_qds_1_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_neg_1_for_nxt_cycle_s0_qds_1_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_neg_1_iter_init_1(4, 0), m_neg_1_to_nxt_cycle_1(4, 0))
+  m_neg_1_for_nxt_cycle_s0_qds_1_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_neg_1_iter_init_1(4, 0),
+    m_neg_1_to_nxt_cycle_1(4, 0)
+  )
   m_neg_1_for_nxt_cycle_s0_qds_2_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_neg_1_for_nxt_cycle_s0_qds_2_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_neg_1_iter_init_2(4, 0), m_neg_1_to_nxt_cycle_2(4, 0))
+  m_neg_1_for_nxt_cycle_s0_qds_2_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_neg_1_iter_init_2(4, 0),
+    m_neg_1_to_nxt_cycle_2(4, 0)
+  )
   m_neg_1_for_nxt_cycle_s0_qds_3_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_neg_1_for_nxt_cycle_s0_qds_3_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_neg_1_iter_init_3(4, 0), m_neg_1_to_nxt_cycle_3(4, 0))
+  m_neg_1_for_nxt_cycle_s0_qds_3_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_neg_1_iter_init_3(4, 0),
+    m_neg_1_to_nxt_cycle_3(4, 0)
+  )
   m_neg_0_for_nxt_cycle_s0_qds_0_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_neg_0_for_nxt_cycle_s0_qds_0_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_neg_0_iter_init_0(3, 0), m_neg_0_to_nxt_cycle_0(3, 0))
+  m_neg_0_for_nxt_cycle_s0_qds_0_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_neg_0_iter_init_0(3, 0),
+    m_neg_0_to_nxt_cycle_0(3, 0)
+  )
   m_neg_0_for_nxt_cycle_s0_qds_1_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_neg_0_for_nxt_cycle_s0_qds_1_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_neg_0_iter_init_1(3, 0), m_neg_0_to_nxt_cycle_1(3, 0))
+  m_neg_0_for_nxt_cycle_s0_qds_1_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_neg_0_iter_init_1(3, 0),
+    m_neg_0_to_nxt_cycle_1(3, 0)
+  )
   m_neg_0_for_nxt_cycle_s0_qds_2_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_neg_0_for_nxt_cycle_s0_qds_2_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_neg_0_iter_init_2(3, 0), m_neg_0_to_nxt_cycle_2(3, 0))
+  m_neg_0_for_nxt_cycle_s0_qds_2_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_neg_0_iter_init_2(3, 0),
+    m_neg_0_to_nxt_cycle_2(3, 0)
+  )
   m_neg_0_for_nxt_cycle_s0_qds_3_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_neg_0_for_nxt_cycle_s0_qds_3_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_neg_0_iter_init_3(3, 0), m_neg_0_to_nxt_cycle_3(3, 0))
+  m_neg_0_for_nxt_cycle_s0_qds_3_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_neg_0_iter_init_3(3, 0),
+    m_neg_0_to_nxt_cycle_3(3, 0)
+  )
   m_pos_1_for_nxt_cycle_s0_qds_0_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_pos_1_for_nxt_cycle_s0_qds_0_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_pos_1_iter_init_0(2, 0), m_pos_1_to_nxt_cycle_0(2, 0))
+  m_pos_1_for_nxt_cycle_s0_qds_0_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_pos_1_iter_init_0(2, 0),
+    m_pos_1_to_nxt_cycle_0(2, 0)
+  )
   m_pos_1_for_nxt_cycle_s0_qds_1_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_pos_1_for_nxt_cycle_s0_qds_1_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_pos_1_iter_init_1(2, 0), m_pos_1_to_nxt_cycle_1(2, 0))
+  m_pos_1_for_nxt_cycle_s0_qds_1_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_pos_1_iter_init_1(2, 0),
+    m_pos_1_to_nxt_cycle_1(2, 0)
+  )
   m_pos_1_for_nxt_cycle_s0_qds_2_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_pos_1_for_nxt_cycle_s0_qds_2_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_pos_1_iter_init_2(2, 0), m_pos_1_to_nxt_cycle_2(2, 0))
+  m_pos_1_for_nxt_cycle_s0_qds_2_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_pos_1_iter_init_2(2, 0),
+    m_pos_1_to_nxt_cycle_2(2, 0)
+  )
   m_pos_1_for_nxt_cycle_s0_qds_3_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_pos_1_for_nxt_cycle_s0_qds_3_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_pos_1_iter_init_3(2, 0), m_pos_1_to_nxt_cycle_3(2, 0))
+  m_pos_1_for_nxt_cycle_s0_qds_3_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_pos_1_iter_init_3(2, 0),
+    m_pos_1_to_nxt_cycle_3(2, 0)
+  )
   m_pos_2_for_nxt_cycle_s0_qds_0_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_pos_2_for_nxt_cycle_s0_qds_0_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_pos_2_iter_init_0(4, 1), m_pos_2_to_nxt_cycle_0(4, 1))
+  m_pos_2_for_nxt_cycle_s0_qds_0_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_pos_2_iter_init_0(4, 1),
+    m_pos_2_to_nxt_cycle_0(4, 1)
+  )
   m_pos_2_for_nxt_cycle_s0_qds_1_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_pos_2_for_nxt_cycle_s0_qds_1_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_pos_2_iter_init_1(4, 1), m_pos_2_to_nxt_cycle_1(4, 1))
+  m_pos_2_for_nxt_cycle_s0_qds_1_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_pos_2_iter_init_1(4, 1),
+    m_pos_2_to_nxt_cycle_1(4, 1)
+  )
   m_pos_2_for_nxt_cycle_s0_qds_2_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_pos_2_for_nxt_cycle_s0_qds_2_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_pos_2_iter_init_2(4, 1), m_pos_2_to_nxt_cycle_2(4, 1))
+  m_pos_2_for_nxt_cycle_s0_qds_2_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_pos_2_iter_init_2(4, 1),
+    m_pos_2_to_nxt_cycle_2(4, 1)
+  )
   m_pos_2_for_nxt_cycle_s0_qds_3_en := start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_ITER_BIT)
-  m_pos_2_for_nxt_cycle_s0_qds_3_d := Mux((fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)), m_pos_2_iter_init_3(4, 1), m_pos_2_to_nxt_cycle_3(4, 1))
-  val u_fpsqrt_r16_block = Module(new fpsqrt_r16_block(
-    S0_CSA_SPECULATIVE = S0_CSA_SPECULATIVE,
-    S0_CSA_MERGED = S0_CSA_MERGED,
-    S1_QDS_SPECULATIVE = S1_QDS_SPECULATIVE,
-    S1_CSA_SPECULATIVE = S1_CSA_SPECULATIVE,
-    S1_CSA_MERGED = S1_CSA_MERGED,
-    RT_DIG_W = RT_DIG_W))
+  m_pos_2_for_nxt_cycle_s0_qds_3_d := Mux(
+    (fsm_q(FSM_PRE_0_BIT) | fsm_q(FSM_PRE_1_BIT)),
+    m_pos_2_iter_init_3(4, 1),
+    m_pos_2_to_nxt_cycle_3(4, 1)
+  )
+  val u_fpsqrt_r16_block = Module(
+    new fpsqrt_r16_block(
+      S0_CSA_SPECULATIVE = S0_CSA_SPECULATIVE,
+      S0_CSA_MERGED = S0_CSA_MERGED,
+      S1_QDS_SPECULATIVE = S1_QDS_SPECULATIVE,
+      S1_CSA_SPECULATIVE = S1_CSA_SPECULATIVE,
+      S1_CSA_MERGED = S1_CSA_MERGED,
+      RT_DIG_W = RT_DIG_W
+    )
+  )
   u_fpsqrt_r16_block.fp_fmt_i <> fp_fmt_q
   u_fpsqrt_r16_block.f_r_s_i <> f_r_s_q
   u_fpsqrt_r16_block.f_r_c_i <> f_r_c_q
@@ -1115,28 +1478,27 @@ class fpsqrt_vector_r16(
       (f_r_xor(67, 54) =/= f_r_or(67, 54)) |
         (!fp_fmt_q(0) & (f_r_xor(53, 42) =/= f_r_or(53, 42))) |
         (fp_fmt_q(2) & (f_r_xor(41, 14) =/= f_r_or(41, 14)))
-      )
+    )
     rem_is_not_zero_1 := nr_f_r_merged(33) | (
       (f_r_xor(31, 18) =/= f_r_or(31, 18)) |
         (fp_fmt_q(1) & (f_r_xor(17, 6) =/= f_r_or(17, 6)))
-      )
+    )
     rem_is_not_zero_2 := nr_f_r_merged(51) | (f_r_xor(49, 36) =/= f_r_or(49, 36))
     rem_is_not_zero_3 := nr_f_r_merged(15) | (f_r_xor(13, 0) =/= f_r_or(13, 0))
     select_rt_m1_0 := nr_f_r_merged(69) & ~res_is_sqrt_2_q
     select_rt_m1_1 := nr_f_r_merged(33) & ~res_is_sqrt_2_q
     select_rt_m1_2 := nr_f_r_merged(51)
     select_rt_m1_3 := nr_f_r_merged(15) & ~res_is_sqrt_2_q
-  }
-  else {
+  } else {
     rem_is_not_zero_0 := nr_f_r(66) | (
       (f_r_xor(61, 48) =/= f_r_or(61, 48)) |
         (!fp_fmt_q(0) & (f_r_xor(47, 36) =/= f_r_or(47, 36))) |
         (fp_fmt_q(2) & (f_r_xor(35, 8) =/= f_r_or(35, 8)))
-      )
+    )
     rem_is_not_zero_1 := nr_f_r(32) | (
       (f_r_xor(29, 16) =/= f_r_or(29, 16)) |
         (fp_fmt_q(1) & (f_r_xor(15, 4) =/= f_r_or(15, 4)))
-      )
+    )
     rem_is_not_zero_2 := nr_f_r(49) | (f_r_xor(45, 32) =/= f_r_or(45, 32))
     rem_is_not_zero_3 := nr_f_r(15) | (f_r_xor(13, 0) =/= f_r_or(13, 0))
     select_rt_m1_0 := nr_f_r(66) & ~res_is_sqrt_2_q
@@ -1148,34 +1510,44 @@ class fpsqrt_vector_r16(
   f64_res_is_sqrt_2 := res_is_sqrt_2_q & fp_fmt_q(2)
   f32_res_is_sqrt_2 := res_is_sqrt_2_q & fp_fmt_q(1)
   f16_res_is_sqrt_2 := res_is_sqrt_2_q & fp_fmt_q(0)
-  rt_for_inc := Mux(res_is_sqrt_2_q, (
-    (Fill(56, f64_res_is_sqrt_2) & Cat(SQRT_2_WITH_ROUND_BIT, rt_q(1, 0))) |
-      (Fill(56, f32_res_is_sqrt_2) & Cat(rt_q(55, 28), SQRT_2_WITH_ROUND_BIT(53, 53 - 25 + 1), rt_q(2, 0))) |
-      (Fill(56, f16_res_is_sqrt_2) & Cat(rt_q(55, 14), SQRT_2_WITH_ROUND_BIT(53, 53 - 12 + 1), rt_q(1, 0)))
-    ), rt_q)
+  rt_for_inc := Mux(
+    res_is_sqrt_2_q,
+    (
+      (Fill(56, f64_res_is_sqrt_2) & Cat(SQRT_2_WITH_ROUND_BIT, rt_q(1, 0))) |
+        (Fill(56, f32_res_is_sqrt_2) & Cat(rt_q(55, 28), SQRT_2_WITH_ROUND_BIT(53, 53 - 25 + 1), rt_q(2, 0))) |
+        (Fill(56, f16_res_is_sqrt_2) & Cat(rt_q(55, 14), SQRT_2_WITH_ROUND_BIT(53, 53 - 12 + 1), rt_q(1, 0)))
+    ),
+    rt_q
+  )
   rt_pre_inc := Cat(
-    rt_for_inc(54, 42), Mux(
-      fp_fmt_q(0), "b0".U(1.W), rt_for_inc(41)),
+    rt_for_inc(54, 42),
+    Mux(fp_fmt_q(0), "b0".U(1.W), rt_for_inc(41)),
     rt_for_inc(40, 28),
     Mux((fp_fmt_q(0) | fp_fmt_q(1)), "b0".U(1.W), rt_for_inc(27)),
-    rt_for_inc(26, 14), Mux(
-      fp_fmt_q(0), "b0".U(1.W), rt_for_inc(13)),
+    rt_for_inc(26, 14),
+    Mux(fp_fmt_q(0), "b0".U(1.W), rt_for_inc(13)),
     rt_for_inc(12, 3)
   )
   rt_inc_lane :=
     (Fill(52, fp_fmt_q(0)) & Cat(
-      "b0".U(9.W), "b1".U(1.W),
+      "b0".U(9.W),
+      "b1".U(1.W),
       "b0".U(4.W),
-      "b0".U(9.W), "b1".U(1.W),
+      "b0".U(9.W),
+      "b1".U(1.W),
       "b0".U(4.W),
-      "b0".U(9.W), "b1".U(1.W),
+      "b0".U(9.W),
+      "b1".U(1.W),
       "b0".U(4.W),
-      "b0".U(9.W), "b1".U(1.W)
+      "b0".U(9.W),
+      "b1".U(1.W)
     )) |
       (Fill(52, fp_fmt_q(1)) & Cat(
-        "b0".U(22.W), "b1".U(1.W),
+        "b0".U(22.W),
+        "b1".U(1.W),
         "b0".U(5.W),
-        "b0".U(22.W), "b1".U(1.W),
+        "b0".U(22.W),
+        "b1".U(1.W),
         "b0".U(1.W)
       )) |
       (Fill(52, fp_fmt_q(2)) & Cat("b0".U(51.W), "b1".U(1.W)))
@@ -1204,7 +1576,11 @@ class fpsqrt_vector_r16(
   guard_bit_rt_m1_3 := rt_m1_q(4)
   rt_m1_inc_res_0 := Mux((guard_bit_rt_0 === guard_bit_rt_m1_0), rt_inc_res, Cat("b0".U(1.W), rt_pre_inc))
   rt_m1_inc_res_1 := Mux((guard_bit_rt_1 === guard_bit_rt_m1_1), rt_inc_res(24, 1), Cat("b0".U(1.W), rt_pre_inc(23, 1)))
-  rt_m1_inc_res_2 := Mux((guard_bit_rt_2 === guard_bit_rt_m1_2), rt_inc_res(38, 28), Cat("b0".U(1.W), rt_pre_inc(37, 28)))
+  rt_m1_inc_res_2 := Mux(
+    (guard_bit_rt_2 === guard_bit_rt_m1_2),
+    rt_inc_res(38, 28),
+    Cat("b0".U(1.W), rt_pre_inc(37, 28))
+  )
   rt_m1_inc_res_3 := Mux((guard_bit_rt_3 === guard_bit_rt_m1_3), rt_inc_res(10, 0), Cat("b0".U(1.W), rt_pre_inc(9, 0)))
   round_bit_rt_0 :=
     (Fill(1, fp_fmt_q(0)) & rt_for_inc(44)) |
@@ -1277,61 +1653,70 @@ class fpsqrt_vector_r16(
   exp_rounded_2 := Mux(carry_after_round_2, (out_exp_2_q + 1.U(5.W)), out_exp_2_q)
   exp_rounded_3 := Mux(carry_after_round_3, (out_exp_3_q + 1.U(5.W)), out_exp_3_q)
   f16_exp_res_0 :=
-    Mux((res_is_nan_0_q | res_is_inf_0_q), Fill(5, "b1".U(1.W)), Mux(
-      res_is_exact_zero_0_q, "b0".U(5.W),
-      exp_rounded_0(4, 0)))
+    Mux(
+      (res_is_nan_0_q | res_is_inf_0_q),
+      Fill(5, "b1".U(1.W)),
+      Mux(res_is_exact_zero_0_q, "b0".U(5.W), exp_rounded_0(4, 0))
+    )
   f16_exp_res_1 :=
-    Mux((res_is_nan_1_q | res_is_inf_1_q), Fill(5, "b1".U(1.W)), Mux(
-      res_is_exact_zero_1_q, "b0".U(5.W),
-      exp_rounded_1(4, 0)))
+    Mux(
+      (res_is_nan_1_q | res_is_inf_1_q),
+      Fill(5, "b1".U(1.W)),
+      Mux(res_is_exact_zero_1_q, "b0".U(5.W), exp_rounded_1(4, 0))
+    )
   f16_exp_res_2 :=
-    Mux((res_is_nan_2_q | res_is_inf_2_q), Fill(5, "b1".U(1.W)), Mux(
-      res_is_exact_zero_2_q, "b0".U(5.W),
-      exp_rounded_2))
+    Mux((res_is_nan_2_q | res_is_inf_2_q), Fill(5, "b1".U(1.W)), Mux(res_is_exact_zero_2_q, "b0".U(5.W), exp_rounded_2))
   f16_exp_res_3 :=
-    Mux((res_is_nan_3_q | res_is_inf_3_q), Fill(5, "b1".U(1.W)), Mux(
-      res_is_exact_zero_3_q, "b0".U(5.W),
-      exp_rounded_3))
+    Mux((res_is_nan_3_q | res_is_inf_3_q), Fill(5, "b1".U(1.W)), Mux(res_is_exact_zero_3_q, "b0".U(5.W), exp_rounded_3))
   f32_exp_res_0 :=
-    Mux((res_is_nan_0_q | res_is_inf_0_q), Fill(8, "b1".U(1.W)), Mux(
-      res_is_exact_zero_0_q, "b0".U(8.W),
-      exp_rounded_0(7, 0)))
+    Mux(
+      (res_is_nan_0_q | res_is_inf_0_q),
+      Fill(8, "b1".U(1.W)),
+      Mux(res_is_exact_zero_0_q, "b0".U(8.W), exp_rounded_0(7, 0))
+    )
   f32_exp_res_1 :=
-    Mux((res_is_nan_1_q | res_is_inf_1_q), Fill(8, "b1".U(1.W)), Mux(
-      res_is_exact_zero_1_q, "b0".U(8.W),
-      exp_rounded_1))
+    Mux((res_is_nan_1_q | res_is_inf_1_q), Fill(8, "b1".U(1.W)), Mux(res_is_exact_zero_1_q, "b0".U(8.W), exp_rounded_1))
   f64_exp_res_0 :=
-    Mux((res_is_nan_0_q | res_is_inf_0_q), Fill(11, "b1".U(1.W)), Mux(
-      res_is_exact_zero_0_q, "b0".U(11.W),
-      exp_rounded_0))
+    Mux(
+      (res_is_nan_0_q | res_is_inf_0_q),
+      Fill(11, "b1".U(1.W)),
+      Mux(res_is_exact_zero_0_q, "b0".U(11.W), exp_rounded_0)
+    )
   f16_frac_res_0 := Mux(
-    res_is_nan_0_q, Cat("b1".U(1.W), "b0".U(9.W)),
-    Mux((res_is_inf_0_q | res_is_exact_zero_0_q), "b0".U(10.W),
-      frac_rounded_0(51, 51 - 10 + 1)))
+    res_is_nan_0_q,
+    Cat("b1".U(1.W), "b0".U(9.W)),
+    Mux((res_is_inf_0_q | res_is_exact_zero_0_q), "b0".U(10.W), frac_rounded_0(51, 51 - 10 + 1))
+  )
   f16_frac_res_1 := Mux(
-    res_is_nan_1_q, Cat("b1".U(1.W), "b0".U(9.W)),
-    Mux((res_is_inf_1_q | res_is_exact_zero_1_q), "b0".U(10.W),
-      frac_rounded_1(22, 22 - 10 + 1)))
+    res_is_nan_1_q,
+    Cat("b1".U(1.W), "b0".U(9.W)),
+    Mux((res_is_inf_1_q | res_is_exact_zero_1_q), "b0".U(10.W), frac_rounded_1(22, 22 - 10 + 1))
+  )
   f16_frac_res_2 := Mux(
-    res_is_nan_2_q, Cat("b1".U(1.W), "b0".U(9.W)),
-    Mux((res_is_inf_2_q | res_is_exact_zero_2_q), "b0".U(10.W),
-      frac_rounded_2(0 + 10 - 1, 0)))
+    res_is_nan_2_q,
+    Cat("b1".U(1.W), "b0".U(9.W)),
+    Mux((res_is_inf_2_q | res_is_exact_zero_2_q), "b0".U(10.W), frac_rounded_2(0 + 10 - 1, 0))
+  )
   f16_frac_res_3 := Mux(
-    res_is_nan_3_q, Cat("b1".U(1.W), "b0".U(9.W)),
-    Mux((res_is_inf_3_q | res_is_exact_zero_3_q), "b0".U(10.W),
-      frac_rounded_3(0 + 10 - 1, 0)))
+    res_is_nan_3_q,
+    Cat("b1".U(1.W), "b0".U(9.W)),
+    Mux((res_is_inf_3_q | res_is_exact_zero_3_q), "b0".U(10.W), frac_rounded_3(0 + 10 - 1, 0))
+  )
   f32_frac_res_0 := Mux(
-    res_is_nan_0_q, Cat("b1".U(1.W), "b0".U(22.W)),
-    Mux((res_is_inf_0_q | res_is_exact_zero_0_q), "b0".U(23.W),
-      frac_rounded_0(51, 51 - 23 + 1)))
+    res_is_nan_0_q,
+    Cat("b1".U(1.W), "b0".U(22.W)),
+    Mux((res_is_inf_0_q | res_is_exact_zero_0_q), "b0".U(23.W), frac_rounded_0(51, 51 - 23 + 1))
+  )
   f32_frac_res_1 := Mux(
-    res_is_nan_1_q, Cat("b1".U(1.W), "b0".U(22.W)),
-    Mux((res_is_inf_1_q | res_is_exact_zero_1_q), "b0".U(23.W),
-      frac_rounded_1(0 + 23 - 1, 0)))
+    res_is_nan_1_q,
+    Cat("b1".U(1.W), "b0".U(22.W)),
+    Mux((res_is_inf_1_q | res_is_exact_zero_1_q), "b0".U(23.W), frac_rounded_1(0 + 23 - 1, 0))
+  )
   f64_frac_res_0 := Mux(
-    res_is_nan_0_q, Cat("b1".U(1.W), "b0".U(51.W)),
-    Mux((res_is_inf_0_q | res_is_exact_zero_0_q), "b0".U(52.W),
-      frac_rounded_0(0 + 52 - 1, 0)))
+    res_is_nan_0_q,
+    Cat("b1".U(1.W), "b0".U(51.W)),
+    Mux((res_is_inf_0_q | res_is_exact_zero_0_q), "b0".U(52.W), frac_rounded_0(0 + 52 - 1, 0))
+  )
   f16_res_0 := Cat(out_sign_0_q, f16_exp_res_0, f16_frac_res_0)
   f16_res_1 := Cat(out_sign_1_q, f16_exp_res_1, f16_frac_res_1)
   f16_res_2 := Cat(out_sign_2_q, f16_exp_res_2, f16_frac_res_2)
@@ -1344,8 +1729,8 @@ class fpsqrt_vector_r16(
     (Fill(64, fp_fmt_q(2)) & f64_res_0)
   val fpsqrt_res_scalar = Mux1H(
     Seq(
-      fp_fmt_q(0) -> Cat(0.U(48.W),f16_res_3),
-      fp_fmt_q(1) -> Cat(0.U(32.W),f32_res_1),
+      fp_fmt_q(0) -> Cat(0.U(48.W), f16_res_3),
+      fp_fmt_q(1) -> Cat(0.U(32.W), f32_res_1),
       fp_fmt_q(2) -> f64_res_0
     )
   )
@@ -1374,54 +1759,64 @@ class fpsqrt_vector_r16(
   fflags_underflow_3 := 0.U
   fflags_inexact_3 := inexact_3 & ~res_is_nan_3_q & ~res_is_exact_zero_3_q
   f16_fflags_invalid_operation := fflags_invalid_operation_3 | (Mux(
-    v_mode_q, (
+    v_mode_q,
+    (
       fflags_invalid_operation_0 |
         fflags_invalid_operation_1 |
         fflags_invalid_operation_2
-      ), "b0".U(1.W)
+    ),
+    "b0".U(1.W)
   ))
   f32_fflags_invalid_operation := fflags_invalid_operation_1 | (Mux(v_mode_q, fflags_invalid_operation_0, "b0".U(1.W)))
   f64_fflags_invalid_operation := fflags_invalid_operation_0
   f16_fflags_div_by_zero := fflags_div_by_zero_3 | (Mux(
-    v_mode_q, (
+    v_mode_q,
+    (
       fflags_div_by_zero_0 |
         fflags_div_by_zero_1 |
         fflags_div_by_zero_2
-      ), "b0".U(1.W)
+    ),
+    "b0".U(1.W)
   ))
   f32_fflags_div_by_zero := fflags_div_by_zero_1 | (Mux(v_mode_q, fflags_div_by_zero_0, "b0".U(1.W)))
   f64_fflags_div_by_zero := fflags_div_by_zero_0
   f16_fflags_overflow := fflags_overflow_3 | (Mux(
-    v_mode_q, (
+    v_mode_q,
+    (
       fflags_overflow_0 |
         fflags_overflow_1 |
         fflags_overflow_2
-      ), "b0".U(1.W)
+    ),
+    "b0".U(1.W)
   ))
   f32_fflags_overflow := fflags_overflow_1 | (Mux(v_mode_q, fflags_overflow_0, "b0".U(1.W)))
   f64_fflags_overflow := fflags_overflow_0
   f16_fflags_underflow := fflags_underflow_3 | (Mux(
-    v_mode_q, (
+    v_mode_q,
+    (
       fflags_underflow_0 |
         fflags_underflow_1 |
         fflags_underflow_2
-      ), "b0".U(1.W)
+    ),
+    "b0".U(1.W)
   ))
   f32_fflags_underflow := fflags_underflow_1 | (Mux(v_mode_q, fflags_underflow_0, "b0".U(1.W)))
   f64_fflags_underflow := fflags_underflow_0
   f16_fflags_inexact := fflags_inexact_3 | (Mux(
-    v_mode_q, (
+    v_mode_q,
+    (
       fflags_inexact_0 |
         fflags_inexact_1 |
         fflags_inexact_2
-      ), "b0".U(1.W)
+    ),
+    "b0".U(1.W)
   ))
   f32_fflags_inexact := fflags_inexact_1 | (Mux(v_mode_q, fflags_inexact_0, "b0".U(1.W)))
   f64_fflags_inexact := fflags_inexact_0
-  val fflags_3 = Cat(fflags_invalid_operation_3,0.U,0.U,0.U,fflags_inexact_3)
-  val fflags_2 = Cat(fflags_invalid_operation_2,0.U,0.U,0.U,fflags_inexact_2)
-  val fflags_1 = Cat(fflags_invalid_operation_1,0.U,0.U,0.U,fflags_inexact_1)
-  val fflags_0 = Cat(fflags_invalid_operation_0,0.U,0.U,0.U,fflags_inexact_0)
+  val fflags_3 = Cat(fflags_invalid_operation_3, 0.U, 0.U, 0.U, fflags_inexact_3)
+  val fflags_2 = Cat(fflags_invalid_operation_2, 0.U, 0.U, 0.U, fflags_inexact_2)
+  val fflags_1 = Cat(fflags_invalid_operation_1, 0.U, 0.U, 0.U, fflags_inexact_1)
+  val fflags_0 = Cat(fflags_invalid_operation_0, 0.U, 0.U, 0.U, fflags_inexact_0)
   val f16_fflags = Cat(
     fflags_0,
     fflags_2,
@@ -1478,7 +1873,11 @@ class fpsqrt_vector_r16(
   when(flush_i) {
     fsm_d := FSM_PRE_0
   }.elsewhen(fsm_q === FSM_PRE_0) {
-    fsm_d := Mux(start_valid_i, (Mux(early_finish, FSM_POST_0, (Mux(need_2_cycles_init, FSM_PRE_1, FSM_ITER)))), FSM_PRE_0)
+    fsm_d := Mux(
+      start_valid_i,
+      (Mux(early_finish, FSM_POST_0, (Mux(need_2_cycles_init, FSM_PRE_1, FSM_ITER)))),
+      FSM_PRE_0
+    )
   }.elsewhen(fsm_q === FSM_PRE_1) {
     fsm_d := FSM_ITER
   }.elsewhen(fsm_q === FSM_ITER) {

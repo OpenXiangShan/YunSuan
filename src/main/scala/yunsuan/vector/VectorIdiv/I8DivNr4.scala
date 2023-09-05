@@ -1,10 +1,9 @@
-
 package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
 // 8bit div int module using non-restoring division
-class I8DivNr4(bit_width: Int=8) extends Module {
+class I8DivNr4(bit_width: Int = 8) extends Module {
   val io = IO(new Bundle() {
     val sign = Input(Bool())
     //val Int_format = Input(UInt(2.W))
@@ -56,17 +55,20 @@ class I8DivNr4(bit_width: Int=8) extends Module {
 
   val init_q = Wire(UInt(bit_width.W))
   val iter_q = Wire(UInt(bit_width.W))
-  val nxt_q  = Wire(UInt(bit_width.W))
-  val iter_q_reg = RegEnable(iter_q, stateReg(pre)|stateReg(iter))
-  val init_w = Wire(UInt((bit_width+1).W))
-  val iter_w = Wire(UInt((bit_width+1).W))
-  val nxt_w = Wire(UInt((bit_width+1).W))
-  val iter_w_reg = RegEnable(iter_w, stateReg(pre)|stateReg(iter)) // msb of rem
+  val nxt_q = Wire(UInt(bit_width.W))
+  val iter_q_reg = RegEnable(iter_q, stateReg(pre) | stateReg(iter))
+  val init_w = Wire(UInt((bit_width + 1).W))
+  val iter_w = Wire(UInt((bit_width + 1).W))
+  val nxt_w = Wire(UInt((bit_width + 1).W))
+  val iter_w_reg = RegEnable(iter_w, stateReg(pre) | stateReg(iter)) // msb of rem
   val init_w_low = Wire(UInt(bit_width.W))
   val iter_w_low = Wire(UInt(bit_width.W))
   val nxt_w_low = Wire(UInt(bit_width.W))
-  val iter_w_low_reg = RegEnable(iter_w_low,stateReg(pre)|stateReg(iter)) // lsbn of rem :divisor need to left shift n bit，which means we subtract d from msb of rem and each iteration we left shift msb and get the lsb from this reg
-
+  val iter_w_low_reg =
+    RegEnable(
+      iter_w_low,
+      stateReg(pre) | stateReg(iter)
+    ) // lsbn of rem :divisor need to left shift n bit，which means we subtract d from msb of rem and each iteration we left shift msb and get the lsb from this reg
 
   // pre
   val x = io.dividend
@@ -80,63 +82,56 @@ class I8DivNr4(bit_width: Int=8) extends Module {
   val abs_x = Wire(UInt(bit_width.W))
   val abs_d = Wire(UInt(bit_width.W))
 
-
-  neg_x_q := - Mux(stateReg(pre),x,iter_q_reg)
-  neg_d := - d
+  neg_x_q := -Mux(stateReg(pre), x, iter_q_reg)
+  neg_d := -d
   abs_x := Mux(x_sign, neg_x_q, x)
   abs_d := Mux(d_sign, neg_d, d)
-
 
   // q _sign
   val q_sign = Wire(Bool())
   val q_sign_reg = RegEnable(q_sign, stateReg(pre))
   q_sign := x_sign ^ d_sign
 
-
-
   // special case
   val x_small = abs_x < abs_d
   val x_zero = !(abs_x.orR)
   val d_zero = !(abs_d.orR)
-  val zero_d_reg = RegEnable(d_zero,stateReg(pre))
+  val zero_d_reg = RegEnable(d_zero, stateReg(pre))
   early_finish := x_small || x_zero || d_zero
-  val early_finish_q = RegEnable(early_finish,stateReg(pre))
+  val early_finish_q = RegEnable(early_finish, stateReg(pre))
 
   //  val d_one =
 
-  val early_q = Mux(x_small, 0.U,
-    Mux(d_zero, Fill(bit_width, 1.U)
-      ,0.U))
+  val early_q = Mux(x_small, 0.U, Mux(d_zero, Fill(bit_width, 1.U), 0.U))
   val early_rem = Mux(x_small | d_zero, abs_x, 0.U)
 
   // iter_num
   val init_iter_num = Wire(UInt(lzc_w.W))
   val iter_num = Wire(UInt(lzc_w.W))
-  val iter_num_reg = RegEnable(iter_num, stateReg(pre)|stateReg(iter))
+  val iter_num_reg = RegEnable(iter_num, stateReg(pre) | stateReg(iter))
   init_iter_num := bit_width.U >> 1
   iter_num := Mux(stateReg(pre), init_iter_num, iter_num_reg - 1.U)
   iter_finish := iter_num === 0.U
 
-
   // init q
-  init_q := Mux(early_finish,early_q,0.U)
+  init_q := Mux(early_finish, early_q, 0.U)
 
   // init_w
-  init_w := Mux(early_finish,(Cat(0.U(1.W),early_rem)), 0.U)
+  init_w := Mux(early_finish, (Cat(0.U(1.W), early_rem)), 0.U)
   init_w_low := abs_x
 
   // const generate for d
-  val d_ext = Cat(0.U(1.W),abs_d)
+  val d_ext = Cat(0.U(1.W), abs_d)
   val neg_d_ext = -d_ext
-  val const_d = VecInit(  // for {-3,-1,1,3} {j 0 j+1 0, j 0 j+1 1, j 1 j+1 0, j 1 j+1 1} j, j+1 is the sign of rem_j rem_j+1
-    neg_d_ext + (neg_d_ext << 1),
-    neg_d_ext,
-    d_ext,
-    d_ext + (d_ext << 1)
-  )
+  val const_d =
+    VecInit( // for {-3,-1,1,3} {j 0 j+1 0, j 0 j+1 1, j 1 j+1 0, j 1 j+1 1} j, j+1 is the sign of rem_j rem_j+1
+      neg_d_ext + (neg_d_ext << 1),
+      neg_d_ext,
+      d_ext,
+      d_ext + (d_ext << 1)
+    )
 
   val const_d_reg = RegEnable(const_d, stateReg(pre))
-
 
   // iter
   val iter_b = Module(new IterBlockI8Nr4(bit_width))
@@ -151,13 +146,12 @@ class I8DivNr4(bit_width: Int=8) extends Module {
   // reg
   iter_w := Mux(stateReg(pre), init_w, nxt_w)
   iter_w_low := Mux(stateReg(pre), init_w_low, nxt_w_low)
-  iter_q := Mux(stateReg(pre),init_q, nxt_q)
-
+  iter_q := Mux(stateReg(pre), init_q, nxt_q)
 
   // post
   val out_q_final = Wire(UInt(bit_width.W))
   out_q_final := Mux(q_sign_reg && !zero_d_reg, neg_x_q, iter_q_reg)
-  val out_q_final_reg = RegEnable(out_q_final,stateReg(post)) 
+  val out_q_final_reg = RegEnable(out_q_final, stateReg(post))
 
   val out_rem_is_zero = Wire(Bool())
   out_rem_is_zero := !(iter_w_reg.orR)
@@ -165,20 +159,19 @@ class I8DivNr4(bit_width: Int=8) extends Module {
   out_rem_is_pos := (!iter_w_reg(bit_width)).asBool
   val out_rem_adjust = Wire(UInt(bit_width.W))
   val out_rem_adjust_plus_D = Wire(UInt(bit_width.W))
-  when (x_sign_reg ) {
-    out_rem_adjust := -iter_w_reg(bit_width-1, 0)
-    out_rem_adjust_plus_D := -iter_w_reg(bit_width-1, 0) + const_d_reg(1)(bit_width-1,0)
-  } .otherwise {
-    out_rem_adjust := iter_w_reg(bit_width-1, 0)
-    out_rem_adjust_plus_D := iter_w_reg(bit_width-1, 0) + const_d_reg(2)(bit_width-1, 0)
+  when(x_sign_reg) {
+    out_rem_adjust := -iter_w_reg(bit_width - 1, 0)
+    out_rem_adjust_plus_D := -iter_w_reg(bit_width - 1, 0) + const_d_reg(1)(bit_width - 1, 0)
+  }.otherwise {
+    out_rem_adjust := iter_w_reg(bit_width - 1, 0)
+    out_rem_adjust_plus_D := iter_w_reg(bit_width - 1, 0) + const_d_reg(2)(bit_width - 1, 0)
   }
-
 
   val adjust = Wire(Bool())
   //  adjust := Mux(x_sign_reg , (!out_rem_is_zero) && out_rem_is_pos, !out_rem_is_pos) && !early_finish_q
   adjust := !out_rem_is_pos && !early_finish_q
   val out_rem_final = Wire(UInt(bit_width.W))
-  val out_rem_final_reg =RegEnable(out_rem_final, stateReg(post))
+  val out_rem_final_reg = RegEnable(out_rem_final, stateReg(post))
   out_rem_final := Mux(adjust, out_rem_adjust_plus_D, out_rem_adjust)
 
   io.div_out_q := out_q_final_reg
@@ -214,41 +207,41 @@ class I8DivNr4(bit_width: Int=8) extends Module {
     printf("data valid %b \n", io.div_out_valid)
     printf("data ready %b \n", io.div_out_ready)
   }
-  */
+   */
 }
 class IterBlockI8Nr4(bit_width: Int) extends Module {
   val io = IO(new Bundle() {
-    val d_cons = Vec(4,Input(UInt((bit_width+1).W)))
-    val pre_w = Input(UInt((bit_width+1).W))
+    val d_cons = Vec(4, Input(UInt((bit_width + 1).W)))
+    val pre_w = Input(UInt((bit_width + 1).W))
     val pre_w_low = Input(UInt(bit_width.W))
-    val nxt_w = Output(UInt((bit_width+1).W))
+    val nxt_w = Output(UInt((bit_width + 1).W))
     val nxt_w_low = Output(UInt(bit_width.W))
     val pre_q = Input(UInt(bit_width.W))
     val nxt_q = Output(UInt(bit_width.W))
   })
-  val pre_w_mul4 = Wire(UInt((bit_width+1).W))
+  val pre_w_mul4 = Wire(UInt((bit_width + 1).W))
   pre_w_mul4 := Cat(io.pre_w(bit_width - 2, 0), io.pre_w_low(bit_width - 1, bit_width - 2))
-  val pre_w_mul2 = Wire(UInt((bit_width+1).W))
-  pre_w_mul2 := Cat(io.pre_w(bit_width - 1,0),io.pre_w_low(bit_width - 1))
+  val pre_w_mul2 = Wire(UInt((bit_width + 1).W))
+  pre_w_mul2 := Cat(io.pre_w(bit_width - 1, 0), io.pre_w_low(bit_width - 1))
   io.nxt_w_low := io.pre_w_low << 2
 
-  val cons = Wire(UInt((bit_width+1).W))
-  val cons_index = Cat(0.U(1.W),io.pre_w(bit_width))+ 1.U
-  cons := io.d_cons(cons_index)  // sign 1 pos dcons(1) sign 0 neg dcons(0)
+  val cons = Wire(UInt((bit_width + 1).W))
+  val cons_index = Cat(0.U(1.W), io.pre_w(bit_width)) + 1.U
+  cons := io.d_cons(cons_index) // sign 1 pos dcons(1) sign 0 neg dcons(0)
 
-  val tmp = Wire(UInt((bit_width+1).W))
+  val tmp = Wire(UInt((bit_width + 1).W))
   tmp := cons + pre_w_mul2
 
   // speculative Parallel implementation, predicting all possible values before obtaining the previous q,
-  val spec_rem = Wire(Vec(4,UInt((bit_width + 1).W)))
-  spec_rem := VecInit (
-    Seq.tabulate(4) {i => io.d_cons(i) + pre_w_mul4}
+  val spec_rem = Wire(Vec(4, UInt((bit_width + 1).W)))
+  spec_rem := VecInit(
+    Seq.tabulate(4) { i => io.d_cons(i) + pre_w_mul4 }
   )
   // choose w from spec_rem
-  val spec_hb = UIntToOH(Cat(io.pre_w(bit_width),tmp(bit_width)),4)
-  io.nxt_w := Mux1H(spec_hb,spec_rem.toSeq)
-  io.nxt_q := Cat(io.pre_q(bit_width - 3, 0), ~tmp(bit_width),~io.nxt_w(bit_width))
- // printf("pre_w := %b\n",io.pre_w)
+  val spec_hb = UIntToOH(Cat(io.pre_w(bit_width), tmp(bit_width)), 4)
+  io.nxt_w := Mux1H(spec_hb, spec_rem.toSeq)
+  io.nxt_q := Cat(io.pre_q(bit_width - 3, 0), ~tmp(bit_width), ~io.nxt_w(bit_width))
+  // printf("pre_w := %b\n",io.pre_w)
   //printf("tmp := %b\n", tmp)
   //printf("cons := %b  cons_index := %b\n",cons,cons_index)
   //printf("spec_rem := %b %b %b %b \n", spec_rem(0),spec_rem(1),spec_rem(2),spec_rem(3))

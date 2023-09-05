@@ -1,11 +1,10 @@
-
 package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
 import yunsuan.vector.alu.VAluOpcode._
 
-class VAluOpcode extends Bundle{
+class VAluOpcode extends Bundle {
   val op = UInt(6.W)
   // Alu opcode:
   def isAddSub = op === vadd || op === vsub
@@ -35,20 +34,20 @@ class VAluOpcode extends Bundle{
   def isSignedShift = op === vsra || op === vssra
   def isShift = op === vsll || op === vsrl || op === vssrl || isSignedShift
   def isLeftShift = op === vsll
-  def isReduction = (op >= vredsum) && (op <= vredxor) 
+  def isReduction = (op >= vredsum) && (op <= vredxor)
   def isVredsum = op === vredsum
   def isVredmax = op === vredmax
-  def isVredmin = op === vredmin  
+  def isVredmin = op === vredmin
   def isVredand = op === vredand
-  def isVredor  = op === vredor
+  def isVredor = op === vredor
   def isVredxor = op === vredxor
-  def isVcpop   = op === vcpop 
-  def isVfirst  = op === vfirst
-  def isVmsbf   = op === vmsbf 
-  def isVmsif   = op === vmsif 
-  def isVmsof   = op === vmsof 
-  def isViota   = op === viota 
-  def isVid     = op === vid   
+  def isVcpop = op === vcpop
+  def isVfirst = op === vfirst
+  def isVmsbf = op === vmsbf
+  def isVmsif = op === vmsif
+  def isVmsof = op === vmsof
+  def isViota = op === viota
+  def isVid = op === vid
   def isIntFixp = op < vredsum || op === vmvsx
   def isVmvsx = op === vmvsx
   // IMac opcode:
@@ -74,8 +73,8 @@ class VIFuInfo extends Bundle {
 class VIFuInput extends Bundle {
   val opcode = new VAluOpcode
   val info = new VIFuInfo
-  val srcType = Vec(2, UInt(4.W))  // 0: vs2   1: vs1
-  val vdType  = UInt(4.W)
+  val srcType = Vec(2, UInt(4.W)) // 0: vs2   1: vs1
+  val vdType = UInt(4.W)
   val vs1 = UInt(128.W)
   val vs2 = UInt(128.W)
   val old_vd = UInt(128.W)
@@ -87,7 +86,7 @@ class VIFuOutput extends Bundle {
   val vxsat = Bool()
 }
 
-class SewOH extends Bundle {  // 0   1   2   3
+class SewOH extends Bundle { // 0   1   2   3
   val oneHot = Vec(4, Bool()) // 8, 16, 32, 64
   def is8 = oneHot(0)
   def is16 = oneHot(1)

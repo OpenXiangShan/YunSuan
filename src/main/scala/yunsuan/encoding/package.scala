@@ -12,7 +12,7 @@ package object encoding {
   object VdType extends VecDstType
 
   object VsType {
-    def width: Int = Vs1IntType.width max Vs2IntType.width
+    def width: Int = Vs1IntType.width.max(Vs2IntType.width)
 
     def apply(): UInt = UInt(width.W)
   }
@@ -20,9 +20,9 @@ package object encoding {
   class Vs2Vs1VdType extends Bundle {
     val vs2 = Vs2IntType()
     val vs1 = Vs1IntType()
-    val vd  = VdType()
+    val vd = VdType()
   }
-  
+
   object Vs2Vs1VdType {
     def apply(): Vs2Vs1VdType = new Vs2Vs1VdType()
   }

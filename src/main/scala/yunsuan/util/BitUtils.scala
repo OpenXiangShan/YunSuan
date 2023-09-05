@@ -1,18 +1,19 @@
-/***************************************************************************************
-* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
-* Copyright (c) 2020-2021 Peng Cheng Laboratory
-*
-* XiangShan is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2.
-* You may obtain a copy of Mulan PSL v2 at:
-*          http://license.coscl.org.cn/MulanPSL2
-*
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-*
-* See the Mulan PSL v2 for more details.
-***************************************************************************************/
+/** *************************************************************************************
+  * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+  * Copyright (c) 2020-2021 Peng Cheng Laboratory
+  *
+  * XiangShan is licensed under Mulan PSL v2.
+  * You can use this software according to the terms and conditions of the Mulan PSL v2.
+  * You may obtain a copy of Mulan PSL v2 at:
+  *          http://license.coscl.org.cn/MulanPSL2
+  *
+  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+  *
+  * See the Mulan PSL v2 for more details.
+  * *************************************************************************************
+  */
 
 package yunsuan.util
 
@@ -26,8 +27,7 @@ object RegNextWithEnable {
     val next = Wire(data.cloneType)
     if (hasInit) {
       next.valid := RegNext(data.valid, false.B)
-    }
-    else {
+    } else {
       next.valid := RegNext(data.valid)
     }
     next.bits := RegEnable(data.bits, data.valid)
@@ -39,8 +39,7 @@ class CircularShift(data: UInt) {
   private def helper(step: Int, isLeft: Boolean): UInt = {
     if (step == 0) {
       data
-    }
-    else {
+    } else {
       val splitIndex = if (isLeft) {
         data.getWidth - (step % data.getWidth)
       } else {
@@ -49,7 +48,7 @@ class CircularShift(data: UInt) {
       Cat(data(splitIndex - 1, 0), data(data.getWidth - 1, splitIndex))
     }
   }
-  def left(step: Int): UInt = helper(step, true)
+  def left(step:  Int): UInt = helper(step, true)
   def right(step: Int): UInt = helper(step, false)
 }
 
@@ -62,8 +61,8 @@ object WordShift {
 }
 
 object MaskExpand {
-  def apply(m: UInt, maskWidth: Int = 8): UInt = Cat(m.asBools.map(Fill(maskWidth, _)).reverse)
-  def apply(m: Seq[Bool], maskWidth: Int): Vec[UInt] = VecInit(m.map(Fill(maskWidth, _)))
+  def apply(m: UInt, maskWidth:      Int = 8): UInt = Cat(m.asBools.map(Fill(maskWidth, _)).reverse)
+  def apply(m: Seq[Bool], maskWidth: Int):     Vec[UInt] = VecInit(m.map(Fill(maskWidth, _)))
 }
 
 object MaskData {
@@ -77,15 +76,15 @@ object MaskData {
 object SignExt {
   def apply(a: UInt, len: Int): UInt = {
     val aLen = a.getWidth
-    val signBit = a(aLen-1)
-    if (aLen >= len) a(len-1,0) else Cat(Fill(len - aLen, signBit), a)
+    val signBit = a(aLen - 1)
+    if (aLen >= len) a(len - 1, 0) else Cat(Fill(len - aLen, signBit), a)
   }
 }
 
 object ZeroExt {
   def apply(a: UInt, len: Int): UInt = {
     val aLen = a.getWidth
-    if (aLen >= len) a(len-1,0) else Cat(0.U((len - aLen).W), a)
+    if (aLen >= len) a(len - 1, 0) else Cat(0.U((len - aLen).W), a)
   }
 }
 
@@ -95,8 +94,8 @@ object Or {
   def leftOR(x: UInt, width: Integer, cap: Integer = 999999): UInt = {
     val stop = min(width, cap)
     def helper(s: Int, x: UInt): UInt =
-      if (s >= stop) x else helper(s+s, x | (x << s)(width-1,0))
-    helper(1, x)(width-1, 0)
+      if (s >= stop) x else helper(s + s, x | (x << s)(width - 1, 0))
+    helper(1, x)(width - 1, 0)
   }
 
   // Fill 1s form high bits to low bits
@@ -104,17 +103,17 @@ object Or {
   def rightOR(x: UInt, width: Integer, cap: Integer = 999999): UInt = {
     val stop = min(width, cap)
     def helper(s: Int, x: UInt): UInt =
-      if (s >= stop) x else helper(s+s, x | (x >> s).asUInt)
-    helper(1, x)(width-1, 0)
+      if (s >= stop) x else helper(s + s, x | (x >> s).asUInt)
+    helper(1, x)(width - 1, 0)
   }
 }
 
 object OneHot {
-  def OH1ToOH(x: UInt): UInt = ((x << 1).asUInt | 1.U) & (~Cat(0.U(1.W), x)).asUInt
-  def OH1ToUInt(x: UInt): UInt = OHToUInt(OH1ToOH(x))
-  def UIntToOH1(x: UInt, width: Int): UInt = (~((-1).S(width.W).asUInt << x)(width-1, 0)).asUInt
-  def UIntToOH1(x: UInt): UInt = UIntToOH1(x, (1 << x.getWidth) - 1)
-  def checkOneHot(in: Bits): Unit = assert(PopCount(in) <= 1.U)
+  def OH1ToOH(x:      UInt):           UInt = ((x << 1).asUInt | 1.U) & (~Cat(0.U(1.W), x)).asUInt
+  def OH1ToUInt(x:    UInt): UInt = OHToUInt(OH1ToOH(x))
+  def UIntToOH1(x:    UInt, width: Int): UInt = (~((-1).S(width.W).asUInt << x)(width - 1, 0)).asUInt
+  def UIntToOH1(x:    UInt):           UInt = UIntToOH1(x, (1 << x.getWidth) - 1)
+  def checkOneHot(in: Bits):           Unit = assert(PopCount(in) <= 1.U)
   def checkOneHot(in: Iterable[Bool]): Unit = assert(PopCount(in) <= 1.U)
 }
 
@@ -164,7 +163,7 @@ object GenMask {
   // generate w/r mask
   def apply(high: Int, low: Int) = {
     require(high > low)
-    (VecInit(List.fill(high+1)(true.B)).asUInt >> low << low).asUInt()
+    (VecInit(List.fill(high + 1)(true.B)).asUInt >> low << low).asUInt()
   }
   def apply(pos: Int) = {
     (1.U << pos).asUInt()
@@ -176,29 +175,28 @@ object UIntToMask {
   def reverseUInt(input: UInt): UInt = {
     VecInit(input.asBools.reverse).asUInt
   }
-  def leftmask(ptr: UInt, length: Integer) = UIntToOH(ptr)(length - 1, 0) - 1.U
+  def leftmask(ptr:  UInt, length: Integer) = UIntToOH(ptr)(length - 1, 0) - 1.U
   def rightmask(ptr: UInt, length: Integer) = reverseUInt(reverseUInt(UIntToOH(ptr)(length - 1, 0)) - 1.U)
 }
 
 object GetEvenBits {
   def apply(input: UInt): UInt = {
-    VecInit((0 until input.getWidth/2).map(i => {input(2*i)})).asUInt
+    VecInit((0 until input.getWidth / 2).map(i => { input(2 * i) })).asUInt
   }
   def reverse(input: UInt): UInt = {
     VecInit((0 until input.getWidth * 2).map(i => {
-      if(i % 2 == 0) input(i/2) else false.B 
+      if (i % 2 == 0) input(i / 2) else false.B
     })).asUInt
   }
 }
 
-
 object GetOddBits {
   def apply(input: UInt): UInt = {
-    VecInit((0 until input.getWidth/2).map(i => {input(2*i+1)})).asUInt
+    VecInit((0 until input.getWidth / 2).map(i => { input(2 * i + 1) })).asUInt
   }
   def reverse(input: UInt): UInt = {
     VecInit((0 until input.getWidth * 2).map(i => {
-      if(i % 2 == 0) false.B else input(i/2) 
+      if (i % 2 == 0) false.B else input(i / 2)
     })).asUInt
   }
 }
@@ -208,9 +206,11 @@ object GetRemBits {
     (0 until div).map(rem => VecInit((0 until input.getWidth / div).map(i => input(div * i + rem))).asUInt)
   }
   def reverse(div: Int)(input: Seq[UInt]): Seq[UInt] = {
-    (0 until div).map(rem => VecInit((0 until input(rem).getWidth * div).map(i => {
-      if (i % div == rem) input(rem)(i / div) else 0.B
-    })).asUInt)
+    (0 until div).map(rem =>
+      VecInit((0 until input(rem).getWidth * div).map(i => {
+        if (i % div == rem) input(rem)(i / div) else 0.B
+      })).asUInt
+    )
   }
 }
 
@@ -219,7 +219,7 @@ object XORFold {
     require(resWidth > 0)
     val fold_range = (input.getWidth + resWidth - 1) / resWidth
     val value = ZeroExt(input, fold_range * resWidth)
-    ParallelXOR((0 until fold_range).map(i => value(i*resWidth+resWidth-1, i*resWidth)))
+    ParallelXOR((0 until fold_range).map(i => value(i * resWidth + resWidth - 1, i * resWidth)))
   }
 }
 
@@ -227,14 +227,11 @@ object OnesMoreThan {
   def apply(input: Seq[Bool], thres: Int): Bool = {
     if (thres == 0) {
       true.B
-    }
-    else if (input.length < thres) {
+    } else if (input.length < thres) {
       false.B
-    }
-    else if (thres == 1) {
+    } else if (thres == 1) {
       VecInit(input).asUInt.orR
-    }
-    else {
+    } else {
       val tail = input.drop(1)
       input(0) && OnesMoreThan(tail, thres - 1) || OnesMoreThan(tail, thres)
     }
@@ -259,8 +256,7 @@ class NaiveSelectOne(bits: Seq[Bool], max_sel: Int = -1) extends SelectOne {
       // it's impossible to select j-th one from i elements
       else if (i < j) {
         matrix(i)(j) := false.B
-      }
-      else {
+      } else {
         matrix(i)(j) := bits(i - 1) && matrix(i - 1)(j - 1) || !bits(i - 1) && matrix(i - 1)(j)
       }
     }
@@ -271,7 +267,7 @@ class NaiveSelectOne(bits: Seq[Bool], max_sel: Int = -1) extends SelectOne {
     require(n <= n_sel, s"$n should not be larger than $n_sel")
     // bits(i) is true.B and bits(i - 1, 0) has n - 1
     val selValid = OnesMoreThan(bits, n)
-    val sel = VecInit(bits.zip(matrix).map{ case (b, m) => b && m(n - 1) })
+    val sel = VecInit(bits.zip(matrix).map { case (b, m) => b && m(n - 1) })
     (selValid, sel)
   }
 }
@@ -290,8 +286,7 @@ class CircSelectOne(bits: Seq[Bool], max_sel: Int = -1) extends SelectOne {
     val sel_index = (n + 1) / 2
     if (n % 2 == 1) {
       (selValid, sel_forward.getNthOH(sel_index)._2)
-    }
-    else {
+    } else {
       (selValid, VecInit(sel_backward.getNthOH(sel_index)._2.reverse))
     }
   }
@@ -314,8 +309,7 @@ class OddEvenSelectOne(bits: Seq[Bool], max_sel: Int = -1) extends SelectOne {
       val selected = sel_even.getNthOH(sel_index)
       val sel = VecInit((0 until n_bits).map(i => if (i % 2 == 0) selected._2(i / 2) else false.B))
       (selected._1, sel)
-    }
-    else {
+    } else {
       val selected = sel_odd.getNthOH(sel_index)
       val sel = VecInit((0 until n_bits).map(i => if (i % 2 == 1) selected._2(i / 2) else false.B))
       (selected._1, sel)
@@ -339,22 +333,22 @@ class CenterSelectOne(bits: Seq[Bool], max_sel: Int = -1) extends SelectOne {
 object SelectOne {
   def apply(policy: String, bits: Seq[Bool], max_sel: Int = -1): SelectOne = {
     policy.toLowerCase match {
-      case "naive" => new NaiveSelectOne(bits, max_sel)
-      case "circ" => new CircSelectOne(bits, max_sel)
+      case "naive"   => new NaiveSelectOne(bits, max_sel)
+      case "circ"    => new CircSelectOne(bits, max_sel)
       case "oddeven" => new OddEvenSelectOne(bits, max_sel)
-      case "center" => new CenterSelectOne(bits, max_sel)
-      case _ => throw new IllegalArgumentException(s"unknown select policy")
+      case "center"  => new CenterSelectOne(bits, max_sel)
+      case _         => throw new IllegalArgumentException(s"unknown select policy")
     }
   }
 }
 
 /**
- * SelectFirstN: select n index from bit mask, low bit has high priority.
- */
+  * SelectFirstN: select n index from bit mask, low bit has high priority.
+  */
 object SelectFirstN {
   def apply(in: UInt, n: Int, valid: UInt) = {
     val sels = Wire(Vec(n, UInt(in.getWidth.W)))
-    var mask = in 
+    var mask = in
 
     for (i <- 0 until n) {
       sels(i) := PriorityEncoderOH(mask) & Fill(in.getWidth, valid(i))
