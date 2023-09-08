@@ -11,6 +11,7 @@ class RoundingUnit(val width: Int) extends Module {
     val stickyIn = Input(Bool())
     val signIn = Input(Bool())
     val rm = Input(UInt(3.W))
+
     val out = Output(UInt(width.W))
     val inexact = Output(Bool())
     val cout = Output(Bool())
