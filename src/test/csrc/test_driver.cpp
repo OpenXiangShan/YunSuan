@@ -325,6 +325,19 @@ void TestDriver::gen_random_idiv_input() {
 
 void TestDriver::get_random_input() {
   if (keepinput) { return; }
+ 
+  // input.src1[0] = 0x4000400040003fff;
+  // input.src1[1] = 0x40004001;
+
+  // input.src1[0] = 0xc0004000c0003fff;
+  // input.src1[1] = 0xc0004001;
+
+  // input.src1[0] = 0x4000200140002000;
+  // input.src1[1] = 0x40002fff;
+
+  // input.src1[0] = 0x4000100140001000;
+  // input.src1[1] = 0x40001fff;
+  
   input.src1[0] = rand64();
   input.src1[1] = rand64();
   input.src2[0] = rand64();
