@@ -12,9 +12,9 @@ class RoundingUnit(val width: Int) extends Module {
     val signIn = Input(Bool())
     val rm = Input(UInt(3.W))
 
-    val out = Output(UInt(width.W))
+    val out = Output(UInt(width.W)) //todo: drop
     val inexact = Output(Bool())
-    val cout = Output(Bool())
+    val cout = Output(Bool()) //todo: drop
     val r_up = Output(Bool())
   })
 
@@ -39,49 +39,6 @@ class RoundingUnit(val width: Int) extends Module {
   io.cout := r_up && io.in.andR()
   io.r_up := r_up
 }
-
-//class RoundingUnitNew(val width: Int) extends Module {
-//  val io = IO(new Bundle() {
-//    val in = Input(UInt(width.W))
-//    val roundIn = Input(Bool())
-//    val stickyIn = Input(Bool())
-//    val signIn = Input(Bool())
-//    val rm = Input(UInt(3.W))
-//
-//    val out = Output(UInt(width.W))
-//    val inexact = Output(Bool())
-//    val cout = Output(Bool())
-//    val r_up = Output(Bool())
-//  })
-//
-//  val (g, r, s) = (io.in(0).asBool(), io.roundIn, io.stickyIn)
-//  val inexact = r | s
-//  val r_up = MuxLookup( //舍入后绝对值增加
-//    io.rm,
-//    false.B,
-//    Seq(
-//      RNE -> ((r && s) || (r && !s && g)),
-//      RTZ -> false.B,
-//      RUP -> (inexact & !io.signIn),
-//      RDN -> (inexact & io.signIn),
-//      RMM -> r,
-//      RTO -> ((r && s) || (r && !s && !g))
-//    )
-//  )
-//
-//  io.out := io.in
-//  io.inexact := inexact
-//  io.cout := r_up && io.in.andR()
-//  io.r_up := r_up
-//
-////  val out_r_up = io.in + 1.U  //尝试把这玩意儿移出去
-////  io.out := Mux(r_up, out_r_up, io.in) //如果有进位，这里变全零 float格式的隐含1还在，并且在外面exp + 1, todo: 如果是整数呢??
-////  io.inexact := inexact
-////  // r_up && io.in === 111...1
-////  io.cout := r_up && io.in.andR()
-////  io.r_up := r_up
-//}
-
 
 object RoundingUnit {
   def apply(in: UInt, rm: UInt, sign: Bool, width: Int): RoundingUnit = {

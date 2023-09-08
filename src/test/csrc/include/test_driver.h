@@ -12,8 +12,8 @@
 
 // 改这里来适应fu
 #define pickFuType VFloatCvt
-#define pickFuOptype VFNCVT_FXW 
-#define pickSEW 1
+#define pickFuOptype VFNCVT_FFW 
+#define pickSEW  1   
 #define FRS1 false
 #define FRS2 false
 
