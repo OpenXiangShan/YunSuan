@@ -142,7 +142,9 @@ ElementOutput VGMFloatCvt::calculation_e32(ElementInput input) {
       output.result = f32_to_f16(i2f32((uint32_t)input.src1)).v;  break;
     case VFNCVT_ROD_FFW:// f32 ->f16 rounding towards odd ？？？
       softfloat_roundingMode = softfloat_round_odd;
-      output.result = f32_to_f16(i2f32((uint32_t)input.src1)).v;  
+      output.result = f32_to_f16(i2f32((uint32_t)input.src1)).v;
+      printf("\nodd==========input       %lx\n", (uint32_t)input.src1);  
+      printf("\nodd=========f32_to_f16   %lx\n", output.result);   
       break; 
     case VFNCVT_RTZ_XUFW: //f32 -> ui16 trun
       output.result = f32_to_ui16(i2f32((uint32_t)input.src1), softfloat_round_minMag, true);  break; 

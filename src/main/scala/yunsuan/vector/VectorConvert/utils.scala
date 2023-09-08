@@ -26,4 +26,14 @@ package object utils{
     val frac = x.tail(1 + floatFormat.expWidth)
     sign ## 0.U((f64.expWidth - floatFormat.expWidth).W) ## exp ## frac ## 0.U((f64.fracWidth - floatFormat.fracWidth).W) ## false.B //tail is false ->65 bit
   }
+
+  // extend to Int
+  def extend(x: Bits, len: Int, signed: Boolean = true): Bits = {
+    if (x.getWidth >= len)
+      x
+    else {
+      val fillBit = if (signed) x.head(1) else 0.B
+      Fill(len - x.getWidth, fillBit) ## x.asUInt
+    }
+  }
 }

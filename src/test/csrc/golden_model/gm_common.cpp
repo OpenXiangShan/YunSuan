@@ -27,7 +27,7 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
       // printf("\n==========result_shift_len %d\n", result_shift_len);
       for(int i = 0; i < number; i++) {
         ElementInput element = select_element(input, i);
-        // printf("\n==========element %lx\n", element.src1);
+        printf("\n==========element %lx\n", element.src1);
         switch (sew) {
           case 0: output_part[i] = calculation_e8(element); mask = 0xFFFF; break;
           case 1: output_part[i] = calculation_e16(element); mask = 0xFFFFFFFF; break;
@@ -45,6 +45,7 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
       half_number = half_number >> 1;
       for(int i = 0; i < number/2; i++) {
         ElementInput element = select_element(input, i);
+        // printf("\n==========element %lx\n", element.src1);
         switch (sew) {
           case 0: output_part[i] = calculation_e16(element); mask = 0xFF; break;
           case 1: output_part[i] = calculation_e32(element); mask = 0xFFFF; break;
@@ -216,7 +217,7 @@ ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
         element.src1 = input.is_frs2 ? (uint64_t)input64->src1[0] : (uint64_t)input16->src1[idx];
         element.src2 = input.is_frs1 ? (uint64_t)input64->src2[0] : (uint64_t)input16->src2[idx];
         element.src3 = (uint64_t)input16->src3[idx];
-        printf("\n==========select element.src1 %lx\n", element.src1);
+        // printf("\n==========select element.src1 %lx\n", element.src1);
         break;
       case 2:
         element.src1 = input.is_frs2 ? (uint64_t)input64->src1[0] : (uint64_t)input32->src1[idx];
