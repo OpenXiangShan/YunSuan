@@ -11,9 +11,14 @@
 #include "iotype.h"
 
 // 改这里来适应fu
+#define pickFU  true
+#define pickFUop true
+#define pickSEW  true
+
 #define pickFuType VFloatCvt
-#define pickFuOptype VFNCVT_FFW 
-#define pickSEW  1   
+#define pickFuOptype VFCVT_XUFV   
+#define pickSEWvalue  3
+
 #define FRS1 false
 #define FRS2 false
 

@@ -27,8 +27,8 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 }
 // fix set_test_type to select fuType
 void TestDriver::set_test_type() {
-  test_type.pick_fuType = true;
-  test_type.pick_fuOpType = true;
+  test_type.pick_fuType = pickFU;
+  test_type.pick_fuOpType = pickFUop;
   test_type.fuType = pickFuType;
   test_type.fuOpType = pickFuOptype;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
@@ -82,8 +82,10 @@ uint8_t TestDriver::gen_random_optype() {
       break;
     }
     case VFloatCvt:{
-      uint8_t vid_all_optype[VFCVT_NUM] = VFCVT_ALL_OPTYPES;
-      return vid_all_optype[rand() % VFCVT_NUM];
+      // uint8_t vid_all_optype[VFCVT_NUM] = VFCVT_ALL_OPTYPES;
+      // return vid_all_optype[rand() % VFCVT_NUM];
+      uint8_t vid_all_optype[2] = {VFRSQRT7, VFREC7};
+      return vid_all_optype[rand() % 2];
       break;
     }
     default:
@@ -361,7 +363,9 @@ void TestDriver::get_random_input() {
   gen_random_uopidx();
   gen_input_vperm();
 
-  input.sew = pickSEW;
+  if(pickSEW) input.sew = pickSEWvalue; 
+  else input.sew =gen_random_sew();
+
   input.is_frs1 = FRS1;
   input.is_frs2 = FRS2;
   input.widen = 0;
