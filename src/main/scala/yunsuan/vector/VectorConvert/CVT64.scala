@@ -2,6 +2,7 @@ package yunsuan.vector.VectorConvert
 
 import chisel3._
 import chisel3.util._
+import sun.jvm.hotspot.debugger.cdbg.IntType
 import yunsuan.vector.VectorConvert.util._
 import yunsuan.vector.VectorConvert.utils._
 import yunsuan.vector.VectorConvert.RoundingModle._
@@ -55,6 +56,7 @@ class CVT64(width: Int = 64) extends CVT(width){
   //parameter
   val fpMap = Seq(f16, f32, f64)
   val biasDeltaMap = Seq(f32.bias - f16.bias, f64.bias - f32.bias)
+  val intParamMap = (0 to 3).map(i => (1<<i) * 8)
 
   /** src common
    * init
@@ -161,7 +163,7 @@ class CVT64(width: Int = 64) extends CVT(width){
    */
   val rmin =
     rm === RTZ || (signSrc && rm === RUP) || (!signSrc && rm === RDN)
-  val fracValueSrc = !isSubnormalSrc ## fracSrc
+  val fracValueSrc = expNotZeroSrc ## fracSrc
 
   //    val resultOverflow = Mux(rmin, //todo：要不要拆这个, 看到时候能不能和后面统一起来
   //      f64.maxExp.U(f64.expWidth.W) ## ~0.U(f64.fracWidth.W), // great FN
@@ -206,7 +208,7 @@ class CVT64(width: Int = 64) extends CVT(width){
   // mux
 
 
-  when(!inIsFp && outIsFp){//1
+  when(!inIsFp){//1
     /** any Int-> any fp
      */
     // todo: circuit need to reuse, done. Maxbias is 1023, MaxfirstOne is 64(Int), Maxexp is 2048, so the 13bits for adder is enough.
@@ -548,11 +550,12 @@ class CVT64(width: Int = 64) extends CVT(width){
 
     // 8bit: => u64, i64, u32, i32, u16, i16, u8, i8
     val hasSignInt1HOut = int1HOut.asBools.map(oh => Seq(oh && !hasSignInt, oh && hasSignInt)).flatten
-    val isOnesRounderInputMap =
-      Seq(64, 63, 32, 31, 16, 15, 8, 7).reverse.map(intType => rounderInput.tail(64 - intType).andR)
-
 //    val isOnesRounderInputMap =
-//      Seq(64, 63).map(fp => fracSrc.tail(64 - fp).andR)
+//      Seq(64, 63, 32, 31, 16, 15, 8, 7).reverse.map(intType => rounderInput.tail(64 - intType).andR)
+
+    val isOnesRounderInputMap =
+      intParamMap.map(intType =>Seq(intType, intType-1)).flatten.map(intType => rounderInput.tail(64 - intType).andR)
+
 
     val rounder = Module(new RoundingUnit(64))
     rounder.io.in := rounderInput
@@ -566,45 +569,86 @@ class CVT64(width: Int = 64) extends CVT(width){
     val upRounded = rounder.io.r_up
 
     // out of roundingUint
-    val resultRounded = Mux(upRounded, rounderInput + 1.U, rounderInput) //todo：加法重用
+    val resultRounded = Mux(upRounded, rounderInput + 1.U, rounderInput) //todo：reuse adder 原码
     val cout = upRounded && Mux1H(hasSignInt1HOut, isOnesRounderInputMap)
-    val expRounded = Mux(cout, expValue + 1.S, expValue)
+    val expRounded = Mux(cout, expValue + 1.S, expValue) //todo：reuse adder
+    val isZeroRounded = !resultRounded.orR
+    
+    val normalResult = Mux(signSrc && resultRounded.orR, (~resultRounded).asUInt + 1.U, resultRounded) //排除0 todo：reuse adder 补码
 
-    when(!hasSignInt) { //64u
-      //    val normalResult = Mux(signSrc, (~resultRounded).asUInt + 1.U, resultRounded) // todo: fix
-      val normalResult = resultRounded // todo: fix
-      nv := expRounded >= 64.S || signSrc //todo: fix
-      dz := false.B //
-      of := false.B
-      uf := false.B
-      nx := !nv && nxRounded && !signSrc
+    val ofExp = expRounded >= Mux1H(hasSignInt1HOut,
+      intParamMap.map(intType => Seq(intType, intType-1)).flatten.map(intType => intType.S)) //todo：reuse adder, drop ">="
 
-      val result1H = Cat(
-        !isNaNSrc && !nv,
-        !signSrc && (isInfSrc || (expRounded >= 64.S)) || isNaNSrc,
-        signSrc && !isNaNSrc
-      )
+    val excludeFrac = Mux1H(int1HOut,
+      intParamMap.map(intType => resultRounded(intType - 1) && !resultRounded(intType - 2, 0).orR))
 
-      val resultMap = VecInit((0 to 2).map {
+    val excludeExp =expRounded === Mux1H(int1HOut,
+      intParamMap.map(intType => (intType-1).S))
+
+    val toUnv = (ofExp || signSrc) && !isZeroRounded
+    val toUnx = !toUnv && nxRounded
+
+    val toInv = ofExp && !(signSrc && excludeExp && excludeFrac) //nv has included inf & nan, 排除负的最大指数
+    val toInx = !toInv && nxRounded
+
+    nv := Mux(hasSignInt, toInv, toUnv)
+    dz := false.B
+    of := false.B
+    uf := false.B
+    nx := Mux(hasSignInt, toInx, toUnx)
+
+    val result1H = Cat(
+      !hasSignInt && !isNaNSrc && !toUnv,
+      !hasSignInt && (!signSrc && (isInfSrc || ofExp) || isNaNSrc),
+      !hasSignInt && signSrc && !isNaNSrc,
+      hasSignInt && toInv,
+      hasSignInt && !toInv
+    )
+
+    def toIntResulutMapGen(intType: Int): Seq[UInt]={
+      VecInit((0 to 4).map {
         case 0 => normalResult
-        case 1 => ~0.U(64.W)
-        case 2 => 0.U(64.W)
+        case 1 => (~0.U(intType.W)).asUInt
+        case 2 => 0.U(intType.W)
+        case 3 => signNonNan ## Fill(intType-1, !signNonNan)
+        case 4 => normalResult
       })
-
-      result := Mux1H(result1H.asBools.reverse, resultMap)
-    }.otherwise{ // 64i
-      val normalResult = Mux(signSrc, (~resultRounded).asUInt + 1.U, resultRounded) // todo: fix
-      nv := (!signSrc && expRounded >= 63.S) || (signSrc && expRounded >= 63.S && !cout) //nv has included inf & nan
-      dz := false.B
-      of := false.B
-      uf := false.B
-      nx := !nv && nxRounded
-
-      result := Mux(nv,
-        signNonNan ## Fill(63, !signNonNan),
-        normalResult
-      )
     }
+
+    val intResultMap: Seq[UInt] = intParamMap.map(intType => Mux1H(result1H.asBools.reverse, toIntResulutMapGen(intType)))
+    result := Mux1H(int1HOut, intResultMap)
+
+//    dz := false.B
+//    of := false.B
+//    uf := false.B
+//
+//    when(!hasSignInt) { //64u
+//      nv := ofExp || signSrc
+//      nx := !nv && nxRounded && !signSrc
+//
+//      val result1H = Cat(
+//        !isNaNSrc && !nv,
+//        !signSrc && (isInfSrc || ofExp) || isNaNSrc,
+//        signSrc && !isNaNSrc
+//      )
+//
+//      val resultMap = VecInit((0 to 2).map {
+//        case 0 => normalResult
+//        case 1 => ~0.U(64.W)
+//        case 2 => 0.U(64.W)
+//      })
+//
+//      result := Mux1H(result1H.asBools.reverse, resultMap)
+//    }.otherwise{ // 64i
+//      nv := (!signSrc && ofExp) || (signSrc && ofExp && !cout) //nv has included inf & nan
+//      nx := !nv && nxRounded
+//
+//      result := Mux(nv,
+//        signNonNan ## Fill(63, !signNonNan),
+//        normalResult
+//      )
+//    }
+
   }.otherwise{
 
     nv := false.B
