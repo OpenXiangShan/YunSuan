@@ -11,16 +11,17 @@
 #include "iotype.h"
 
 // 改这里来适应fu
-#define pickFU  true
+#define pickFU   true
 #define pickFUop true
 #define pickSEW  true
 
-#define pickFuType VFloatCvt
-#define pickFuOptype VFCVT_XUFV   
-#define pickSEWvalue  3
+#define pickFuType     VFloatCvt
+#define pickFuOptype   VFCVT_XUFV    
+#define pickSEWvalue   1  
 
 #define FRS1 false
 #define FRS2 false
+
 
 enum {
   // STATE_GOODTRAP = 0;

@@ -101,7 +101,8 @@ uint8_t TestDriver::gen_random_sew() {
   {
     case VIntegerALU: return rand()%4; break;
     case VPermutation: return rand()%4; break;
-    default: return (rand()%3)+1; break;
+    // default: return (rand()%3)+1; break;
+    default: return rand()%4; break;
   }
 }
 
