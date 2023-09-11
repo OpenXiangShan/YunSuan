@@ -2,12 +2,16 @@ package yunsuan.vector.VectorConvert
 
 import chisel3._
 import chisel3.util._
-import sun.jvm.hotspot.debugger.cdbg.IntType
 import yunsuan.vector.VectorConvert.util._
 import yunsuan.vector.VectorConvert.utils._
 import yunsuan.vector.VectorConvert.RoundingModle._
 
 class CVT64(width: Int = 64) extends CVT(width){
+
+  //parameter
+  val fpParamMap = Seq(f16, f32, f64)
+  val biasDeltaMap = Seq(f32.bias - f16.bias, f64.bias - f32.bias)
+  val intParamMap = (0 to 3).map(i => (1 << i) * 8)
 
   // input
   val src = io.src
@@ -20,8 +24,18 @@ class CVT64(width: Int = 64) extends CVT(width){
   dontTouch(input1H)
   dontTouch(output1H)
 
-  val widen = opType(4,3) // 0->single 1->widen 2->norrow => width of result
+  // output
+  val nv = Wire(Bool())
+  val dz = Wire(Bool())
+  val of = Wire(Bool())
+  val uf = Wire(Bool())
+  val nx = Wire(Bool())
+  val fflags = Wire(UInt(5.W))
+  val result = Wire(UInt(64.W))
 
+
+  // control
+  val widen = opType(4,3) // 0->single 1->widen 2->norrow => width of result
   val isSingle = !opType(4) && !opType(3)
   val isWiden = !opType(4) && opType(3)
   val isNorrow = opType(4) && !opType(3)
@@ -33,10 +47,6 @@ class CVT64(width: Int = 64) extends CVT(width){
   dontTouch(outIsFp)
 
   val hasSignInt = opType(0).asBool
-
-  // output
-  val fflags = Wire(UInt(5.W))
-  val result = Wire(UInt(64.W))
 
   val int1HSrc = VecInit((0 to 3).map(i => input1H(2*i))).asUInt
   val float1HSrc = VecInit((1 to 3).map(i => input1H(2*i+1))).asUInt //exclude f8
@@ -53,17 +63,12 @@ class CVT64(width: Int = 64) extends CVT(width){
     Mux1H(int1HSrc, intMap)
   )
 
-  //parameter
-  val fpMap = Seq(f16, f32, f64)
-  val biasDeltaMap = Seq(f32.bias - f16.bias, f64.bias - f32.bias)
-  val intParamMap = (0 to 3).map(i => (1<<i) * 8)
 
+  // data
   /** src common
    * init
    */
   val signSrc = input.head(1).asBool
-  //  commom
-  //  val firstOneSrc = Mux(inIsFp, Mux(expIsZeroSrc, 1.U,expSrc) - biasSrc, leftFirstOne(absIntSrc))
 
   /** src is int
    * init
@@ -72,16 +77,12 @@ class CVT64(width: Int = 64) extends CVT(width){
   absIntSrc := Mux(signSrc, (~input.tail(1)).asUInt + 1.U, input.tail(1))
   val isZeroIntSrc = !absIntSrc.orR
 
-
   /** src is float
    * init
+   * special: INF, NaN, qNaN, SNaN, 0, Great NF均有正负, canonical NaN
    */
   val expSrc = input.tail(1).head(f64.expWidth)
   val fracSrc = input.tail(f64.expWidth+1).head(f64.fracWidth)
-
-  val expWidthSrc = Mux1H(float1HSrc, Seq(f16.expWidth.U, f32.expWidth.U, f64.expWidth.U))
-  val fracWidthSrc = Mux1H(float1HSrc, Seq(f16.fracWidth.U, f32.fracWidth.U, f64.fracWidth.U))
-  val biasSrc = Mux1H(float1HSrc, Seq(f16.bias.U, f32.bias.U, f64.bias.U))
 
   val expf16Src = expSrc(f16.expWidth - 1, 0)
   val expf32Src = expSrc(f32.expWidth - 1, 0)
@@ -106,9 +107,7 @@ class CVT64(width: Int = 64) extends CVT(width){
   val isNaNSrc = expIsOnesSrc && fracNotZeroSrc
   val isSNaNSrc = isNaNSrc && !fracSrc.head(1)
   val isQNaNSrc = isNaNSrc && fracSrc.head(1).asBool
-  // special
-  // INF, NaN, qNaN, SNaN, 0, Great NF均有正负
-  // canonical NaN
+
 
   /**
    * todo：未来要砍的，但是砍它和对应的elseWhen时：一定要注意Mux(isRec,,)和Mux(isF16toF32,,)！！！
@@ -117,8 +116,7 @@ class CVT64(width: Int = 64) extends CVT(width){
   val isEstimate7 = opType(5)
   val isSqrt = opType(5) && !opType(0)
   val isRec = opType(5) && opType(0)
-  val isF16toF32 = input1H(3) && output1H(5)
-  val isF32toF64 = input1H(5) && output1H(7)
+
 
   // for rec7
   //  val isNormalRec0 = expSrc >= (2*b).U && expSrc < (2*b + 1).U
@@ -145,10 +143,9 @@ class CVT64(width: Int = 64) extends CVT(width){
   /** dest is float
    * init
    */
-  val expWidthOut = Mux1H(float1HOut, fpMap.map(fp => fp.expWidth.U))
-  val fracWidthOut = Mux1H(float1HOut, fpMap.map(fp => fp.fracWidth.U))
-  val biasOut = Mux1H(float1HOut, fpMap.map(fp => fp.bias.U))
-
+  val expWidthOut = Mux1H(float1HOut, fpParamMap.map(fp => fp.expWidth.U))
+  val fracWidthOut = Mux1H(float1HOut, fpParamMap.map(fp => fp.fracWidth.U))
+  val biasOut = Mux1H(float1HOut, fpParamMap.map(fp => fp.bias.U))
 
   /** dest is int
    * init
@@ -156,7 +153,6 @@ class CVT64(width: Int = 64) extends CVT(width){
   val maxInt = (0 to 3).map(i => !hasSignInt ## ~0.U(((1 << i) * 8 - 1).W))
   val minInt = (0 to 3).map(i => hasSignInt ## 0.U(((1 << i) * 8 - 1).W))
 
-//  val toWidthValue = if (toFormat.hasSign) toWidth - 1 else toWidth
 
   /** dest common
    * init
@@ -170,58 +166,82 @@ class CVT64(width: Int = 64) extends CVT(width){
   //      (f64.maxExp + 1).U(f64.expWidth.W) ## 0.U(f64.fracWidth.W) // INF
   //    )
 
-  val nv = Wire(Bool())
-  val dz = Wire(Bool())
-  val of = Wire(Bool())
-  val uf = Wire(Bool())
-  val nx = Wire(Bool())
 
-
-  /** critical circuit
+  /** critical circuit & share
    * 1.count leading zero Max is 64
    * 2.adder: exp
    * 3.shift left/right(UInt)
    * 4.rounding module: +1
    *
    * step1: clz + adder -> compute really exp
-   * step2: shift -> put the first one to the correct position
+   * step2: shift left/right -> put the first one to the correct position
    * step3: rounding
    * step4: select result and fflags by mux1H
-   *
    */
 
-  // clz
+  /** share
+   * clz
+   * todo: done
+   * for: int->fp, fp->fp widen, estimate7,  reuse clz according to fracSrc << (64 - f64.fracWidth), fp尾数高位对齐到64bit absint
+   */
   val clzIn = Mux(inIsFp, fracSrc<<(64 - f64.fracWidth), absIntSrc).asUInt
   val leadZeros = CLZ(clzIn)
 
-  // adder todo: 干掉所有的减号 => 自己按位取反 和 比较符号 => 逻辑运算
+  /** share
+   * adder
+   * todo: 干掉所有的减号 => 自己按位取反 和 比较符号 => 逻辑运算
+   * for:
+   */
 
-  // shift left
-  val absShiftLeft = Wire(UInt(64.W))
-  absShiftLeft :=  (absIntSrc << 1) << leadZeros //abs 64bit todo: replace
-  val fracShiftLeft = (fracSrc << 1) << leadZeros   //frac 53bit todo : replace
+  /** share
+   * shift left
+   * todo: done
+   * for: t->fp, fp->fp widen, estimate7, reuse shift left according to fracSrc << (64 - f64.fracWidth), fp尾数高位对齐到64bit absint
+   */
+  val shiftLeft = Wire(UInt(64.W))
+  shiftLeft := (Mux(inIsFp, fracSrc << (64 - f64.fracWidth), absIntSrc).asUInt << 1) << leadZeros
+  // for estimate7 & fp->fp widen
+  val fracNormaled = Wire(UInt(64.W))
+  fracNormaled := Mux(isSubnormalSrc, shiftLeft, fracSrc << (64 - f64.fracWidth))
 
-  // shift right
+  /** share
+   * shift right
+   * todo:
+   * for:
+   */
 
-  // rounder todo: 抽那个+1的加法
+  /** share
+   * rounder
+   * todo: 抽那个+1的加法
+   * for:
+   */
 
-  // mux
+  /** share
+   * all
+   * todo:
+   * for: all
+   */
 
 
   when(!inIsFp){//1
-    /** any Int-> any fp
+    /** int->fp   any int/uint-> any fp
+     *
+     * done: extend u/i to i65
+     * todo: share exp adder & rounder
+     *
      */
+
     // todo: circuit need to reuse, done. Maxbias is 1023, MaxfirstOne is 64(Int), Maxexp is 2048, so the 13bits for adder is enough.
     val exp = Wire(UInt(f64.expWidth.W))
     val expRounded = Wire(UInt(f64.expWidth.W))
-    exp := Mux1H(float1HOut, fpMap.map(fp => (fp.bias + 63).U)) - leadZeros //todo 尝试去和estimate7的加法器重用  adder1
+    exp := Mux1H(float1HOut, fpParamMap.map(fp => (fp.bias + 63).U)) - leadZeros //todo 尝试去和estimate7的加法器重用  adder1
 
     val rounderMap =
-      fpMap.map(fp => Seq(
-        absShiftLeft.head(fp.fracWidth),
-        absShiftLeft.tail(fp.fracWidth).head(1),
-        absShiftLeft.tail(fp.fracWidth + 1).orR,
-        absShiftLeft.head(fp.fracWidth).andR
+      fpParamMap.map(fp => Seq(
+        shiftLeft.head(fp.fracWidth),
+        shiftLeft.tail(fp.fracWidth).head(1),
+        shiftLeft.tail(fp.fracWidth + 1).orR,
+        shiftLeft.head(fp.fracWidth).andR
       )
     ).transpose
 
@@ -247,8 +267,8 @@ class CVT64(width: Int = 64) extends CVT(width){
 
     expRounded := Mux(cout, exp + 1.U, exp) // todo: adder3
     val ofRounded = Mux(cout,
-        exp > Mux1H(float1HOut, fpMap.map(fp => (fp.maxExp-1).U)),
-        exp > Mux1H(float1HOut, fpMap.map(fp => fp.maxExp.U))
+        exp > Mux1H(float1HOut, fpParamMap.map(fp => (fp.maxExp-1).U)),
+        exp > Mux1H(float1HOut, fpParamMap.map(fp => fp.maxExp.U))
     ) // todo: adder4
 
     nv := false.B
@@ -273,20 +293,17 @@ class CVT64(width: Int = 64) extends CVT(width){
       })
     }
 
-    val int2FpResultMap: Seq[UInt] = fpMap.map(fp => Mux1H(result1H.asBools.reverse, int2FpResultMapGen(fp)))
+    val int2FpResultMap: Seq[UInt] = fpParamMap.map(fp => Mux1H(result1H.asBools.reverse, int2FpResultMapGen(fp)))
     result := Mux1H(float1HOut, int2FpResultMap)
 
   }.elsewhen(inIsFp && outIsFp && isWiden){//2 todo: 砍elsewhen时一定要注意 f16->f32->f64的定义
     /** fp -> fp widen
-     * 1.count leading zero    :done
-     * 2.compute exp: adder    :todo
-     * 3.compute frac: shift   :done
+     *
+     * done: share inner
+     * todo: 去和 estimate7 重用adder
+     *
      */
 
-    val fracNormaled = Wire(UInt(f64.fracWidth.W))
-    fracNormaled := Mux(isSubnormalSrc, (fracSrc << 1) << leadZeros, fracSrc)
-
-    //  f16->f32->f64
     //  val expNormaled = Mux(isSubnormalSrc, -leadZeros, expSrc)
     //  f16tof32 := (f32.bias - f16.bias).U - expNormaled)
     //  f32tof64 := (f64.bias - f32.bias).U - expNormaled
@@ -305,7 +322,7 @@ class CVT64(width: Int = 64) extends CVT(width){
       VecInit((0 to 2).map {
         case 0 => signNonNan ## ~0.U(fp.expWidth.W) ## fracNotZeroSrc ## 0.U((fp.fracWidth - 1).W) // INF or NaN->QNAN
         case 1 => signNonNan ## 0.U((fp.width - 1).W) // 0
-        case 2 => signNonNan ## expNormaled(fp.expWidth - 1, 0) ## fracNormaled(f64.fracWidth - 1, f64.fracWidth - fp.fracWidth)
+        case 2 => signNonNan ## expNormaled(fp.expWidth - 1, 0) ## fracNormaled.head(fp.fracWidth)
       })
     }
 
@@ -325,8 +342,12 @@ class CVT64(width: Int = 64) extends CVT(width){
     result := Mux1H(float1HOut.head(2), fpwidenResultMap)
   }.elsewhen(inIsFp && outIsFp && isNorrow){//3
     /** fp -> fp norrow
-     * 下溢：非零结果看作无限指数范围计算，舍入之后非零结果严格处于(-b^emin, b^emin)区间，或者
-     * 非零结果看作无限指数范围和无限精度计算，舍入之前非零结果严格处于(-b^emin, b^emin)区间。
+     *
+     * note:下溢：非零结果看作无限指数范围计算，舍入之后非零结果严格处于(-b^emin, b^emin)区间，或者
+     * note: 非零结果看作无限指数范围和无限精度计算，舍入之前非零结果严格处于(-b^emin, b^emin)区间。
+     * done: share exp adder & rounder inner
+     * todo: share exp adder & rounder
+     *
      */
 
     val interExp = Mux(isSubnormalSrc, false.B ## 1.U, false.B ## expSrc).asSInt -
@@ -447,22 +468,21 @@ class CVT64(width: Int = 64) extends CVT(width){
 
     val fpNorrowResultMap: Seq[UInt] = Seq(f16, f32).map(fp => Mux1H(result1H.asBools.reverse, fpNorrowResultMapGen(fp)))
     result := Mux1H(float1HOut.tail(1), fpNorrowResultMap)
-  }.elsewhen(isEstimate7) {//5 todo: 砍elsewhen时一定要注意 isSqrt/isRec 的定义！！！
-    /** Estimate7 opType(5)
-     * 1.count leading zero    :done
-     * 2.compute exp: adder    :todo
-     * 3.compute frac: shift left   :done
+  }.elsewhen(isEstimate7) {//4 todo: 砍elsewhen时一定要注意 isSqrt/isRec 的定义！！！
+    /** Estimate7: sqrt7 & rec7
+     *
+     * done: share adder inner
+     * todo: share exp aader
+     *
      */
 
     //-leadZeros： -Uint => 位宽不变，按位取反加1，但这里只用到了最低位，所以没问题
     val expNormaled = Mux(isSubnormalSrc, -leadZeros, expSrc)
-    val fracNormaled = Wire(UInt(f64.fracWidth.W))
-    fracNormaled := Mux(isSubnormalSrc, (fracSrc << 1) << leadZeros, fracSrc)
 
     //  expSqrt := ((3 * f64.bias - 1).U - expNormaled) >> 1
     //  expRec := (2 * f64.bias - 1).U - expNormaled
-    val biasEstimate = Mux(isRec, Mux1H(float1HOut, fpMap.map(fp => (2 * fp.bias - 1).U)),
-                                  Mux1H(float1HOut, fpMap.map(fp => (3 * fp.bias - 1).U)))
+    val biasEstimate = Mux(isRec, Mux1H(float1HOut, fpParamMap.map(fp => (2 * fp.bias - 1).U)),
+                                  Mux1H(float1HOut, fpParamMap.map(fp => (3 * fp.bias - 1).U)))
     val minusExp = Mux(isSubnormalSrc, leadZeros,
                                         extend( (~(false.B ## expSrc)).asUInt + 1.U, biasEstimate.getWidth)).asUInt
     val expEstimate = biasEstimate + minusExp // todo: reuse 和fp2fp widen
@@ -472,21 +492,6 @@ class CVT64(width: Int = 64) extends CVT(width){
     val rec7Table = Module(new Rec7Table)
     rec7Table.src := fracNormaled.head(7)
     val fracEstimate = Mux(opType(0), rec7Table.out, rsqrt7Table.out)
-
-
-    //    // rec7: opType(5) & opType(0)
-    //    nv := isSNaNSrc
-    //    dz := isZeroSrc
-    //    of := isSubnormalRec2
-    //    uf := false.B
-    //    nx := isSubnormalRec2
-    //
-    //    // rsqrt7: opType(5) & !opType(0)
-    //    nv := (signSrc && !isZeroSrc && !isQNaNSrc) | isSNaNSrc
-    //    dz := isZeroSrc
-    //    of := false.B
-    //    uf := false.B
-    //    nx := false.B
 
     nv := Mux(isRec, isSNaNSrc, (signSrc && !isZeroSrc && !isQNaNSrc) | isSNaNSrc)
     dz := isZeroSrc
@@ -514,7 +519,7 @@ class CVT64(width: Int = 64) extends CVT(width){
       isNormalRec2 || isSubnormalRec0 || isSubnormalRec1,
       isSubnormalRec2 && rmin
     )
-    val recResultMap: Seq[UInt] = fpMap.map(fp => Mux1H(recResult1H.asBools.reverse, recResultMapGen(fp)))
+    val recResultMap: Seq[UInt] = fpParamMap.map(fp => Mux1H(recResult1H.asBools.reverse, recResultMapGen(fp)))
 
     def sqrtResultMapGen(fp: FloatFormat): Seq[UInt] = {
       VecInit((0 to 3).map {
@@ -530,29 +535,25 @@ class CVT64(width: Int = 64) extends CVT(width){
       !signSrc & !isZeroSrc & !expIsOnesSrc,
       !signSrc & isInfSrc,
     )
-    val sqrtResultMap: Seq[UInt] = fpMap.map(fp => Mux1H(sqrtResult1H.asBools.reverse, sqrtResultMapGen(fp)))
+    val sqrtResultMap: Seq[UInt] = fpParamMap.map(fp => Mux1H(sqrtResult1H.asBools.reverse, sqrtResultMapGen(fp)))
     result := Mux(isRec, Mux1H(float1HOut, recResultMap), Mux1H(float1HOut, sqrtResultMap))
 
-  }.elsewhen(!outIsFp) {//7
-    /**
-     * out is int
-     */
-    /** any fp->any int
-     *  deal the width to 64bits, drop the shift left!!!
+  }.elsewhen(!outIsFp) {//5
+    /** out is int, any fp->any int/uint
+     *
+     * done: deal the width to 64bits, drop the shift left!!!
+     * todo: detail refactor
      *
      */
 
     val fracFp2In = fracValueSrc ## 0.U(11.W)
-    val expValue = Mux(isSubnormalSrc, false.B ## 1.U, false.B ## expSrc).asSInt - Mux1H(float1HSrc, fpMap.map(fp => fp.bias.S))
+    val expValue = Mux(isSubnormalSrc, false.B ## 1.U, false.B ## expSrc).asSInt - Mux1H(float1HSrc, fpParamMap.map(fp => fp.bias.S))
     val (inRounder, sticky) = ShiftRightJam(fracFp2In ## false.B, (63.S - expValue).asUInt) //todo:最多移64位，最好作下限制
 
     val rounderInput = inRounder.head(64) //drop least bit
 
     // 8bit: => u64, i64, u32, i32, u16, i16, u8, i8
     val hasSignInt1HOut = int1HOut.asBools.map(oh => Seq(oh && !hasSignInt, oh && hasSignInt)).flatten
-//    val isOnesRounderInputMap =
-//      Seq(64, 63, 32, 31, 16, 15, 8, 7).reverse.map(intType => rounderInput.tail(64 - intType).andR)
-
     val isOnesRounderInputMap =
       intParamMap.map(intType =>Seq(intType, intType-1)).flatten.map(intType => rounderInput.tail(64 - intType).andR)
 
@@ -573,7 +574,7 @@ class CVT64(width: Int = 64) extends CVT(width){
     val cout = upRounded && Mux1H(hasSignInt1HOut, isOnesRounderInputMap)
     val expRounded = Mux(cout, expValue + 1.S, expValue) //todo：reuse adder
     val isZeroRounded = !resultRounded.orR
-    
+
     val normalResult = Mux(signSrc && resultRounded.orR, (~resultRounded).asUInt + 1.U, resultRounded) //排除0 todo：reuse adder 补码
 
     val ofExp = expRounded >= Mux1H(hasSignInt1HOut,
@@ -585,10 +586,10 @@ class CVT64(width: Int = 64) extends CVT(width){
     val excludeExp =expRounded === Mux1H(int1HOut,
       intParamMap.map(intType => (intType-1).S))
 
-    val toUnv = (ofExp || signSrc) && !isZeroRounded
+    val toUnv = (ofExp || signSrc) && !isZeroRounded // todo: refactor
     val toUnx = !toUnv && nxRounded
 
-    val toInv = ofExp && !(signSrc && excludeExp && excludeFrac) //nv has included inf & nan, 排除负的最大指数
+    val toInv = ofExp && !(signSrc && excludeExp && excludeFrac) //nv has included inf & nan, 排除负的最大指数 todo: refactor
     val toInx = !toInv && nxRounded
 
     nv := Mux(hasSignInt, toInv, toUnv)
@@ -598,56 +599,23 @@ class CVT64(width: Int = 64) extends CVT(width){
     nx := Mux(hasSignInt, toInx, toUnx)
 
     val result1H = Cat(
-      !hasSignInt && !isNaNSrc && !toUnv,
+      (!hasSignInt && !isNaNSrc && !toUnv) || (hasSignInt && !toInv),
       !hasSignInt && (!signSrc && (isInfSrc || ofExp) || isNaNSrc),
       !hasSignInt && signSrc && !isNaNSrc,
       hasSignInt && toInv,
-      hasSignInt && !toInv
     )
 
-    def toIntResulutMapGen(intType: Int): Seq[UInt]={
-      VecInit((0 to 4).map {
+    def toIntResulutMapGen(intType: Int): Seq[UInt]={ //todo : refactor
+      VecInit((0 to 3).map {
         case 0 => normalResult
         case 1 => (~0.U(intType.W)).asUInt
         case 2 => 0.U(intType.W)
         case 3 => signNonNan ## Fill(intType-1, !signNonNan)
-        case 4 => normalResult
       })
     }
 
     val intResultMap: Seq[UInt] = intParamMap.map(intType => Mux1H(result1H.asBools.reverse, toIntResulutMapGen(intType)))
     result := Mux1H(int1HOut, intResultMap)
-
-//    dz := false.B
-//    of := false.B
-//    uf := false.B
-//
-//    when(!hasSignInt) { //64u
-//      nv := ofExp || signSrc
-//      nx := !nv && nxRounded && !signSrc
-//
-//      val result1H = Cat(
-//        !isNaNSrc && !nv,
-//        !signSrc && (isInfSrc || ofExp) || isNaNSrc,
-//        signSrc && !isNaNSrc
-//      )
-//
-//      val resultMap = VecInit((0 to 2).map {
-//        case 0 => normalResult
-//        case 1 => ~0.U(64.W)
-//        case 2 => 0.U(64.W)
-//      })
-//
-//      result := Mux1H(result1H.asBools.reverse, resultMap)
-//    }.otherwise{ // 64i
-//      nv := (!signSrc && ofExp) || (signSrc && ofExp && !cout) //nv has included inf & nan
-//      nx := !nv && nxRounded
-//
-//      result := Mux(nv,
-//        signNonNan ## Fill(63, !signNonNan),
-//        normalResult
-//      )
-//    }
 
   }.otherwise{
 
@@ -656,12 +624,10 @@ class CVT64(width: Int = 64) extends CVT(width){
     of := false.B
     uf := false.B
     nx := false.B
-
     result := 0.U
   }
 
   fflags := Cat(nv, dz, of, uf, nx)
-
   io.result := result
   io.fflags := fflags
 }

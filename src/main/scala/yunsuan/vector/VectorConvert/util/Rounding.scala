@@ -1,4 +1,4 @@
-package yunsuan.vector.VectorConvert
+package yunsuan.vector.VectorConvert.util
 
 import chisel3._
 import chisel3.util._
@@ -12,9 +12,7 @@ class RoundingUnit(val width: Int) extends Module {
     val signIn = Input(Bool())
     val rm = Input(UInt(3.W))
 
-    val out = Output(UInt(width.W)) //todo: drop
     val inexact = Output(Bool())
-    val cout = Output(Bool()) //todo: drop
     val r_up = Output(Bool())
   })
 
@@ -32,11 +30,8 @@ class RoundingUnit(val width: Int) extends Module {
       RTO -> ((r || s) && !g),
     )
   )
-  val out_r_up = io.in + 1.U  //尝试把这玩意儿移出去
-  io.out := Mux(r_up, out_r_up, io.in) //如果有进位，这里变全零 float格式的隐含1还在，并且在外面exp + 1, todo: 如果是整数呢??
+
   io.inexact := inexact
-  // r_up && io.in === 111...1
-  io.cout := r_up && io.in.andR()
   io.r_up := r_up
 }
 
@@ -77,4 +72,4 @@ object RoundingUnit {
 //    (io.in.sig.head(2) === "b01".U(2.W) && !rounder.io.cout)
 //
 //  io.tininess := tininess
-//}
+//}。
