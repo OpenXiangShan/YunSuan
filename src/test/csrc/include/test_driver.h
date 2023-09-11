@@ -16,8 +16,8 @@
 #define pickSEW  true
 
 #define pickFuType     VFloatCvt
-#define pickFuOptype   VFCVT_XUFV    
-#define pickSEWvalue   1  
+#define pickFuOptype   VFWCVT_FFV    
+#define pickSEWvalue   2  
 
 #define FRS1 false
 #define FRS2 false
