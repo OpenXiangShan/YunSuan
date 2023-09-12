@@ -358,7 +358,21 @@ void TestDriver::get_random_input() {
   // input.src_widen = gen_random_src_widen();
   // input.is_frs1 = gen_random_is_frs1();
   // input.is_frs2 = gen_random_is_frs2();
-  input.rm = rand() % 5;
+
+  if(input.fuType == VFloatCvt && input.fuOpType == VFNCVT_ROD_FFW){
+    input.rm = 6;
+  }else if(input.fuType == VFloatCvt && input.fuOpType == VFCVT_RTZ_XUFV ||
+           input.fuType == VFloatCvt && input.fuOpType == VFCVT_RTZ_XFV ||
+           input.fuType == VFloatCvt && input.fuOpType == VFWCVT_RTZ_XUFV ||
+           input.fuType == VFloatCvt && input.fuOpType == VFWCVT_RTZ_XFV ||
+           input.fuType == VFloatCvt && input.fuOpType == VFNCVT_RTZ_XUFW ||
+           input.fuType == VFloatCvt && input.fuOpType == VFNCVT_RTZ_XFW 
+  ){
+    input.rm = 1;
+  }else{
+    input.rm = rand() % 5;
+  }
+
   input.rm_s = rand() % 5;
   gen_random_vecinfo();
   gen_random_uopidx();

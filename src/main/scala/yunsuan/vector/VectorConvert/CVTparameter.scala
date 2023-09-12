@@ -9,7 +9,7 @@ object RoundingModle{
   def RDN: UInt = 2.U(3.W)
   def RUP: UInt = 3.U(3.W)
   def RMM: UInt = 4.U(3.W)
-  def RTO: UInt = 5.U(3.W)
+  def RTO: UInt = 6.U(3.W)
 }
 
 trait FloatFormat{

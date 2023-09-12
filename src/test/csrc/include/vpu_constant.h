@@ -245,6 +245,7 @@ extern "C"{
 #define RM_RDN (2)
 #define RM_RUP (3)
 #define RM_RMM (4)
+#define RM_RTO (6)
 
 // float-flags
 #define FFLAGS_NV (0x10)

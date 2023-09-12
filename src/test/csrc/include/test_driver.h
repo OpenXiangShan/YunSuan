@@ -16,12 +16,11 @@
 #define pickSEW  true
 
 #define pickFuType     VFloatCvt
-#define pickFuOptype   VFWCVT_FFV    
-#define pickSEWvalue   2  
+#define pickFuOptype   VFREC7    
+#define pickSEWvalue   1  
 
 #define FRS1 false
 #define FRS2 false
-
 
 enum {
   // STATE_GOODTRAP = 0;
