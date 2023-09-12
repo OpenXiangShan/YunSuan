@@ -108,9 +108,9 @@ class VectorCvt(xlen :Int) extends Module{
   dontTouch(in0)
 
   val (result0, fflags0) = VCVT(64)(in0, opType, sew, rm, input1H, output1H)
-  val (result1, fflags1) = VCVT(64)(in1, opType, sew, rm, input1H, output1H) // todo: replace 32
-  val (result2, fflags2) = VCVT(64)(in2, opType, sew, rm, input1H, output1H) // todo: replace 16
-  val (result3, fflags3) = VCVT(64)(in3, opType, sew, rm, input1H, output1H) // todo: replace 16
+  val (result1, fflags1) = VCVT(32)(in1, opType, sew, rm, input1H, output1H) // todo: replace 32
+  val (result2, fflags2) = VCVT(16)(in2, opType, sew, rm, input1H, output1H) // todo: replace 16
+  val (result3, fflags3) = VCVT(16)(in3, opType, sew, rm, input1H, output1H) // todo: replace 16
 
   io.result := Mux1H(outputWidth1H, Seq(
     result3(7,0) ## result2(7,0) ## result1(7,0) ## result0(7,0),

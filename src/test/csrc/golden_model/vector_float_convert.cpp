@@ -61,7 +61,7 @@ ElementOutput VGMFloatCvt::calculation_e16(ElementInput input) {
     case VFWCVT_FFV:  //f16 -> f32 
       output.result = f16_to_f32(i2f16((uint16_t)input.src1)).v;
       // printf("\n==========(uint16_t)input.src1 %lx\n", (uint16_t)input.src1);  
-      printf("\n==========f16_to_f32 %lx\n", output.result);  
+      // printf("\n==========f16_to_f32 %lx\n", output.result);  
       break;
     case VFWCVT_RTZ_XUFV: //f16 -> ui32 trun 
       output.result = f16_to_ui32(i2f16((uint16_t)input.src1), softfloat_round_minMag, true);  break;
@@ -75,7 +75,7 @@ ElementOutput VGMFloatCvt::calculation_e16(ElementInput input) {
     case VFNCVT_RTZ_XUFW: //f16 -> ui8 trun
       output.result = f16_to_ui8(i2f16((uint16_t)input.src1), softfloat_round_minMag, true);  break; 
     case VFNCVT_RTZ_XFW:  //f16 -> i8 trun
-      output.result = f16_to_ui8(i2f16((uint16_t)input.src1), softfloat_round_minMag, true);  break; 
+      output.result = f16_to_i8(i2f16((uint16_t)input.src1), softfloat_round_minMag, true);  break; 
     default:
       printf("VFConvert Unsupported fuOpType %d\n", input.fuOpType);
       exit(1);
@@ -121,8 +121,8 @@ ElementOutput VGMFloatCvt::calculation_e32(ElementInput input) {
       output.result = i32_to_f64((uint32_t)input.src1).v;  break; 
     case VFWCVT_FFV:  //f32 -> f64 
       output.result = f32_to_f64(i2f32((uint32_t)input.src1)).v; 
-      printf("\n==========(uint32_t)input.src1 %lx\n", (uint32_t)input.src1);  
-      printf("\n==========f32_to_f64 %lx\n", output.result);   
+      // printf("\n==========(uint32_t)input.src1 %lx\n", (uint32_t)input.src1);  
+      // printf("\n==========f32_to_f64 %lx\n", output.result);   
       break; 
 
     case VFWCVT_RTZ_XUFV: //f32 -> ui64 trun 
@@ -143,8 +143,8 @@ ElementOutput VGMFloatCvt::calculation_e32(ElementInput input) {
     case VFNCVT_ROD_FFW:// f32 ->f16 rounding towards odd ？？？
       softfloat_roundingMode = softfloat_round_odd;
       output.result = f32_to_f16(i2f32((uint32_t)input.src1)).v;
-      printf("\nodd==========input       %lx\n", (uint32_t)input.src1);  
-      printf("\nodd=========f32_to_f16   %lx\n", output.result);   
+      // printf("\nodd==========input       %lx\n", (uint32_t)input.src1);  
+      // printf("\nodd=========f32_to_f16   %lx\n", output.result);   
       break; 
     case VFNCVT_RTZ_XUFW: //f32 -> ui16 trun
       output.result = f32_to_ui16(i2f32((uint32_t)input.src1), softfloat_round_minMag, true);  break; 
@@ -175,7 +175,7 @@ ElementOutput VGMFloatCvt::calculation_e64(ElementInput input) {
     case VFCVT_FXV: //i64 -> f64
       output.result = i64_to_f64((uint64_t)input.src1).v;  
       // printf("\n==========(uint64_t)input.src1 %lx\n", (uint64_t)input.src1);  
-      printf("\n==========f64_to_i64 %lx\n", output.result);   
+      // printf("\n==========f64_to_i64 %lx\n", output.result);   
       break;
     case VFCVT_RTZ_XUFV: // f64->Ui64 trun
       output.result = f64_to_ui64(i2f64((uint64_t)input.src1), softfloat_round_minMag, true);  break; 
@@ -187,12 +187,12 @@ ElementOutput VGMFloatCvt::calculation_e64(ElementInput input) {
     case VFRSQRT7: // f64->f64
       output.result = f64_rsqrte7(i2f64((uint64_t)input.src1)).v;
       // printf("\n==========(uint64_t)input.src1 %lx\n", (uint64_t)input.src1);  
-      printf("\n==========f64_rsqrte7 %lx\n", output.result); 
+      // printf("\n==========f64_rsqrte7 %lx\n", output.result); 
       break;
     case VFREC7:  // f64->f64
       output.result = f64_recip7(i2f64((uint64_t)input.src1)).v;
       // printf("\n==========(uint64_t)input.src1 %lx\n", (uint64_t)input.src1);  
-      printf("\n==========f64_recip7 %lx\n", output.result); 
+      // printf("\n==========f64_recip7 %lx\n", output.result); 
       break;
     
     // norrow 64->32
