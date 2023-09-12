@@ -1,4 +1,4 @@
-package yunsuan.vector.VectorConvert.utils
+package yunsuan.vector.VectorConvert.util
 
 import chisel3._
 import chisel3.util._

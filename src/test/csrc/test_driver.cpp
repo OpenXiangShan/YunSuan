@@ -11,7 +11,7 @@ extern "C" {
 #include "include/test_driver.h"
 
 TestDriver::TestDriver():
-  issued(false), verbose(true), keepinput(false)
+  issued(false), verbose(false), keepinput(false)
 {
   // aviod random value
   set_test_type();
@@ -27,9 +27,13 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 }
 // fix set_test_type to select fuType
 void TestDriver::set_test_type() {
-  test_type.pick_fuType = pickFU;
-  test_type.pick_fuOpType = pickFUop;
-  test_type.fuType = pickFuType;
+  // test_type.pick_fuType = pickFU;
+  // test_type.pick_fuOpType = pickFUop;
+  // test_type.fuType = pickFuType;
+  // test_type.fuOpType = pickFuOptype;
+  test_type.pick_fuType = true;
+  test_type.pick_fuOpType = false;
+  test_type.fuType = VFloatCvt;
   test_type.fuOpType = pickFuOptype;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
@@ -84,9 +88,26 @@ uint8_t TestDriver::gen_random_optype() {
     case VFloatCvt:{
       // uint8_t vid_all_optype[VFCVT_NUM] = VFCVT_ALL_OPTYPES;
       // return vid_all_optype[rand() % VFCVT_NUM];
-      uint8_t vid_all_optype[2] = {VFRSQRT7, VFREC7};
-      return vid_all_optype[rand() % 2];
-      break;
+      // uint8_t vid_all_optype[2] = {VFRSQRT7, VFREC7};
+      // return vid_all_optype[rand() % 2];
+      // break;
+      if (input.sew == 0) {
+        uint8_t vfcvt_8_optype[VFCVT_8_NUM] = VFCVT_8_OPTYPES;
+        return vfcvt_8_optype[rand() % VFCVT_8_NUM];
+        break;
+      } else if (input.sew == 1) {
+        uint8_t vfcvt_16_optype[VFCVT_16_NUM] = VFCVT_16_OPTYPES;
+        return vfcvt_16_optype[rand() % VFCVT_16_NUM];
+        break;
+      } else if (input.sew == 2) {
+        uint8_t vfcvt_32_optype[VFCVT_32_NUM] = VFCVT_32_OPTYPES;
+        return vfcvt_32_optype[rand() % VFCVT_32_NUM];
+        break;
+      } else {
+        uint8_t vfcvt_64_optype[VFCVT_64_NUM] = VFCVT_64_OPTYPES;
+        return vfcvt_64_optype[rand() % VFCVT_64_NUM];
+        break;
+      }
     }
     default:
       printf("Unsupported FuType %d\n", input.fuType);
@@ -349,6 +370,7 @@ void TestDriver::get_random_input() {
   input.src3[1] = rand64();
   input.src4[0] = rand64();
   input.src4[1] = rand64();
+  input.sew = gen_random_sew();
   if (!test_type.pick_fuType) { input.fuType = gen_random_futype(ALL_FUTYPES); }
   else { input.fuType = test_type.fuType; }
   if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
@@ -378,8 +400,8 @@ void TestDriver::get_random_input() {
   gen_random_uopidx();
   gen_input_vperm();
 
-  if(pickSEW) input.sew = pickSEWvalue; 
-  else input.sew =gen_random_sew();
+  // if(pickSEW) input.sew = pickSEWvalue; 
+  // else input.sew =gen_random_sew();
 
   input.is_frs1 = FRS1;
   input.is_frs2 = FRS2;
