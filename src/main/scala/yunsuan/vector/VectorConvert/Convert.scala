@@ -19,8 +19,8 @@ class VectorCvtIO(width: Int) extends Bundle {
 class VectorCvt(xlen :Int) extends Module{
 
   val io = IO(new VectorCvtIO(xlen))
-  val (src, opType, sew) = (io.src, io.opType, io.sew)
-  val rm = Mux(opType === vfnvct_rod_ffw, RTO, io.rm)
+  val (src, opType, sew, rm) = (io.src, io.opType, io.sew, io.rm)
+
 
   val widen = opType(4, 3) // 0->single 1->widen 2->norrow => width of result
   val inIsFp = opType.head(1).asBool

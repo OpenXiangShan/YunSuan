@@ -15,6 +15,7 @@ void VGMFloatBase::fp_set_rm(int rm) {
     case RM_RDN: softfloat_roundingMode = softfloat_round_min; break;
     case RM_RUP: softfloat_roundingMode = softfloat_round_max; break;
     case RM_RMM: softfloat_roundingMode = softfloat_round_near_maxMag; break;
+    case RM_RTO: softfloat_roundingMode = softfloat_round_odd; break;
     default:
       printf("Error RM:%d\n", rm);
       exit(1);
