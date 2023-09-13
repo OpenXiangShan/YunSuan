@@ -12,12 +12,13 @@
 
 // 改这里来适应fu
 #define pickFU   true
-#define pickFUop true
-#define pickSEW  true
+#define pickFUop false
+#define pickSEW  false
+#define VERBOSE  false
 
 #define pickFuType     VFloatCvt
-#define pickFuOptype   VFREC7    
-#define pickSEWvalue   1  
+#define pickFuOptype   VFCVT_XFV    
+#define pickSEWvalue   1   
 
 #define FRS1 false
 #define FRS2 false

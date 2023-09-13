@@ -23,8 +23,6 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
     if(widenNorrow == 1){ //widen
       half_number = half_number >> 1;
       result_shift_len = result_shift_len << 1;
-      // printf("\n==========half_number %d\n", half_number);
-      // printf("\n==========result_shift_len %d\n", result_shift_len);
       for(int i = 0; i < number; i++) {
         ElementInput element = select_element(input, i);
         // printf("\n==========widen element %lx\n", element.src1);
@@ -101,9 +99,6 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
   for (int i = 0; i < 2; i++) {
     output.result[i] = 0;
     output.fflags[i] = 0;
-    // printf("\n==========half_number %d\n", half_number);
-    // printf("\n==========result_shift_len %d\n", result_shift_len);
-    // printf("\n==========mask %lx\n", mask);
     for (int j = 0; j < half_number; j++) {
       if(input.fuType == VIntegerDivider) {
         output.result[i] += (uint64_t)(output_part[i*half_number+j].result&mask) << (j*result_shift_len);
@@ -116,8 +111,6 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
           output.result[i] += ((uint64_t)output_part[i*half_number+j].result&mask) << (j*result_shift_len);
           output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << (j*5);
         }
-        // printf("\noutput_part[i*half_number+j].result %lx\n", output_part[i*half_number+j].result);
-        // printf("\n==========output.result %lx\n", output.result[i]);
       }else {
         output.result[i] += ((uint64_t)output_part[i*half_number+j].result) << (j*result_shift_len);
         output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << (j*5);
@@ -217,7 +210,6 @@ ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
         element.src1 = input.is_frs2 ? (uint64_t)input64->src1[0] : (uint64_t)input16->src1[idx];
         element.src2 = input.is_frs1 ? (uint64_t)input64->src2[0] : (uint64_t)input16->src2[idx];
         element.src3 = (uint64_t)input16->src3[idx];
-        // printf("\n==========select element.src1 %lx\n", element.src1);
         break;
       case 2:
         element.src1 = input.is_frs2 ? (uint64_t)input64->src1[0] : (uint64_t)input32->src1[idx];
