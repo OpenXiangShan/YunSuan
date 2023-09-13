@@ -130,7 +130,7 @@ class CVT64(width: Int = 64) extends CVT(width){
       fpParamMap.map(fp => expSrc(fp.expWidth - 1, 0)).zip(fpParamMap.map(fp => fp.expWidth)).map { case (exp, expWidth) =>
         VecInit(
           exp.head(expWidth-1).andR && !exp(0),
-          exp.head(expWidth-2).andR && !exp(1) && exp(0),
+          exp.head(expWidth-2).andR && !exp(1) && exp(0)
         ).asUInt
       }
   )
@@ -284,7 +284,7 @@ class CVT64(width: Int = 64) extends CVT(width){
    * 因为结果是根据result1HOut来选的，所以fp->fp norrow的rounderMap直接包含于int-> fp的，直接砍掉fp->fp norrow的rounderMap
    * 再Mux一下把fp->int的也砍掉
    */
-  //todo:用力想想why这里要多这个，fp norrow src is normal 会出现 out is subnormal
+  //todo:用力想想why这里要多这个，fp norrow src is normal 会出现 out is subnormal，且隐含1被干掉了
   val rounderMapIn = Mux(isFp2FpNarrow, fracSrc << (64 - f64.fracWidth), shiftLeft)
   val rounderMap =
     fpParamMap.map(fp => Seq(
@@ -308,32 +308,6 @@ class CVT64(width: Int = 64) extends CVT(width){
   rounder.io.rm := rm
   val nxRounded = rounder.io.inexact
   val upRounded = rounder.io.r_up
-
-//    val rounderMap =
-//      Seq(f16, f32).map(fp => Seq(
-//        fracSrc.head(fp.fracWidth),
-//        fracSrc.tail(fp.fracWidth).head(1),
-//        fracSrc.tail(fp.fracWidth + 1).orR,
-//        fracSrc.head(fp.fracWidth).andR
-//        )
-//      ).transpose
-//
-//    val (rounderInputMap, rounerInMap, rounderStikyMap, isOnesRounderInputMap) = {
-//      (rounderMap(0), rounderMap(1), rounderMap(2), rounderMap(3))
-//    }
-//
-//    val rounder = Module(new RoundingUnit(64)) //todo: circuit is abled to reuse
-//    val rounderInput = Wire(UInt(64.W))
-//    rounderInput := Mux1H(float1HOut.tail(1), rounderInputMap)
-//    rounder.io.in := rounderInput // todo:拿不到正确的，这里没有问题
-//    rounder.io.roundIn := Mux1H(float1HOut.tail(1), rounerInMap)
-//    rounder.io.stickyIn := Mux1H(float1HOut.tail(1), rounderStikyMap) //todo 找到准确的那几位来进行orR
-//    rounder.io.signIn := signSrc
-//    rounder.io.rm := rm
-//
-//    // from roundingUnit
-//    val nxRounded = rounder.io.inexact
-//    val upRounded = rounder.io.r_up
 
   val expIncrease = exp + 1.U //todo：注意exp有无可能在为0或负时指数计算出错
   val rounderInputIncrease = rounderInput + 1.U
@@ -386,14 +360,21 @@ class CVT64(width: Int = 64) extends CVT(width){
 //    val upRounded = rounder.io.r_up
 
     // out of roundingUint
-    val fracRounded = Mux(upRounded, rounderInputIncrease, rounderInput) //todo：加法重用 adder2！！！
+    val fracRounded = Mux(upRounded, rounderInputIncrease, rounderInput)
     val cout = upRounded && Mux1H(float1HOut, isOnesRounderInputMap).asBool
 
-    expRounded := Mux(cout, expIncrease, exp) // todo: adder3
-    val ofRounded = Mux(cout,
-        exp > Mux1H(float1HOut, fpParamMap.map(fp => (fp.maxExp-1).U)),
-        exp > Mux1H(float1HOut, fpParamMap.map(fp => fp.maxExp.U))
-    ) // todo: adder4
+    expRounded := Mux(cout, expIncrease, exp)
+//    val ofRounded = Mux(cout,
+//        exp > Mux1H(float1HOut, fpParamMap.map(fp => (fp.maxExp-1).U)),
+//        exp > Mux1H(float1HOut, fpParamMap.map(fp => fp.maxExp.U))
+//    ) // todo: adder4
+
+    val ofRounded = !exp.head(1).asBool && Mux1H(float1HOut,
+      fpParamMap.map(fp => Mux(cout,
+        exp(fp.expWidth - 1, 1).andR || exp(exp.getWidth - 2, fp.expWidth).orR,
+        exp(fp.expWidth - 1, 0).andR || exp(exp.getWidth - 2, fp.expWidth).orR)
+      )
+    )
 
     nv := false.B
     dz := false.B
@@ -479,7 +460,7 @@ class CVT64(width: Int = 64) extends CVT(width){
 //      Mux1H(float1HOut.tail(1), biasDeltaMap.map(delta => delta.S)) //todo: have to think of sign
     val interExp = exp.asSInt
     /**
-     * normal todo：它什么都不用等，sub要等指数计算和右移的结果
+     * ！！！dest is normal todo：它什么都不用等，sub要等指数计算和右移的结果
      */
 //    val rounderMap =
 //      Seq(f16, f32).map(fp => Seq(
@@ -507,24 +488,35 @@ class CVT64(width: Int = 64) extends CVT(width){
 //    val upRounded = rounder.io.r_up
 
     // out of roundingUint
-    val fracRounded = Mux(upRounded, rounderInputIncrease, rounderInput) //todo：加法重用 adder2！！！
+    val fracRounded = Mux(upRounded, rounderInputIncrease, rounderInput)
     val cout = upRounded && Mux1H(float1HOut, isOnesRounderInputMap).asBool
 
-    val expRounded = Mux(cout, expIncrease, exp) // todo: adder3
-    val ofRounded = Mux(cout,
-      interExp > Mux1H(float1HOut.tail(1), Seq(f16, f32).map(fp => (fp.maxExp - 1).S)),
-      interExp > Mux1H(float1HOut.tail(1), Seq(f16, f32).map(fp => fp.maxExp.S))
-    ) // todo: adder4
+    val expRounded = Mux(cout, expIncrease, exp)
+//    val ofRounded = Mux(cout,
+//      interExp > Mux1H(float1HOut.tail(1), Seq(f16, f32).map(fp => (fp.maxExp - 1).S)),
+//      interExp > Mux1H(float1HOut.tail(1), Seq(f16, f32).map(fp => fp.maxExp.S))
+//    ) // todo: adder4
 
-    val ufExpRounded = Mux(cout, interExp < 0.S, interExp < 1.S) // todo: adder4
+    val ofRounded = !exp.head(1).asBool && Mux1H(float1HOut,
+      fpParamMap.map(fp => Mux(cout,
+        exp(fp.expWidth - 1, 1).andR || exp(exp.getWidth - 2, fp.expWidth).orR,
+        exp(fp.expWidth - 1, 0).andR || exp(exp.getWidth - 2, fp.expWidth).orR)
+      )
+    )
+
+//    val ufExpRounded = Mux(cout, interExp < 0.S, interExp < 1.S) // todo: adder4
+    val ufExpRounded = Mux(cout, exp.head(1).asBool, exp.head(1).asBool || !exp.orR) // todo: adder4
+
     val nxOfRounded = nxRounded || ofRounded
 
+
     /**
-     * Subnormal should compute exp at same cycle
+     * ！！！dest is Subnormal
      */
     //目的格式原点前一位的实际指数为1-toBias，差值为1-toBias - (srcExp - srcBias)
     //或者，按照注释的理解在浮点格式中（加偏置之后），原点的前一位指数为1，src->to之后为down_exp = srcExp - srcBias + toBias
-    val maybeSub = interExp < 1.S  // todo: adder5
+//    val maybeSub = interExp < 1.S  // todo: adder5
+    val maybeSub = exp.head(1).asBool || !exp.orR  // todo: adder5
     val subFracRounded = Wire(UInt(f32.fracWidth.W))
     val subExpRounded = Wire(UInt(f32.expWidth.W))
 
@@ -705,14 +697,33 @@ class CVT64(width: Int = 64) extends CVT(width){
 
     val normalResult = Mux(signSrc && resultRounded.orR, (~resultRounded).asUInt + 1.U, resultRounded) //排除0 todo：reuse adder 补码
 
-    val ofExpRounded = expRounded >= Mux1H(hasSignInt1HOut,
-      intParamMap.map(intType => Seq(intType, intType-1)).flatten.map(intType => intType.S)) //todo：reuse adder, drop ">="
+//    val ofExpRounded = expRounded >= Mux1H(hasSignInt1HOut,
+//      intParamMap.map(intType => Seq(intType, intType-1)).flatten.map(intType => intType.S)) //todo：reuse adder, drop ">="
+    val ofExpRounded = !exp.head(1) && Mux1H(int1HOut,
+      (3 to 6).map(i =>
+        Mux1H(UIntToOH(hasSignInt ## cout), VecInit((0 to 3).map {
+          case 0 => exp(exp.getWidth-2, i).orR                        //>=intType   unsign & non cout
+          case 1 => exp(exp.getWidth-2, i).orR || exp(i-1, 0).andR    //>=intType-1 unsign & cout
+          case 2 => exp(exp.getWidth-2, i).orR || exp(i-1, 0).andR    //>=intType-1 sign   & non cout
+          case 3 => exp(exp.getWidth-2, i).orR || exp(i-1, 1).andR    //>=intType-2 sign   & cout
+        })
+        )
+      )
+    )
 
     val excludeFrac = Mux1H(int1HOut,
       intParamMap.map(intType => resultRounded(intType - 1) && !resultRounded(intType - 2, 0).orR))
 
-    val excludeExp =expRounded === Mux1H(int1HOut,
-      intParamMap.map(intType => (intType-1).S))
+//    val excludeExp =expRounded === Mux1H(int1HOut, intParamMap.map(intType => (intType-1).S))
+    // i=log2(intType)
+    val excludeExp = Mux1H(int1HOut,
+      (3 to 6).map(i => !exp.head(exp.getWidth - i).orR &&
+        Mux(cout,
+          exp(i-1, 1).andR && !exp(0), // ==inType-2
+          exp(i-1, 0).andR             // ==inType-1
+        )
+      )
+    )
 
     val toUnv = ofExpRounded || expIsOnesSrc || signSrc && // todo: refactor
       !(isZeroSrc || isZeroRounded && !ofExpRounded) //在负的情况下排除-0以及舍入之后为-0的情况。

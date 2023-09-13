@@ -11,7 +11,7 @@ extern "C" {
 #include "include/test_driver.h"
 
 TestDriver::TestDriver():
-  issued(false), verbose(false), keepinput(false)
+  issued(false), verbose(VERBOSE), keepinput(false)
 {
   // aviod random value
   set_test_type();
@@ -27,14 +27,14 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 }
 // fix set_test_type to select fuType
 void TestDriver::set_test_type() {
-  // test_type.pick_fuType = pickFU;
-  // test_type.pick_fuOpType = pickFUop;
-  // test_type.fuType = pickFuType;
-  // test_type.fuOpType = pickFuOptype;
-  test_type.pick_fuType = true;
-  test_type.pick_fuOpType = false;
-  test_type.fuType = VFloatCvt;
+  test_type.pick_fuType = pickFU;
+  test_type.pick_fuOpType = pickFUop;
+  test_type.fuType = pickFuType;
   test_type.fuOpType = pickFuOptype;
+  // test_type.pick_fuType = true;
+  // test_type.pick_fuOpType = false;
+  // test_type.fuType = VFloatCvt;
+  // test_type.fuOpType = pickFuOptype;
   // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -350,18 +350,6 @@ void TestDriver::gen_random_idiv_input() {
 void TestDriver::get_random_input() {
   if (keepinput) { return; }
  
-  // input.src1[0] = 0x4000400040003fff;
-  // input.src1[1] = 0x40004001;
-
-  // input.src1[0] = 0xc0004000c0003fff;
-  // input.src1[1] = 0xc0004001;
-
-  // input.src1[0] = 0x4000200140002000;
-  // input.src1[1] = 0x40002fff;
-
-  // input.src1[0] = 0x4000100140001000;
-  // input.src1[1] = 0x40001fff;
-  
   input.src1[0] = rand64();
   input.src1[1] = rand64();
   input.src2[0] = rand64();
@@ -370,7 +358,10 @@ void TestDriver::get_random_input() {
   input.src3[1] = rand64();
   input.src4[0] = rand64();
   input.src4[1] = rand64();
-  input.sew = gen_random_sew();
+
+  if(pickSEW) input.sew = pickSEWvalue; 
+  else input.sew =gen_random_sew();
+  
   if (!test_type.pick_fuType) { input.fuType = gen_random_futype(ALL_FUTYPES); }
   else { input.fuType = test_type.fuType; }
   if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
@@ -399,9 +390,6 @@ void TestDriver::get_random_input() {
   gen_random_vecinfo();
   gen_random_uopidx();
   gen_input_vperm();
-
-  // if(pickSEW) input.sew = pickSEWvalue; 
-  // else input.sew =gen_random_sew();
 
   input.is_frs1 = FRS1;
   input.is_frs2 = FRS2;
@@ -489,8 +477,6 @@ bool TestDriver::assign_input_raising(VSimTop *dut_ptr) {
   dut_ptr->io_in_bits_vinfo_vm     = input.vinfo.vm;
   dut_ptr->io_in_bits_vinfo_ta     = input.vinfo.ta;
   dut_ptr->io_in_bits_vinfo_ma     = input.vinfo.ma;
-  // printf("fuType:%d fuOpType:%d inFuType:%d inFuOpType:%d\n", dut_ptr->io_in_bits_fuType,dut_ptr->io_in_bits_fuOpType,input.fuType,input.fuOpType);
-  // printf("dut_ptr->io_in_bits_src_0_0:%lx dut_ptr->io_in_bits_src_0_1:%lx\n", dut_ptr->io_in_bits_src_0_0, dut_ptr->io_in_bits_src_0_1);
   return  dut_ptr->io_in_valid;
 }
 
