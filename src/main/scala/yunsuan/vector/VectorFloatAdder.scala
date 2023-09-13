@@ -73,6 +73,7 @@ class VectorFloatAdder() extends Module {
   val is_fsum_ure = io.op_code === VfaddOpCode.fsum_ure
   val is_fmin_re  = io.op_code === VfaddOpCode.fmin_re
   val is_fmax_re  = io.op_code === VfaddOpCode.fmax_re
+  val is_fsum_ore = io.op_code === VfaddOpCode.fsum_ore
 
   val fast_is_sub = io.op_code(0)
 
@@ -415,6 +416,7 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     val is_fsum_ure = io.op_code === VfaddOpCode.fsum_ure
     val is_fmin_re = io.op_code === VfaddOpCode.fmin_re
     val is_fmax_re = io.op_code === VfaddOpCode.fmax_re
+    val is_fsum_ore = io.op_code === VfaddOpCode.fsum_ore
     val fp_a_sign = fp_a_to32.head(1)
     val fp_b_sign = fp_b_to32.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -509,11 +511,18 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
       fp_a_is_NAN & !fp_a_is_SNAN
     )))
     val is_fsum_ure_notmasked = is_fsum_ure && io.maskForReduction.andR
-    val is_fsum_ure_masked = is_fsum_ure && io.maskForReduction.orR
+    val is_fsum_ure_masked = is_fsum_ure && !io.maskForReduction.andR
+    val is_fsum_ore_notmasked = is_fsum_ore && io.maskForReduction(0)
+    val is_fsum_ore_masked = is_fsum_ore && !io.maskForReduction(0)
     val result_fsum_ure_masked = Mux(
       io.maskForReduction === 0.U,
       0.U(floatWidth.W),
       Mux(io.maskForReduction(0), io.fp_a, io.fp_b)
+    )
+    val result_fsum_ore_masked = Mux(
+      io.maskForReduction(0) === 0.U,
+      0.U(floatWidth.W),
+      io.fp_b
     )
     val outInf = Mux(
       res_is_f32,
@@ -554,6 +563,7 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
         is_fsum_ure_masked,
         is_fmax_re,
         is_fmin_re,
+        is_fsum_ore_masked,
       ),
       Seq(
         result_min,
@@ -573,14 +583,15 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
         result_fsum_ure_masked,
         result_fmax_re,
         result_fmin_re,
+        result_fsum_ore_masked,
       )
     )
     val fflags_NV_stage0 = ((is_min | is_max) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_feq | is_fne) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN))
     val fflags_stage0 = Cat(fflags_NV_stage0,0.U(4.W))
-    io.fp_c := Mux(RegNext(is_add | is_sub | is_fsum_ure_notmasked),float_adder_result,RegNext(result_stage0))
-    io.fflags := Mux(RegNext(is_add | is_sub | is_fsum_ure_notmasked),float_adder_fflags,RegNext(fflags_stage0))
+    io.fp_c := Mux(RegNext(is_add | is_sub | is_fsum_ure_notmasked | is_fsum_ore_notmasked),float_adder_result,RegNext(result_stage0))
+    io.fflags := Mux(RegNext(is_add | is_sub | is_fsum_ure_notmasked | is_fsum_ore_notmasked),float_adder_fflags,RegNext(fflags_stage0))
   }
   else {
     io.fp_c := float_adder_result
@@ -1680,6 +1691,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     val is_fsum_ure = io.op_code === VfaddOpCode.fsum_ure
     val is_fmin_re = io.op_code === VfaddOpCode.fmin_re
     val is_fmax_re = io.op_code === VfaddOpCode.fmax_re
+    val is_fsum_ore = io.op_code === VfaddOpCode.fsum_ore
     val fp_a_sign = io.fp_a.head(1)
     val fp_b_sign = io.fp_b.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -1760,11 +1772,18 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
       fp_a_is_NAN & !fp_a_is_SNAN
     )))
     val is_fsum_ure_notmasked = is_fsum_ure && io.maskForReduction.andR
-    val is_fsum_ure_masked = is_fsum_ure && io.maskForReduction.orR
+    val is_fsum_ure_masked = is_fsum_ure && !io.maskForReduction.andR
+    val is_fsum_ore_notmasked = is_fsum_ore && io.maskForReduction(0)
+    val is_fsum_ore_masked = is_fsum_ore && !io.maskForReduction(0)
     val result_fsum_ure_masked = Mux(
       io.maskForReduction === 0.U,
       0.U(floatWidth.W),
       Mux(io.maskForReduction(0), io.fp_a, io.fp_b)
+    )
+    val result_fsum_ore_masked = Mux(
+      io.maskForReduction(0) === 0.U,
+      0.U(floatWidth.W),
+      io.fp_b
     )
     val outInf = Cat(is_fmax_re, Fill(exponentWidth, 1.U), 0.U((significandWidth-1).W))
     val re_masked_one_out = Mux(
@@ -1801,6 +1820,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
         is_fsum_ure_masked,
         is_fmax_re,
         is_fmin_re,
+        is_fsum_ore_masked,
       ),
       Seq(
         result_min,
@@ -1820,14 +1840,15 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
         result_fsum_ure_masked,
         result_fmax_re,
         result_fmin_re,
+        result_fsum_ore_masked,
       )
     )
     val fflags_NV_stage0 = ((is_min | is_max) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_feq | is_fne) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN))
     val fflags_stage0 = Cat(fflags_NV_stage0, 0.U(4.W))
-    io.fp_c := Mux(RegNext(is_add | is_sub | is_fsum_ure_notmasked), float_adder_result, RegNext(result_stage0))
-    io.fflags := Mux(RegNext(is_add | is_sub | is_fsum_ure_notmasked), float_adder_fflags, RegNext(fflags_stage0))
+    io.fp_c := Mux(RegNext(is_add | is_sub | is_fsum_ure_notmasked | is_fsum_ore_notmasked), float_adder_result, RegNext(result_stage0))
+    io.fflags := Mux(RegNext(is_add | is_sub | is_fsum_ure_notmasked | is_fsum_ore_notmasked), float_adder_fflags, RegNext(fflags_stage0))
   }
   else {
     io.fp_c := float_adder_result
@@ -2325,6 +2346,7 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
     val is_fsum_ure = io.op_code === VfaddOpCode.fsum_ure
     val is_fmin_re = io.op_code === VfaddOpCode.fmin_re
     val is_fmax_re = io.op_code === VfaddOpCode.fmax_re
+    val is_fsum_ore = io.op_code === VfaddOpCode.fsum_ore
     val fp_a_sign = io.fp_a.head(1)
     val fp_b_sign = io.fp_b.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -2405,11 +2427,18 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
       fp_a_is_NAN & !fp_a_is_SNAN
     )))
     val is_fsum_ure_notmasked = is_fsum_ure && io.maskForReduction.andR
-    val is_fsum_ure_masked = is_fsum_ure && io.maskForReduction.orR
+    val is_fsum_ure_masked = is_fsum_ure && !io.maskForReduction.andR
+    val is_fsum_ore_notmasked = is_fsum_ore && io.maskForReduction(0)
+    val is_fsum_ore_masked = is_fsum_ore && !io.maskForReduction(0)
     val result_fsum_ure_masked = Mux(
       io.maskForReduction === 0.U,
       0.U(floatWidth.W),
       Mux(io.maskForReduction(0), io.fp_a, io.fp_b)
+    )
+    val result_fsum_ore_masked = Mux(
+      io.maskForReduction(0) === 0.U,
+      0.U(floatWidth.W),
+      io.fp_b
     )
     val outInf = Cat(is_fmax_re, Fill(exponentWidth, 1.U), 0.U((significandWidth-1).W))
     val re_masked_one_out = Mux(
@@ -2446,6 +2475,7 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
         is_fsum_ure_masked,
         is_fmax_re,
         is_fmin_re,
+        is_fsum_ore_masked,
       ),
       Seq(
         result_min,
@@ -2465,14 +2495,15 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
         result_fsum_ure_masked,
         result_fmax_re,
         result_fmin_re,
+        result_fsum_ore_masked,
       )
     )
     val fflags_NV_stage0 = ((is_min | is_max) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_feq | is_fne) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN))
     val fflags_stage0 = Cat(fflags_NV_stage0, 0.U(4.W))
-    io.fp_c := Mux(RegNext(is_add | is_sub | is_fsum_ure_notmasked), float_adder_result, RegNext(result_stage0))
-    io.fflags := Mux(RegNext(is_add | is_sub | is_fsum_ure_notmasked), float_adder_fflags, RegNext(fflags_stage0))
+    io.fp_c := Mux(RegNext(is_add | is_sub | is_fsum_ure_notmasked | is_fsum_ore_notmasked), float_adder_result, RegNext(result_stage0))
+    io.fflags := Mux(RegNext(is_add | is_sub | is_fsum_ure_notmasked | is_fsum_ore_notmasked), float_adder_fflags, RegNext(fflags_stage0))
   }
   else {
     io.fp_c := float_adder_result
