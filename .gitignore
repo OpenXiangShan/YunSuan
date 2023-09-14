@@ -58,6 +58,7 @@ xlnx_auto_0_xdb/
 xst/
 _ngo/
 _xmsgs/
+generated/
 ### Eclipse template
 *.pydevproject
 .metadata
