@@ -18,6 +18,7 @@ trait FloatFormat{
   def fracWidth : Int
   def bias      : Int
   def width =  signWidth + expWidth + fracWidth
+  def precision = fracWidth + 1
   def maxExp = (BigInt(1) << expWidth) - 2
   def minExp = 1
 }

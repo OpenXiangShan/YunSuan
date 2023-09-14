@@ -16,12 +16,15 @@ class CVT32(width: Int = 32) extends CVT(width){
     val is_sew_32 = io.sew === "b10".U
 
     val is_single = io.opType.tail(3).head(2) === "b00".U
-    val is_widden = io.opType.tail(3).head(2) === "b01".U
+    val is_widen  = io.opType.tail(3).head(2) === "b01".U
     val is_narrow = io.opType.tail(3).head(2) === "b10".U
 
-    val is_vfr = io.opType.head(3) === "b111".U
+    val is_vfr = io.opType(5).asBool
     val is_fp2int = io.opType.head(2) === "b10".U & !is_vfr
     val is_int2fp = io.opType.head(2) === "b01".U & !is_vfr
+
+    val in_is_fp = io.opType.head(1).asBool
+    val out_is_fp = io.opType.tail(1).head(1).asBool
 
     val is_signed_int = io.opType(0)
     val rm = io.rm
@@ -48,131 +51,210 @@ class CVT32(width: Int = 32) extends CVT(width){
    *      -> ui8      
    *      ->  i8      
    */
-    when(is_fp2int) {
-        val in_is_fp32 = (is_sew_32 & is_single) | (is_sew_16 & is_narrow)
-        when(in_is_fp32) {
-            val in = VectorFloat.fromUInt(io.src, expWidth_f32, precision_f32)
-            val raw_in = RawVectorFloat.fromVFP(in, Some(in.decode.expNotZero))
-            val max_int_exp = Mux(is_single, VectorFloat.expBias(expWidth_f32).U +& 31.U, VectorFloat.expBias(expWidth_f32).U +& 15.U)
-            val exp_of = raw_in.exp > max_int_exp
+  when(is_fp2int) {
+    val in_is_fp32 = (is_sew_32 & is_single | is_sew_16 & is_narrow).asBool
+    val fp32toint32 = in_is_fp32 && is_single
+    val fp32toint16 = in_is_fp32 && is_narrow
+    val fp16toint32 = !in_is_fp32 && is_widen
+    val fp16toint16 = !in_is_fp32 && is_single
+    val fp16toint8 = !in_is_fp32 && is_narrow
+    val src = Mux(in_is_fp32, io.src,
+        io.src.tail(16).head(1) ## 0.U(3.W) ## io.src.tail(17).head(f16.expWidth) ## io.src.tail(f16.expWidth+17) ## 0.U(13.W))
+    val in = VectorFloat.fromUInt(src, f32.expWidth, f32.precision)
+    val expNotZero = Mux1H(
+      Seq(fp32toint32 || fp32toint16,
+        fp16toint32 || fp16toint16 || fp16toint8),
+      Seq(in.decode.expNotZero,
+        src.tail(4).head(f16.expWidth).orR)
+    )
+    val raw_in = RawVectorFloat.fromVFP(in, Some(expNotZero))
+    val max_int_exp = Mux1H(
+      Seq(fp32toint32,
+        fp32toint16,
+        fp16toint32,
+        fp16toint16,
+        fp16toint8,
+        ),
+      Seq(VectorFloat.expBias(f32.expWidth).U +& 31.U,
+        VectorFloat.expBias(f32.expWidth).U +& 15.U,
+        VectorFloat.expBias(f16.expWidth).U +& 31.U,
+        VectorFloat.expBias(f16.expWidth).U +& 15.U,
+        VectorFloat.expBias(f16.expWidth).U +& 7.U
+      )
+    )
+    val exp_of = raw_in.exp > max_int_exp || (!in_is_fp32 && src.tail(4).head(f16.expWidth).andR)
 
-            val lpath_shamt = Mux(is_single, raw_in.exp - (VectorFloat.expBias(expWidth_f32) + 23).U, 0.U)
-            val lpath_sig_shifted = Mux(is_single, (raw_in.sig << lpath_shamt(7, 0))(31, 0), 0.U)
-            val lpath_iv = Mux(is_single, (!is_signed_int & raw_in.sign).asUInt, 0.U).asBool
-            val lpath_may_of = Mux(is_single, (is_signed_int & (raw_in.exp === max_int_exp)).asUInt, 0.U).asBool
-            val lpath_pos_of = Mux(is_single, (lpath_may_of & !raw_in.sign).asUInt, 0.U).asBool
-            val lpath_neg_of = Mux(is_single, (lpath_may_of & raw_in.sign & raw_in.sig.tail(1).orR).asUInt, 0.U).asBool
-            val lpath_of = lpath_pos_of | lpath_neg_of
+    // left
+    val lpath_shamt = raw_in.exp - Mux1H(
+      Seq(fp32toint32,
+        fp16toint16 || fp16toint32
+        ),
+      Seq((VectorFloat.expBias(f32.expWidth) + f32.fracWidth).U,
+        (VectorFloat.expBias(f16.expWidth) + f16.fracWidth).U)
+    )
+    val lpath_max_shamt = Mux1H(
+      Seq(fp32toint32,
+        fp16toint16,
+        fp16toint32),
+      Seq((31 - f32.fracWidth).U,
+        (15 - f16.fracWidth).U,
+        (31 - f16.fracWidth).U)
+    )
+    val lpath_sig_shifted = Mux1H(
+      Seq(fp32toint32,
+        fp16toint16 || fp16toint32),
+      Seq((raw_in.sig << lpath_shamt(lpath_max_shamt.getWidth - 1, 0))(31, 0),
+      (raw_in.sig << lpath_shamt(lpath_max_shamt.getWidth - 1, 0))(31, 13))
+    )
 
-            val rpath_shamt = Mux(is_single, (VectorFloat.expBias(expWidth_f32) + 23).U - raw_in.exp, (VectorFloat.expBias(expWidth_f32) + 15).U - raw_in.exp)
-            val (rpath_sig_shifted, rpath_sticky) = ShiftRightJam(Cat(raw_in.sig, 0.U), rpath_shamt)
+    val lpath_iv = (fp32toint32 || fp16toint16 || fp16toint32) && !is_signed_int && raw_in.sign
+    val lpath_may_of = (fp32toint32 || fp16toint16 || fp16toint32) && is_signed_int && (raw_in.exp === max_int_exp)
+    val lpath_pos_of = (fp32toint32 || fp16toint16 || fp16toint32) && lpath_may_of && !raw_in.sign
+    val lpath_neg_of = (fp32toint32 || fp16toint16 || fp16toint32) && lpath_may_of && raw_in.sign && raw_in.sig.tail(1).orR
+    val lpath_of = lpath_pos_of || lpath_neg_of
 
-            val rpath_rounder = Module(new RoundingUnit(precision_f32))
-            rpath_rounder.io.in := Mux(is_single, rpath_sig_shifted.head(precision_f32).asUInt, rpath_sig_shifted.head(16).asUInt)
-            rpath_rounder.io.roundIn := Mux(is_single, rpath_sig_shifted.tail(precision_f32).asUInt, rpath_sig_shifted.tail(16).head(1).asUInt).asBool
-            rpath_rounder.io.stickyIn := rpath_sticky | Mux(is_narrow, rpath_sig_shifted.tail(17).orR.asUInt, 0.U).asBool
-            rpath_rounder.io.signIn := raw_in.sign
-            rpath_rounder.io.rm := rm
+    // right
+    val rpath_shamt = Mux1H(
+      Seq(fp32toint32,
+        fp32toint16,
+        fp16toint16 || fp16toint32,
+        fp16toint8),
+      Seq((VectorFloat.expBias(f32.expWidth) + f32.fracWidth).U,
+        (VectorFloat.expBias(f32.expWidth) + 15).U,
+        (VectorFloat.expBias(f16.expWidth) + f16.fracWidth).U,
+        (VectorFloat.expBias(f16.expWidth) + 8 - 1).U)
+    ) - raw_in.exp
+    val (rpath_sig_shifted, rpath_sticky) = ShiftRightJam(Cat(raw_in.sig,0.U), rpath_shamt)
 
-            val out_r_up = rpath_rounder.io.in + 1.U
-            val out = Mux(rpath_rounder.io.r_up, out_r_up, rpath_rounder.io.in)
-            val cout = rpath_rounder.io.r_up && Mux(is_narrow, rpath_rounder.io.in.tail(9).andR.asUInt, rpath_rounder.io.in.andR.asUInt).asBool
+    val rpath_rounder = Module(new RoundingUnit(f32.precision))
+    rpath_rounder.io.in := Mux1H(
+      Seq(fp32toint32,
+        fp32toint16,
+        fp16toint16 || fp16toint32,
+        fp16toint8),
+      Seq(rpath_sig_shifted.head(f32.precision),
+        rpath_sig_shifted.head(16),
+        rpath_sig_shifted.head(f16.precision),
+        rpath_sig_shifted.head(8))
+    )
+    rpath_rounder.io.roundIn := Mux1H(
+      Seq(fp32toint32,
+        fp32toint16,
+        fp16toint16 || fp16toint32,
+        fp16toint8),
+      Seq(rpath_sig_shifted.tail(f32.precision).head(1),
+        rpath_sig_shifted.tail(16).head(1),
+        rpath_sig_shifted.tail(f16.precision).head(1),
+        rpath_sig_shifted.tail(8).head(1))
+    )
+    rpath_rounder.io.stickyIn := Mux1H(
+      Seq(fp32toint32,
+        fp32toint16,
+        fp16toint16 || fp16toint32,
+        fp16toint8),
+      Seq(rpath_sticky,
+        rpath_sticky || rpath_sig_shifted.tail(17).orR,
+        rpath_sticky || rpath_sig_shifted.tail(12).orR,
+        rpath_sticky || rpath_sig_shifted.tail(9).orR)
+    )
+    rpath_rounder.io.signIn := raw_in.sign
+    rpath_rounder.io.rm := rm
 
-            val rpath_sig = Mux(is_single, Cat(0.U(7.W), cout, out), Cat(0.U(8.W), out))
-            val rpath_ix = rpath_rounder.io.inexact
-            val rpath_iv = !is_signed_int & raw_in.sign & rpath_sig.orR
+    val out = Mux(rpath_rounder.io.r_up, rpath_rounder.io.in + 1.U, rpath_rounder.io.in)
+    val cout = rpath_rounder.io.r_up && Mux1H(
+      Seq(fp32toint32 || fp16toint32,
+        fp32toint16 || fp16toint16,
+        fp16toint8),
+      Seq(rpath_rounder.io.in.andR,
+        rpath_rounder.io.in.tail(9).andR,
+        rpath_rounder.io.in.tail(17).andR))
 
-            val rpath_pos_of = !raw_in.sign &
-                Mux(is_signed_int,
-                    (raw_in.exp === 142.U | (raw_in.exp === 141.U & cout)).asUInt,
-                    (raw_in.exp === 142.U & cout).asUInt).asBool
-            val rpath_neg_of = raw_in.sign & (raw_in.exp === 142.U) & (rpath_rounder.io.in.tail(8).orR | rpath_rounder.io.r_up)
-            val rpath_of = Mux(is_narrow, (rpath_neg_of | rpath_pos_of).asUInt, cout.asUInt).asBool
+    val rpath_sig = Mux1H(
+      Seq(fp32toint32,
+        fp32toint16,
+        fp16toint16 || fp16toint32,
+        fp16toint8),
+      Seq(Cat(0.U((32 - f32.precision - 1).W), cout, out),
+        Cat(0.U(8.W), out),
+        Cat(0.U((32 - f16.precision - 1).W), cout, out(10,0)),
+        Cat(0.U(21.W), out(10,0)))
+    )
 
-            val sel_lpath = raw_in.exp >= 150.U
-            val of = exp_of | sel_lpath & lpath_of | !sel_lpath & rpath_of
-            val iv = of | sel_lpath & lpath_iv | !sel_lpath & rpath_iv
-            val ix = !iv & !sel_lpath & rpath_ix
+    val rpath_ix = rpath_rounder.io.inexact || (fp16toint8 && rpath_sig_shifted.tail(8).orR)
+    val rpath_iv = !is_signed_int && raw_in.sign && rpath_sig.orR
 
-            val int_abs = Mux(sel_lpath, lpath_sig_shifted, rpath_sig)
-            val int = Mux(is_narrow, 
-                Mux(raw_in.sign & is_signed_int, -int_abs.tail(16), int_abs.tail(16)), 
-                Mux(raw_in.sign & is_signed_int, -int_abs, int_abs))
-        
-            val max_int32 = Mux(is_single, Cat(!is_signed_int, ~0.U(31.W)), Cat(!is_signed_int, ~0.U(15.W)))
-            val min_int32 = Mux(is_single, Cat(is_signed_int,   0.U(31.W)), Cat(is_signed_int,   0.U(15.W)))
+    val rpath_pos_of = !raw_in.sign &&
+      Mux(is_signed_int,
+        Mux1H(
+          Seq(fp32toint16,
+            fp16toint8),
+          Seq((raw_in.exp === 142.U) || (raw_in.exp === 141.U) && cout,
+            (raw_in.exp === 22.U) || (raw_in.exp === 21.U) && cout)
+        ),
+        Mux1H(
+          Seq(fp32toint16,
+            fp16toint8),
+          Seq((raw_in.exp === 142.U) && cout,
+            (raw_in.exp === 22.U) && cout)
+        )
+      )
 
-            result := Mux(iv, Mux(in.decode.isNaN | !raw_in.sign, max_int32, min_int32), int)
-            fflags := Cat(iv, false.B, false.B, false.B, ix)
-        }.otherwise {
-            val in = VectorFloat.fromUInt(io.src, expWidth_f16, precision_f16)
-            val raw_in = RawVectorFloat.fromVFP(in, Some(in.decode.expNotZero))
-            val max_int_exp = Mux(is_single, VectorFloat.expBias(expWidth_f16).U +& 15.U, Mux(is_widden, VectorFloat.expBias(expWidth_f16).U +& 31.U, VectorFloat.expBias(expWidth_f16).U +& 7.U))
-            val exp_of = (raw_in.exp > max_int_exp) | in.decode.expIsOnes
+    val rpath_neg_of = raw_in.sign && Mux1H(
+      Seq(fp32toint16,
+        fp16toint8),
+      Seq(raw_in.exp === 142.U && (rpath_rounder.io.in.tail(8).orR || rpath_rounder.io.r_up),
+        raw_in.exp === 22.U && (rpath_rounder.io.in.tail(17).orR || rpath_rounder.io.r_up))
+    )
+    val rpath_of = is_narrow && (rpath_pos_of || rpath_neg_of) || !is_narrow && cout
 
-            val lpath_shamt = Mux(is_single | is_widden, raw_in.exp - (VectorFloat.expBias(expWidth_f16) + precision_f16 - 1).U, 0.U)
-            val lpath_max_shamt = Mux(is_single, (15 - (precision_f16 - 1)).U, Mux(is_widden, (31 - (precision_f16 - 1)).U, 0.U))
-            val lpath_max_shamt_width = lpath_max_shamt.getWidth
-            val lpath_sig_shifted =
-                Mux(is_single, (raw_in.sig << lpath_shamt(lpath_max_shamt_width - 1, 0))(15, 0),
-                    Mux(is_widden, (raw_in.sig << lpath_shamt(lpath_max_shamt_width - 1, 0))(31, 0), 0.U))
-            val lpath_iv = Mux(is_single | is_widden, (!is_signed_int & raw_in.sign).asUInt, 0.U).asBool
-            val lpath_may_of = Mux(is_single | is_widden, (is_signed_int & (raw_in.exp === max_int_exp)).asUInt, 0.U).asBool
-            val lpath_pos_of = Mux(is_single | is_widden, (lpath_may_of & !raw_in.sign).asUInt, 0.U).asBool
-            val lpath_neg_of = Mux(is_single | is_widden, (lpath_may_of & raw_in.sign & raw_in.sig.tail(1).orR).asUInt, 0.U).asBool
-            val lpath_of = lpath_pos_of | lpath_neg_of
+    val sel_lpath = raw_in.exp >= Mux1H(
+      Seq(in_is_fp32,
+        !in_is_fp32),
+      Seq((VectorFloat.expBias(f32.expWidth) + f32.fracWidth).U,
+        (VectorFloat.expBias(f16.expWidth) + f16.fracWidth).U)
+    )
 
-            val rpath_shamt = Mux(is_single | is_widden,
-                (VectorFloat.expBias(expWidth_f16) + precision_f16 - 1).U - raw_in.exp,
-                (VectorFloat.expBias(expWidth_f16) + 8 - 1).U - raw_in.exp)
-            val (rpath_sig_shifted, rpath_sticky) = ShiftRightJam(Cat(raw_in.sig, 0.U), rpath_shamt)
+    val of = exp_of || sel_lpath && lpath_of || !sel_lpath && rpath_of
+    val iv = of || sel_lpath && lpath_iv || !sel_lpath && rpath_iv
+    val ix = !iv && !sel_lpath && rpath_ix
 
-            val rpath_rounder = Module(new RoundingUnit(precision_f16))
-            rpath_rounder.io.in := Mux(is_single | is_widden, rpath_sig_shifted.head(precision_f16), rpath_sig_shifted.head(8))
-            rpath_rounder.io.roundIn := Mux(is_single | is_widden, rpath_sig_shifted.tail(precision_f16), rpath_sig_shifted.tail(8).head(1)).asBool
-            rpath_rounder.io.stickyIn := rpath_sticky || Mux(is_narrow, rpath_sig_shifted.tail(9).orR.asUInt, 0.U).asBool
-            rpath_rounder.io.signIn := raw_in.sign.asBool
-            rpath_rounder.io.rm := rm
+    val int_abs = Mux(sel_lpath, lpath_sig_shifted, rpath_sig)
+    val sign = raw_in.sign && is_signed_int
+    val raw_int = Mux1H(
+      Seq(fp32toint16 || fp16toint16,
+        fp32toint32 || fp16toint32,
+        fp16toint8),
+      Seq(int_abs.tail(16),
+        int_abs,
+        int_abs.tail(24))
+    )
+    val int = Mux(sign, -raw_int, raw_int)
 
-            val out_r_up = rpath_rounder.io.in + 1.U
-            val out = Mux(rpath_rounder.io.r_up, out_r_up, rpath_rounder.io.in)
-            val cout = rpath_rounder.io.r_up && Mux(is_narrow, rpath_rounder.io.in.tail(4).andR.asUInt, rpath_rounder.io.in.andR.asUInt).asBool
-
-            val rpath_sig = Mux(is_single | is_widden, Cat(0.U((32 - precision_f16 - 1).W), cout, out),
-                Cat(0.U(21.W), out))
-
-            val rpath_ix = rpath_rounder.io.inexact || Mux(is_narrow, rpath_sig_shifted.tail(8).orR.asUInt, 0.U).asBool
-            val rpath_iv = !is_signed_int & raw_in.sign & rpath_sig.orR
-
-            val rpath_pos_of = !raw_in.sign &
-                Mux(is_signed_int,
-                (raw_in.exp === 22.U) | (raw_in.exp === 21.U & cout),
-                (raw_in.exp === 22.U) & cout)
-            val rpath_neg_of = raw_in.sign & (raw_in.exp === 22.U) & (rpath_rounder.io.in.tail(4).orR | rpath_rounder.io.r_up)
-            val rpath_of = Mux(is_narrow, (rpath_neg_of | rpath_pos_of).asUInt, cout.asUInt).asBool
-
-            val sel_lpath = raw_in.exp >= (VectorFloat.expBias(expWidth_f16) + precision_f16 - 1).U
-
-            val of = exp_of | (sel_lpath & lpath_of) | (!sel_lpath & rpath_of)
-            val iv = of | (sel_lpath & lpath_iv) | (!sel_lpath & rpath_iv)
-            val ix = !iv & !sel_lpath & rpath_ix
-
-            val int_abs = Mux(sel_lpath, lpath_sig_shifted, rpath_sig)
-            val int =
-                Mux(is_narrow,
-                Mux(raw_in.sign & is_signed_int,
-                    -int_abs.tail(24), int_abs.tail(24)),
-                Mux(is_single,
-                    Mux(raw_in.sign & is_signed_int, -int_abs.tail(16), int_abs.tail(16)),
-                    Mux(raw_in.sign & is_signed_int, -int_abs, int_abs)))
-
-            val max_int = Mux(is_single, Cat(!is_signed_int, ~0.U(15.W)), Mux(is_narrow, Cat(!is_signed_int, ~0.U(7.W)), Cat(!is_signed_int, ~0.U(31.W))))
-            val min_int = Mux(is_single, Cat(is_signed_int,   0.U(15.W)), Mux(is_narrow, Cat(is_signed_int,   0.U(7.W)), Cat(is_signed_int,   0.U(31.W))))
-
-            result := Mux(iv, Mux(in.decode.isNaN | !raw_in.sign, max_int, min_int).asUInt, int)
-            fflags := Cat(iv, false.B, false.B, false.B, ix)
-        }
-    }.elsewhen(is_int2fp) {
+    val max_int = Mux1H(
+      Seq(fp32toint32 || fp16toint32,
+        fp32toint16 || fp16toint16,
+        fp16toint8),
+      Seq(Cat(!is_signed_int, ~0.U(31.W)),
+        Cat(!is_signed_int,   ~0.U(15.W)),
+        Cat(!is_signed_int,   ~0.U(7.W)))
+    )
+    val min_int = Mux1H(
+      Seq(fp32toint32 || fp16toint32,
+        fp32toint16 || fp16toint16,
+        fp16toint8),
+      Seq(Cat(is_signed_int, 0.U(31.W)),
+        Cat(is_signed_int,   0.U(15.W)),
+        Cat(is_signed_int,   0.U(7.W)))
+    )
+    val sign_or_nan = Mux1H(
+      Seq(fp32toint32 || fp32toint16,
+        fp16toint32 || fp16toint16 || fp16toint8),
+      Seq(in.decode.isNaN,
+        src.tail(4).head(f16.expWidth).andR && src.tail(9).orR)
+    ) | !raw_in.sign
+    result := Mux(iv, Mux(sign_or_nan, max_int, min_int), int)
+    fflags := Cat(iv, false.B, false.B, false.B, ix)
+  }.elsewhen(is_int2fp) {
 /**
      * inttofp         
      * ui32 -> fp32      
@@ -188,83 +270,141 @@ class CVT32(width: Int = 32) extends CVT(width){
      * i8  ->      
      *
      */
-        val out_is_fp32 = (is_sew_32 & is_single) | (is_sew_16 & is_widden)
-        when(out_is_fp32) {
-            val sign = is_signed_int & Mux(is_widden, io.src(15), io.src(31))
-            val in_sext = Cat(Fill(16, io.src(15)), io.src(15, 0))
-            val in = Mux(is_signed_int & is_widden, in_sext, io.src)
-            val in_abs = Mux(sign, (~in).asUInt + 1.U, in)
+        val out_is_fp32 = (is_sew_32 && is_single) || (is_sew_16 && is_widen)
+        val int32tofp32 = out_is_fp32 && is_single
+        val int16tofp32 = out_is_fp32 && is_widen
+        val int32tofp16 = !out_is_fp32 && is_narrow
+        val int16tofp16 = !out_is_fp32 && is_single
+        val int8tofp16 = !out_is_fp32 && is_widen
+        val sign = is_signed_int && Mux1H(
+        Seq(int32tofp32 || int32tofp16,
+            int16tofp32 || int16tofp16,
+            int8tofp16),
+        Seq(io.src.head(1).asBool,
+            io.src.tail(16).head(1).asBool,
+            io.src.tail(24).head(1).asBool)
+        )
+        val in_sext = Mux1H(
+        Seq(int32tofp32 || int32tofp16,
+            int16tofp32 || int16tofp16,
+            int8tofp16),
+        Seq(io.src,
+            Cat(Fill(16, io.src(15)), io.src(15,0)),
+            Cat(Fill(24, io.src(7)), io.src(7,0)))
+        )
+        val in = Mux1H(
+        Seq(is_signed_int && (int16tofp32 || int8tofp16 || int16tofp16),
+            out_is_fp32 && !(is_signed_int && int16tofp32) || !out_is_fp32 && !(is_signed_int && (int8tofp16 || int16tofp16))),
+        Seq(in_sext,
+            io.src)
+        )
+        val in_abs = Mux(sign, (~in).asUInt + 1.U, in)
 
-            val lzc = CLZ(in_abs)
+        val exp_of = int32tofp16 && in_abs.head(16).orR
 
-            val in_shift = (in_abs << lzc)(30, 0)
-            val exp_raw = (VectorFloat.expBias(expWidth_f32) + 31).U - lzc
+        val lzc = Mux1H(
+        Seq(out_is_fp32 || exp_of,
+            int32tofp16 && !in_abs.head(16).orR || int16tofp16 || int8tofp16,
+        ),
+        Seq(CLZ(in_abs),
+            CLZ(in_abs(15,0)))
+        )
 
-            val sig_raw = Mux(is_widden, in_shift.head(16), in_shift.head(23))
-            val round_bit = Mux(is_widden, in_shift.tail(16).head(1), in_shift.tail(23).head(1))
-            val sticky_bit = Mux(is_widden, in_shift.tail(16).orR.asUInt, in_shift.tail(precision_f32).orR.asUInt).asBool
-            val rounder = Module(new RoundingUnit(precision_f32 - 1))
-            rounder.io.in := sig_raw
-            rounder.io.roundIn := round_bit
-            rounder.io.stickyIn := sticky_bit
-            rounder.io.signIn := Mux(is_signed_int, sign.asUInt, 0.U).asBool
-            rounder.io.rm := rm
+        val in_shift = Mux1H(
+        Seq(out_is_fp32 || exp_of,
+            int32tofp16 && !in_abs.head(16).orR || int16tofp16 || int8tofp16
+        ),
+        Seq((in_abs << lzc)(30, 0),
+            Cat((in_abs << lzc)(14,0), 0.U(16.W)))
+        )
+        val exp_raw = Mux1H(
+        Seq(out_is_fp32,
+            !out_is_fp32),
+        Seq(VectorFloat.expBias(f32.expWidth).asUInt +& 31.U - lzc,
+            VectorFloat.expBias(f16.expWidth).asUInt +& 15.U - lzc)
+        )
 
-            val out_r_up = rounder.io.in + 1.U
-            val out = Mux(rounder.io.r_up, out_r_up, rounder.io.in)
-            val cout = rounder.io.r_up && Mux(is_narrow, rounder.io.in.tail(9).andR.asUInt, rounder.io.in.andR.asUInt).asBool
+        val sig_raw = Mux1H(
+        Seq(int16tofp32,
+            int32tofp32,
+            int8tofp16,
+            int16tofp16 || int32tofp16),
+        Seq(in_shift.head(16),
+            in_shift.head(23),
+            in_shift.head(8),
+            in_shift.head(10))
+        )
+        val round_bit = Mux1H(
+        Seq(int16tofp32,
+            int32tofp32,
+            int8tofp16,
+            int16tofp16 || int32tofp16),
+        Seq(in_shift.tail(16).head(1),
+            in_shift.tail(23).head(1),
+            in_shift.tail(8).head(1),
+            in_shift.tail(10).head(1))
+        )
+        val sticky_bit = Mux1H(
+        Seq(int16tofp32,
+            int32tofp32,
+            int8tofp16,
+            int16tofp16 || int32tofp16),
+        Seq(in_shift.tail(16).orR,
+            in_shift.tail(f32.precision).orR,
+            in_shift.tail(8).orR,
+            in_shift.tail(f16.precision).orR)
+        )
+        val rounder = Module(new RoundingUnit(f32.fracWidth))
+        rounder.io.in := sig_raw
+        rounder.io.roundIn := round_bit
+        rounder.io.stickyIn := sticky_bit
+        rounder.io.signIn := sign
+        rounder.io.rm := io.rm
 
+        val out = Mux(rounder.io.r_up, rounder.io.in + 1.U, rounder.io.in)
+        val cout = rounder.io.r_up && Mux1H(
+        Seq(int16tofp32,
+            int32tofp32,
+            int8tofp16,
+            int16tofp16 || int32tofp16),
+        Seq(rounder.io.in.tail(7).andR,
+            rounder.io.in.andR,
+            rounder.io.in.tail(15).andR,
+            rounder.io.in.tail(13).andR))
 
-            val exp = Mux(in === 0.U, 0.U, exp_raw + cout)
-            val sig = out
+        val exp = Mux(in === 0.U, 0.U, exp_raw + cout)
+        val sig = out
 
-            val of = exp === 255.U
-            val ix = rounder.io.inexact
+        val of = Mux1H(
+        Seq(out_is_fp32,
+            int32tofp16,
+            !out_is_fp32 && !int32tofp16),
+        Seq(exp === 255.U,
+            exp_of || exp === 31.U,
+            exp === 31.U)
+        )
+        val ix = Mux1H(
+        Seq(out_is_fp32 || int16tofp16 || int8tofp16,
+            int32tofp16),
+        Seq(rounder.io.inexact,
+            exp_of || rounder.io.inexact)
+        )
 
-            result := Cat(Mux(is_signed_int, sign, 0.U), exp, Mux(is_widden, Cat(sig.tail(7), 0.U(7.W)), sig))
-            fflags := Cat(0.U(2.W), of, 0.U, ix)
+        val result_fp = Cat(sign, Mux(RoundingUnit.is_rmin(io.rm, sign), Cat(Fill(4, 1.U), 0.U, Fill(10, 1.U)), Cat(Fill(5, 1.U), Fill(10, 0.U))))
 
-        }.otherwise {
-            val sign = is_signed_int & Mux(is_single, io.src(15).asUInt, Mux(is_widden, io.src(7).asUInt, io.src.head(1).asUInt)).asBool
-            val in_sext =
-                Mux(is_single, Cat(Fill(16, io.src(15)), io.src(15, 0)),
-                    Mux(is_widden, Cat(Fill(24, io.src(7)), io.src(7, 0)), io.src))
-            val in = Mux(is_signed_int & (is_widden | is_single), in_sext, io.src)
-            val in_abs = Mux(sign, (~in).asUInt + 1.U, in)
-
-            val exp_of = Mux(is_narrow, in_abs.head(16).orR.asUInt, 0.U).asBool
-
-            val lzc = Mux(is_narrow, Mux(!in_abs.head(16).orR, CLZ(in_abs(15, 0)), CLZ(in_abs)), CLZ(in_abs(15, 0)))
-
-            val in_shift = Mux(is_narrow, Mux(!in_abs.head(16).orR, Cat((in_abs << lzc)(14, 0), 0.U(16.W)), (in_abs << lzc)(30, 0)), Cat((in_abs << lzc)(14, 0), 0.U(16.W)))
-            val exp_raw = VectorFloat.expBias(expWidth_f16).U +& 15.U - lzc.asUInt
-
-            val sig_raw = Mux(is_widden, in_shift.head(8).asUInt, in_shift.head(10).asUInt)
-            val round_bit = Mux(is_widden, in_shift.tail(8).head(1), in_shift.tail(10).head(1))
-            val sticky_bit = Mux(is_widden, in_shift.tail(8).orR.asUInt, in_shift.tail(precision_f16).orR.asUInt).asBool
-            val rounder = Module(new RoundingUnit(precision_f16 - 1))
-            rounder.io.in := sig_raw
-            rounder.io.roundIn := round_bit
-            rounder.io.stickyIn := sticky_bit
-            rounder.io.signIn := sign
-            rounder.io.rm := rm
-
-            val out_r_up = rounder.io.in + 1.U
-            val out = Mux(rounder.io.r_up, out_r_up, rounder.io.in)
-            val cout = rounder.io.r_up && Mux(is_narrow, rounder.io.in.tail(9).andR.asUInt, rounder.io.in.andR.asUInt).asBool
-
-            val exp = Mux(in === 0.U, 0.U, exp_raw + cout)
-            val sig = out
-
-            val of = Mux(is_narrow, (exp_of | (exp === 31.U)).asUInt, (exp === 31.U).asUInt).asBool
-            val ix = Mux(is_narrow, exp_of | rounder.io.inexact, rounder.io.inexact)
-
-
-            val result_fp = Cat(sign, Mux(RoundingUnit.is_rmin(rm, sign), Cat(Fill(4, 1.U), 0.U, Fill(10, 1.U)), Cat(Fill(5, 1.U), Fill(10, 0.U))))
-
-            result := Mux(is_narrow & of, result_fp, Cat(sign, exp, Mux(is_widden, Cat(sig.tail(2), 0.U(2.W)), sig)))
-            fflags := Cat(0.U(2.W), of, 0.U, ix)
-        }
+        result := Mux1H(
+        Seq(int32tofp32,
+            int16tofp32,
+            int32tofp16 && of,
+            int8tofp16,
+            int32tofp16 && !of || int16tofp16),
+        Seq(Cat(sign, exp, sig),
+            Cat(sign, exp, sig.tail(7), 0.U(7.W)),
+            result_fp,
+            Cat(sign, exp(4,0), sig(7,0), 0.U(2.W)),
+            Cat(sign, exp(4,0), sig(9,0)))
+        )
+        fflags := Cat(false.B, false.B, of, false.B, ix)
     }.elsewhen(is_vfr) {
         val in_is_fp16 = is_sew_16
         val in_is_fp32 = is_sew_32
