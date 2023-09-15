@@ -17,7 +17,7 @@ trait VSPParameter {
   val VFA_latency: Int = 1
   val VPERM_latency: Int = 1
   val VID_latency: Int = 99
-  val VCVT_latency: Int = 0 // ??
+  val VCVT_latency: Int = 2 // ??
 }
 
 object VPUTestFuType { // only use in test, difftest with xs
