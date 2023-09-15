@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import yunsuan.util.LookupTree
 import yunsuan.vector.VectorConvert.util.{CLZ, ShiftRightJam, VFRSqrtTable, VFRecTable, RoundingUnit}
+import yunsuan.vector.VectorConvert.RoundingModle._
 
 
 class CVT16(width: Int = 16) extends CVT(width){
@@ -35,6 +36,7 @@ class CVT16(width: Int = 16) extends CVT(width){
    when(is_fp2int) {
     val in = VectorFloat.fromUInt(io.src, expWidth, precision)
     val raw_in = RawVectorFloat.fromVFP(in, Some(in.decode.expNotZero))
+    val raw_in_reg0 = RegNext(raw_in)
     
     // single max exp = bias +& 15.U, narrow max exp = bias +& 7.U
     val max_int_exp = Mux(is_single, 30.U, 22.U)
@@ -66,34 +68,36 @@ class CVT16(width: Int = 16) extends CVT(width){
 
     val out_r_up = rpath_rounder.io.in + 1.U
     val out = Mux(rpath_rounder.io.r_up, out_r_up, rpath_rounder.io.in)
+    val out_reg0 = RegNext(out)
     val cout = rpath_rounder.io.r_up && Mux(is_narrow, rpath_rounder.io.in.tail(4).andR.asUInt, rpath_rounder.io.in.andR.asUInt).asBool
+    val cout_reg0 = RegNext(cout)
 
-    val rpath_sig = Mux(is_single, Cat(0.U(4.W), cout, out), Cat(0.U(5.W), out))
+    val rpath_sig = Mux(RegNext(is_single), Cat(0.U(4.W), cout_reg0, out_reg0), Cat(0.U(5.W), out_reg0))
     val rpath_ix = rpath_rounder.io.inexact | Mux(is_narrow, rpath_sig_shifted.tail(8).orR.asUInt, 0.U).asBool
-    val rpath_iv = !is_signed_int & raw_in.sign & rpath_sig.orR
-    val rpath_pos_of = !raw_in.sign &
-        Mux(is_signed_int,
-            (raw_in.exp === 22.U | (raw_in.exp === 21.U & cout)).asUInt,
-            (raw_in.exp === 22.U & cout).asUInt).asBool
+    val rpath_iv = !RegNext(is_signed_int) & raw_in_reg0.sign & rpath_sig.orR
+    val rpath_pos_of = !raw_in_reg0.sign &
+        Mux(RegNext(is_signed_int),
+            (raw_in_reg0.exp === 22.U | (raw_in_reg0.exp === 21.U & cout_reg0)),
+            (raw_in_reg0.exp === 22.U & cout_reg0))
     val rpath_neg_of = raw_in.sign & raw_in.exp === 22.U & (rpath_rounder.io.in.tail(4).orR | rpath_rounder.io.r_up)
-    val rpath_of = Mux(is_narrow, (rpath_pos_of | rpath_neg_of).asUInt, cout.asUInt).asBool
+    val rpath_of = Mux(RegNext(is_narrow), (rpath_pos_of | RegNext(rpath_neg_of)), cout_reg0)
 
     // select result
     val sel_lpath = raw_in.exp >= 25.U
-    val of = exp_of | (sel_lpath & lpath_of) | (!sel_lpath & rpath_of)
-    val iv = of | (sel_lpath & lpath_iv) | (!sel_lpath & rpath_iv)
-    val ix = !iv & !sel_lpath & rpath_ix
+    val of = RegNext(exp_of | sel_lpath & lpath_of) | (RegNext(!sel_lpath) & rpath_of)
+    val iv = of | RegNext(sel_lpath & lpath_iv) | (RegNext(!sel_lpath) & rpath_iv)
+    val ix = !iv & RegNext(!sel_lpath & rpath_ix)
 
-    val int_abs = Mux(sel_lpath, lpath_sig_shifted, rpath_sig)
-    val int = Mux(is_narrow,
-        Mux(raw_in.sign & is_signed_int, -int_abs.tail(8), int_abs.tail(8)),
-        Mux(raw_in.sign & is_signed_int, -int_abs, int_abs))
+    val int_abs = Mux(RegNext(sel_lpath), RegNext(lpath_sig_shifted), rpath_sig)
+    val int = Mux(RegNext(is_narrow),
+        Mux(raw_in_reg0.sign & RegNext(is_signed_int), -int_abs.tail(8), int_abs.tail(8)),
+        Mux(raw_in_reg0.sign & RegNext(is_signed_int), -int_abs, int_abs))
 
     val max_int = Mux(is_single, Cat(!is_signed_int, ~0.U(15.W)), Cat(!is_signed_int, ~0.U(7.W)))
     val min_int = Mux(is_single, Cat(is_signed_int,   0.U(15.W)), Cat(is_signed_int,   0.U(7.W)))
 
-    result := Mux(iv, Mux(in.decode.isNaN | !raw_in.sign, max_int, min_int), int)
-    fflags := Cat(iv, false.B, false.B, false.B, ix)
+    result := RegNext(Mux(iv, RegNext(Mux(in.decode.isNaN | !raw_in.sign, max_int, min_int)), int))
+    fflags := RegNext(Cat(iv, false.B, false.B, false.B, ix))
    }.elsewhen(is_int2fp) {
 /**
    * ui16 -> f16  vfcvt.f.xu.v
@@ -122,19 +126,23 @@ class CVT16(width: Int = 16) extends CVT(width){
 
     val out_r_up = rounder.io.in + 1.U
     val out = Mux(rounder.io.r_up, out_r_up, rounder.io.in)
+    val out_reg0 = RegNext(out)
     val cout = rounder.io.r_up && rounder.io.in.andR.asBool
+    val cout_reg0 = RegNext(cout)
 
-    val exp = Mux(in === 0.U, 0.U, exp_raw + cout)
-    val sig = out
+    val exp = RegNext(Mux(in === 0.U, 0.U, exp_raw + cout))
+    val sig = out_reg0
 
     val of = exp === 31.U
     val ix = rounder.io.inexact
 
-    result := Cat(Mux(is_signed_int, sign.asUInt, 0.U), exp, Mux(is_widen, Cat(sig.tail(2).asUInt, 0.U(2.W)), sig))
-    fflags := Cat(false.B, false.B, of, false.B, ix)
+    result := RegNext(Cat(Mux(RegNext(is_signed_int), RegNext(sign.asUInt), 0.U), exp, Mux(RegNext(is_widen), Cat(sig.tail(2).asUInt, 0.U(2.W)), sig)))
+    fflags := RegNext(Cat(false.B, false.B, of, false.B, RegNext(ix)))
    }.otherwise {    // vfr
     val is_vfrsqrt7 = is_vfr & !is_signed_int
     val is_vfrec7 = is_vfr & is_signed_int
+    val vfrsqrt7Table = Module(new Rsqrt7Table)
+    val vfrec7Table = Module(new Rec7Table)
     val in = VectorFloat.fromUInt(io.src, expWidth, precision)
 
     val is_normal = in.decode.isNormal
@@ -159,15 +167,25 @@ class CVT16(width: Int = 16) extends CVT(width){
       Mux(is_poszero_posinf, Mux(is_normal, in.exp, Cat(Fill(expWidth - zero_minus_lzc.getWidth, zero_minus_lzc.head(1)), zero_minus_lzc)), 0.U),
       Mux(is_normal, in.exp, Cat(Fill(expWidth - zero_minus_lzc.getWidth, zero_minus_lzc.head(1)), zero_minus_lzc)))
 
-    val sig_normalized = Mux(is_vfrsqrt7,
+    val exp_normalized_reg0 = RegNext(exp_normalized)
+
+    val sig_normalized = Wire(UInt(11.W))
+    sig_normalized := Mux(is_vfrsqrt7,
       Mux(is_poszero_posinf, Mux(is_normal, Cat(0.U, in.sig), (in.sig << 1.U).asUInt), 0.U),
       Mux(is_normal, Cat(0.U, in.sig), (in.sig << 1.U).asUInt))
+    
+    val sig_normalized_reg0 = Reg(UInt(11.W))
+    sig_normalized_reg0 := RegNext(sig_normalized)
 
-    val sig_in7 = Mux(is_vfrsqrt7,
-      Cat(exp_normalized(0), (sig_normalized << Mux(is_normal, 0.U, CLZ(sig_normalized)))(9, 4)), // vfrsqrt7  Cat(exp_nor(0), sig_nor(9,4))
-      (sig_normalized << Mux(is_normal, 0.U, CLZ(sig_normalized)))(9,3)) // vfrec7 sig_nor(9,3)
+    val sig_in7 = Mux(RegNext(is_vfrsqrt7),
+      Cat(exp_normalized_reg0(0), (sig_normalized_reg0 << Mux(RegNext(is_normal), 0.U, RegNext(CLZ(sig_normalized))))(9, 4)), // vfrsqrt7  Cat(exp_nor(0), sig_nor(9,4))
+      (sig_normalized_reg0 << Mux(RegNext(is_normal), 0.U, RegNext(CLZ(sig_normalized))))(9,3)) // vfrec7 sig_nor(9,3)
+    
+    vfrsqrt7Table.src := sig_in7
+    vfrec7Table.src := sig_in7
+
     val sig_out7 = Wire(UInt(7.W))
-    sig_out7 := Mux(is_vfrsqrt7, LookupTree(sig_in7, VFRSqrtTable.VFRSqrtTable), LookupTree(sig_in7, VFRecTable.VFRecTable))
+    sig_out7 := Mux(RegNext(is_vfrsqrt7), vfrsqrt7Table.out, vfrec7Table.out)
 
     val out_exp_normalized = Mux(is_vfrec7, 29.U - exp_normalized, 0.U) // 2 * bias - 1 - exp_nor
     val out_exp = Wire(UInt(5.W))
@@ -175,53 +193,53 @@ class CVT16(width: Int = 16) extends CVT(width){
       Mux(is_normal, (44.U - in.exp) >> 1, (44.U + CLZ(in.sig)) >> 1), // if normal (3 * bias - 1 - exp) >> 1 else (3 * bias -1 + CLZ) >>1
       Mux(out_exp_normalized === 0.U | out_exp_normalized.andR, 0.U, out_exp_normalized))
     val out_sig =
-      Mux(is_vfrec7,
-        Mux(out_exp_normalized === 0.U | out_exp_normalized.andR,
-          Mux(is_neg2_bplus1_b | is_pos2_b_bplus1,
+      Mux(RegNext(is_vfrec7),
+        Mux(RegNext(out_exp_normalized) === 0.U | RegNext(out_exp_normalized).andR,
+          Mux(RegNext(is_neg2_bplus1_b | is_pos2_b_bplus1),
             Cat(0.U, 1.U, sig_out7, 0.U),
-            Mux(is_neg2_b_bminus1 | is_pos2_bminus1_b,
+            Mux(RegNext(is_neg2_b_bminus1 | is_pos2_bminus1_b),
               Cat(1.U, sig_out7, 0.U(2.W)),
               Cat(1.U, sig_out7, 0.U(2.W)) >> 1.U)),
           Cat(sig_out7, 0.U(3.W))),
         0.U)
 
-    val out_sign = is_poszero_posinf & in.sign
+    val out_sign = RegNext(is_poszero_posinf & in.sign)
 
     val fp_result = Wire(UInt(16.W))
-    fp_result := Mux(is_vfrsqrt7, Cat(out_sign, out_exp, sig_out7, 0.U(3.W)), Cat(in.sign, out_exp, out_sig))
+    fp_result := Mux(RegNext(is_vfrsqrt7), Cat(out_sign, RegNext(out_exp), sig_out7, 0.U(3.W)), Cat(RegNext(in.sign), RegNext(out_exp), out_sig))
 
 
     val result_nan = Cat(0.U, Fill(6, 1.U), 0.U(9.W))
     val result_inf = Cat(Fill(5, 1.U), Fill(10, 0.U))
     val result_greatest_fin = Cat(Fill(4, 1.U), 0.U, Fill(10, 1.U))
 
-    when(is_vfrsqrt7) {
-      when(is_nan | is_neginf_negzero) {
+    when(ShiftRegister(is_vfrsqrt7, 2)) {
+      when(ShiftRegister(is_nan | is_neginf_negzero, 2)) {
         result := result_nan
-        fflags := Mux(is_snan | is_neginf_negzero, "b10000".U, "b00000".U)
-      }.elsewhen(is_inf) {
-        result := Mux(is_neginf, result_nan, 0.U)
-        fflags := Mux(is_neginf, "b10000".U, "b00000".U)
-      }.elsewhen(is_negzero | is_poszero) {
-        result := Mux(is_negzero, Cat(1.U, result_inf), Cat(0.U, result_inf))
+        fflags := ShiftRegister(Mux(is_snan | is_neginf_negzero, "b10000".U, "b00000".U), 2)
+      }.elsewhen(ShiftRegister(is_inf, 2)) {
+        result := ShiftRegister(Mux(is_neginf, result_nan, 0.U), 2)
+        fflags := ShiftRegister(Mux(is_neginf, "b10000".U, "b00000".U), 2)
+      }.elsewhen(ShiftRegister(is_negzero | is_poszero, 2)) {
+        result := ShiftRegister(Mux(is_negzero, Cat(1.U, result_inf), Cat(0.U, result_inf)), 2)
         fflags := "b01000".U
       }.otherwise {
         result := fp_result
       }
     }.otherwise {
-      when(is_nan) {
+      when(ShiftRegister(is_nan, 2)) {
         result := result_nan
-        fflags := Mux(is_snan, "b10000".U, "b00000".U)
-      }.elsewhen(is_inf) {
-        result := Mux(is_neginf, Cat(1.U, 0.U(15.W)), 0.U)
-      }.elsewhen(is_negzero | is_poszero) {
-        result := Mux(is_negzero, Cat(Fill(6, 1.U), 0.U(10.W)), Cat(0.U, Fill(5, 1.U), 0.U(10.W)))
+        fflags := ShiftRegister(Mux(is_snan, "b10000".U, "b00000".U), 2)
+      }.elsewhen(ShiftRegister(is_inf, 2)) {
+        result := ShiftRegister(Mux(is_neginf, Cat(1.U, 0.U(15.W)), 0.U), 2)
+      }.elsewhen(ShiftRegister(is_negzero | is_poszero, 2)) {
+        result := ShiftRegister(Mux(is_negzero, Cat(Fill(6, 1.U), 0.U(10.W)), Cat(0.U, Fill(5, 1.U), 0.U(10.W))), 2)
         fflags := "b01000".U
-      }.elsewhen(is_neg2_negbminus1_negzero) {
-        result := Mux((rm === RoundingModle.RUP) | (rm === RoundingModle.RTZ), Cat(1.U, result_greatest_fin), Cat(1.U, result_inf))
+      }.elsewhen(ShiftRegister(is_neg2_negbminus1_negzero, 2)) {
+        result := ShiftRegister(Mux((rm === RUP) | (rm === RTZ), Cat(1.U, result_greatest_fin), Cat(1.U, result_inf)), 2)
         fflags := "b00101".U
-      }.elsewhen(is_pos2_poszero_negbminus1) {
-        result := Mux((rm === RoundingModle.RDN) | (rm === RoundingModle.RTZ), Cat(0.U, result_greatest_fin), Cat(0.U, result_inf))
+      }.elsewhen(ShiftRegister(is_pos2_poszero_negbminus1, 2)) {
+        result := ShiftRegister(Mux((rm === RDN) | (rm === RTZ), Cat(0.U, result_greatest_fin), Cat(0.U, result_inf)), 2)
         fflags := "b00101".U
       }.otherwise {
         result := fp_result
