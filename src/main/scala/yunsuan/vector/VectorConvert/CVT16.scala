@@ -15,7 +15,7 @@ class CVT16(width: Int = 16) extends CVT(width){
     val is_widen  = io.opType.tail(3).head(2) === "b01".U
     val is_narrow = io.opType.tail(3).head(2) === "b10".U
 
-    val is_vfr = io.opType.head(3) === "b111".U
+    val is_vfr = io.opType(5).asBool
     val is_fp2int = io.opType.head(2) === "b10".U && !is_widen
     val is_int2fp = io.opType.head(2) === "b01".U && !is_narrow
 
@@ -132,50 +132,53 @@ class CVT16(width: Int = 16) extends CVT(width){
 
     result := RegNext(Cat(Mux(RegNext(is_signed_int), RegNext(sign.asUInt), 0.U), exp_reg0, Mux(RegNext(is_widen), Cat(sig_reg0.tail(2).asUInt, 0.U(2.W)), sig_reg0)))
     fflags := RegNext(Cat(false.B, false.B, of, false.B, ix))
-   }.otherwise {    // vfr
-    val result_1 = Wire(UInt(16.W))
-    val fflags_1 = WireInit(Cat(NV, DZ, OF, UF, NX))
-    val is_vfrsqrt7 = is_vfr & !is_signed_int
-    val is_vfrec7 = is_vfr & is_signed_int
-    val vfrsqrt7Table = Module(new Rsqrt7Table)
-    val vfrec7Table = Module(new Rec7Table)
-    val in = VectorFloat.fromUInt(io.src, expWidth, precision)
+   }.otherwise {
+     val result_1 = Wire(UInt(16.W))
+     val fflags_1 = WireInit(Cat(NV, DZ, OF, UF, NX))
+     val is_vfrsqrt7 = !io.opType(0).asBool
+     val is_vfrec7 = io.opType(0).asBool
+     val vfrsqrt7Table = Module(new Rsqrt7Table)
+     val vfrec7Table = Module(new Rec7Table)
+     val in = io.src
+     val sign = in.head(1).asBool
+     val exp = in.tail(1).head(f16.expWidth)
+     val sig = in.tail(6)
 
-    val is_normal = in.decode.isNormal
-    val is_subnormal = in.decode.isSubnormal
-    val is_inf = in.decode.isInf
-    val is_nan = in.decode.isNaN
-    val is_neginf = in.sign & in.decode.isInf
-    val is_neginf_negzero = in.sign & (is_normal | is_subnormal & in.decode.sigNotZero)
-    val is_negzero = in.sign & in.decode.isZero
-    val is_poszero = !in.sign & in.decode.isZero
-    val is_poszero_posinf = !in.sign & (is_normal | is_subnormal & in.decode.sigNotZero)
-    val is_snan = in.decode.isSNaN
-    val is_neg2_bplus1_b = in.sign & (in.exp === 30.U)
-    val is_neg2_b_bminus1 = in.sign & (in.exp === 29.U)
-    val is_neg2_negbminus1_negzero = in.sign & (in.sig.head(2) === "b00".U) & is_subnormal & in.decode.sigNotZero
-    val is_pos2_poszero_negbminus1 = !in.sign & (in.sig.head(2) === "b00".U) & is_subnormal & in.decode.sigNotZero
-    val is_pos2_bminus1_b = !in.sign & (in.exp === 29.U)
-    val is_pos2_b_bplus1 = !in.sign & (in.exp === 30.U)
+     val is_normal = exp.orR & !exp.andR
+     val is_subnormal = !exp.orR
+     val is_inf = exp.andR & !sig.orR
+     val is_nan = exp.andR & sig.orR
+     val is_neginf = sign & is_inf
+     val is_neginf_negzero = sign & (is_normal | is_subnormal & sig.orR)
+     val is_negzero = sign & is_subnormal & !sig.orR
+     val is_poszero = !sign & is_subnormal & !sig.orR
+     val is_poszero_posinf = !sign & (is_normal | is_subnormal & sig.orR)
+     val is_snan = !sig.head(1).asBool & is_nan
+     val is_neg2_bplus1_b = sign & (exp === 30.U)
+     val is_neg2_b_bminus1 = sign & (exp === 29.U)
+     val is_neg2_negbminus1_negzero = sign & (sig.head(2) === "b00".U) & is_subnormal & sig.orR
+     val is_pos2_poszero_negbminus1 = !sign & (sig.head(2) === "b00".U) & is_subnormal & sig.orR
+     val is_pos2_bminus1_b = !sign & (exp === 29.U)
+     val is_pos2_b_bplus1 = !sign & (exp === 30.U)
 
-    val zero_minus_lzc = 0.U - CLZ(in.sig) // 0 - count leading zero
-    val exp_normalized = Mux(is_vfrsqrt7,
-      Mux(is_poszero_posinf, Mux(is_normal, in.exp, Cat(Fill(expWidth - zero_minus_lzc.getWidth, zero_minus_lzc.head(1)), zero_minus_lzc)), 0.U),
-      Mux(is_normal, in.exp, Cat(Fill(expWidth - zero_minus_lzc.getWidth, zero_minus_lzc.head(1)), zero_minus_lzc)))
+     val zero_minus_lzc = 0.U - CLZ(sig) // 0 - count leading zero
+     val exp_normalized =
+       Mux(is_vfrsqrt7,
+         Mux(is_poszero_posinf, Mux(is_normal, exp, Cat(Fill(f16.expWidth - zero_minus_lzc.getWidth, zero_minus_lzc.head(1)), zero_minus_lzc)), 0.U),
+         Mux(is_normal, exp, Cat(Fill(f16.expWidth - zero_minus_lzc.getWidth, zero_minus_lzc.head(1)), zero_minus_lzc)))
 
-    val exp_normalized_reg0 = RegNext(exp_normalized)
+     val exp_normalized_reg0 = RegNext(exp_normalized)
 
-    val sig_normalized = Wire(UInt(11.W))
-    sig_normalized := Mux(is_vfrsqrt7,
-      Mux(is_poszero_posinf, Mux(is_normal, Cat(0.U, in.sig), (in.sig << 1.U).asUInt), 0.U),
-      Mux(is_normal, Cat(0.U, in.sig), (in.sig << 1.U).asUInt))
-    
-    val sig_normalized_reg0 = Reg(UInt(11.W))
-    sig_normalized_reg0 := RegNext(sig_normalized)
+     val sig_normalized = Wire(UInt(11.W))
+     sig_normalized := Mux(is_vfrsqrt7,
+       Mux(is_poszero_posinf, Mux(is_normal, Cat(0.U, sig), (sig << 1.U).asUInt), 0.U),
+       Mux(is_normal, Cat(0.U, sig), (sig << 1.U).asUInt))
 
-    val sig_in7 = Mux(RegNext(is_vfrsqrt7),
-      Cat(exp_normalized_reg0(0), (sig_normalized_reg0 << Mux(RegNext(is_normal), 0.U, RegNext(CLZ(sig_normalized))))(9, 4)), // vfrsqrt7  Cat(exp_nor(0), sig_nor(9,4))
-      (sig_normalized_reg0 << Mux(RegNext(is_normal), 0.U, RegNext(CLZ(sig_normalized))))(9,3)) // vfrec7 sig_nor(9,3)
+     val sig_normalized_reg0 = RegNext(sig_normalized)
+
+     val sig_in7 = Mux(RegNext(is_vfrsqrt7),
+       Cat(exp_normalized_reg0(0), (sig_normalized_reg0 << Mux(RegNext(is_normal), 0.U, RegNext(CLZ(sig_normalized))))(9, 4)), // vfrsqrt7  Cat(exp_nor(0), sig_nor(9,4))
+       (sig_normalized_reg0 << Mux(RegNext(is_normal), 0.U, RegNext(CLZ(sig_normalized))))(9,3)) // vfrec7 sig_nor(9,3)
     
     vfrsqrt7Table.src := sig_in7
     vfrec7Table.src := sig_in7
@@ -186,11 +189,11 @@ class CVT16(width: Int = 16) extends CVT(width){
     val out_exp_normalized = Mux(is_vfrec7, 29.U - exp_normalized, 0.U) // 2 * bias - 1 - exp_nor
     val out_exp = Wire(UInt(5.W))
     out_exp := Mux(is_vfrsqrt7,
-      Mux(is_normal, (44.U - in.exp) >> 1, (44.U + CLZ(in.sig)) >> 1), // if normal (3 * bias - 1 - exp) >> 1 else (3 * bias -1 + CLZ) >>1
+      Mux(is_normal, (44.U - exp) >> 1, (44.U + CLZ(sig)) >> 1), // if normal (3 * bias - 1 - exp) >> 1 else (3 * bias -1 + CLZ) >>1
       Mux(out_exp_normalized === 0.U | out_exp_normalized.andR, 0.U, out_exp_normalized))
     val out_sig =
       Mux(RegNext(is_vfrec7),
-        Mux(RegNext(out_exp_normalized) === 0.U | RegNext(out_exp_normalized).andR,
+        Mux(RegNext(out_exp_normalized === 0.U | out_exp_normalized.andR),
           Mux(RegNext(is_neg2_bplus1_b | is_pos2_b_bplus1),
             Cat(0.U, 1.U, sig_out7, 0.U),
             Mux(RegNext(is_neg2_b_bminus1 | is_pos2_bminus1_b),
@@ -199,11 +202,15 @@ class CVT16(width: Int = 16) extends CVT(width){
           Cat(sig_out7, 0.U(3.W))),
         0.U)
 
-    val out_sign = RegNext(is_poszero_posinf & in.sign)
+    val out_sign = is_poszero_posinf & sign
 
     val fp_result = Wire(UInt(16.W))
-    fp_result := Mux(RegNext(is_vfrsqrt7), Cat(out_sign, RegNext(out_exp), sig_out7, 0.U(3.W)), Cat(RegNext(in.sign), RegNext(out_exp), out_sig))
-
+    fp_result := Mux1H(
+      Seq(RegNext(is_vfrsqrt7),
+        RegNext(is_vfrec7)),
+      Seq(Cat(RegNext(Cat(out_sign, out_exp)), sig_out7, 0.U(3.W)),
+        Cat(RegNext(Cat(sign, out_exp)), out_sig))
+    )
 
     val result_nan = Cat(0.U, Fill(6, 1.U), 0.U(9.W))
     val result_inf = Cat(Fill(5, 1.U), Fill(10, 0.U))

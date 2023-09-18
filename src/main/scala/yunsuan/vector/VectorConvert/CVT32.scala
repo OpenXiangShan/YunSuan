@@ -441,17 +441,17 @@ class CVT32(width: Int = 32) extends CVT(width){
           Mux(is_poszero_posinf,
             Mux(is_normal, exp, Cat(Fill(f16.expWidth - zero_minus_lzc.getWidth, zero_minus_lzc.head(1)), zero_minus_lzc)), 0.U).asUInt,
           Mux(is_normal, exp, Cat(Fill(f16.expWidth - zero_minus_lzc.getWidth, zero_minus_lzc.head(1)), zero_minus_lzc))).asUInt
-      val vfrsqrt7_exp_normalized_reg0 = RegNext(exp_normalized)
+      val exp_normalized_reg0 = RegNext(exp_normalized)
 
       val sig_normalized = Wire(UInt(11.W))
       sig_normalized := Mux(is_vfrsqrt7,
         Mux(is_poszero_posinf, Mux(is_normal, Cat(0.U, sig), (sig << 1.U).asUInt).asUInt, 0.U),
         Mux(is_normal, Cat(0.U, sig), (sig << 1.U).asUInt))
-      val vfrsqrt7_sig_normalized_reg0 = RegNext(sig_normalized)
+      val sig_normalized_reg0 = RegNext(sig_normalized)
 
       val sig_in7 = Mux(RegNext(is_vfrsqrt7),
-        Cat(vfrsqrt7_exp_normalized_reg0(0), (vfrsqrt7_sig_normalized_reg0 << Mux(RegNext(is_normal), 0.U, RegNext(CLZ(sig_normalized))))(9, 4)).asUInt, // vfrsqrt7  Cat(exp_nor(0), sig_nor(9,4))
-        (vfrsqrt7_sig_normalized_reg0 << Mux(RegNext(is_normal), 0.U, RegNext(CLZ(sig_normalized))))(9, 3)).asUInt // vfrec7 sig_nor(9,3)
+        Cat(exp_normalized_reg0(0), (sig_normalized_reg0 << Mux(RegNext(is_normal), 0.U, RegNext(CLZ(sig_normalized))))(9, 4)).asUInt, // vfrsqrt7  Cat(exp_nor(0), sig_nor(9,4))
+        (sig_normalized_reg0 << Mux(RegNext(is_normal), 0.U, RegNext(CLZ(sig_normalized))))(9, 3)).asUInt // vfrec7 sig_nor(9,3)
 
       vfrsqrt7Table.src := sig_in7
       vfrec7Table.src := sig_in7
