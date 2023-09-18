@@ -115,6 +115,7 @@ class VectorCvt(xlen :Int) extends Module{
   io.result := Mux1H(outputWidth1H, Seq(
     result3(7,0) ## result2(7,0) ## result1(7,0) ## result0(7,0),
     result3(15,0) ## result2(15,0) ## result1(15,0) ## result0(15,0),
+    // result1 ## result0,
     result1(31,0) ## result0(31,0),
     result0
   ))

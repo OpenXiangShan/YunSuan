@@ -60,38 +60,35 @@ class CVT16(width: Int = 16) extends CVT(width){
     val rpath_shamt = Mux(is_single, 25.U - raw_in.exp, 22.U - raw_in.exp);
     val (rpath_sig_shifted, rpath_sticky) = ShiftRightJam(Cat(raw_in.sig, 0.U), rpath_shamt)
     val rpath_rounder = Module(new RoundingUnit(precision))
-    rpath_rounder.io.in := Mux(is_single, rpath_sig_shifted.head(precision).asUInt, rpath_sig_shifted.head(8).asUInt)
-    rpath_rounder.io.roundIn := Mux(is_single, rpath_sig_shifted.tail(precision).asUInt, rpath_sig_shifted.tail(8).head(1).asUInt).asBool
-    rpath_rounder.io.stickyIn := rpath_sticky | Mux(is_narrow, rpath_sig_shifted.tail(9).orR.asUInt, 0.U).asBool
-    rpath_rounder.io.signIn := raw_in.sign
-    rpath_rounder.io.rm := rm
+    rpath_rounder.io.in := RegNext(Mux(is_single, rpath_sig_shifted.head(precision).asUInt, rpath_sig_shifted.head(8).asUInt))
+    rpath_rounder.io.roundIn := RegNext(Mux(is_single, rpath_sig_shifted.tail(precision).asUInt, rpath_sig_shifted.tail(8).head(1).asUInt).asBool)
+    rpath_rounder.io.stickyIn := RegNext(rpath_sticky | Mux(is_narrow, rpath_sig_shifted.tail(9).orR.asUInt, 0.U).asBool)
+    rpath_rounder.io.signIn := RegNext(raw_in.sign)
+    rpath_rounder.io.rm := RegNext(rm)
 
-    val out_r_up = rpath_rounder.io.in + 1.U
-    val out = Mux(rpath_rounder.io.r_up, out_r_up, rpath_rounder.io.in)
-    val out_reg0 = RegNext(out)
-    val cout = rpath_rounder.io.r_up && Mux(is_narrow, rpath_rounder.io.in.tail(4).andR.asUInt, rpath_rounder.io.in.andR.asUInt).asBool
-    val cout_reg0 = RegNext(cout)
+    val fp2int_rpath_out_reg0 = Mux(rpath_rounder.io.r_up, rpath_rounder.io.in + 1.U, rpath_rounder.io.in)
+    val fp2int_rpath_cout_reg0 = rpath_rounder.io.r_up && Mux(RegNext(is_narrow), rpath_rounder.io.in.tail(4).andR.asUInt, rpath_rounder.io.in.andR.asUInt).asBool
 
-    val rpath_sig = Mux(RegNext(is_single), Cat(0.U(4.W), cout_reg0, out_reg0), Cat(0.U(5.W), out_reg0))
-    val rpath_ix = rpath_rounder.io.inexact | Mux(is_narrow, rpath_sig_shifted.tail(8).orR.asUInt, 0.U).asBool
-    val rpath_iv = !RegNext(is_signed_int) & raw_in_reg0.sign & rpath_sig.orR
-    val rpath_pos_of = !raw_in_reg0.sign &
-        Mux(RegNext(is_signed_int),
-            (raw_in_reg0.exp === 22.U | (raw_in_reg0.exp === 21.U & cout_reg0)),
-            (raw_in_reg0.exp === 22.U & cout_reg0))
-    val rpath_neg_of = raw_in.sign & raw_in.exp === 22.U & (rpath_rounder.io.in.tail(4).orR | rpath_rounder.io.r_up)
-    val rpath_of = Mux(RegNext(is_narrow), (rpath_pos_of | RegNext(rpath_neg_of)), cout_reg0)
+    val rpath_sig_reg0 = Mux(RegNext(is_single), Cat(0.U(4.W), fp2int_rpath_cout_reg0, fp2int_rpath_out_reg0), Cat(0.U(5.W), fp2int_rpath_out_reg0))
+    val rpath_ix_reg0 = rpath_rounder.io.inexact | RegNext(Mux(is_narrow, rpath_sig_shifted.tail(8).orR.asUInt, 0.U).asBool)
+    val rpath_iv_reg0 = RegNext(!is_signed_int) & raw_in_reg0.sign & rpath_sig_reg0.orR
+    val rpath_pos_of_reg0 = !raw_in_reg0.sign &
+      Mux(RegNext(is_signed_int),
+        (raw_in_reg0.exp === 22.U | (raw_in_reg0.exp === 21.U & fp2int_rpath_cout_reg0)),
+        (raw_in_reg0.exp === 22.U & fp2int_rpath_cout_reg0))
+    val rpath_neg_of_reg0 = raw_in_reg0.sign & raw_in_reg0.exp === 22.U & (rpath_rounder.io.in.tail(4).orR | rpath_rounder.io.r_up)
+    val rpath_of_reg0 = Mux(RegNext(is_narrow), (rpath_pos_of_reg0 | rpath_neg_of_reg0), fp2int_rpath_cout_reg0)
 
     // select result
     val sel_lpath = raw_in.exp >= 25.U
-    val of = RegNext(exp_of | sel_lpath & lpath_of) | (RegNext(!sel_lpath) & rpath_of)
-    val iv = of | RegNext(sel_lpath & lpath_iv) | (RegNext(!sel_lpath) & rpath_iv)
-    val ix = !iv & RegNext(!sel_lpath & rpath_ix)
+    val of = RegNext(exp_of | sel_lpath & lpath_of) | (RegNext(!sel_lpath) & rpath_of_reg0)
+    val iv = of | RegNext(sel_lpath & lpath_iv) | (RegNext(!sel_lpath) & rpath_iv_reg0)
+    val ix = !iv & RegNext(!sel_lpath) & rpath_ix_reg0
 
-    val int_abs = Mux(RegNext(sel_lpath), RegNext(lpath_sig_shifted), rpath_sig)
+    val int_abs = Mux(RegNext(sel_lpath), RegNext(lpath_sig_shifted), rpath_sig_reg0)
     val int = Mux(RegNext(is_narrow),
-        Mux(raw_in_reg0.sign & RegNext(is_signed_int), -int_abs.tail(8), int_abs.tail(8)),
-        Mux(raw_in_reg0.sign & RegNext(is_signed_int), -int_abs, int_abs))
+      Mux(raw_in_reg0.sign & RegNext(is_signed_int), -int_abs.tail(8), int_abs.tail(8)),
+      Mux(raw_in_reg0.sign & RegNext(is_signed_int), -int_abs, int_abs))
 
     val max_int = Mux(is_single, Cat(!is_signed_int, ~0.U(15.W)), Cat(!is_signed_int, ~0.U(7.W)))
     val min_int = Mux(is_single, Cat(is_signed_int,   0.U(15.W)), Cat(is_signed_int,   0.U(7.W)))
@@ -118,27 +115,26 @@ class CVT16(width: Int = 16) extends CVT(width){
     val round_bit = Mux(is_widen, in_shift.tail(8).head(1).asUInt, in_shift.tail(10).head(1).asUInt).asBool
     val sticky_bit = Mux(is_widen, in_shift.tail(9).orR.asUInt, in_shift.tail(precision).orR.asUInt).asBool
     val rounder = Module(new RoundingUnit(10))
-    rounder.io.in := sig_raw
-    rounder.io.roundIn := round_bit
-    rounder.io.stickyIn := sticky_bit
-    rounder.io.signIn := sign
-    rounder.io.rm := rm
+    rounder.io.in := RegNext(sig_raw)
+    rounder.io.roundIn := RegNext(round_bit)
+    rounder.io.stickyIn := RegNext(sticky_bit)
+    rounder.io.signIn := RegNext(sign)
+    rounder.io.rm := RegNext(rm)
 
-    val out_r_up = rounder.io.in + 1.U
-    val out = Mux(rounder.io.r_up, out_r_up, rounder.io.in)
-    val out_reg0 = RegNext(out)
-    val cout = rounder.io.r_up && rounder.io.in.andR.asBool
-    val cout_reg0 = RegNext(cout)
+    val int2fp_out_reg0 = Mux(rounder.io.r_up, rounder.io.in + 1.U, rounder.io.in)
+    val int2fp_cout_reg0 = rounder.io.r_up && rounder.io.in.andR.asBool
 
-    val exp = RegNext(Mux(in === 0.U, 0.U, exp_raw + cout))
-    val sig = out_reg0
+    val exp_reg0 = Mux(in.orR,RegNext(exp_raw) + int2fp_cout_reg0, 0.U)
+    val sig_reg0 = int2fp_out_reg0
 
-    val of = exp === 31.U
+    val of = exp_reg0 === 31.U
     val ix = rounder.io.inexact
 
-    result := RegNext(Cat(Mux(RegNext(is_signed_int), RegNext(sign.asUInt), 0.U), exp, Mux(RegNext(is_widen), Cat(sig.tail(2).asUInt, 0.U(2.W)), sig)))
-    fflags := RegNext(Cat(false.B, false.B, of, false.B, RegNext(ix)))
+    result := RegNext(Cat(Mux(RegNext(is_signed_int), RegNext(sign.asUInt), 0.U), exp_reg0, Mux(RegNext(is_widen), Cat(sig_reg0.tail(2).asUInt, 0.U(2.W)), sig_reg0)))
+    fflags := RegNext(Cat(false.B, false.B, of, false.B, ix))
    }.otherwise {    // vfr
+    val result_1 = Wire(UInt(16.W))
+    val fflags_1 = WireInit(Cat(NV, DZ, OF, UF, NX))
     val is_vfrsqrt7 = is_vfr & !is_signed_int
     val is_vfrec7 = is_vfr & is_signed_int
     val vfrsqrt7Table = Module(new Rsqrt7Table)
@@ -213,38 +209,40 @@ class CVT16(width: Int = 16) extends CVT(width){
     val result_inf = Cat(Fill(5, 1.U), Fill(10, 0.U))
     val result_greatest_fin = Cat(Fill(4, 1.U), 0.U, Fill(10, 1.U))
 
-    when(ShiftRegister(is_vfrsqrt7, 2)) {
-      when(ShiftRegister(is_nan | is_neginf_negzero, 2)) {
-        result := result_nan
-        fflags := ShiftRegister(Mux(is_snan | is_neginf_negzero, "b10000".U, "b00000".U), 2)
-      }.elsewhen(ShiftRegister(is_inf, 2)) {
-        result := ShiftRegister(Mux(is_neginf, result_nan, 0.U), 2)
-        fflags := ShiftRegister(Mux(is_neginf, "b10000".U, "b00000".U), 2)
-      }.elsewhen(ShiftRegister(is_negzero | is_poszero, 2)) {
-        result := ShiftRegister(Mux(is_negzero, Cat(1.U, result_inf), Cat(0.U, result_inf)), 2)
-        fflags := "b01000".U
+    when(RegNext(is_vfrsqrt7)) {
+      when(RegNext(is_nan | is_neginf_negzero)) {
+        result_1 := result_nan
+        fflags_1 := RegNext(Mux(is_snan | is_neginf_negzero, "b10000".U, "b00000".U))
+      }.elsewhen(RegNext(is_inf)) {
+        result_1 := RegNext(Mux(is_neginf, result_nan, 0.U))
+        fflags_1 := RegNext(Mux(is_neginf, "b10000".U, "b00000".U))
+      }.elsewhen(RegNext(is_negzero | is_poszero)) {
+        result_1 := RegNext(Mux(is_negzero, Cat(1.U, result_inf), Cat(0.U, result_inf)))
+        fflags_1 := "b01000".U
       }.otherwise {
-        result := fp_result
+        result_1 := fp_result
       }
     }.otherwise {
-      when(ShiftRegister(is_nan, 2)) {
-        result := result_nan
-        fflags := ShiftRegister(Mux(is_snan, "b10000".U, "b00000".U), 2)
-      }.elsewhen(ShiftRegister(is_inf, 2)) {
-        result := ShiftRegister(Mux(is_neginf, Cat(1.U, 0.U(15.W)), 0.U), 2)
-      }.elsewhen(ShiftRegister(is_negzero | is_poszero, 2)) {
-        result := ShiftRegister(Mux(is_negzero, Cat(Fill(6, 1.U), 0.U(10.W)), Cat(0.U, Fill(5, 1.U), 0.U(10.W))), 2)
-        fflags := "b01000".U
-      }.elsewhen(ShiftRegister(is_neg2_negbminus1_negzero, 2)) {
-        result := ShiftRegister(Mux((rm === RUP) | (rm === RTZ), Cat(1.U, result_greatest_fin), Cat(1.U, result_inf)), 2)
-        fflags := "b00101".U
-      }.elsewhen(ShiftRegister(is_pos2_poszero_negbminus1, 2)) {
-        result := ShiftRegister(Mux((rm === RDN) | (rm === RTZ), Cat(0.U, result_greatest_fin), Cat(0.U, result_inf)), 2)
-        fflags := "b00101".U
+      when(RegNext(is_nan)) {
+        result_1 := result_nan
+        fflags_1 := RegNext(Mux(is_snan, "b10000".U, "b00000".U))
+      }.elsewhen(RegNext(is_inf)) {
+        result_1 := RegNext(Mux(is_neginf, Cat(1.U, 0.U(15.W)), 0.U))
+      }.elsewhen(RegNext(is_negzero | is_poszero)) {
+        result_1 := RegNext(Mux(is_negzero, Cat(Fill(6, 1.U), 0.U(10.W)), Cat(0.U, Fill(5, 1.U), 0.U(10.W))))
+        fflags_1 := "b01000".U
+      }.elsewhen(RegNext(is_neg2_negbminus1_negzero)) {
+        result_1 := RegNext(Mux((rm === RUP) | (rm === RTZ), Cat(1.U, result_greatest_fin), Cat(1.U, result_inf)))
+        fflags_1 := "b00101".U
+      }.elsewhen(RegNext(is_pos2_poszero_negbminus1)) {
+        result_1 := RegNext(Mux((rm === RDN) | (rm === RTZ), Cat(0.U, result_greatest_fin), Cat(0.U, result_inf)))
+        fflags_1 := "b00101".U
       }.otherwise {
-        result := fp_result
+        result_1 := fp_result
       }
     }
+    result := RegNext(result_1)
+    fflags := RegNext(fflags_1)
    }
 
    io.result := result
