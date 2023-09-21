@@ -131,16 +131,6 @@ class VMask extends Module {
     one_cnt_uop_sew64(i) := 0.U
   }
 
-  //  for (i <- 0 until vlenb) {
-  //    when(i.U < ele_cnt) {
-  //      when(vs2m_uop(i).asBool || vid_v) {
-  //        one_cnt_uop(i + 1) := one_cnt_uop(i) + 1.U
-  //      }.otherwise {
-  //        one_cnt_uop(i + 1) := one_cnt_uop(i)
-  //      }
-  //    }
-  //  }
-
   for (i <- 0 until vlenb) {
     one_cnt_uop_sew8(i + 1) := PopCount(vs2m_uop_vid(i, 0))
   }

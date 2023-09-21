@@ -225,10 +225,7 @@ class PermFsm extends Module {
   val rd_vd_idx = RegInit(0.U(4.W))
   val cmprs_rd_vd = RegInit(false.B)
   val cmprs_rd_vd_reg = RegInit(VecInit(Seq.fill(5)(false.B)))
-  // val cmprs_rd_done = reg_vcompress && (rd_vd_idx === (Cat(0.U(1.W), vlmul_reg) + 1.U)) && rd_sent
-  // val vrgather_rd_done = reg_vrgather && (wb_idx === vlmul_reg) && vrgather_wb_vld
   val rd_done = (wb_idx === vlmul_reg) && wb_vld
-  // val old_vd_idx = Mux(reg_vcompress, rd_vd_idx, Mux(reg_vrgather16_sew8, vs_idx(2, 1) + 1.U, Mux(vs_idx === vlmul_reg, vs_idx, vs_idx + 1.U)))
   val old_vd_idx = Mux(reg_vcompress, rd_vd_idx, Mux(vs_idx === vlmul_reg, vs_idx, vs_idx + 1.U)) //todo
   val rd_one_sum = RegInit(0.U(8.W))
   val cmprs_rd_vd_wb_en = RegInit(false.B)
@@ -632,15 +629,10 @@ class PermFsm extends Module {
     old_vd := Mux(vcompress, viq1_vs1, viq1_old_vd)
   }.elsewhen(reg_vslide && rd_sent_reg(3)) {
     old_vd := io.in.fsm_rd_data_3
-    //}.elsewhen(reg_vrgather && !reg_vrgather16_sew8 && vrgather_wb_vld_reg(3)) {
   }.elsewhen(reg_vrgather && vrgather_wb_vld_reg(3)) { //todo
     old_vd := io.in.fsm_rd_data_3
-    //  }.elsewhen(reg_vrgather16_sew8 && vrgather_wb_vld_reg(3) && update_vl_cnt(0)) {
-    //    old_vd := io.in.fsm_rd_data_3
   }.elsewhen(reg_vcompress && rd_sent && !rd_wb) {
     old_vd := old_vd >> (1.U << sew_shift)
-    //  }.elsewhen(reg_vrgather && vrgather_table_sent_reg(3)) {
-    //    old_vd := Cat(vrgather_vd.reverse)
   }
 
   when(br_flush_vld) {

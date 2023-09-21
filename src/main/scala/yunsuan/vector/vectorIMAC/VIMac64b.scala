@@ -149,7 +149,6 @@ class VIMac64b extends Module {
     }
   }
   val nAddendsSeq = nAddendsSeqGen(34)
-  // println(nAddendsSeq) =  List(34, 23, 16, 11, 8, 6, 4, 3)
 
   // Perform all wallace stages.
   def wallaceStage(stageIdx: Int): Seq[UInt] = {
@@ -172,7 +171,6 @@ class VIMac64b extends Module {
   val highHalfS1 = RegNext(io.highHalf)
   val widenS1 = RegNext(io.widen)
   val uopIdxS1 = RegNext(uopIdx)
-  // val wallaceOutReg = wallaceOut map {x => RegNext(x)}
   val wallaceOutReg = reduce3to2(reduce3to2(reduce3to2(wallaceOut_mid_reg, sewS1), sewS1), sewS1) // Seq(2)(UInt(128.W))
 
   // Sum of final two 128b numbers
@@ -195,7 +193,6 @@ class VIMac64b extends Module {
     } else {
       cin_wo(i) := Mux(sewS1.is8, false.B, cout_wo(i-1))
     }
-    // cin_wo(i) := Mux1H(sewS1.oneHot, Seq(1,2,4,8).map(n => if (i % n == 0) false.B else cout_wo(i-1)))
     sum_wo(i) := adder_16b.out
   }
 
@@ -269,7 +266,6 @@ class VIMac64b extends Module {
       } else {
         cin(i) := Mux(sewS2.is8, rndInc(i), cout(i-1))
       }
-      // cin(i) := Mux1H(sewS2.oneHot, Seq(1, 2, 4, 8).map(n => if ((i % n) == 0) rndInc(i) else cout(i-1)))
       cout(i) := adder_8b_rnd.cout
       out(i) := adder_8b_rnd.out
     }

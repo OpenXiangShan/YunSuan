@@ -118,36 +118,6 @@ class VFixPoint64b extends Module {
     ))
   }
   // // cin is 1 bit carry-in
-  // class Adder_8b_rnd(in1: UInt, cin: Bool) {
-  //   private val bits = in1 + cin.asUInt
-  //   val (cout, out) = (in1 === "b1111_1111".U && cin, bits)
-  // }
-  // // Chain up eight 8-bit adders
-  // def Adder_chain_rnd(data: Seq[UInt], rndInc: Seq[Bool]): Seq[UInt] = {
-  //   val cin = Wire(Vec(8, Bool()))
-  //   val cout = Wire(Vec(8, Bool()))
-  //   val out = Wire(Vec(8, UInt(8.W)))
-  //   for (i <- 0 until 8) {
-  //     val adder_8b_rnd = new Adder_8b_rnd(data(i), cin(i))
-  //     val eewCin = Wire(new SewOH)
-  //     eewCin.oneHot := Mux(io.isNClip, (sew.oneHot << 1)(3, 0), sew.oneHot)
-  //     if (i == 0) {
-  //       cin(i) := rndInc(i)
-  //     } else if (i == 4) {
-  //       cin(i) := Mux(eewCin.is64, cout(i-1), rndInc(i))
-  //     } else if (i % 2 == 0) {
-  //       cin(i) := Mux(eewCin.is64 || eewCin.is32, cout(i-1), rndInc(i))
-  //     } else {
-  //       cin(i) := Mux(eewCin.is8, rndInc(i), cout(i-1))
-  //     }
-  //     // cin(i) := Mux1H(Mux(io.isNClip, (sew.oneHot.asUInt << 1)(3, 0), sew.oneHot.asUInt), Seq(1, 2, 4, 8).map(n => 
-  //     //   if ((i % n) == 0) rndInc(i) else cout(i-1))
-  //     // )
-  //     cout(i) := adder_8b_rnd.cout
-  //     out(i) := adder_8b_rnd.out
-  //   }
-  //   out
-  // }
 
   //---- Rewrite to shorten critical path of vnclip(u) ----
   class Adder_8b_rnd(in1: UInt, cin: Bool) {
@@ -243,31 +213,6 @@ class VFixPoint64b extends Module {
   /**
     *   12.5 Narrowing Fixed-Point Clip
     */
-  // // 2*sew -> sew                       (result, saturate)
-  // def narrowClip(data: UInt, sew: Int): (UInt, Bool) = {
-  //   val w = data.getWidth
-  //   require(w == sew * 2)
-  //   val result = Wire(UInt(sew.W))
-  //   val sat = Wire(Bool())
-  //   when (signed) {
-  //     when (data(w-1, sew-1) === 0.U || data(w-1, sew-1) === ~0.U((sew+1).W)) {
-  //       result := data(sew-1, 0)
-  //       sat := false.B
-  //     }.otherwise {
-  //       result := Cat(data(w-1), Fill(sew-1, !data(w-1)))
-  //       sat := true.B
-  //     }
-  //   }.otherwise {
-  //     when (data(w-1, sew) === 0.U) {
-  //       result := data(sew-1, 0)
-  //       sat := false.B
-  //     }.otherwise {
-  //       result := ~0.U(sew.W)
-  //       sat := true.B
-  //     }
-  //   }
-  //   (result, sat)
-  // }
 
   //---- Rewrite to shorten critical path of vnclip(u) ----
   // 2*sew -> sew                       (result, saturate)

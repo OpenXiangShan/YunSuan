@@ -15,7 +15,6 @@ class Reduction extends Module {
   val io = IO(new Bundle {
     val in = Flipped(ValidIO(new VIFuInput))
     val out = Output(new VIFuOutput)
-    //  val alu_in = ValidIO(new VIFuInput)
   })
 
   val vs1 = io.in.bits.vs1
@@ -198,21 +197,6 @@ class Reduction extends Module {
   }.elsewhen(vsew === 3.U) {
     vs12m_bits := vs12m_bits_sew64
   }
-
-  // for (i <- 0 until 2 * vlenb) {
-  //   vs12m_bytes(i) := vs12_bytes(i)
-  //   when(((!vm && !vmask_bits(i.U >> vsew)) || (i.U >= vlRemainBytes)) && (reduction_uop || widen_reduction_uop)) {
-  //     when(vsew === 0.U) {
-  //       vs12m_bytes(i) := ele64(7, 0)
-  //     }.elsewhen(vsew === 1.U) {
-  //       vs12m_bytes(i) := ele64((i % 2 + 1) * 8 - 1, (i % 2) * 8)
-  //     }.elsewhen(vsew === 2.U) {
-  //       vs12m_bytes(i) := ele64((i % 4 + 1) * 8 - 1, (i % 4) * 8)
-  //     }.elsewhen(vsew === 3.U) {
-  //       vs12m_bytes(i) := ele64((i % 8 + 1) * 8 - 1, (i % 8) * 8)
-  //     }
-  //   }
-  // }
 
   class Adder_8b(in1: UInt, in2: UInt, cin: UInt) {
     private val bits = Cat(0.U(1.W), in1, cin) +
