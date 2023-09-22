@@ -18,7 +18,7 @@ class RoundingUnit(val width: Int) extends Module {
 
   val (g, r, s) = (io.in(0).asBool(), io.roundIn, io.stickyIn)
   val inexact = r | s
-  val r_up = MuxLookup( //舍入后绝对值增加
+  val r_up = MuxLookup(
     io.rm,
     false.B,
     Seq(
@@ -47,7 +47,7 @@ object RoundingUnit {
     rounder.io.signIn := sign
     rounder
   }
-  def padd_tail(x: UInt, w: Int): UInt = Cat(x, 0.U((w - x.getWidth).W)) // 少于两位则补零
+  def padd_tail(x: UInt, w: Int): UInt = Cat(x, 0.U((w - x.getWidth).W))
   def is_rmin(rm: UInt, sign: Bool): Bool = {
     rm === RTZ || (rm === RDN && !sign) || (rm === RUP && sign)
   }

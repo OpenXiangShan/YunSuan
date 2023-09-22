@@ -6,10 +6,10 @@ import chisel3.util._
 class CVTIO(width: Int) extends Bundle {
   val src = Input(UInt(width.W))
   val opType = Input(UInt(8.W))
-  val sew = Input(UInt(2.W)) //来的元素的位宽
-  val rm = Input(UInt(3.W)) //舍入模式
-  val input1H = Input(UInt(8.W))
-  val output1H = Input(UInt(8.W))
+  val sew = Input(UInt(2.W))
+  val rm = Input(UInt(3.W))
+  val input1H = Input(UInt(4.W))
+  val output1H = Input(UInt(4.W))
   val result = Output(UInt(width.W))
   val fflags = Output(UInt(5.W))
 }
@@ -17,8 +17,6 @@ class CVTIO(width: Int) extends Bundle {
 abstract class CVT(width: Int) extends Module{
   val io = IO(new CVTIO(width))
 }
-
-
 
 class VCVT(width: Int) extends Module{
   val io = IO(new CVTIO(width))

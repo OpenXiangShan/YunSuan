@@ -27,15 +27,11 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 }
 // fix set_test_type to select fuType
 void TestDriver::set_test_type() {
-  test_type.pick_fuType = pickFU;
-  test_type.pick_fuOpType = pickFUop;
-  test_type.fuType = pickFuType;
+  test_type.pick_fuType = false;
+  test_type.pick_fuOpType = false;
+  test_type.fuType = VFloatCvt;
   test_type.fuOpType = pickFuOptype;
-  // test_type.pick_fuType = true;
-  // test_type.pick_fuOpType = false;
-  // test_type.fuType = VFloatCvt;
-  // test_type.fuOpType = pickFuOptype;
-  // printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
+  printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
 void TestDriver::gen_next_test_case() {
