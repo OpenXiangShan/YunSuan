@@ -25,11 +25,11 @@ class CVT64(width: Int = 64) extends CVT(width){
   val outIsFp = opType.tail(1).head(1).asBool
   val hasSignIntNext = opType(0).asBool
 
-  val int1HSrcNext = VecInit((0 to 3).map(i => input1H(2*i))).asUInt
-  val float1HSrcNext = VecInit((1 to 3).map(i => input1H(2*i+1))).asUInt //exclude f8
+  val int1HSrcNext = input1H
+  val float1HSrcNext = input1H.head(3)//exclude f8
 
-  val int1HOutNext = VecInit((0 to 3).map(i => output1H(2 * i))).asUInt
-  val float1HOutNext = VecInit((1 to 3).map(i => output1H(2 * i + 1))).asUInt //exclude f8
+  val int1HOutNext = output1H
+  val float1HOutNext = output1H.head(3)//exclude f8
 
   val srcMap = (0 to 3).map(i => src((1 << i) * 8 - 1, 0))
   val intMap = srcMap.map(int => intExtend(int, hasSignIntNext && int.head(1).asBool))
@@ -159,13 +159,11 @@ class CVT64(width: Int = 64) extends CVT(width){
    */
 
   // for cycle1
-  val float1HOutReg = RegNext(float1HOutNext, 0.U(3.W))
+  val output1HReg = RegNext(output1H, 0.U(4.W))
   val float1HOut = Wire(UInt(3.W))
-  float1HOut := float1HOutReg
-
-  val int1HOutReg = RegNext(int1HOutNext, 0.U(4.W))
+  float1HOut := output1HReg.head(3)
   val int1HOut = Wire(UInt(4.W))
-  int1HOut := int1HOutReg
+  int1HOut := output1HReg
 
   val expNext = Wire(UInt(widthExpAdder.W))
   val expReg = RegNext(expNext, 0.U(widthExpAdder.W))
@@ -242,8 +240,6 @@ class CVT64(width: Int = 64) extends CVT(width){
    * for: int->fp, fp->fp widen, estimate7, reuse shift left according to fracSrc << (64 - f64.fracWidth)
    * cycle: 0
    *
-   * shiftLeft将int的abs和fp normal的fracSrc都统一到了靠近高位的64bit 对于转浮点有用，已经drop了隐含1
-   * fracNormaled将fp规格化和非规格化的尾数统一到了一起（用在estimate7中）
    */
   val shiftLeft = Wire(UInt(64.W))
   shiftLeft := (Mux(inIsFp, fracSrc << (64 - f64.fracWidth), absIntSrc).asUInt << 1) << leadZeros //cycle0
@@ -255,9 +251,6 @@ class CVT64(width: Int = 64) extends CVT(width){
    * for: fp->fp Narrow, fp->int
    * cycle: 0
    *
-   * in fp->fp Narrow sub中: 右移之前shamt不需要等 exp的结果(但与normal应该同时进行: shamt= biasDetal +1 -expSrc
-   * 而在fp->int中(63.S - expValue)需要等exp的结果；shamt =(63.S - expValue)=> 63 + bias - expSrc
-   * 所以另外用一个加法器来计算这两种shamt
    */
 
   // common
@@ -277,11 +270,7 @@ class CVT64(width: Int = 64) extends CVT(width){
    * cycle: 1
    */
   rounderMapInNext := Mux(isFpNarrowNext, fracSrc << (64 - f64.fracWidth), shiftLeft)
-  /**
-   * cycle0
-   * -------------------------------------------------------------------------------------------
-   * cycle1
-   */
+
   val rounderMap =
     fpParamMap.map(fp => Seq(
       rounderMapIn.head(fp.fracWidth),
@@ -313,7 +302,7 @@ class CVT64(width: Int = 64) extends CVT(width){
    *  for all exclude estimate7 & fp->fp widen
    *  cycle: 1
    */
-  val expIncrease = exp + 1.U //todo：注意exp有无可能在为0或负时指数计算出错
+  val expIncrease = exp + 1.U
   val rounderInputIncrease = rounderInput + 1.U
 
   // for fp2int
@@ -338,7 +327,7 @@ class CVT64(width: Int = 64) extends CVT(width){
   /** Mux/Mux1H
    * cycle: 1
    */
-  when(isInt2Fp){//1
+  when(isInt2Fp){
     /** int->fp   any int/uint-> any fp
      */
     // Mux(cout, exp > FP.maxExp -1, exp > FP.maxExp)
@@ -366,7 +355,7 @@ class CVT64(width: Int = 64) extends CVT(width){
       VecInit((0 to 3).map {
         case 0 => signSrc ## fp.maxExp.U(fp.expWidth.W) ## ~0.U(fp.fracWidth.W) //GNF
         case 1 => signSrc ## ~0.U(fp.expWidth.W) ## 0.U(fp.fracWidth.W) // INF
-        case 2 => signSrc ## 0.U((fp.width - 1).W) // 0 是不是包含在下面一种情况下,不能因为在rounder时没有排除这种情况,全零进rounder出来的1##全零是非零
+        case 2 => signSrc ## 0.U((fp.width - 1).W) // 0
         case 3 => signSrc ## expRounded(fp.expWidth-1, 0) ## fracRounded(fp.fracWidth-1, 0) // normal
       })
     }
@@ -374,7 +363,7 @@ class CVT64(width: Int = 64) extends CVT(width){
     val int2FpResultMap: Seq[UInt] = fpParamMap.map(fp => Mux1H(result1H.asBools.reverse, int2FpResultMapGen(fp)))
     resultNext := Mux1H(float1HOut, int2FpResultMap)
 
-  }.elsewhen(isFpWiden){//2 todo: note f16->f32->f64
+  }.elsewhen(isFpWiden){
     /** fp -> fp widen
      */
     def fpWidenResultMapGen(fp: FloatFormat): Seq[UInt] = {
@@ -400,7 +389,7 @@ class CVT64(width: Int = 64) extends CVT(width){
     val fpwidenResultMap: Seq[UInt] = Seq(f32, f64).map(fp => Mux1H(result1H.asBools.reverse, fpWidenResultMapGen(fp)))
     resultNext := Mux1H(float1HOut.head(2), fpwidenResultMap)
 
-  }.elsewhen(isFpNarrow){//3
+  }.elsewhen(isFpNarrow){
     /** fp -> fp Narrow
      * note: IEEE754 uf：exp in (-b^emin, b^emin), after rounding(RiscV!!!)
      * note: IEEE754 uf：exp in (-b^emin, b^emin), before rounding(other)
@@ -490,7 +479,7 @@ class CVT64(width: Int = 64) extends CVT(width){
 
     val fpNarrowResultMap: Seq[UInt] = Seq(f16, f32).map(fp => Mux1H(result1H.asBools.reverse, fpNarrowResultMapGen(fp)))
     resultNext := Mux1H(float1HOut.tail(1), fpNarrowResultMap)
-  }.elsewhen(isEstimate7) {//4 todo: note isSqrt/isRec
+  }.elsewhen(isEstimate7) {
     /** Estimate7: sqrt7 & rec7
      */
 
@@ -586,7 +575,7 @@ class CVT64(width: Int = 64) extends CVT(width){
       !(isZeroSrc || isZeroRounded && !ofExpRounded) //exclude 0 & -0 after rounding
     val toUnx = !toUnv && nxRounded
 
-    val toInv = ofExpRounded && !(signSrc && excludeExp && excludeFrac) || expIsOnesSrc //nv has included inf & nan, 排除负的最大指数
+    val toInv = ofExpRounded && !(signSrc && excludeExp && excludeFrac) || expIsOnesSrc //nv has included inf & nan
     val toInx = !toInv && nxRounded
 
     nv := Mux(hasSignInt, toInv, toUnv)
@@ -597,7 +586,7 @@ class CVT64(width: Int = 64) extends CVT(width){
 
 
     val result1H = Cat(
-      (!hasSignInt && !toUnv) || (hasSignInt && !toInv), //toUnv包含nan和inf
+      (!hasSignInt && !toUnv) || (hasSignInt && !toInv), //toUnv include nan & inf
       !hasSignInt && toUnv && (isNaNSrc || !signSrc && (isInfSrc || ofExpRounded)),
       !hasSignInt && toUnv && signSrc && !isNaNSrc,
       hasSignInt && toInv
@@ -614,11 +603,6 @@ class CVT64(width: Int = 64) extends CVT(width){
 
   fflagsNext := Cat(nv, dz, of, uf, nx)
 
-  /**
-   * cycle1
-   * -------------------------------------------------------------------------------------------
-   * cycle2
-   */
   io.result := result
   io.fflags := fflags
 }

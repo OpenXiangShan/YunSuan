@@ -25,7 +25,6 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
       result_shift_len = result_shift_len << 1;
       for(int i = 0; i < number; i++) {
         ElementInput element = select_element(input, i);
-        // printf("\n==========widen element %lx\n", element.src1);
         switch (sew) {
           case 0: output_part[i] = calculation_e8(element); mask = 0xFFFF; break;
           case 1: output_part[i] = calculation_e16(element); mask = 0xFFFFFFFF; break;
@@ -43,7 +42,6 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
       half_number = half_number >> 1;
       for(int i = 0; i < number/2; i++) {
         ElementInput element = select_element(input, i);
-        // printf("\n==========norrow element %lx\n", element.src1);
         switch (sew) {
           case 0: output_part[i] = calculation_e16(element); mask = 0xFF; break;
           case 1: output_part[i] = calculation_e32(element); mask = 0xFFFF; break;
@@ -60,7 +58,6 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
     }else if(widenNorrow == 0){ // single
       for(int i = 0; i < number; i++) {
         ElementInput element = select_element(input, i);
-        // printf("\n==========single element %lx\n", element.src1);
         switch (sew) {
           case 1: output_part[i] = calculation_e16(element); mask = 0xFFFF; break;
           case 2: output_part[i] = calculation_e32(element); mask = 0xFFFFFFFF; break;

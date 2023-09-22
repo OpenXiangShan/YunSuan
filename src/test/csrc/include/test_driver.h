@@ -10,19 +10,6 @@
 #include "gm_common.h"
 #include "iotype.h"
 
-// 改这里来适应fu
-#define pickFU   true
-#define pickFUop false
-#define pickSEW  false
-#define VERBOSE  false
-
-#define pickFuType     VFloatCvt
-#define pickFuOptype   VFCVT_XFV    
-#define pickSEWvalue   1   
-
-#define FRS1 false
-#define FRS2 false
-
 enum {
   // STATE_GOODTRAP = 0;
   STATE_BADTRAP = 1,
@@ -47,6 +34,8 @@ private:
   VecOutput dut_output;
   TestType test_type;
   bool issued;
+  VecOutput expect_output_buffer[3];
+  VecInput input_buffer[3];
 
   VGMFloatAdder vfa;
   VGMFloatFMA vff;

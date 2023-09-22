@@ -2,7 +2,6 @@ package yunsuan.vector.VectorConvert.util
 
 import chisel3._
 import chisel3.util._
-import chisel3.util.experimental.decode._
 
 class CLZ(len: Int, zero: Boolean) extends Module {
 
