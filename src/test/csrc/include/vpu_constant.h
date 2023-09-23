@@ -13,7 +13,7 @@ extern "C"{
 #define VLEN 128
 #define XLEN 64
 
-#define FU_NUM 8 // for random
+// #define FU_NUM 8 // for random
 #define VFloatAdder (0)
 #define VFloatFMA   (1)
 #define VFloatDivider (2)
@@ -22,7 +22,11 @@ extern "C"{
 #define VIntegerALUV2 (5)
 #define VIntegerDivider (6)
 #define VFloatCvt (7)
-#define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt}
+// #define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt}
+
+//will be delated
+#define FU_NUM 6 
+#define ALL_FUTYPES {VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerDivider,VFloatCvt}
 
 #define INT_ROUNDING(result, xrm, gb) \
   do { \
@@ -288,7 +292,7 @@ extern "C"{
 
   #define VFCVT_ALL_OPTYPES {VFCVT_XUFV, VFCVT_XFV, VFCVT_FXUV, VFCVT_FXV, VFCVT_RTZ_XUFV, VFCVT_RTZ_XFV, \
   VFWCVT_XUFV, VFWCVT_XFV, VFWCVT_FXUV, VFWCVT_FXV, VFWCVT_FFV, VFWCVT_RTZ_XUFV, VFWCVT_RTZ_XFV, \
-  VFNCVT_XUFW, VFNCVT_XFW, VFNCVT_FXUW, VFNCVT_FXW, VFNCVT_FFW, VFNCVT_ROD_FFW, VFNCVT_RTZ_XUFW ,VFNCVT_RTZ_XFW, VFRSQRT7, VFREC7}\   
+  VFNCVT_XUFW, VFNCVT_XFW, VFNCVT_FXUW, VFNCVT_FXW, VFNCVT_FFW, VFNCVT_ROD_FFW, VFNCVT_RTZ_XUFW ,VFNCVT_RTZ_XFW, VFRSQRT7, VFREC7}
 
   #define VFCVT_8_NUM 6
   #define VFCVT_8_OPTYPES {VFWCVT_FXUV, VFWCVT_FXV, VFNCVT_XUFW, VFNCVT_XFW, VFNCVT_RTZ_XUFW, VFNCVT_RTZ_XFW}

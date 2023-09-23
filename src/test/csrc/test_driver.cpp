@@ -11,7 +11,7 @@ extern "C" {
 #include "include/test_driver.h"
 
 TestDriver::TestDriver():
-  issued(false), verbose(VERBOSE), keepinput(false)
+  issued(false), verbose(false), keepinput(false)
 {
   // aviod random value
   set_test_type();
@@ -30,7 +30,7 @@ void TestDriver::set_test_type() {
   test_type.pick_fuType = false;
   test_type.pick_fuOpType = false;
   test_type.fuType = VFloatCvt;
-  test_type.fuOpType = pickFuOptype;
+  test_type.fuOpType = VFREC7;
   printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -118,8 +118,8 @@ uint8_t TestDriver::gen_random_sew() {
   {
     case VIntegerALU: return rand()%4; break;
     case VPermutation: return rand()%4; break;
-    // default: return (rand()%3)+1; break;
-    default: return rand()%4; break;
+    case VFloatCvt: return rand()%4; break;
+    default: return (rand()%3)+1; break;
   }
 }
 
@@ -355,43 +355,43 @@ void TestDriver::get_random_input() {
   input.src4[0] = rand64();
   input.src4[1] = rand64();
 
-  if(pickSEW) input.sew = pickSEWvalue; 
-  else input.sew =gen_random_sew();
-  
   if (!test_type.pick_fuType) { input.fuType = gen_random_futype(ALL_FUTYPES); }
   else { input.fuType = test_type.fuType; }
-  if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
-  else { input.fuOpType = test_type.fuOpType; }
-  // input.sew = gen_random_sew();
-  // input.widen = gen_random_widen();
-  // input.src_widen = gen_random_src_widen();
-  // input.is_frs1 = gen_random_is_frs1();
-  // input.is_frs2 = gen_random_is_frs2();
+
+  if(input.fuType == VFloatCvt){
+    input.sew = gen_random_sew();
+    input.is_frs1 = false;
+    input.is_frs2 = false;
+    input.widen = false;
+    if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
+    else { input.fuOpType = test_type.fuOpType; }
+  }else{
+    if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
+    else { input.fuOpType = test_type.fuOpType; }
+    input.sew = gen_random_sew();
+    input.widen = gen_random_widen();
+    input.src_widen = gen_random_src_widen();
+    input.is_frs1 = gen_random_is_frs1();
+    input.is_frs2 = gen_random_is_frs2();
+    gen_random_vecinfo();
+    gen_random_uopidx();
+    gen_input_vperm();
+  }
 
   if(input.fuType == VFloatCvt && input.fuOpType == VFNCVT_ROD_FFW){
     input.rm = 6;
-  }else if(input.fuType == VFloatCvt && input.fuOpType == VFCVT_RTZ_XUFV ||
-           input.fuType == VFloatCvt && input.fuOpType == VFCVT_RTZ_XFV ||
-           input.fuType == VFloatCvt && input.fuOpType == VFWCVT_RTZ_XUFV ||
-           input.fuType == VFloatCvt && input.fuOpType == VFWCVT_RTZ_XFV ||
-           input.fuType == VFloatCvt && input.fuOpType == VFNCVT_RTZ_XUFW ||
-           input.fuType == VFloatCvt && input.fuOpType == VFNCVT_RTZ_XFW 
+  }else if((input.fuType == VFloatCvt && input.fuOpType == VFCVT_RTZ_XUFV)  ||
+           (input.fuType == VFloatCvt && input.fuOpType == VFCVT_RTZ_XFV)   ||
+           (input.fuType == VFloatCvt && input.fuOpType == VFWCVT_RTZ_XUFV) ||
+           (input.fuType == VFloatCvt && input.fuOpType == VFWCVT_RTZ_XFV)  ||
+           (input.fuType == VFloatCvt && input.fuOpType == VFNCVT_RTZ_XUFW) ||
+           (input.fuType == VFloatCvt && input.fuOpType == VFNCVT_RTZ_XFW)
   ){
     input.rm = 1;
   }else{
     input.rm = rand() % 5;
   }
 
-  input.rm_s = rand() % 5;
-  gen_random_vecinfo();
-  gen_random_uopidx();
-  gen_input_vperm();
-
-  input.is_frs1 = FRS1;
-  input.is_frs2 = FRS2;
-  input.widen = 0;
-  input.src_widen =0;
-  
   if (input.fuType == VIntegerDivider) {
     gen_random_idiv_input();
   }
