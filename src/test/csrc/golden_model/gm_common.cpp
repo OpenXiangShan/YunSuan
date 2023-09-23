@@ -74,7 +74,6 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
     }
   }
   else{
-    ElementOutput output_part[number];
     for(int i = 0; i < number; i++) {
       ElementInput element = select_element(input, i);
       switch (sew) {

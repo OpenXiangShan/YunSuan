@@ -543,7 +543,7 @@ class CVT64(width: Int = 64) extends CVT(width){
     val resultRounded = fracRounded
     val isZeroRounded = !resultRounded.orR
 
-    val normalResult = Mux(signSrc && resultRounded.orR, (~resultRounded).asUInt + 1.U, resultRounded) //排除0     补码
+    val normalResult = Mux(signSrc && resultRounded.orR, (~resultRounded).asUInt + 1.U, resultRounded) //exclude 0
 
     // i=log2(intType)
     val ofExpRounded = !exp.head(1) && Mux1H(int1HOut,

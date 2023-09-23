@@ -34,8 +34,6 @@ private:
   VecOutput dut_output;
   TestType test_type;
   bool issued;
-  VecOutput expect_output_buffer[3];
-  VecInput input_buffer[3];
 
   VGMFloatAdder vfa;
   VGMFloatFMA vff;

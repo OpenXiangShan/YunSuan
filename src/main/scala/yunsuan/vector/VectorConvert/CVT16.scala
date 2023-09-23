@@ -2,8 +2,7 @@ package yunsuan.vector.VectorConvert
 
 import chisel3._
 import chisel3.util._
-import yunsuan.util.LookupTree
-import yunsuan.vector.VectorConvert.util.{CLZ, ShiftRightJam, VFRSqrtTable, VFRecTable, RoundingUnit}
+import yunsuan.vector.VectorConvert.util._
 import yunsuan.vector.VectorConvert.RoundingModle._
 
 
