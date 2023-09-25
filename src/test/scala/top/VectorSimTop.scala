@@ -244,7 +244,7 @@ class SimTop() extends VPUTestModule {
     vff_result.fflags(i) := vff.io.fflags
     vff_result.vxsat := 0.U // DontCare
 
-    // connect vcvt‘s io
+    // connect vcvt's io
     vcvt.io.sew := sew
     vcvt.io.opType := opcode
     vcvt.io.rm := rm

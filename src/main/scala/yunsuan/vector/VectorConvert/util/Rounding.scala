@@ -72,4 +72,4 @@ object RoundingUnit {
 //    (io.in.sig.head(2) === "b01".U(2.W) && !rounder.io.cout)
 //
 //  io.tininess := tininess
-//}。
+//}
