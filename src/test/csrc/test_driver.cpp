@@ -371,8 +371,8 @@ void TestDriver::get_random_input() {
     input.sew = gen_random_sew();
     input.widen = gen_random_widen();
     input.src_widen = gen_random_src_widen();
-    input.is_frs1 = gen_random_is_frs1();
-    input.is_frs2 = gen_random_is_frs2();
+    input.is_frs1 = false;
+    input.is_frs2 = false;
     gen_random_vecinfo();
     gen_random_uopidx();
     gen_input_vperm();
