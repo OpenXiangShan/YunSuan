@@ -448,7 +448,7 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     val result_fsgnjx = Mux(
       res_is_f32,
       Cat(fp_bFix.head(1) ^ fp_aFix.head(1), fp_aFix(30, 0)),
-      Cat(0.U(16.W), Cat(fp_bFix(15) ^ fp_aFix(15), fp_bFix(14, 0)))
+      Cat(0.U(16.W), Cat(fp_bFix(15) ^ fp_aFix(15), fp_aFix(14, 0)))
     )
     val result_fclass = Wire(UInt(floatWidth.W))
     val result_fmerge = Mux(

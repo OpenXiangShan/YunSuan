@@ -159,7 +159,14 @@ class SimTop() extends VPUTestModule {
     vfa.io.frs1  := in.src(1)(0) // VS1(63,0)
     vfa.io.fp_b := src2
     // TODO: change mask
-    vfa.io.mask := Cat(src3(48),src3(32),src3(16),src3(0))
+    val maskTemp = Cat(src3(48),src3(32),src3(16),src3(0))
+    vfa.io.mask := Mux1H(
+      Seq(
+        (sew === 1.U) -> maskTemp,
+        (sew === 2.U) -> Cat(maskTemp(2),maskTemp(0)),
+        (sew === 3.U) -> maskTemp(0)
+      )
+    )
     vfa.io.uop_idx := uop_idx(0)
     // TODO: which module to handle dest's original value
     vfa.io.round_mode := rm
