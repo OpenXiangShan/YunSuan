@@ -198,7 +198,7 @@ class CVT64(width: Int = 64) extends CVT(width){
    */
 
   val type1H = Cat(isInt2FpNext, isFpWidenNext, isFpNarrowNext, isEstimate7Next, isFp2IntNext).asBools.reverse
-  val expAdderIn0 = Wire(UInt(widthExpAdder.W)) //13bits is enough, 多给1bit
+  val expAdderIn0 = Wire(UInt(widthExpAdder.W)) //13bits is enough
   val expAdderIn1 = Wire(UInt(widthExpAdder.W))
 
   val biasDelta = Mux1H(float1HOutNext.tail(1), biasDeltaMap.map(delta => delta.U))
@@ -470,8 +470,8 @@ class CVT64(width: Int = 64) extends CVT(width){
     def fpNarrowResultMapGen(fp: FloatFormat): Seq[UInt] ={
       VecInit((0 to 4).map {
         case 0 => signNonNan ## ~0.U(fp.expWidth.W) ## fracNotZeroSrc ## 0.U((fp.fracWidth - 1).W)  // INF or NaN->QNAN
-        case 1 => signNonNan ## fp.maxExp.U(fp.expWidth.W) ## ~0.U(fp.fracWidth.W)                  // of => great FN
-        case 2 => signNonNan ## (fp.maxExp + 1).U(fp.expWidth.W) ## 0.U(fp.fracWidth.W)             // of => great FN
+        case 1 => signNonNan ## fp.maxExp.U(fp.expWidth.W) ## ~0.U(fp.fracWidth.W)                  // of => GNF
+        case 2 => signNonNan ## (fp.maxExp + 1).U(fp.expWidth.W) ## 0.U(fp.fracWidth.W)             // of => INF
         case 3 => signNonNan ## expRounded(fp.expWidth - 1, 0) ## fracRounded(fp.fracWidth - 1, 0)  // normal
         case 4 => signNonNan ## subExpRounded(fp.expWidth - 1, 0) ## subFracRounded(fp.fracWidth - 1, 0) //sub or uf
       })
