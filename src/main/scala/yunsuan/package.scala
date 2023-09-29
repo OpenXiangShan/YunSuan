@@ -521,14 +521,14 @@ object VfcvtType {
   def vfwcvt_rtz_xufv   = "b10_001110".U(8.W)
   def vfwcvt_rtz_xfv    = "b10_001111".U(8.W)
 
-  def vfnvct_xufw       = "b10_010000".U(8.W)
-  def vfnvct_xfw        = "b10_010001".U(8.W)
-  def vfnvct_fxuw       = "b01_010010".U(8.W)
-  def vfnvct_fxw        = "b01_010011".U(8.W)
-  def vfnvct_ffw        = "b11_010100".U(8.W)
-  def vfnvct_rod_ffw    = "b11_010101".U(8.W)
-  def vfnvct_rtz_xufw   = "b10_010110".U(8.W)
-  def vfnvct_rtz_xfw    = "b10_010111".U(8.W)
+  def vfncvt_xufw       = "b10_010000".U(8.W)
+  def vfncvt_xfw        = "b10_010001".U(8.W)
+  def vfncvt_fxuw       = "b01_010010".U(8.W)
+  def vfncvt_fxw        = "b01_010011".U(8.W)
+  def vfncvt_ffw        = "b11_010100".U(8.W)
+  def vfncvt_rod_ffw    = "b11_010101".U(8.W)
+  def vfncvt_rtz_xufw   = "b10_010110".U(8.W)
+  def vfncvt_rtz_xfw    = "b10_010111".U(8.W)
 }
 
 
