@@ -240,20 +240,20 @@ class VectorIdiv extends Module {
 
   finish := divide_8_finish.reduce(_ & _) & divide_16_finish.reduce(_ & _) & divide_32_finish.reduce(_ & _) & divide_64_finish.reduce(_ & _)
   div_out_d_zero_result :=
-    Mux(sew_hb(0), Cat(divide_64_d_zero.asUInt(), divide_32_d_zero.asUInt(), divide_16_d_zero.asUInt(), divide_8_d_zero.asUInt()),
-      Mux(sew_hb(1), Cat(0.U(8.W), divide_64_d_zero.asUInt(), divide_32_d_zero.asUInt(), divide_16_d_zero.asUInt()),
-        Mux(sew_hb(2), Cat(0.U(12.W),divide_64_d_zero.asUInt(), divide_32_d_zero.asUInt()),
-          Cat(0.U(14.W),divide_64_d_zero.asUInt()))))
+    Mux(sew_hb(0), Cat(divide_64_d_zero.asUInt, divide_32_d_zero.asUInt, divide_16_d_zero.asUInt, divide_8_d_zero.asUInt),
+      Mux(sew_hb(1), Cat(0.U(8.W), divide_64_d_zero.asUInt, divide_32_d_zero.asUInt, divide_16_d_zero.asUInt),
+        Mux(sew_hb(2), Cat(0.U(12.W),divide_64_d_zero.asUInt, divide_32_d_zero.asUInt),
+          Cat(0.U(14.W),divide_64_d_zero.asUInt))))
   div_out_q_result :=
-    Mux(sew_hb(0), Cat(divide_64_I8_q.asUInt(),divide_32_I8_q.asUInt(),divide_16_I8_q.asUInt(), divide_8_q_result.asUInt()),
-      Mux(sew_hb(1),Cat(divide_64_I16_q.asUInt(),divide_32_I16_q.asUInt(),divide_16_I16_q.asUInt()),
-        Mux(sew_hb(2),Cat(divide_64_I32_q.asUInt(),divide_32_I32_q.asUInt()),
-          divide_64_I64_q.asUInt())))
+    Mux(sew_hb(0), Cat(divide_64_I8_q.asUInt,divide_32_I8_q.asUInt,divide_16_I8_q.asUInt, divide_8_q_result.asUInt),
+      Mux(sew_hb(1),Cat(divide_64_I16_q.asUInt,divide_32_I16_q.asUInt,divide_16_I16_q.asUInt),
+        Mux(sew_hb(2),Cat(divide_64_I32_q.asUInt,divide_32_I32_q.asUInt),
+          divide_64_I64_q.asUInt)))
   div_out_rem_result :=
-    Mux(sew_hb(0), Cat(divide_64_I8_rem.asUInt(), divide_32_I8_rem.asUInt(), divide_16_I8_rem.asUInt(), divide_8_rem_result.asUInt()),
-      Mux(sew_hb(1), Cat(divide_64_I16_rem.asUInt(), divide_32_I16_rem.asUInt(), divide_16_I16_rem.asUInt()),
-        Mux(sew_hb(2), Cat(divide_64_I32_rem.asUInt(), divide_32_I32_rem.asUInt()),
-          divide_64_I64_rem.asUInt())))
+    Mux(sew_hb(0), Cat(divide_64_I8_rem.asUInt, divide_32_I8_rem.asUInt, divide_16_I8_rem.asUInt, divide_8_rem_result.asUInt),
+      Mux(sew_hb(1), Cat(divide_64_I16_rem.asUInt, divide_32_I16_rem.asUInt, divide_16_I16_rem.asUInt),
+        Mux(sew_hb(2), Cat(divide_64_I32_rem.asUInt, divide_32_I32_rem.asUInt),
+          divide_64_I64_rem.asUInt)))
 
 
   // output

@@ -213,14 +213,14 @@ class SRT16Divint(bit_width: Int) extends Module {
   val x_enc = Wire(UInt((lzc_w+1).W)) // x value of priority encoder
   val d_enc = Wire(UInt((lzc_w+1).W)) // d value of priority encoder
 
-  x_enc := PriorityEncoder(abs_x_reg(bit_width-1, 0).asBools().reverse)
-  d_enc := PriorityEncoder(abs_d_reg(bit_width-1, 0).asBools().reverse)
+  x_enc := PriorityEncoder(abs_x_reg(bit_width-1, 0).asBools.reverse)
+  d_enc := PriorityEncoder(abs_d_reg(bit_width-1, 0).asBools.reverse)
 
   lzc_x := x_enc(lzc_w - 1, 0)
-  zero_x := ~abs_x_reg.orR()
+  zero_x := ~abs_x_reg.orR
   lzc_d := d_enc(lzc_w - 1, 0)
-  zero_d := ~abs_d_reg.orR()
-  d_is_one := lzc_d(lzc_w - 1, 0).andR()
+  zero_d := ~abs_d_reg.orR
+  d_is_one := lzc_d(lzc_w - 1, 0).andR
   // lzc_diff and pre shifter
   val lzc_diff = Cat(0.U(1.W),lzc_d) - Cat(0.U(1.W),lzc_x) // x d the diffenrence between lzc of x and lzc of d
   val lzc_x_ex = ZeroExt(lzc_x, 6) // Due to the possibility of multiple bit widths, it is necessary to uniformly zero expand lzc for easy storage
@@ -459,7 +459,7 @@ class SRT16Divint(bit_width: Int) extends Module {
   }
 
   // output stage
-  val Bypass_rem_is_zero = !(Bypass_final_rem_reg.orR())
+  val Bypass_rem_is_zero = !(Bypass_final_rem_reg.orR)
   val adjust = Mux(x_sign_reg, (~Bypass_rem_is_zero).asBool & (~Bypass_final_rem_reg(w_width-1)).asBool, Bypass_final_rem_reg(w_width-1)) & !early_finish_q // rem need to adjust
   val out_q_final =
     Mux(adjust, q_B_sign_c_reg, q_A_sign_c_reg)

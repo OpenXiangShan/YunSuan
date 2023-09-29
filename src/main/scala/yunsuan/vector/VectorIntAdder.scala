@@ -2,7 +2,6 @@ package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
-import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 import yunsuan.{OpType, VipuType0, VectorElementFormat}
 
 /**
@@ -358,11 +357,4 @@ class VectorIntAdder() extends Module {
       is_greater_than_unsigned_out,is_greater_than_signed_out,is_greater_than_or_equal_unsigned_out, is_greater_than_or_equal_signed_out)
   )
 
-}
-
-object MainAdderTest extends App {
-  println(ChiselStage.emitVerilog(new VectorIntAdder()))
-
-  (new ChiselStage).execute(Array("--emission-options=disableMemRandomization,disableRegisterRandomization",
-    "--target-dir", "./generated/Adder"), Seq(ChiselGeneratorAnnotation(() => new VectorIntAdder())))
 }
