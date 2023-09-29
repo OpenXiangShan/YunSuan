@@ -17,9 +17,9 @@ class ShiftRightJam(val len: Int) extends Module {
   val exceed_max_shift = io.shamt > len.U
   val shamt = io.shamt(max_shift_width - 1, 0)
   val sticky_mask =
-    ((1.U << shamt).asUInt() - 1.U)(len - 1, 0) | Fill(len, exceed_max_shift) //移出去那几位的mask
+    ((1.U << shamt).asUInt - 1.U)(len - 1, 0) | Fill(len, exceed_max_shift) //移出去那几位的mask
   io.out := Mux(exceed_max_shift, 0.U, io.in >> io.shamt)
-  io.sticky := (io.in & sticky_mask).orR() //看移出去的这几位是否sticky
+  io.sticky := (io.in & sticky_mask).orR //看移出去的这几位是否sticky
 }
 
 object ShiftRightJam {

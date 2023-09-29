@@ -83,7 +83,7 @@ class Vfslide1upModule() extends Module(){
   ))
   val result_vtm0 = (body_result_temp & body_mask & active_mask) | (io.in.src1 & body_mask & (~active_mask).asUInt) // vma=0
 
-  val result_vtm1 = (body_result_temp & body_mask & active_mask) | (Fill(128, 1.U(1.W)) & body_mask & (~active_mask).asUInt()) // vma=1
+  val result_vtm1 = (body_result_temp & body_mask & active_mask) | (Fill(128, 1.U(1.W)) & body_mask & (~active_mask).asUInt) // vma=1
 
   val resutl_vtm = Mux(io.in.vma, result_vtm1, result_vtm0)
 
@@ -97,7 +97,7 @@ class Vfslide1upModule() extends Module(){
   ))
 
   val result_vta0 = tail & tail_mask // vta=0
-  val result_vta1 = (Fill(128, 1.U(1.W)) & tail_mask) | (tail & (~tail_mask).asUInt())  // vta=1
+  val result_vta1 = (Fill(128, 1.U(1.W)) & tail_mask) | (tail & (~tail_mask).asUInt)  // vta=1
   val result_vta = Mux(io.in.vta, result_vta1, result_vta0)
 
   // body + tail

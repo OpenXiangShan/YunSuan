@@ -215,25 +215,25 @@ package object yunsuan {
       val format = Mux(
         (getOpcodeGeneral(fuOpType) === getOpcodeGeneral(vadd_vv) || getOpcodeGeneral(fuOpType) === getOpcodeGeneral(vsub_vv)),
         Mux1H(Seq( // format for vadd/vsub : 00 vvv   01 vvw   10 wvw   11 rvvv
-          (formatOH === "b00".U) -> Cat(Sew, Sew, Sew).asUInt(),
-          (formatOH === "b01".U) -> Cat(Sew, Sew, Sew2).asUInt(),
-          (formatOH === "b10".U) -> Cat(Sew2, Sew, Sew2).asUInt(),
-          (formatOH === "b11".U) -> Cat(Sew, Sew, Sew).asUInt(),
+          (formatOH === "b00".U) -> Cat(Sew, Sew, Sew).asUInt,
+          (formatOH === "b01".U) -> Cat(Sew, Sew, Sew2).asUInt,
+          (formatOH === "b10".U) -> Cat(Sew2, Sew, Sew2).asUInt,
+          (formatOH === "b11".U) -> Cat(Sew, Sew, Sew).asUInt,
         )
         ),
         Mux(
           (getOpcodeGeneral(fuOpType) === getOpcodeGeneral(vzext_vf2)),
           Mux1H(Seq( // format for vext : 00 22v   01 44v   10 88v
-            (formatOH === "b00".U) -> Cat(Sewf2, Sewf2, Sew).asUInt(),
-            (formatOH === "b01".U) -> Cat(Sewf4, Sewf4, Sew).asUInt(),
-            (formatOH === "b10".U) -> Cat(Sewf8, Sewf8, Sew).asUInt(),
+            (formatOH === "b00".U) -> Cat(Sewf2, Sewf2, Sew).asUInt,
+            (formatOH === "b01".U) -> Cat(Sewf4, Sewf4, Sew).asUInt,
+            (formatOH === "b10".U) -> Cat(Sewf8, Sewf8, Sew).asUInt,
           )
           ),
           Mux1H(Seq( // format for general opcode : 00 vvv/0xv   01 vvm   10 mmm   11 wvv
-            (formatOH === "b00".U) -> Cat(Sew, Sew, Sew).asUInt(),
-            (formatOH === "b01".U) -> Cat(Sew, Sew, Mask).asUInt(),
-            (formatOH === "b10".U) -> Cat(Mask, Mask, Mask).asUInt(),
-            (formatOH === "b11".U) -> Cat(Sew2, Sew, Sew).asUInt(),
+            (formatOH === "b00".U) -> Cat(Sew, Sew, Sew).asUInt,
+            (formatOH === "b01".U) -> Cat(Sew, Sew, Mask).asUInt,
+            (formatOH === "b10".U) -> Cat(Mask, Mask, Mask).asUInt,
+            (formatOH === "b11".U) -> Cat(Sew2, Sew, Sew).asUInt,
           )
           )
         )
@@ -322,7 +322,7 @@ package object yunsuan {
     def vmv8r              = "b0_0_0_11_111".U(OpTypeWidth.W) // vmvnr
 
     def getLmulVmvnr(fuOpType: UInt) = Cat(0.U(1.W), fuOpType(4,3))
-    def isVmvnr(fuOpType: UInt) = fuOpType(2,0).andR() && (!fuOpType(7,5).orR())
+    def isVmvnr(fuOpType: UInt) = fuOpType(2,0).andR && (!fuOpType(7,5).orR)
     def getOpcode(fuOpType: UInt) = Cat(0.U(3.W), fuOpType(2,0))
     def getSrcVdType(fuOpType: UInt, sew: UInt) = {
       val isFp = fuOpType(6)
@@ -334,7 +334,7 @@ package object yunsuan {
         !(isvrgatherei16|isvrgatherei16)   -> Cat(isFp ,isFp,  sew(1,0)),
       ))
       val uSew =   Cat(0.U(1.W), 0.U(1.W), sew(1,0))
-      val format = Cat(uSew, srcType1, uSew).asUInt()
+      val format = Cat(uSew, srcType1, uSew).asUInt
       format
     }
     def notNeedSew(fuOpType: UInt) = fuOpType(7)

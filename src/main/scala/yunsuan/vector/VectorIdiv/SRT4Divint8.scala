@@ -106,10 +106,10 @@ class SRT4Divint8(bit_width: Int=8) extends Module {
   x_enc := PriorityEncoder(abs_x.asBools.reverse)
   d_enc := PriorityEncoder(abs_d.asBools.reverse)
   lzc_x := x_enc(lzc_w - 1, 0)
-  zero_x := ~abs_x.orR()
+  zero_x := ~abs_x.orR
   lzc_d := d_enc(lzc_w - 1, 0)
   val lzc_d_reg = RegEnable(lzc_d, stateReg(pre))
-  zero_d := ~abs_d.orR()
+  zero_d := ~abs_d.orR
   // q _sign
   val q_sign = Wire(Bool())
   val q_sign_reg = RegEnable(q_sign, stateReg(pre))
@@ -249,7 +249,7 @@ class SRT4Divint8(bit_width: Int=8) extends Module {
     rem_sign := rem_correct(0).asUInt +rem_correct(1).asUInt
     rem_sign_plus_d := rem_correct(0).asUInt + rem_correct(1).asUInt + const_d_reg(3)
   }
-  val rem_is_zero = !(rem_sign.orR())
+  val rem_is_zero = !(rem_sign.orR)
   val adjust = Mux(x_sign_reg, (~rem_is_zero).asBool &(~rem_sign(w_width - 1)).asBool, rem_sign(w_width -1)) & !early_finish_q
   val out_q_final =
     Mux(adjust, q_B_sign_c, q_A_sign_c)
