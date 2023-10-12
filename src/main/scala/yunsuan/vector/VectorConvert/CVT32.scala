@@ -657,7 +657,7 @@ class CVT32(width: Int = 32) extends CVT(width){
   val exp_delta = VectorFloat.expBias(f32.expWidth) - VectorFloat.expBias(f16.expWidth)
 
   val down_exp_s = fp_in.exp.zext - exp_delta.S
-  val down_exp = Wire(UInt(8.W))
+  val down_exp = Wire(UInt(9.W))
   val down_exp_reg0 = RegNext(down_exp)
   down_exp := down_exp_s.asUInt
 
@@ -668,7 +668,7 @@ class CVT32(width: Int = 32) extends CVT(width){
   nor_signBit := fp_in.sign
 
   // subnormal
-  val shamt = (exp_delta + 1).U(f32.expWidth) - fp_in.exp
+  val shamt = (exp_delta + 1).U(f32.expWidth.W) - fp_in.exp
   val (subnor_sig, shift_sticky) = ShiftRightJam(Cat(fp_in.decode.expNotZero, fp_in.sig.head(f16.precision)), shamt)
   subnor_in := subnor_sig.tail(1).head(f16.precision - 1)
   subnor_roundBit := subnor_sig(0)
@@ -677,7 +677,7 @@ class CVT32(width: Int = 32) extends CVT(width){
 
   val may_be_subnor = Wire(Bool())
   val may_be_subnor_reg0 = RegNext(may_be_subnor)
-  may_be_subnor := down_exp.asSInt < 1.S
+  may_be_subnor := down_exp_s < 1.S
 
   val rmin = is_fp2fp && is_narrow &&  (io.rm === RTZ || (io.rm === RDN & !fp_in.sign) || (io.rm === RUP && fp_in.sign))
 
