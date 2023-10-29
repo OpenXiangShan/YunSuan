@@ -1680,7 +1680,7 @@ private[vector] class BoothEncoderF64F32F16(
     val head_first_one_width = 11-4-2*(i-1)
     val tail_zero_width = 2*(i-1)
     i match {
-      case 0 => addend_seq_f16(i) := Cat( 0.U((11-4).U), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f16(i) )
+      case 0 => addend_seq_f16(i) := Cat( 0.U((11-4).W), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f16(i) )
       case 1 => addend_seq_f16(i) := Cat( 1.U(head_first_one_width.W), ~sign_seq(i), pp_seq_f16(i), 0.U, sign_seq(i-1) )
       case 4 => addend_seq_f16(i) := Cat(1.U, ~sign_seq(i), pp_seq_f16(i), 0.U, sign_seq(i - 1), 0.U(tail_zero_width.W))
       case 5 => if (is_addend_expand_1bit) addend_seq_f16(i) := Cat(1.U, pp_seq_f16(i), 0.U,sign_seq(i-1), 0.U(tail_zero_width.W))
@@ -1695,7 +1695,7 @@ private[vector] class BoothEncoderF64F32F16(
     val head_first_one_width = 11-4-2*(i-1-7)
     val tail_zero_width = 2*(i-1-7)
     i match {
-      case 7 => addend_seq_f16(i) := Cat( 0.U((11-4).U), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f16(i) )
+      case 7 => addend_seq_f16(i) := Cat( 0.U((11-4).W), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f16(i) )
       case 8 => addend_seq_f16(i) := Cat( 1.U(head_first_one_width.W), ~sign_seq(i), pp_seq_f16(i), 0.U, sign_seq(i-1) )
       case 11 => addend_seq_f16(i) := Cat(1.U, ~sign_seq(i), pp_seq_f16(i), 0.U, sign_seq(i - 1), 0.U(tail_zero_width.W))
       case 12 => if (is_addend_expand_1bit) addend_seq_f16(i) := Cat(1.U, pp_seq_f16(i), 0.U,sign_seq(i-1), 0.U(tail_zero_width.W))
@@ -1710,7 +1710,7 @@ private[vector] class BoothEncoderF64F32F16(
     val head_first_one_width = 11-4-2*(i-1-14)
     val tail_zero_width = 2*(i-1-14)
     i match {
-      case 14 => addend_seq_f16(i) := Cat( 0.U((11-4).U), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f16(i) )
+      case 14 => addend_seq_f16(i) := Cat( 0.U((11-4).W), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f16(i) )
       case 15 => addend_seq_f16(i) := Cat( 1.U(head_first_one_width.W), ~sign_seq(i), pp_seq_f16(i), 0.U, sign_seq(i-1) )
       case 18 => addend_seq_f16(i) := Cat(1.U, ~sign_seq(i), pp_seq_f16(i), 0.U, sign_seq(i - 1), 0.U(tail_zero_width.W))
       case 19 => if (is_addend_expand_1bit) addend_seq_f16(i) := Cat(1.U, pp_seq_f16(i), 0.U,sign_seq(i-1), 0.U(tail_zero_width.W))
@@ -1725,7 +1725,7 @@ private[vector] class BoothEncoderF64F32F16(
     val head_first_one_width = 11-4-2*(i-1-21)
     val tail_zero_width = 2*(i-1-21)
     i match {
-      case 21 => addend_seq_f16(i) := Cat( 0.U((11-4).U), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f16(i) )
+      case 21 => addend_seq_f16(i) := Cat( 0.U((11-4).W), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f16(i) )
       case 22 => addend_seq_f16(i) := Cat( 1.U(head_first_one_width.W), ~sign_seq(i), pp_seq_f16(i), 0.U, sign_seq(i-1) )
       case 25 => addend_seq_f16(i) := Cat(1.U, ~sign_seq(i), pp_seq_f16(i), 0.U, sign_seq(i - 1), 0.U(tail_zero_width.W))
       case 26 => if (is_addend_expand_1bit) addend_seq_f16(i) := Cat(1.U, pp_seq_f16(i), 0.U,sign_seq(i-1), 0.U(tail_zero_width.W))
@@ -1740,7 +1740,7 @@ private[vector] class BoothEncoderF64F32F16(
     val head_first_one_width = 24-4-2*(i-1)
     val tail_zero_width = 2*(i-1)
     i match {
-      case 0 => addend_seq_f32(i) := Cat( 0.U((24-4).U), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f32(i) )
+      case 0 => addend_seq_f32(i) := Cat( 0.U((24-4).W), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f32(i) )
       case 1 => addend_seq_f32(i) := Cat( 1.U(head_first_one_width.W), ~sign_seq(i), pp_seq_f32(i), 0.U, sign_seq(i-1) )
       case 11 => addend_seq_f32(i) := Cat(1.U, ~sign_seq(i), pp_seq_f32(i), 0.U, sign_seq(i - 1), 0.U(tail_zero_width.W))
       case 12 => addend_seq_f32(i) := Cat(pp_seq_f32(i).tail(1), 0.U, sign_seq(i-1), 0.U(tail_zero_width.W))
@@ -1754,7 +1754,7 @@ private[vector] class BoothEncoderF64F32F16(
     val head_first_one_width = 24-4-2*(i-1-14)
     val tail_zero_width = 2*(i-1-14)
     i match {
-      case 14 => addend_seq_f32(i) := Cat( 0.U((24-4).U), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f32(i) )
+      case 14 => addend_seq_f32(i) := Cat( 0.U((24-4).W), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f32(i) )
       case 15 => addend_seq_f32(i) := Cat( 1.U(head_first_one_width.W), ~sign_seq(i), pp_seq_f32(i), 0.U, sign_seq(i-1) )
       case 25 => addend_seq_f32(i) := Cat(1.U, ~sign_seq(i), pp_seq_f32(i), 0.U, sign_seq(i - 1), 0.U(tail_zero_width.W))
       case 26 => addend_seq_f32(i) := Cat(pp_seq_f32(i).tail(1), 0.U, sign_seq(i-1), 0.U(tail_zero_width.W))
@@ -1768,7 +1768,7 @@ private[vector] class BoothEncoderF64F32F16(
     val head_first_one_width = width - 4 - 2 * (i - 1)
     val tail_zero_width = 2 * (i - 1)
     i match {
-      case 0 => addend_seq_f64(i) := Cat(0.U((width - 4).U), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f64(0))
+      case 0 => addend_seq_f64(i) := Cat(0.U((width - 4).W), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f64(0))
       case 1 => addend_seq_f64(i) := Cat(1.U(head_first_one_width.W), ~sign_seq(i), pp_seq_f64(i), 0.U, sign_seq(i - 1))
       case `outNumBeforeLast` =>
         if (width % 2 == 0) {
