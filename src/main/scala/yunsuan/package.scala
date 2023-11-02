@@ -316,13 +316,9 @@ package object yunsuan {
     def vrgatherei16       = "b0_0_1_00_100".U(OpTypeWidth.W) // 
     def vrgather_vx        = "b1_0_0_00_101".U(OpTypeWidth.W) // 
     def vcompress          = "b0_0_1_00_110".U(OpTypeWidth.W) // 
-    def vmv1r              = "b0_0_0_00_111".U(OpTypeWidth.W) // vmvnr
-    def vmv2r              = "b0_0_0_01_111".U(OpTypeWidth.W) // vmvnr
-    def vmv4r              = "b0_0_0_10_111".U(OpTypeWidth.W) // vmvnr
-    def vmv8r              = "b0_0_0_11_111".U(OpTypeWidth.W) // vmvnr
+    def vmvnr              = "b0_0_0_00_111".U(OpTypeWidth.W) // vmvnr
 
     def getLmulVmvnr(fuOpType: UInt) = Cat(0.U(1.W), fuOpType(4,3))
-    def isVmvnr(fuOpType: UInt) = fuOpType(2,0).andR && (!fuOpType(7,5).orR)
     def getOpcode(fuOpType: UInt) = Cat(0.U(3.W), fuOpType(2,0))
     def getSrcVdType(fuOpType: UInt, sew: UInt) = {
       val isFp = fuOpType(6)
