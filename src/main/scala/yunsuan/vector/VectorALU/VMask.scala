@@ -2,6 +2,8 @@ package yunsuan.vector.alu
 
 import chisel3._
 import chisel3.util._
+import yunsuan.util.ZeroExt
+
 import scala.language.postfixOps
 import yunsuan.vector._
 import yunsuan.vector.alu.VAluOpcode._
@@ -105,7 +107,11 @@ class VMask extends Module {
 
   vmsof := ~vmsbf & vmsif
   vmsbf := sbf(Cat(vs2m.reverse))
-  vmfirst := BitsExtend(vfirst(Cat(vs2m.reverse)), xLen, true.B)
+  vmfirst := Mux(
+    vs2m.asUInt.orR,
+    ZeroExt(vfirst(Cat(vs2m.reverse)), xLen),
+    Fill(xLen, 1.U(1.W))
+  )
 
   // viota/vid/vcpop
   val vs2m_uop = Cat(vs2m.reverse) >> Mux(vcpop_m, uopIdx << vsew_plus1, uopIdx(5, 1) << vsew_plus1)
