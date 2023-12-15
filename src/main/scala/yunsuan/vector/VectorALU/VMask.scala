@@ -311,7 +311,7 @@ class VMask extends Module {
   tail_vd := old_vd_vl_mask | (mask_vd & vd_vl_mask)
 
   vd_out := vd_reg
-  when(vstart_reg >= vl_reg) {
+  when(vstart_reg >= vl_reg && !reg_vfirst_m && !reg_vmsbf_m && !reg_vmsof_m && !reg_vmsif_m) {
     vd_out := old_vd_reg
   }.elsewhen(reg_vmsbf_m || reg_vmsif_m || reg_vmsof_m) {
     vd_out := tail_vd
@@ -321,6 +321,8 @@ class VMask extends Module {
 
   io.out.vd := vd_out
   io.out.vxsat := false.B
+
+  dontTouch(vmfirst)
 }
 
 object VerilogMask extends App {
