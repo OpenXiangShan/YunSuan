@@ -2,6 +2,8 @@ package yunsuan.vector.alu
 
 import chisel3._
 import chisel3.util._
+import yunsuan.util.ZeroExt
+
 import scala.language.postfixOps
 import yunsuan.vector._
 import yunsuan.vector.alu.VAluOpcode._
@@ -105,7 +107,11 @@ class VMask extends Module {
 
   vmsof := ~vmsbf & vmsif
   vmsbf := sbf(Cat(vs2m.reverse))
-  vmfirst := BitsExtend(vfirst(Cat(vs2m.reverse)), xLen, true.B)
+  vmfirst := Mux(
+    vs2m.asUInt.orR,
+    ZeroExt(vfirst(Cat(vs2m.reverse)), xLen),
+    Fill(xLen, 1.U(1.W))
+  )
 
   // viota/vid/vcpop
   val vs2m_uop = Cat(vs2m.reverse) >> Mux(vcpop_m, uopIdx << vsew_plus1, uopIdx(5, 1) << vsew_plus1)
@@ -305,7 +311,7 @@ class VMask extends Module {
   tail_vd := old_vd_vl_mask | (mask_vd & vd_vl_mask)
 
   vd_out := vd_reg
-  when(vstart_reg >= vl_reg) {
+  when(vstart_reg >= vl_reg && !reg_vfirst_m && !reg_vmsbf_m && !reg_vmsof_m && !reg_vmsif_m) {
     vd_out := old_vd_reg
   }.elsewhen(reg_vmsbf_m || reg_vmsif_m || reg_vmsof_m) {
     vd_out := tail_vd
@@ -315,6 +321,8 @@ class VMask extends Module {
 
   io.out.vd := vd_out
   io.out.vxsat := false.B
+
+  dontTouch(vmfirst)
 }
 
 object VerilogMask extends App {
