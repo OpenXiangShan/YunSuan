@@ -320,7 +320,7 @@ class Permutation extends Module {
     (vrgather16_sew8 && (uopIdx >= 4.U))
   ) {
     vstartRemain := Mux(vslideup_vstart >= ele_cnt, vslideup_vstart - ele_cnt, 0.U)
-  }.elsewhen(vslide1up || vmvnr) {
+  }.elsewhen(vslide1up) {
     vstartRemain := Mux(vstart >= (uopIdx << vsew_plus1), vstart - (uopIdx << vsew_plus1), 0.U)
   }.elsewhen(vslide1dn) {
     vstartRemain := Mux(vstart >= (uopIdx(5, 1) << vsew_plus1), vstart - (uopIdx(5, 1) << vsew_plus1), 0.U)
@@ -425,7 +425,7 @@ class Permutation extends Module {
   }
 
   perm_tail_mask_vd := vd_reg
-  when(reg_vslide || reg_vrgather || reg_vrgather_vx || reg_vmvnr) {
+  when(reg_vslide || reg_vrgather || reg_vrgather_vx) {
     perm_tail_mask_vd := (vd_reg & vmask_tail_bits & vmask_vstart_bits) | tail_vd | vstart_old_vd
   }
 

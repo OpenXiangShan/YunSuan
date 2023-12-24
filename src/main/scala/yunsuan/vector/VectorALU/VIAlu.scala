@@ -5,6 +5,7 @@ import chisel3._
 import chisel3.util._
 import yunsuan.vector._
 import yunsuan.vector.alu.VAluOpcode._
+import yunsuan.vector.alu.VSew._
 
 class VIAlu extends Module {
   val io = IO(new Bundle {
@@ -40,6 +41,8 @@ class VIAlu extends Module {
   vIntFixpAlu.io.in.mask16b := MaskExtract(mask, maskIdx, eewVm)
   vIntFixpAlu.io.ctrl.narrow := narrow
   vIntFixpAlu.io.ctrl.vstart_gte_vl := vstart_gte_vl
+  val vsew = vdType(1, 0)
+  val vs2 = io.in.bits.vs2
 
   val vReduAlu = Module(new Reduction)
   vReduAlu.io.in := io.in
@@ -47,12 +50,20 @@ class VIAlu extends Module {
   val vMaskAlu = Module(new VMask)
   vMaskAlu.io.in := io.in
 
+  val vs2Ext = RegEnable(Mux1H(Seq(
+    (vsew === e8)  -> BitsExtend(vs2(7,0), 64, true.B),
+    (vsew === e16) -> BitsExtend(vs2(15,0), 64, true.B),
+    (vsew === e32) -> BitsExtend(vs2(31,0), 64, true.B),
+    (vsew === e64) -> vs2(63,0)
+  )) , io.in.valid)
+
   /**
    * Output stage
    */
-  val opcodeS1 = RegNext(io.in.bits.opcode)
-  val vdFinal = Mux(opcodeS1.isIntFixp, vIntFixpAlu.io.out.vd,
-                    Mux(opcodeS1.isReduction, vReduAlu.io.out.vd, vMaskAlu.io.out.vd))
+  val opcodeS1 = RegEnable(io.in.bits.opcode, io.in.valid)
+  val vdFinal = Mux(opcodeS1.isVmvxs, vs2Ext,
+                    Mux(opcodeS1.isIntFixp, vIntFixpAlu.io.out.vd,
+                        Mux(opcodeS1.isReduction, vReduAlu.io.out.vd, vMaskAlu.io.out.vd)))
 
   io.out.bits.vd := vdFinal
   io.out.bits.vxsat := vIntFixpAlu.io.out.vxsat
