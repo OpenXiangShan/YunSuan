@@ -53,6 +53,7 @@ object VAluOpcode {
   val viota   = 44.U(6.W)
   val vid     = 45.U(6.W)
   val vmvsx   = 46.U(6.W)
+  val vmvxs   = 47.U(6.W)
 }
 
 import VAluOpcode._
@@ -81,6 +82,13 @@ object VIntFixpTable {
     BitPat(vaadd)  -> BitPat("b0  0  0"),
     BitPat(vasub)  -> BitPat("b1  0  0"),
   )
+}
+
+object VSew {
+  val e8  = "b00".U(2.W)
+  val e16 = "b01".U(2.W)
+  val e32 = "b10".U(2.W)
+  val e64 = "b11".U(2.W)
 }
 
 // object VAluDecode {
