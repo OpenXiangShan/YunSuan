@@ -67,6 +67,8 @@ class Permutation extends Module {
   val vmask_byte_strb = Wire(Vec(vlenb, UInt(1.W)))
   val vs1_bytes = VecInit(Seq.tabulate(vlenb)(i => vs1((i + 1) * 8 - 1, i * 8)))
   val vs2_bytes = VecInit(Seq.tabulate(vlenb)(i => vs2((i + 1) * 8 - 1, i * 8)))
+  val emul = vlmul(1, 0)
+  val evl = Mux1H(Seq.tabulate(4)(i => (emul === i.U) -> (ele_cnt << i.U)))
 
   val vslideup_vl = Wire(UInt(8.W))
   vlRemain := vslideup_vl
@@ -368,15 +370,15 @@ class Permutation extends Module {
     }
   }
 
-  val reg_vcompress = RegEnable(vcompress, false.B, fire)
-  val reg_vslideup = RegEnable(vslideup, false.B, fire)
-  val reg_vslidedn = RegEnable(vslidedn, false.B, fire)
-  val reg_vslide1up = RegEnable(vslide1up, false.B, fire)
-  val reg_vslide1dn = RegEnable(vslide1dn, false.B, fire)
-  val reg_vrgather = RegEnable(vrgather, false.B, fire)
-  val reg_vrgather_vx = RegEnable(vrgather_vx, false.B, fire)
-  val reg_vmvnr = RegEnable(vmvnr, false.B, fire)
-  val reg_vslide = RegEnable(vslide, false.B, fire)
+  val is_vcompress_reg = RegEnable(vcompress, false.B, fire)
+  val is_vslideup_reg = RegEnable(vslideup, false.B, fire)
+  val is_vslidedn_reg = RegEnable(vslidedn, false.B, fire)
+  val is_vslide1up_reg = RegEnable(vslide1up, false.B, fire)
+  val is_vslide1dn_reg = RegEnable(vslide1dn, false.B, fire)
+  val is_vrgather_reg = RegEnable(vrgather, false.B, fire)
+  val is_vrgather_vx_reg = RegEnable(vrgather_vx, false.B, fire)
+  val is_vmvnr_reg = RegEnable(vmvnr, false.B, fire)
+  val is_vslide_reg = RegEnable(vslide, false.B, fire)
   val uopIdx_reg = RegEnable(uopIdx, 0.U, fire)
   val load_rs1_reg = RegEnable(load_rs1, false.B, fire)
   val vlRemain_reg = RegEnable(vlRemain, 0.U, fire)
@@ -389,7 +391,7 @@ class Permutation extends Module {
   val base_reg = RegEnable(base, 0.U, fire)
   val one_reg = RegEnable(in_previous_ones_sum, 0.U, fire)
   val vstart_reg = RegEnable(vstart, 0.U, fire)
-  val vl_reg = RegEnable(vl, 0.U, fire)
+  val vl_reg = RegEnable(Mux(vmvnr, evl, vl), 0.U, fire)
 
   val vlRemainBytes_reg = vlRemain_reg << vsew_reg
   val vstartRemainBytes_reg = vstartRemain_reg << vsew_reg
@@ -399,10 +401,10 @@ class Permutation extends Module {
   val tail_bytes = Mux((vlRemainBytes_reg >= vlenb.U), 0.U, vlenb.U - vlRemainBytes_reg)
   val tail_bits = Cat(tail_bytes, 0.U(3.W))
   val vmask_tail_bits = Wire(UInt(VLEN.W))
-  vmask_tail_bits := Mux(reg_vmvnr, vd_mask, vd_mask >> tail_bits)
+  vmask_tail_bits := Mux(is_vmvnr_reg, vd_mask, vd_mask >> tail_bits)
   val tail_old_vd = old_vd_reg & (~vmask_tail_bits)
   val tail_ones_vd = ~vmask_tail_bits
-  val tail_vd = Mux(reg_vmvnr, 0.U, Mux(ta_reg, tail_ones_vd, tail_old_vd))
+  val tail_vd = Mux(is_vmvnr_reg, 0.U, Mux(ta_reg, tail_ones_vd, tail_old_vd))
   val perm_tail_mask_vd = Wire(UInt(VLEN.W))
 
   val vstart_bytes = Mux(vstartRemainBytes_reg >= vlenb.U, vlenb.U, vstartRemainBytes_reg)
@@ -425,7 +427,7 @@ class Permutation extends Module {
   }
 
   perm_tail_mask_vd := vd_reg
-  when(reg_vslide || reg_vrgather || reg_vrgather_vx) {
+  when(is_vslide_reg || is_vrgather_reg || is_vrgather_vx_reg) {
     perm_tail_mask_vd := (vd_reg & vmask_tail_bits & vmask_vstart_bits) | tail_vd | vstart_old_vd
   }
 
@@ -434,7 +436,7 @@ class Permutation extends Module {
   perm_vd := perm_tail_mask_vd
   when(vstart_reg >= vl_reg) {
     perm_vd := old_vd_reg
-  }.elsewhen(reg_vcompress) {
+  }.elsewhen(is_vcompress_reg) {
     when(uopIdx_reg === 1.U) {
       perm_vd := vd_reg
     }.otherwise {
