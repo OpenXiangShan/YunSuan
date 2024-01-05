@@ -2,7 +2,8 @@ package yunsuan.vector.perm
 
 import chisel3._
 import chisel3.util._
-import scala.language.postfixOps
+import chisel3.util.experimental.decode.TruthTable
+import scala.language.{existentials, postfixOps}
 import yunsuan.vector._
 
 class Permutation extends Module {
@@ -59,6 +60,188 @@ class Permutation extends Module {
   val vmvnr = opcode.isVmvnr
   val vrgather16_sew8 = opcode.isVrgather && (srcTypeVs1 === 1.U) && (srcTypeVs2 === 0.U)
   val vslide = vslideup || vslide1up || vslidedn || vslide1dn
+
+  val vlRemain_vcompress = Wire(UInt(8.W))
+  val elements = Wire(UInt(5.W))
+  val base_ele = Wire(UInt(5.W))
+  val mask_start_idx = Wire(UInt(7.W))
+  val mask_selected = Wire(UInt(16.W))
+  val ones_sum_base = Wire(UInt(8.W))
+  val ones_sum = WireInit(VecInit(Seq.fill(vlenb + 1)(0.U(8.W))))
+  val compressed_vs2_en = WireInit(VecInit(Seq.fill(vlenb)(0.U(16.W))))
+  val compressed_vs2 = WireInit(VecInit(Seq.fill(vlenb)(0.U(VLEN.W))))
+  val compressed_vs2_masked = WireInit(VecInit(Seq.fill(vlenb)(0.U(VLEN.W))))
+  val compressed_res = Wire(UInt(VLEN.W))
+  val compressed_res_8 = WireInit(VecInit(Seq.fill(16)(0.U(8.W))))
+  val compressed_res_16 = WireInit(VecInit(Seq.fill(8)(0.U(16.W))))
+  val compressed_res_32 = WireInit(VecInit(Seq.fill(4)(0.U(32.W))))
+  val compressed_res_64 = WireInit(VecInit(Seq.fill(2)(0.U(64.W))))
+  val select_compressed_vs2 = Wire(UInt(vlenb.W))
+  val compressed_vs2_merged = Wire(UInt(VLEN.W))
+
+  val vlRemain1H = VecInit(Seq(
+    uopIdx === 0.U  || uopIdx === 1.U,
+    uopIdx === 2.U  || uopIdx === 3.U  || uopIdx === 4.U,
+    uopIdx === 5.U  || uopIdx === 6.U  || uopIdx === 7.U  || uopIdx === 8.U,
+    uopIdx === 9.U  || uopIdx === 10.U || uopIdx === 11.U || uopIdx === 12.U || uopIdx === 13.U,
+    uopIdx === 14.U || uopIdx === 15.U || uopIdx === 16.U || uopIdx === 17.U || uopIdx === 18.U || uopIdx === 19.U,
+    uopIdx === 20.U || uopIdx === 21.U || uopIdx === 22.U || uopIdx === 23.U || uopIdx === 24.U || uopIdx === 25.U || uopIdx === 26.U,
+    uopIdx === 27.U || uopIdx === 28.U || uopIdx === 29.U || uopIdx === 30.U || uopIdx === 31.U || uopIdx === 32.U || uopIdx === 33.U || uopIdx === 34.U,
+    uopIdx === 35.U || uopIdx === 36.U || uopIdx === 37.U || uopIdx === 38.U || uopIdx === 39.U || uopIdx === 40.U || uopIdx === 41.U || uopIdx === 42.U
+  )).asUInt
+  val vlRemainOut = Seq(
+    Mux(vl > ele_cnt.asUInt, ele_cnt.asUInt, vl),
+    Mux(vl > (ele_cnt.asUInt << 1.U), ele_cnt.asUInt, Mux(vl >  ele_cnt.asUInt        , vl -  ele_cnt.asUInt        , 0.U)),
+    Mux(vl > (ele_cnt.asUInt *  3.U), ele_cnt.asUInt, Mux(vl > (ele_cnt.asUInt << 1.U), vl - (ele_cnt.asUInt << 1.U), 0.U)),
+    Mux(vl > (ele_cnt.asUInt << 2.U), ele_cnt.asUInt, Mux(vl > (ele_cnt.asUInt  * 3.U), vl - (ele_cnt.asUInt *  3.U), 0.U)),
+    Mux(vl > (ele_cnt.asUInt *  5.U), ele_cnt.asUInt, Mux(vl > (ele_cnt.asUInt << 2.U), vl - (ele_cnt.asUInt << 2.U), 0.U)),
+    Mux(vl > (ele_cnt.asUInt *  6.U), ele_cnt.asUInt, Mux(vl > (ele_cnt.asUInt *  5.U), vl - (ele_cnt.asUInt *  5.U), 0.U)),
+    Mux(vl > (ele_cnt.asUInt *  7.U), ele_cnt.asUInt, Mux(vl > (ele_cnt.asUInt *  6.U), vl - (ele_cnt.asUInt *  6.U), 0.U)),
+    Mux(vl > (ele_cnt.asUInt *  7.U), vl - (ele_cnt.asUInt * 7.U), 0.U)
+  )
+  vlRemain_vcompress := Mux1H(vlRemain1H, vlRemainOut)
+
+  when(vlmul === 5.U) {
+    elements := Mux(vl < Cat(ele_cnt >> 3.U), vl, ele_cnt >> 3.U)
+  }.elsewhen(vlmul === 6.U) {
+    elements := Mux(vl < Cat(ele_cnt >> 2.U), vl, ele_cnt >> 2.U)
+  }.elsewhen(vlmul === 7.U) {
+    elements := Mux(vl < Cat(ele_cnt >> 1.U), vl, ele_cnt >> 1.U)
+  }.elsewhen(vlmul === 1.U) {
+    elements := Mux(vl < Cat(ele_cnt << 1.U), vlRemain_vcompress, ele_cnt)
+  }.elsewhen(vlmul === 2.U) {
+    elements := Mux(vl < Cat(ele_cnt << 2.U), vlRemain_vcompress, ele_cnt)
+  }.elsewhen(vlmul === 3.U) {
+    elements := Mux(vl < Cat(ele_cnt << 3.U), vlRemain_vcompress, ele_cnt)
+  }.otherwise {
+    elements := Mux(vl < Cat(ele_cnt), vl, ele_cnt)
+  }
+
+  when(vlmul === 5.U) {
+    base_ele := ele_cnt >> 3.U
+  }.elsewhen(vlmul === 6.U) {
+    base_ele := ele_cnt >> 2.U
+  }.elsewhen(vlmul === 7.U) {
+    base_ele := ele_cnt >> 1.U
+  }.otherwise {
+    base_ele := ele_cnt
+  }
+
+  val eNum = Mux1H(UIntToOH(vsew), Seq(16, 8, 4, 2).map(num => num.U))
+  val maskUopIdx1H = Seq(
+    uopIdx >= 0.U  && uopIdx <= 1.U,
+    uopIdx >= 2.U  && uopIdx <= 4.U,
+    uopIdx >= 5.U  && uopIdx <= 8.U,
+    uopIdx >= 9.U  && uopIdx <= 13.U,
+    uopIdx >= 14.U && uopIdx <= 19.U,
+    uopIdx >= 20.U && uopIdx <= 26.U,
+    uopIdx >= 27.U && uopIdx <= 34.U,
+    uopIdx >= 35.U && uopIdx <= 42.U
+  )
+  val startIdx1H = Mux1H(maskUopIdx1H, Seq.tabulate(8){num => num.U})
+  mask_start_idx := eNum * startIdx1H
+  val maskPart = vmask >> mask_start_idx
+  mask_selected := Mux1H(UIntToOH(vsew), Seq(16, 8, 4, 2).map(num => maskPart(num - 1 ,0)))
+
+  val baseUopIdx1H = Seq(
+    uopIdx === 0.U  || uopIdx === 2.U  || uopIdx === 5.U  || uopIdx === 9.U  || uopIdx === 14.U || uopIdx === 20.U || uopIdx === 27.U || uopIdx === 35.U,
+    uopIdx === 3.U  || uopIdx === 6.U  || uopIdx === 10.U || uopIdx === 15.U || uopIdx === 21.U || uopIdx === 28.U || uopIdx === 36.U,
+    uopIdx === 7.U  || uopIdx === 11.U || uopIdx === 16.U || uopIdx === 22.U || uopIdx === 29.U || uopIdx === 37.U,
+    uopIdx === 12.U || uopIdx === 17.U || uopIdx === 23.U || uopIdx === 30.U || uopIdx === 38.U,
+    uopIdx === 18.U || uopIdx === 24.U || uopIdx === 31.U || uopIdx === 39.U,
+    uopIdx === 25.U || uopIdx === 32.U || uopIdx === 40.U,
+    uopIdx === 33.U || uopIdx === 41.U,
+    uopIdx === 42.U
+  )
+  ones_sum_base := Mux1H(baseUopIdx1H, Seq.tabulate(8){num => num.U * base_ele})
+  ones_sum(0) := vmask(7, 0)
+
+  for (i <- 1 to vlenb) {
+    when(i.U <= elements) {
+      ones_sum(i) := ones_sum(i - 1) + vs1(mask_start_idx + i.U - 1.U)
+    }
+  }
+
+  dontTouch(vlRemain1H)
+  dontTouch(vlRemain_vcompress)
+  dontTouch(elements)
+  dontTouch(base_ele)
+  dontTouch(eNum)
+  dontTouch(mask_start_idx)
+  dontTouch(mask_selected)
+  dontTouch(Cat(ones_sum.reverse))
+
+  when(vsew === 0.U) {
+    for (i <- 0 until 16) {
+      when(i.U < elements) {
+        compressed_vs2_en(i) := (vs1(mask_start_idx + i.U) & (0.U <= (ones_sum(i) - ones_sum_base)) & ((ones_sum(i) - ones_sum_base) < ele_cnt)) << (ones_sum(i) - ones_sum_base)(3, 0)
+        compressed_vs2(i) := vs2(8 * i + 7, 8 * i) << ((ones_sum(i) - ones_sum_base)(3, 0) << 3.U)
+        compressed_vs2_masked(i) := Fill(VLEN, vs1(mask_start_idx + i.U) & (0.U <= (ones_sum(i) - ones_sum_base)) & ((ones_sum(i) - ones_sum_base) < ele_cnt)) & compressed_vs2(i)
+      }
+    }
+  }.elsewhen(vsew === 1.U) {
+    for (i <- 0 until 8) {
+      when(i.U < elements) {
+        compressed_vs2_en(i) := (vs1(mask_start_idx + i.U) & (0.U <= (ones_sum(i) - ones_sum_base)) & ((ones_sum(i) - ones_sum_base) < ele_cnt)) << (ones_sum(i) - ones_sum_base)(3, 0)
+        compressed_vs2(i) := vs2(16 * i + 15, 16 * i) << ((ones_sum(i) - ones_sum_base)(3, 0) << 4.U)
+        compressed_vs2_masked(i) := Fill(VLEN, vs1(mask_start_idx + i.U) & (0.U <= (ones_sum(i) - ones_sum_base)) & ((ones_sum(i) - ones_sum_base) < ele_cnt)) & compressed_vs2(i)
+      }
+    }
+  }.elsewhen(vsew === 2.U) {
+    for (i <- 0 until 4) {
+      when(i.U < elements) {
+        compressed_vs2_en(i) := (vs1(mask_start_idx + i.U) & (0.U <= (ones_sum(i) - ones_sum_base)) & ((ones_sum(i) - ones_sum_base) < ele_cnt)) << (ones_sum(i) - ones_sum_base)(3, 0)
+        compressed_vs2(i) := vs2(32 * i + 31, 32 * i) << ((ones_sum(i) - ones_sum_base)(3, 0) << 5.U)
+        compressed_vs2_masked(i) := Fill(VLEN, vs1(mask_start_idx + i.U) & (0.U <= (ones_sum(i) - ones_sum_base)) & ((ones_sum(i) - ones_sum_base) < ele_cnt)) & compressed_vs2(i)
+      }
+    }
+  }.otherwise {
+    for (i <- 0 until 2) {
+      when(i.U < elements) {
+        compressed_vs2_en(i) := (vs1(mask_start_idx + i.U) & (0.U <= (ones_sum(i) - ones_sum_base)) & ((ones_sum(i) - ones_sum_base) < ele_cnt)) << (ones_sum(i) - ones_sum_base)(3, 0)
+        compressed_vs2(i) := vs2(64 * i + 63, 64 * i) << ((ones_sum(i) - ones_sum_base)(3, 0) << 6.U)
+        compressed_vs2_masked(i) := Fill(VLEN, vs1(mask_start_idx + i.U) & (0.U <= (ones_sum(i) - ones_sum_base)) & ((ones_sum(i) - ones_sum_base) < ele_cnt)) & compressed_vs2(i)
+      }
+    }
+  }
+
+  select_compressed_vs2 := compressed_vs2_en.reduce(_ | _)
+  compressed_vs2_merged := compressed_vs2_masked.reduce(_ | _)
+
+  when(vsew === 0.U) {
+    for (i <- 0 until 16) {
+      compressed_res_8(i):= Mux(select_compressed_vs2(i), compressed_vs2_merged(8 * i + 7, 8 * i), old_vd(8 * i + 7, 8 * i))
+    }
+  }.elsewhen(vsew === 1.U) {
+    for (i <- 0 until 8) {
+      compressed_res_16(i) := Mux(select_compressed_vs2(i), compressed_vs2_merged(16 * i + 15, 16 * i), old_vd(16 * i + 15, 16 * i))
+    }
+  }.elsewhen(vsew === 2.U) {
+    for (i <- 0 until 4) {
+      compressed_res_32(i) := Mux(select_compressed_vs2(i), compressed_vs2_merged(32 * i + 31, 32 * i), old_vd(32 * i + 31, 32 * i))
+    }
+  }.otherwise {
+    for (i <- 0 until 2) {
+      compressed_res_64(i) := Mux(select_compressed_vs2(i), compressed_vs2_merged(64 * i + 63, 64 * i), old_vd(64 * i + 63, 64 * i))
+    }
+  }
+
+  when(vsew === 0.U) {
+    compressed_res := Cat(compressed_res_8.reverse)
+  }.elsewhen(vsew === 1.U) {
+    compressed_res := Cat(compressed_res_16.reverse)
+  }.elsewhen(vsew === 2.U) {
+    compressed_res := Cat(compressed_res_32.reverse)
+  }.otherwise {
+    compressed_res := Cat(compressed_res_64.reverse)
+  }
+
+  dontTouch(select_compressed_vs2)
+  dontTouch(Cat(compressed_vs2_en.reverse))
+  dontTouch(Cat(compressed_vs2_masked.reverse))
+  dontTouch(Cat(compressed_vs2.reverse))
+  dontTouch(compressed_vs2_merged)
+  dontTouch(compressed_res)
 
   val base = Wire(UInt(7.W))
   val vmask0 = Mux(vcompress, vs1, vmask)
@@ -328,29 +511,9 @@ class Permutation extends Module {
     vstartRemain := Mux(vstart >= (uopIdx(5, 1) << vsew_plus1), vstart - (uopIdx(5, 1) << vsew_plus1), 0.U)
   }
 
-  val in_previous_ones_sum = Wire(UInt(8.W))
-  val out_previous_ones_sum = Wire(UInt(8.W))
-  val res_idx = Wire(Vec(vlenb, UInt(7.W)))
-  val res_valid = Wire(Vec(vlenb, Bool()))
-  val current_ones_sum = Wire(Vec(vlenb, UInt(8.W)))
-  val current_uop_ones_sum = Wire(Vec(vlenb, UInt(5.W)))
   val vd_reg = RegInit(0.U(VLEN.W))
 
-  in_previous_ones_sum := vmask(7, 0)
-  out_previous_ones_sum := current_uop_ones_sum(vlenb - 1)
-
-  for (i <- 0 until vlenb) {
-    current_uop_ones_sum(i) := PopCount(Cat(vmask_byte_strb.reverse)(i, 0))
-    current_ones_sum(i) := in_previous_ones_sum + current_uop_ones_sum(i)
-  }
-
-  when(vcompress && fire) {
-    when(uopIdx === 1.U) {
-      vd_reg := Cat(0.U((VLEN - 8).W), out_previous_ones_sum)
-    }.otherwise {
-      vd_reg := Cat(current_ones_sum.reverse)
-    }
-  }.elsewhen(vmvnr && fire) {
+  when(vmvnr && fire) {
     vd_reg := vs2
   }.elsewhen(vslideup && fire) {
     vd_reg := Cat(vslideup_vd.reverse)
@@ -384,18 +547,19 @@ class Permutation extends Module {
   val vlRemain_reg = RegEnable(vlRemain, 0.U, fire)
   val vsew_reg = RegEnable(vsew, 0.U, fire)
   val old_vd_reg = RegEnable(old_vd, 0.U, fire)
-  val vs2_reg = RegEnable(vs2, 0.U, fire)
-  val vmask_byte_strb_reg = RegEnable(Cat(vmask_byte_strb.reverse), 0.U, fire)
   val ta_reg = RegEnable(ta, false.B, fire)
   val vstartRemain_reg = RegEnable(vstartRemain, 0.U, fire)
-  val base_reg = RegEnable(base, 0.U, fire)
-  val one_reg = RegEnable(in_previous_ones_sum, 0.U, fire)
   val vstart_reg = RegEnable(vstart, 0.U, fire)
   val vl_reg = RegEnable(Mux(vmvnr, evl, vl), 0.U, fire)
+  val ones_sum_base_reg = RegEnable(ones_sum_base, 0.U, fire)
+  val vm_reg = RegEnable(vm, 0.U, fire)
+  val mask_selected_reg = RegEnable(mask_selected, 0.U, fire)
+  val ma_reg = RegEnable(ma, 0.U, fire)
+  val compressed_res_reg = RegEnable(compressed_res, 0.U, fire)
+  val ones_sum_reg = RegEnable(ones_sum(elements), 0.U, fire)
 
   val vlRemainBytes_reg = vlRemain_reg << vsew_reg
   val vstartRemainBytes_reg = vstartRemain_reg << vsew_reg
-  val current_res_boundary = Mux(uopIdx_reg === 3.U, (2 * vlenb).U, vlenb.U)
 
   vslideup_vl := Mux(vslideup & (slide_ele > vl), Mux(slide_ele > VLEN.U, VLEN.U, slide_ele), vl)
   val tail_bytes = Mux((vlRemainBytes_reg >= vlenb.U), 0.U, vlenb.U - vlRemainBytes_reg)
@@ -413,17 +577,83 @@ class Permutation extends Module {
   vmask_vstart_bits := vd_mask << vstart_bits
   val vstart_old_vd = old_vd_reg & (~vmask_vstart_bits)
 
-  val cmprs_vd = Wire(Vec(vlenb, UInt(8.W)))
-  for (i <- 0 until vlenb) {
-    cmprs_vd(i) := Mux(ta_reg && ((i.U >= one_reg) && (uopIdx_reg =/= 3.U) || (uopIdx_reg === 3.U)), "hff".U, old_vd_reg(i * 8 + 7, i * 8))
+  val cmprs_vd = Wire(UInt(VLEN.W))
+  val cmprs_vd_8  = WireInit(VecInit(Seq.fill(16)(0.U(8.W))))
+  val cmprs_vd_16 = WireInit(VecInit(Seq.fill(8)(0.U(16.W))))
+  val cmprs_vd_32 = WireInit(VecInit(Seq.fill(4)(0.U(32.W))))
+  val cmprs_vd_64 = WireInit(VecInit(Seq.fill(2)(0.U(64.W))))
+  val res_keep_old_vd_8  = WireInit(VecInit(Seq.fill(16)(false.B)))
+  val res_keep_old_vd_16 = WireInit(VecInit(Seq.fill(8)(false.B)))
+  val res_keep_old_vd_32 = WireInit(VecInit(Seq.fill(4)(false.B)))
+  val res_keep_old_vd_64 = WireInit(VecInit(Seq.fill(2)(false.B)))
+  val res_agnostic_8  = WireInit(VecInit(Seq.fill(16)(false.B)))
+  val res_agnostic_16 = WireInit(VecInit(Seq.fill(8)(false.B)))
+  val res_agnostic_32 = WireInit(VecInit(Seq.fill(4)(false.B)))
+  val res_agnostic_64 = WireInit(VecInit(Seq.fill(2)(false.B)))
+
+  when(vsew_reg === 0.U) {
+    for (i <- 0 until 16) {
+      res_keep_old_vd_8(i) := ((~vm_reg & ~mask_selected_reg(i)) & ~ma_reg) | (ones_sum_base_reg + i.U < vstart_reg) | ((ones_sum_base_reg + i.U >= ones_sum_reg) & ~ta_reg)
+      res_agnostic_8(i) := ((ones_sum_base_reg + i.U >= ones_sum_reg) & ta_reg) | ((~vm_reg & ~mask_selected_reg(i)) & ma_reg)
+      when(res_keep_old_vd_8(i)) {
+        cmprs_vd_8(i) := old_vd_reg(8 * i + 7, 8 * i)
+      }.elsewhen(res_agnostic_8(i)) {
+        cmprs_vd_8(i) := Fill(8, 1.U)
+      }.otherwise {
+        cmprs_vd_8(i) := compressed_res_reg(8 * i + 7, 8 * i)
+      }
+    }
+  }.elsewhen(vsew === 1.U) {
+    for (i <- 0 until 8) {
+      res_keep_old_vd_16(i) := ((~vm_reg & ~mask_selected_reg(i)) & ~ma_reg) | (ones_sum_base_reg + i.U < vstart_reg) | ((ones_sum_base_reg + i.U >= ones_sum_reg) & ~ta_reg)
+      res_agnostic_16(i) := ((ones_sum_base_reg + i.U >= ones_sum_reg) & ta_reg) | ((~vm_reg & ~mask_selected_reg(i)) & ma_reg)
+      when(res_keep_old_vd_16(i)) {
+        cmprs_vd_16(i) := old_vd_reg(16 * i + 15, 16 * i)
+      }.elsewhen(res_agnostic_16(i)) {
+        cmprs_vd_16(i) := Fill(16, 1.U)
+      }.otherwise {
+        cmprs_vd_16(i) := compressed_res_reg(16 * i + 15, 16 * i)
+      }
+    }
+  }.elsewhen(vsew === 2.U) {
+    for (i <- 0 until 4) {
+      res_keep_old_vd_32(i) := ((~vm_reg & ~mask_selected_reg(i)) & ~ma_reg) | (ones_sum_base_reg + i.U < vstart_reg) | ((ones_sum_base_reg + i.U >= ones_sum_reg) & ~ta_reg)
+      res_agnostic_32(i) := ((ones_sum_base_reg + i.U >= ones_sum_reg) & ta_reg) | ((~vm_reg & ~mask_selected_reg(i)) & ma_reg)
+      when(res_keep_old_vd_32(i)) {
+        cmprs_vd_32(i) := old_vd_reg(32 * i + 31, 32 * i)
+      }.elsewhen(res_agnostic_32(i)) {
+        cmprs_vd_32(i) := Fill(32, 1.U)
+      }.otherwise {
+        cmprs_vd_32(i) := compressed_res_reg(32 * i + 31, 32 * i)
+      }
+    }
+  }.otherwise {
+    for (i <- 0 until 2) {
+      res_keep_old_vd_64(i) := ((~vm_reg & ~mask_selected_reg(i)) & ~ma_reg) | (ones_sum_base_reg + i.U < vstart_reg) | ((ones_sum_base_reg + i.U >= ones_sum_reg) & ~ta_reg)
+      res_agnostic_64(i) := ((ones_sum_base_reg + i.U >= ones_sum_reg) & ta_reg) | ((~vm_reg & ~mask_selected_reg(i)) & ma_reg)
+      when(res_keep_old_vd_64(i)) {
+        cmprs_vd_64(i) := old_vd_reg(64 * i + 63, 64 * i)
+      }.elsewhen(res_agnostic_64(i)) {
+        cmprs_vd_64(i) := Fill(64, 1.U)
+      }.otherwise {
+        cmprs_vd_64(i) := compressed_res_reg(64 * i + 63, 64 * i)
+      }
+    }
   }
 
-  for (i <- 0 until vlenb) {
-    res_idx(i) := vd_reg(8 * (i + 1) - 1, 8 * i) - base_reg - 1.U
-    res_valid(i) := vd_reg(8 * (i + 1) - 1, 8 * i) >= base_reg + 1.U
-    when((vmask_byte_strb_reg(i) === 1.U) && res_valid(i) && (res_idx(i) < current_res_boundary)) {
-      cmprs_vd(res_idx(i)) := vs2_reg(i * 8 + 7, i * 8)
-    }
+  dontTouch(Cat(cmprs_vd_8.reverse))
+  dontTouch(Cat(cmprs_vd_16.reverse))
+  dontTouch(Cat(cmprs_vd_32.reverse))
+  dontTouch(Cat(cmprs_vd_64.reverse))
+
+  when(vsew_reg === 0.U) {
+    cmprs_vd := Cat(cmprs_vd_8.reverse)
+  }.elsewhen(vsew_reg === 1.U) {
+    cmprs_vd := Cat(cmprs_vd_16.reverse)
+  }.elsewhen(vsew_reg === 2.U) {
+    cmprs_vd := Cat(cmprs_vd_32.reverse)
+  }.otherwise {
+    cmprs_vd := Cat(cmprs_vd_64.reverse)
   }
 
   perm_tail_mask_vd := vd_reg
@@ -437,10 +667,11 @@ class Permutation extends Module {
   when(vstart_reg >= vl_reg) {
     perm_vd := old_vd_reg
   }.elsewhen(is_vcompress_reg) {
-    when(uopIdx_reg === 1.U) {
-      perm_vd := vd_reg
+    when(uopIdx_reg === 1.U || uopIdx_reg === 4.U || uopIdx_reg === 8.U || uopIdx_reg === 13.U || uopIdx_reg === 19.U ||
+      uopIdx_reg === 26.U || uopIdx_reg === 34.U) {
+      perm_vd := ones_sum_reg
     }.otherwise {
-      perm_vd := Cat(cmprs_vd.reverse)
+      perm_vd := cmprs_vd
     }
   }
 
