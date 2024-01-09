@@ -270,6 +270,16 @@ package object yunsuan {
     def vmv_x_s                        = "b01010011".U(OpTypeWidth.W) // vmvxs
   }
 
+  object VidivType {
+    def dummy                           = "b11111111".U(OpTypeWidth.W) // exu not implemented
+    def vremu                           = "b00000000".U(OpTypeWidth.W) // vremu
+    def vrem                            = "b00000001".U(OpTypeWidth.W) // vrem
+    def vdivu                           = "b00000010".U(OpTypeWidth.W) // vdivu
+    def vdiv                            = "b00000011".U(OpTypeWidth.W) // vdiv
+    def isSigned(fuOpType: UInt) : Bool = fuOpType(0)
+    def isDiv(fuOpType: UInt)    : Bool = fuOpType(1)
+  }
+
   object VfpuType {
     def dummy         = "b11111111".U(OpTypeWidth.W) // exu not implemented
     def isVfalu  = BitPat("b000?????")
