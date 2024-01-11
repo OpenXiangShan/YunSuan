@@ -1201,6 +1201,7 @@ private[this] class FarPathFloatAdderF64WidenPipeline(
     val fp_a, fp_b  = Input (UInt(floatWidth.W))
     val fp_c        = Output(UInt(floatWidth.W))
     val is_sub      = Input (Bool())
+    val opb_widening = Input(Bool())
     val round_mode  = Input (UInt(3.W))
     val fflags      = Output(UInt(5.W))
     val absEaSubEb  = Output(UInt(exponentWidth.W))
@@ -1310,7 +1311,7 @@ private[this] class FarPathFloatAdderF64WidenPipeline(
   val far_case_overflow = FS0.head(1).asBool
   val lgs_normal_reg = Cat(FS0(0),Mux(RegNext(EOP),(~Cat(B_guard_normal_reg,B_rsticky_normal_reg)).asUInt+1.U,Cat(B_guard_normal_reg,B_rsticky_normal_reg)))
 
-  val far_sign_result_reg = RegNext(Mux(isEfp_bGreater, efficient_fp_b_sign, fp_a_sign))
+  val far_sign_result_reg = RegNext(Mux(io.opb_widening && io.is_sub, Mux(isEfp_bGreater, ~efficient_fp_b_sign, ~fp_a_sign), Mux(isEfp_bGreater, efficient_fp_b_sign, fp_a_sign)))
   val far_case_normal_round_up = (RegNext(EOP) & !lgs_normal_reg(1) & !lgs_normal_reg(0)) |
     (RNE_reg & lgs_normal_reg(1) & (lgs_normal_reg(2) | lgs_normal_reg(0))) |
     (RDN_reg & far_sign_result_reg & (lgs_normal_reg(1) | lgs_normal_reg(0))) |
@@ -1387,6 +1388,8 @@ private[this] class ClosePathFloatAdderF64WidenPipeline(
   val io = IO(new Bundle() {
     val fp_a, fp_b  = Input (UInt(floatWidth.W))
     val fp_c        = Output(UInt(floatWidth.W))
+    val is_sub      = Input (Bool())
+    val opb_widening = Input(Bool())
     val round_mode  = Input (UInt(3.W))
     val fflags      = Output(UInt(5.W))
     val CS1         = if (hasMinMaxCompare) Output(UInt((significandWidth+1).W)) else Output(UInt(0.W))
@@ -1546,8 +1549,8 @@ private[this] class ClosePathFloatAdderF64WidenPipeline(
       fp_a_sign,
       RDN,
       !fp_a_sign,
-      fp_a_sign,
-      !fp_a_sign,
+      Mux(io.opb_widening & io.is_sub, !fp_a_sign, fp_a_sign),
+      Mux(io.opb_widening & io.is_sub,fp_a_sign, !fp_a_sign),
       Mux(Efp_b_is_greater,!fp_a_sign,fp_a_sign)
     )
   ))
@@ -1616,10 +1619,13 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
   U_far_path.io.fp_a := fp_a_to64
   U_far_path.io.fp_b := fp_b_to64
   U_far_path.io.is_sub := io.is_sub
+  U_far_path.io.opb_widening := io.opb_widening
   U_far_path.io.round_mode := io.round_mode
   val U_close_path = Module(new ClosePathFloatAdderF64WidenPipeline(exponentWidth = exponentWidth,significandWidth = significandWidth, is_print = is_print, hasMinMaxCompare=hasMinMaxCompare))
   U_close_path.io.fp_a := fp_a_to64
   U_close_path.io.fp_b := fp_b_to64
+  U_close_path.io.is_sub := io.is_sub
+  U_close_path.io.opb_widening := io.opb_widening
   U_close_path.io.round_mode := io.round_mode
   val absEaSubEb = U_far_path.io.absEaSubEb
 
@@ -1661,7 +1667,9 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
   when(RegNext(fp_a_is_NAN | fp_b_is_NAN | (EOP & fp_a_is_infinite & fp_b_is_infinite)) ){
     float_adder_result := RegNext(Cat(0.U,Fill(exponentWidth,1.U),1.U,Fill(significandWidth-2,0.U)))
   }.elsewhen(RegNext(fp_a_is_infinite | fp_b_is_infinite)) {
-    float_adder_result := RegNext(Cat(Mux(fp_a_is_infinite,fp_a_to64.head(1),io.is_sub^fp_b_to64.head(1)),Fill(exponentWidth,1.U),Fill(significandWidth-1,0.U)))
+    float_adder_result := RegNext(Cat(Mux(io.opb_widening & io.is_sub,
+      Mux(fp_a_is_infinite,~fp_a_to64.head(1),~(io.is_sub^fp_b_to64.head(1))),
+      Mux(fp_a_is_infinite,fp_a_to64.head(1),io.is_sub^fp_b_to64.head(1))), Fill(exponentWidth,1.U),Fill(significandWidth-1,0.U)))
   }.elsewhen(res_widening_reg & fp_a_is_zero_reg & fp_b_is_zero_reg){
     float_adder_result := RegNext(Cat(Mux(io.round_mode==="b010".U & EOP | (fp_a_to64.head(1).asBool & !EOP),1.U,0.U),0.U(63.W)))
   }.elsewhen(res_widening_reg & fp_a_is_zero_reg){
