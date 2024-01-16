@@ -521,8 +521,8 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     )
     val result_fsum_ore_masked = Mux(
       io.maskForReduction(0) === 0.U,
-      0.U(floatWidth.W),
-      io.fp_b
+      io.fp_b,
+      0.U(floatWidth.W)
     )
     val outInf = Mux(
       res_is_f32,
@@ -1790,8 +1790,8 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     )
     val result_fsum_ore_masked = Mux(
       io.maskForReduction(0) === 0.U,
-      0.U(floatWidth.W),
-      io.fp_b
+      io.fp_b,
+      0.U(floatWidth.W)
     )
     val outInf = Cat(is_fmax_re, Fill(exponentWidth, 1.U), 0.U((significandWidth-1).W))
     val re_masked_one_out = Mux(
@@ -2445,8 +2445,8 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
     )
     val result_fsum_ore_masked = Mux(
       io.maskForReduction(0) === 0.U,
-      0.U(floatWidth.W),
-      io.fp_b
+      io.fp_b,
+      0.U(floatWidth.W)
     )
     val outInf = Cat(is_fmax_re, Fill(exponentWidth, 1.U), 0.U((significandWidth-1).W))
     val re_masked_one_out = Mux(
