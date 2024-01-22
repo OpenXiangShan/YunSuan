@@ -461,7 +461,7 @@ package object yunsuan {
     def fclass   = "b01111".U(5.W)
     def fmv_f_s  = "b10001".U(5.W)
     def fmv_s_f  = "b10010".U(5.W)
-    def fsum_ure = "b10011".U(5.W) // unordered
+    def fsum_ure = "b11010".U(5.W) // unordered
     def fmin_re  = "b10100".U(5.W)
     def fmax_re  = "b10101".U(5.W)
     def fsum_ore = "b10110".U(5.W) // ordered
