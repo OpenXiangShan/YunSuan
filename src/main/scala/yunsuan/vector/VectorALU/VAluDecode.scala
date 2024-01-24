@@ -54,6 +54,15 @@ object VAluOpcode {
   val vid     = 45.U(6.W)
   val vmvsx   = 46.U(6.W)
   val vmvxs   = 47.U(6.W)
+  // Zvbb
+  val vbrev   = 48.U(6.W)
+  val vbrev8  = 49.U(6.W)
+  val vrev8   = 50.U(6.W)
+  val vclz    = 51.U(6.W)
+  val vctz    = 52.U(6.W)
+  val vrol    = 53.U(6.W)
+  val vror    = 54.U(6.W)
+  val vwsll   = 55.U(6.W)
 }
 
 import VAluOpcode._

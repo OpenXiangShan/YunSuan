@@ -52,6 +52,7 @@ class VAluOpcode extends Bundle{
   def isIntFixp = op < vredsum || op === vmvsx
   def isVmvsx = op === vmvsx
   def isVmvxs = op === vmvxs
+  def isVmergeMove = op === vmerge || op === vmvsx
   // IMac opcode:
   def op3b = op(2, 0)
   def highHalf = op3b === 1.U
@@ -59,6 +60,17 @@ class VAluOpcode extends Bundle{
   def isSub = op3b === 3.U || op3b === 5.U
   def isFixP = op3b === 6.U
   def overWriteMultiplicand = op3b === 4.U || op3b === 5.U
+  // Zvbb opcode:
+  def isVbrev   = op === vbrev
+  def isVbrev8  = op === vbrev8
+  def isVrev8   = op === vrev8
+  def isClz     = op === vclz
+  def isCtz     = op === vctz
+  def isVrol    = op === vrol
+  def isVror    = op === vror
+  def isVwsll   = op === vwsll
+  def isVrev    = op === vbrev || op === vbrev8 || op === vrev8
+  def isVCount  = op === vclz || op === vctz || op === vcpop
 }
 
 class VIFuInfo extends Bundle {
