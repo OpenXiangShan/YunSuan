@@ -71,6 +71,7 @@ class VAluOpcode extends Bundle{
   def isVwsll   = op === vwsll
   def isVrev    = op === vbrev || op === vbrev8 || op === vrev8
   def isVCount  = op === vclz || op === vctz || op === vcpop
+  def isVro     = op === vrol
 }
 
 class VIFuInfo extends Bundle {

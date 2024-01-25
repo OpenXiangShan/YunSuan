@@ -386,6 +386,62 @@ class VIntMisc64b extends Module {
     )
   )
 
+  val vroResult = Wire(UInt(64.W))
+  val vroResult_8  = Wire(Vec(8, UInt(8.W)))
+  val vroResult_16 = Wire(Vec(4, UInt(16.W)))
+  val vroResult_32 = Wire(Vec(2, UInt(32.W)))
+  val vroResult_64 = Wire(Vec(1, UInt(64.W)))
+  vroResult_8  := vs2.asTypeOf(vroResult_8)
+  vroResult_16 := vs2.asTypeOf(vroResult_16)
+  vroResult_32 := vs2.asTypeOf(vroResult_32)
+  vroResult_64 := vs2.asTypeOf(vroResult_64)
+  val rot8  = Wire(Vec(8, UInt(3.W)))
+  val rot16 = Wire(Vec(4, UInt(4.W)))
+  val rot32 = Wire(Vec(2, UInt(5.W)))
+  val rot64 = Wire(Vec(1, UInt(6.W)))
+  for (i <- 0 until 8) {
+    rot8(i) := vs1(8*i+2, 8*i)
+  }
+  for (i <- 0 until 4) {
+    rot16(i) := vs1(16*i+3, 16*i)
+  }
+  for (i <- 0 until 2) {
+    rot32(i) := vs1(32*i+4, 32*i)
+  }
+  for (i <- 0 until 1) {
+    rot64(i) := vs1(64*i+5, 64*i)
+  }
+  val vroResult_8_tmp  = Wire(Vec(8, UInt(8.W)))
+  val vroResult_16_tmp = Wire(Vec(4, UInt(16.W)))
+  val vroResult_32_tmp = Wire(Vec(2, UInt(32.W)))
+  val vroResult_64_tmp = Wire(Vec(1, UInt(64.W)))
+  for (i <- 0 until 8) {
+    vroResult_8_tmp(i) := Mux(rot8(i) === 0.U, vroResult_8(i), Cat(vroResult_8(i) << rot8(i), vroResult_8(i)(7, 8-rot8(i))))
+  }
+  for (i <- 0 until 4) {
+    vroResult_16_tmp(i) := Mux(rot16(i) === 0.U, vroResult_16(i), Cat(vroResult_16(i) << rot16(i), vroResult_16(i)(15, 16-rot16(i))))
+  }
+  for (i <- 0 until 2) {
+    vroResult_32_tmp(i) := Mux(rot32(i) === 0.U, vroResult_32(i), Cat(vroResult_32(i) << rot32(i), vroResult_32(i)(31, 32-rot32(i))))
+  }
+  for (i <- 0 until 1) {
+    vroResult_64_tmp(i) := Mux(rot64(i) === 0.U, vroResult_64(i), Cat(vroResult_64(i) << rot64(i), vroResult_64(i)(63, 64-rot64(i))))
+  }
+  vroResult := Mux1H(
+    Seq(
+      opcode.isVrol && eewVd.is8,
+      opcode.isVrol && eewVd.is16,
+      opcode.isVrol && eewVd.is32,
+      opcode.isVrol && eewVd.is64,
+    ),
+    Seq(
+      vroResult_8_tmp.asUInt,
+      vroResult_16_tmp.asUInt,
+      vroResult_32_tmp.asUInt,
+      vroResult_64_tmp.asUInt,
+    )
+  )
+
 
   // Output arbiter
   io.vd := Mux1H(
@@ -396,6 +452,7 @@ class VIntMisc64b extends Module {
       opcode.isVmergeMove,
       opcode.isVrev,
       opcode.isVCount,
+      opcode.isVro,
     ),
     Seq(
       shiftResult,
@@ -404,6 +461,7 @@ class VIntMisc64b extends Module {
       mergeMove,
       revResult,
       countResult,
+      vroResult,
     )
   )
 }
