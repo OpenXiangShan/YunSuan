@@ -369,7 +369,7 @@ class VIntMisc64b extends Module {
   cnt16(3) := Mux(opcode.isVcpop, PopCount(pop_16(3)), cnt64_tmp)
   cnt32(0) := Mux(opcode.isVcpop, PopCount(pop_32(0)), cnt32_tmp)
   cnt32(1) := Mux(opcode.isVcpop, PopCount(pop_32(1)), cnt64_tmp)
-  cnt64    := Mux(opcode.isVcpop, PopCount(pop_64(0)), cnt64_tmp)
+  cnt64(0) := Mux(opcode.isVcpop, PopCount(pop_64(0)), cnt64_tmp)
 
   countResult := Mux1H(
     Seq(
@@ -382,7 +382,7 @@ class VIntMisc64b extends Module {
       cnt8.asUInt,
       cnt16.asUInt,
       cnt32.asUInt,
-      cnt64,
+      cnt64.asUInt,
     )
   )
 
@@ -417,19 +417,19 @@ class VIntMisc64b extends Module {
   val vroResult_64_tmp = Wire(Vec(1, UInt(64.W)))
   for (i <- 0 until 8) {
     vroResult_8_tmp(i) := Mux(rot8(i) === 0.U, vroResult_8(i),
-      Mux(opcode.isVrol, Cat(vroResult_8(i) << rot8(i), vroResult_8(i)(7, 8-rot8(i))), Cat(vroResult_8(i).tail(8-rot8(i)),vroResult_8(i) >> rot8(i))))
+      Mux(opcode.isVrol, Cat(vroResult_8(i) << rot8(i), vroResult_8(i) >> (8.U-rot8(i))), Cat(vroResult_8(i) << (8.U-rot8(i)),vroResult_8(i) >> rot8(i))))
   }
   for (i <- 0 until 4) {
     vroResult_16_tmp(i) := Mux(rot16(i) === 0.U, vroResult_16(i),
-      Mux(opcode.isVrol, Cat(vroResult_16(i) << rot16(i), vroResult_16(i)(15, 16-rot16(i))), Cat(vroResult_16(i).tail(16-rot16(i)), vroResult_16(i) >> rot16(i))))
+      Mux(opcode.isVrol, Cat(vroResult_16(i) << rot16(i), vroResult_16(i) >> (16.U-rot16(i))), Cat(vroResult_16(i) << (16.U-rot16(i)), vroResult_16(i) >> rot16(i))))
   }
   for (i <- 0 until 2) {
     vroResult_32_tmp(i) := Mux(rot32(i) === 0.U, vroResult_32(i),
-      Mux(opcode.isVrol, Cat(vroResult_32(i) << rot32(i), vroResult_32(i)(31, 32-rot32(i))), Cat(vroResult_32(i).tail(32-rot32(i)), vroResult_32(i) >> rot32(i))))
+      Mux(opcode.isVrol, Cat(vroResult_32(i) << rot32(i), vroResult_32(i) >> (32.U-rot32(i))), Cat(vroResult_32(i) << (32.U-rot32(i)), vroResult_32(i) >> rot32(i))))
   }
   for (i <- 0 until 1) {
     vroResult_64_tmp(i) := Mux(rot64(i) === 0.U, vroResult_64(i),
-      Mux(opcode.isVrol, Cat(vroResult_64(i) << rot64(i), vroResult_64(i)(63, 64-rot64(i))), Cat(vroResult_64(i).tail(64-rot64(i)), vroResult_64(i) >> rot64(i))))
+      Mux(opcode.isVrol, Cat(vroResult_64(i) << rot64(i), vroResult_64(i) >> (64.U-rot64(i))), Cat(vroResult_64(i) << (64.U-rot64(i)), vroResult_64(i) >> rot64(i))))
   }
   vroResult := Mux1H(
     Seq(
