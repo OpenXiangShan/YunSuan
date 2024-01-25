@@ -446,6 +446,41 @@ class VIntMisc64b extends Module {
     )
   )
 
+  /**
+   * vwsll.vv vwsll.vx vwsll.vi
+   */
+  val wsllResult = Wire(UInt(64.W))
+  val wsllResult_8  = Wire(Vec(4, UInt(8.W)))
+  val wsllResult_16 = Wire(Vec(2, UInt(16.W)))
+  val wsllResult_32 = Wire(Vec(1, UInt(32.W)))
+  wsllResult_8  := vs2.asTypeOf(wsllResult_8)
+  wsllResult_16 := vs2.asTypeOf(wsllResult_16)
+  wsllResult_32 := vs2.asTypeOf(wsllResult_32)
+
+  val wsllResult_8_tmp  = Wire(Vec(4, UInt(16.W)))
+  val wsllResult_16_tmp = Wire(Vec(2, UInt(32.W)))
+  val wsllResult_32_tmp = Wire(Vec(1, UInt(64.W)))
+  for (i <- 0 until 4) {
+    wsllResult_8_tmp(i) := Cat(Fill(8, 0.U), wsllResult_8(i)) << vs1(8*i+3, 8*i)
+  }
+  for (i <- 0 until 2) {
+    wsllResult_16_tmp(i) := Cat(Fill(16, 0.U), wsllResult_16(i)) << vs1(16*i+4, 16*i)
+  }
+  for (i <- 0 until 1) {
+    wsllResult_32_tmp(i) := Cat(Fill(32, 0.U), wsllResult_32(i)) << vs1(32*i+5, 32*i)
+  }
+  wsllResult := Mux1H(
+    Seq(
+      opcode.isVwsll && eewVd.is16,
+      opcode.isVwsll && eewVd.is32,
+      opcode.isVwsll && eewVd.is64,
+    ),
+    Seq(
+      wsllResult_8_tmp.asUInt,
+      wsllResult_16_tmp.asUInt,
+      wsllResult_32_tmp.asUInt,
+    )
+  )
 
   // Output arbiter
   io.vd := Mux1H(
@@ -457,6 +492,7 @@ class VIntMisc64b extends Module {
       opcode.isVrev,
       opcode.isVCount,
       opcode.isVro,
+      opcode.isVwsll,
     ),
     Seq(
       shiftResult,
@@ -466,6 +502,7 @@ class VIntMisc64b extends Module {
       revResult,
       countResult,
       vroResult,
+      wsllResult,
     )
   )
 }
