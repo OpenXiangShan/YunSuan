@@ -416,23 +416,27 @@ class VIntMisc64b extends Module {
   val vroResult_32_tmp = Wire(Vec(2, UInt(32.W)))
   val vroResult_64_tmp = Wire(Vec(1, UInt(64.W)))
   for (i <- 0 until 8) {
-    vroResult_8_tmp(i) := Mux(rot8(i) === 0.U, vroResult_8(i), Cat(vroResult_8(i) << rot8(i), vroResult_8(i)(7, 8-rot8(i))))
+    vroResult_8_tmp(i) := Mux(rot8(i) === 0.U, vroResult_8(i),
+      Mux(opcode.isVrol, Cat(vroResult_8(i) << rot8(i), vroResult_8(i)(7, 8-rot8(i))), Cat(vroResult_8(i).tail(8-rot8(i)),vroResult_8(i) >> rot8(i))))
   }
   for (i <- 0 until 4) {
-    vroResult_16_tmp(i) := Mux(rot16(i) === 0.U, vroResult_16(i), Cat(vroResult_16(i) << rot16(i), vroResult_16(i)(15, 16-rot16(i))))
+    vroResult_16_tmp(i) := Mux(rot16(i) === 0.U, vroResult_16(i),
+      Mux(opcode.isVrol, Cat(vroResult_16(i) << rot16(i), vroResult_16(i)(15, 16-rot16(i))), Cat(vroResult_16(i).tail(16-rot16(i)), vroResult_16(i) >> rot16(i))))
   }
   for (i <- 0 until 2) {
-    vroResult_32_tmp(i) := Mux(rot32(i) === 0.U, vroResult_32(i), Cat(vroResult_32(i) << rot32(i), vroResult_32(i)(31, 32-rot32(i))))
+    vroResult_32_tmp(i) := Mux(rot32(i) === 0.U, vroResult_32(i),
+      Mux(opcode.isVrol, Cat(vroResult_32(i) << rot32(i), vroResult_32(i)(31, 32-rot32(i))), Cat(vroResult_32(i).tail(32-rot32(i)), vroResult_32(i) >> rot32(i))))
   }
   for (i <- 0 until 1) {
-    vroResult_64_tmp(i) := Mux(rot64(i) === 0.U, vroResult_64(i), Cat(vroResult_64(i) << rot64(i), vroResult_64(i)(63, 64-rot64(i))))
+    vroResult_64_tmp(i) := Mux(rot64(i) === 0.U, vroResult_64(i),
+      Mux(opcode.isVrol, Cat(vroResult_64(i) << rot64(i), vroResult_64(i)(63, 64-rot64(i))), Cat(vroResult_64(i).tail(64-rot64(i)), vroResult_64(i) >> rot64(i))))
   }
   vroResult := Mux1H(
     Seq(
-      opcode.isVrol && eewVd.is8,
-      opcode.isVrol && eewVd.is16,
-      opcode.isVrol && eewVd.is32,
-      opcode.isVrol && eewVd.is64,
+      opcode.isVro && eewVd.is8,
+      opcode.isVro && eewVd.is16,
+      opcode.isVro && eewVd.is32,
+      opcode.isVro && eewVd.is64,
     ),
     Seq(
       vroResult_8_tmp.asUInt,
