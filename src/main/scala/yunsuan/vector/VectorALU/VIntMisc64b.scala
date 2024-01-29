@@ -306,10 +306,8 @@ class VIntMisc64b extends Module {
   pop_32 := vs2.asTypeOf(pop_32)
   pop_64 := vs2.asTypeOf(pop_64)
 
-  val vs2_tmp = Mux(opcode.op === vctz, VecInit(vs2.asBools.reverse).asUInt, vs2)
-
   for (i <- 0 until 4) {
-    countResult_8(i) := vs2_tmp(8*i+7, 8*i)
+    countResult_8(i) := Mux(opcode.isClz, vs2(8*i+7, 8*i), VecInit(vs2(8*i+7, 8*i).asBools.reverse).asUInt)
   }
   for (i <- 0 until 2) {
     countResult_16(i) := Mux1H(
@@ -318,8 +316,8 @@ class VIntMisc64b extends Module {
         eewVd.is16,
       ),
       Seq(
-        vs2_tmp(8*i+7+32,8*i+32) << 8.U,
-        vs2_tmp(16*i+15,16*i),
+        Mux(opcode.isClz, vs2(8*i+7+32,8*i+32) << 8.U, VecInit((vs2(8*i+7+32,8*i+32) << 8.U).asBools.reverse).asUInt),
+        Mux(opcode.isClz, vs2(16*i+15,16*i), VecInit(vs2(16*i+15,16*i).asBools.reverse).asUInt),
       )
     )
   }
@@ -331,9 +329,9 @@ class VIntMisc64b extends Module {
       eewVd.is32,
     ),
     Seq(
-      vs2_tmp(55, 48) << 24.U,
-      vs2_tmp(47, 32) << 16.U,
-      vs2_tmp(31, 0),
+      Mux(opcode.isClz, vs2(55, 48) << 24.U, VecInit((vs2(55, 48) << 24.U).asBools.reverse).asUInt),
+      Mux(opcode.isClz, vs2(47, 32) << 16.U, VecInit((vs2(47, 32) << 16.U).asBools.reverse).asUInt),
+      Mux(opcode.isClz, vs2(31, 0), VecInit(vs2(31, 0).asBools.reverse).asUInt),
     )
   )
   countResult_64 := Mux1H(
@@ -344,10 +342,10 @@ class VIntMisc64b extends Module {
       eewVd.is64,
     ),
     Seq(
-      vs2_tmp(63, 56) << 56.U,
-      vs2_tmp(63, 48) << 48.U,
-      vs2_tmp(63, 32) << 32.U,
-      vs2_tmp,
+      Mux(opcode.isClz, vs2(63, 56) << 56.U, VecInit((vs2(63, 56) << 56.U).asBools.reverse).asUInt),
+      Mux(opcode.isClz, vs2(63, 48) << 48.U, VecInit((vs2(63, 48) << 48.U).asBools.reverse).asUInt),
+      Mux(opcode.isClz, vs2(63, 32) << 32.U, VecInit((vs2(63, 32) << 32.U).asBools.reverse).asUInt),
+      Mux(opcode.isClz, vs2, VecInit(vs2.asBools.reverse).asUInt),
     )
   )
 
