@@ -393,48 +393,90 @@ class VIntMisc64b extends Module {
   vroResult_16 := vs2.asTypeOf(vroResult_16)
   vroResult_32 := vs2.asTypeOf(vroResult_32)
   vroResult_64 := vs2.asTypeOf(vroResult_64)
-  val rot8  = Wire(Vec(8, UInt(3.W)))
-  val rot16 = Wire(Vec(4, UInt(4.W)))
-  val rot32 = Wire(Vec(2, UInt(5.W)))
-  val rot64 = Wire(Vec(1, UInt(6.W)))
+  val vroShift8  = Wire(Vec(8, UInt(3.W)))
+  val vroShift16 = Wire(Vec(4, UInt(4.W)))
+  val vroShift32 = Wire(Vec(2, UInt(5.W)))
+  val vroShift64 = Wire(Vec(1, UInt(6.W)))
+  val vroShift8_neg  = Wire(Vec(8, UInt(3.W)))
+  val vroShift16_neg = Wire(Vec(4, UInt(4.W)))
+  val vroShift32_neg = Wire(Vec(2, UInt(5.W)))
+  val vroShift64_neg = Wire(Vec(1, UInt(6.W)))
+
   for (i <- 0 until 8) {
-    rot8(i) := vs1(8*i+2, 8*i)
+    vroShift8(i)     :=   vs1(8*i+2, 8*i)
+    vroShift8_neg(i) := (~vs1(8*i+2, 8*i)).asUInt + 1.U
   }
   for (i <- 0 until 4) {
-    rot16(i) := vs1(16*i+3, 16*i)
+    vroShift16(i)     :=   vs1(16*i+3, 16*i)
+    vroShift16_neg(i) := (~vs1(16*i+3, 16*i)).asUInt + 1.U
   }
   for (i <- 0 until 2) {
-    rot32(i) := vs1(32*i+4, 32*i)
+    vroShift32(i)     :=   vs1(32*i+4, 32*i)
+    vroShift32_neg(i) := (~vs1(32*i+4, 32*i)).asUInt + 1.U
   }
   for (i <- 0 until 1) {
-    rot64(i) := vs1(64*i+5, 64*i)
+    vroShift64(i)     :=   vs1(64*i+5, 64*i)
+    vroShift64_neg(i) := (~vs1(64*i+5, 64*i)).asUInt + 1.U
   }
+
   val vroResult_8_tmp  = Wire(Vec(8, UInt(8.W)))
   val vroResult_16_tmp = Wire(Vec(4, UInt(16.W)))
   val vroResult_32_tmp = Wire(Vec(2, UInt(32.W)))
   val vroResult_64_tmp = Wire(Vec(1, UInt(64.W)))
   for (i <- 0 until 8) {
-    vroResult_8_tmp(i) := Mux(rot8(i) === 0.U, vroResult_8(i),
-      Mux(opcode.isVrol, Cat(vroResult_8(i) << rot8(i), vroResult_8(i) >> (8.U-rot8(i))), Cat(vroResult_8(i) << (8.U-rot8(i)),vroResult_8(i) >> rot8(i))))
+    vroResult_8_tmp(i) := Mux1H(
+      Seq(
+        opcode.isVrol,
+        opcode.isVror,
+      ),
+      Seq(
+        (vroResult_8(i) << vroShift8(i)) | (vroResult_8(i) >> vroShift8_neg(i)),
+        (vroResult_8(i) << vroShift8_neg(i)) | (vroResult_8(i) >> vroShift8(i)),
+      )
+    )
   }
   for (i <- 0 until 4) {
-    vroResult_16_tmp(i) := Mux(rot16(i) === 0.U, vroResult_16(i),
-      Mux(opcode.isVrol, Cat(vroResult_16(i) << rot16(i), vroResult_16(i) >> (16.U-rot16(i))), Cat(vroResult_16(i) << (16.U-rot16(i)), vroResult_16(i) >> rot16(i))))
+    vroResult_16_tmp(i) := Mux1H(
+      Seq(
+        opcode.isVrol,
+        opcode.isVror,
+      ),
+      Seq(
+        (vroResult_16(i) << vroShift16(i)) | (vroResult_16(i) >> vroShift16_neg(i)),
+        (vroResult_16(i) << vroShift16_neg(i)) | (vroResult_16(i) >> vroShift16(i)),
+      )
+    )
   }
   for (i <- 0 until 2) {
-    vroResult_32_tmp(i) := Mux(rot32(i) === 0.U, vroResult_32(i),
-      Mux(opcode.isVrol, Cat(vroResult_32(i) << rot32(i), vroResult_32(i) >> (32.U-rot32(i))), Cat(vroResult_32(i) << (32.U-rot32(i)), vroResult_32(i) >> rot32(i))))
+    vroResult_32_tmp(i) := Mux1H(
+      Seq(
+        opcode.isVrol,
+        opcode.isVror,
+      ),
+      Seq(
+        (vroResult_32(i) << vroShift32(i)) | (vroResult_32(i) >> vroShift32_neg(i)),
+        (vroResult_32(i) << vroShift32_neg(i)) | (vroResult_32(i) >> vroShift32(i)),
+      )
+    )
   }
   for (i <- 0 until 1) {
-    vroResult_64_tmp(i) := Mux(rot64(i) === 0.U, vroResult_64(i),
-      Mux(opcode.isVrol, Cat(vroResult_64(i) << rot64(i), vroResult_64(i) >> (64.U-rot64(i))), Cat(vroResult_64(i) << (64.U-rot64(i)), vroResult_64(i) >> rot64(i))))
+    vroResult_64_tmp(i) := Mux1H(
+      Seq(
+        opcode.isVrol,
+        opcode.isVror,
+      ),
+      Seq(
+        (vroResult_64(i) << vroShift64(i)) | (vroResult_64(i) >> vroShift64_neg(i)),
+        (vroResult_64(i) << vroShift64_neg(i)) | (vroResult_64(i) >> vroShift64(i)),
+      )
+    )
   }
   vroResult := Mux1H(
     Seq(
-      opcode.isVro && eewVd.is8,
-      opcode.isVro && eewVd.is16,
-      opcode.isVro && eewVd.is32,
-      opcode.isVro && eewVd.is64,
+      eewVd.is8,
+      eewVd.is16,
+      eewVd.is32,
+      eewVd.is64,
     ),
     Seq(
       vroResult_8_tmp.asUInt,
