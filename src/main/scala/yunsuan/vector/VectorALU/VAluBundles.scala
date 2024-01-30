@@ -52,7 +52,7 @@ class VAluOpcode extends Bundle{
   def isIntFixp = op < vredsum || op === vmvsx
   def isVmvsx = op === vmvsx
   def isVmvxs = op === vmvxs
-  def isVmergeMove = op === vmerge || op === vmvsx
+  def isVmergeMove = op === vmerge || op === vmv || op === vmvsx
   // IMac opcode:
   def op3b = op(2, 0)
   def highHalf = op3b === 1.U
