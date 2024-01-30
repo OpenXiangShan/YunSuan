@@ -316,7 +316,7 @@ class VIntMisc64b extends Module {
         eewVd.is16,
       ),
       Seq(
-        Mux(opcode.isClz, vs2(8*i+7+32,8*i+32) << 8.U, VecInit((vs2(8*i+7+32,8*i+32) << 8.U).asBools.reverse).asUInt),
+        Mux(opcode.isClz, vs2(8*i+7+32,8*i+32) << 8, VecInit((vs2(8*i+7+32,8*i+32) << 8).asBools.reverse).asUInt) | (1.U << 7),
         Mux(opcode.isClz, vs2(16*i+15,16*i), VecInit(vs2(16*i+15,16*i).asBools.reverse).asUInt),
       )
     )
@@ -329,8 +329,8 @@ class VIntMisc64b extends Module {
       eewVd.is32,
     ),
     Seq(
-      Mux(opcode.isClz, vs2(55, 48) << 24.U, VecInit((vs2(55, 48) << 24.U).asBools.reverse).asUInt),
-      Mux(opcode.isClz, vs2(47, 32) << 16.U, VecInit((vs2(47, 32) << 16.U).asBools.reverse).asUInt),
+      Mux(opcode.isClz, vs2(55, 48) << 24, VecInit((vs2(55, 48) << 24).asBools.reverse).asUInt) | (1.U << 23),
+      Mux(opcode.isClz, vs2(47, 32) << 16, VecInit((vs2(47, 32) << 16).asBools.reverse).asUInt) | (1.U << 15),
       Mux(opcode.isClz, vs2(31, 0), VecInit(vs2(31, 0).asBools.reverse).asUInt),
     )
   )
@@ -342,9 +342,9 @@ class VIntMisc64b extends Module {
       eewVd.is64,
     ),
     Seq(
-      Mux(opcode.isClz, vs2(63, 56) << 56.U, VecInit((vs2(63, 56) << 56.U).asBools.reverse).asUInt),
-      Mux(opcode.isClz, vs2(63, 48) << 48.U, VecInit((vs2(63, 48) << 48.U).asBools.reverse).asUInt),
-      Mux(opcode.isClz, vs2(63, 32) << 32.U, VecInit((vs2(63, 32) << 32.U).asBools.reverse).asUInt),
+      Mux(opcode.isClz, vs2(63, 56) << 56, VecInit((vs2(63, 56) << 56).asBools.reverse).asUInt) | (1.U << 55),
+      Mux(opcode.isClz, vs2(63, 48) << 48, VecInit((vs2(63, 48) << 48).asBools.reverse).asUInt) | (1.U << 47),
+      Mux(opcode.isClz, vs2(63, 32) << 32, VecInit((vs2(63, 32) << 32).asBools.reverse).asUInt) | (1.U << 31),
       Mux(opcode.isClz, vs2, VecInit(vs2.asBools.reverse).asUInt),
     )
   )
