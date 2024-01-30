@@ -185,7 +185,7 @@ package object yunsuan {
     def vctz_v      = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vctz)   // "b00_0_110011".U(OpTypeWidth.W) // vctz
     def vcpop_v     = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vcpop)  // "b00_0_110100".U(OpTypeWidth.W) // vcpop
     def vrol_vv     = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vrol)   // "b00_0_110101".U(OpTypeWidth.W) // vrol
-    def vror_vv     = LiteralCat(FMT.VVV  , SINT, VialuOpcode.vror)   // "b00_0_110110".U(OpTypeWidth.W) // vror
+    def vror_vv     = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vror)   // "b00_0_110110".U(OpTypeWidth.W) // vror
     def vwsll_vv    = LiteralCat(FMT.WVW  , UINT, VialuOpcode.vwsll)  // "b10_0_110111".U(OpTypeWidth.W) // vwsll
 
     def getOpcode(fuOpType: UInt) : UInt = fuOpType(5, 0)
