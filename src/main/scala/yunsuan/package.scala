@@ -176,6 +176,17 @@ package object yunsuan {
     def vmorn_mm    = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vorn)   // "b10_0_001101".U(OpTypeWidth.W) // vorn
     def vmxnor_mm   = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vxnor)  // "b10_0_001110".U(OpTypeWidth.W) // vxnor
     def vmv_s_x     = LiteralCat(FMT.ZXV  , SINT, VialuOpcode.vmvsx)  // "b00_1_101110".U(OpTypeWidth.W) // vmvsx
+    // Zvbb
+    def vandn_vv    = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vandn)  // "b00_0_001001".U(OPTypeWidth.W) // vandn
+    def vbrev_v     = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vbrev)  // "b00_0_101111".U(OpTypeWidth.W) // vbrev
+    def vbrev8_v    = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vbrev8) // "b00_0_110000".U(OpTypeWidth.W) // vbrev8
+    def vrev8_v     = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vrev8)  // "b00_0_110001".U(OpTypeWidth.W) // vrev8
+    def vclz_v      = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vclz)   // "b00_0_110010".U(OpTypeWidth.W) // vclz
+    def vctz_v      = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vctz)   // "b00_0_110011".U(OpTypeWidth.W) // vctz
+    def vcpop_v     = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vcpop)  // "b00_0_110100".U(OpTypeWidth.W) // vcpop
+    def vrol_vv     = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vrol)   // "b00_0_110101".U(OpTypeWidth.W) // vrol
+    def vror_vv     = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vror)   // "b00_0_110110".U(OpTypeWidth.W) // vror
+    def vwsll_vv    = LiteralCat(FMT.WVW  , UINT, VialuOpcode.vwsll)  // "b10_0_110111".U(OpTypeWidth.W) // vwsll
 
     def getOpcode(fuOpType: UInt) : UInt = fuOpType(5, 0)
 
