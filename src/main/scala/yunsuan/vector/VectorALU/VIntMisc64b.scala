@@ -423,6 +423,8 @@ class VIntMisc64b extends Module {
   val vroResult_16_tmp = Wire(Vec(4, UInt(16.W)))
   val vroResult_32_tmp = Wire(Vec(2, UInt(32.W)))
   val vroResult_64_tmp = Wire(Vec(1, UInt(64.W)))
+
+  // vs2 << vs1 is equal to (vs2.reverse >> vs1).reverse
   for (i <- 0 until 8) {
     vroResult_8_tmp(i) := Mux1H(
       Seq(
@@ -430,8 +432,8 @@ class VIntMisc64b extends Module {
         opcode.isVror,
       ),
       Seq(
-        (vroResult_8(i) << vroShift8(i)) | (vroResult_8(i) >> vroShift8_neg(i)),
-        (vroResult_8(i) << vroShift8_neg(i)) | (vroResult_8(i) >> vroShift8(i)),
+        VecInit(shiftOneElement(vroShift8(i), VecInit(vroResult_8(i).asBools.reverse).asUInt, 8)._1.asBools.reverse).asUInt | shiftOneElement(vroShift8_neg(i), vroResult_8(i), 8)._1,
+        VecInit(shiftOneElement(vroShift8_neg(i), VecInit(vroResult_8(i).asBools.reverse).asUInt, 8)._1.asBools.reverse).asUInt | shiftOneElement(vroShift8(i), vroResult_8(i), 8)._1,
       )
     )
   }
@@ -442,8 +444,8 @@ class VIntMisc64b extends Module {
         opcode.isVror,
       ),
       Seq(
-        (vroResult_16(i) << vroShift16(i)) | (vroResult_16(i) >> vroShift16_neg(i)),
-        (vroResult_16(i) << vroShift16_neg(i)) | (vroResult_16(i) >> vroShift16(i)),
+        VecInit(shiftOneElement(vroShift16(i), VecInit(vroResult_16(i).asBools.reverse).asUInt, 16)._1.asBools.reverse).asUInt | shiftOneElement(vroShift16_neg(i), vroResult_16(i), 16)._1,
+        VecInit(shiftOneElement(vroShift16_neg(i), VecInit(vroResult_16(i).asBools.reverse).asUInt, 16)._1.asBools.reverse).asUInt | shiftOneElement(vroShift16(i), vroResult_16(i), 16)._1,
       )
     )
   }
@@ -454,8 +456,8 @@ class VIntMisc64b extends Module {
         opcode.isVror,
       ),
       Seq(
-        (vroResult_32(i) << vroShift32(i)) | (vroResult_32(i) >> vroShift32_neg(i)),
-        (vroResult_32(i) << vroShift32_neg(i)) | (vroResult_32(i) >> vroShift32(i)),
+        VecInit(shiftOneElement(vroShift32(i), VecInit(vroResult_32(i).asBools.reverse).asUInt, 32)._1.asBools.reverse).asUInt | shiftOneElement(vroShift32_neg(i), vroResult_32(i), 32)._1,
+        VecInit(shiftOneElement(vroShift32_neg(i), VecInit(vroResult_32(i).asBools.reverse).asUInt, 32)._1.asBools.reverse).asUInt | shiftOneElement(vroShift32(i), vroResult_32(i), 32)._1,
       )
     )
   }
@@ -466,8 +468,8 @@ class VIntMisc64b extends Module {
         opcode.isVror,
       ),
       Seq(
-        (vroResult_64(i) << vroShift64(i)) | (vroResult_64(i) >> vroShift64_neg(i)),
-        (vroResult_64(i) << vroShift64_neg(i)) | (vroResult_64(i) >> vroShift64(i)),
+        VecInit(shiftOneElement(vroShift64(i), VecInit(vroResult_64(i).asBools.reverse).asUInt, 64)._1.asBools.reverse).asUInt | shiftOneElement(vroShift64_neg(i), vroResult_64(i), 64)._1,
+        VecInit(shiftOneElement(vroShift64_neg(i), VecInit(vroResult_64(i).asBools.reverse).asUInt, 64)._1.asBools.reverse).asUInt | shiftOneElement(vroShift64(i), vroResult_64(i), 64)._1,
       )
     )
   }
@@ -501,13 +503,13 @@ class VIntMisc64b extends Module {
   val wsllResult_16_tmp = Wire(Vec(2, UInt(32.W)))
   val wsllResult_32_tmp = Wire(Vec(1, UInt(64.W)))
   for (i <- 0 until 4) {
-    wsllResult_8_tmp(i) := Cat(Fill(8, 0.U), wsllResult_8(i)) << vs1(8*i+3, 8*i)
+    wsllResult_8_tmp(i) := VecInit(shiftOneElement(vs1(8*i+3, 8*i), VecInit(Cat(Fill(8, 0.U), wsllResult_8(i)).asBools.reverse).asUInt, 16)._1.asBools.reverse).asUInt
   }
   for (i <- 0 until 2) {
-    wsllResult_16_tmp(i) := Cat(Fill(16, 0.U), wsllResult_16(i)) << vs1(16*i+4, 16*i)
+    wsllResult_16_tmp(i) := VecInit(shiftOneElement(vs1(16*i+4, 16*i), VecInit(Cat(Fill(16, 0.U), wsllResult_16(i)).asBools.reverse).asUInt, 32)._1.asBools.reverse).asUInt
   }
   for (i <- 0 until 1) {
-    wsllResult_32_tmp(i) := Cat(Fill(32, 0.U), wsllResult_32(i)) << vs1(32*i+5, 32*i)
+    wsllResult_32_tmp(i) := VecInit(shiftOneElement(vs1(32*i+5, 32*i), VecInit(Cat(Fill(32, 0.U), wsllResult_32(i)).asBools.reverse).asUInt, 64)._1.asBools.reverse).asUInt
   }
   wsllResult := Mux1H(
     Seq(
