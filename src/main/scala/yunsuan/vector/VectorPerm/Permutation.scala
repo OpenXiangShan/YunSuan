@@ -667,9 +667,7 @@ class Permutation extends Module {
   val vstart_reg = RegEnable(vstart, 0.U, fire)
   val vl_reg = RegEnable(Mux(vmvnr, evl, vl), 0.U, fire)
   val ones_sum_base_reg = RegEnable(ones_sum_base, 0.U, fire)
-  val vm_reg = RegEnable(vm, 0.U, fire)
   val mask_selected_reg = RegEnable(mask_selected, 0.U, fire)
-  val ma_reg = RegEnable(ma, 0.U, fire)
   val compressed_res_reg = RegEnable(compressed_res, 0.U, fire)
   val ones_sum_reg = RegEnable(ones_sum(elements), 0.U, fire)
 
@@ -697,10 +695,6 @@ class Permutation extends Module {
   val cmprs_vd_16 = WireInit(VecInit(Seq.fill(8)(0.U(16.W))))
   val cmprs_vd_32 = WireInit(VecInit(Seq.fill(4)(0.U(32.W))))
   val cmprs_vd_64 = WireInit(VecInit(Seq.fill(2)(0.U(64.W))))
-  val res_keep_old_vd_8  = WireInit(VecInit(Seq.fill(16)(false.B)))
-  val res_keep_old_vd_16 = WireInit(VecInit(Seq.fill(8)(false.B)))
-  val res_keep_old_vd_32 = WireInit(VecInit(Seq.fill(4)(false.B)))
-  val res_keep_old_vd_64 = WireInit(VecInit(Seq.fill(2)(false.B)))
   val res_agnostic_8  = WireInit(VecInit(Seq.fill(16)(false.B)))
   val res_agnostic_16 = WireInit(VecInit(Seq.fill(8)(false.B)))
   val res_agnostic_32 = WireInit(VecInit(Seq.fill(4)(false.B)))
@@ -708,35 +702,26 @@ class Permutation extends Module {
 
   when(vsew_reg === 0.U) {
     for (i <- 0 until 16) {
-      res_keep_old_vd_8(i) := ((~vm_reg & ~mask_selected_reg(i)) & ~ma_reg) | (ones_sum_base_reg + i.U < vstart_reg) | ((ones_sum_base_reg + i.U >= ones_sum_reg) & ~ta_reg)
-      res_agnostic_8(i) := ((ones_sum_base_reg + i.U >= ones_sum_reg) & ta_reg) | ((~vm_reg & ~mask_selected_reg(i)) & ma_reg)
-      when(res_keep_old_vd_8(i)) {
-        cmprs_vd_8(i) := old_vd_reg(8 * i + 7, 8 * i)
-      }.elsewhen(res_agnostic_8(i)) {
+      res_agnostic_8(i) := ((ones_sum_base_reg + i.U >= ones_sum_reg) & ta_reg)
+      when(res_agnostic_8(i)) {
         cmprs_vd_8(i) := Fill(8, 1.U)
       }.otherwise {
         cmprs_vd_8(i) := compressed_res_reg(8 * i + 7, 8 * i)
       }
     }
-  }.elsewhen(vsew === 1.U) {
+  }.elsewhen(vsew_reg === 1.U) {
     for (i <- 0 until 8) {
-      res_keep_old_vd_16(i) := ((~vm_reg & ~mask_selected_reg(i)) & ~ma_reg) | (ones_sum_base_reg + i.U < vstart_reg) | ((ones_sum_base_reg + i.U >= ones_sum_reg) & ~ta_reg)
-      res_agnostic_16(i) := ((ones_sum_base_reg + i.U >= ones_sum_reg) & ta_reg) | ((~vm_reg & ~mask_selected_reg(i)) & ma_reg)
-      when(res_keep_old_vd_16(i)) {
-        cmprs_vd_16(i) := old_vd_reg(16 * i + 15, 16 * i)
-      }.elsewhen(res_agnostic_16(i)) {
+      res_agnostic_16(i) := ((ones_sum_base_reg + i.U >= ones_sum_reg) & ta_reg)
+      when(res_agnostic_16(i)) {
         cmprs_vd_16(i) := Fill(16, 1.U)
       }.otherwise {
         cmprs_vd_16(i) := compressed_res_reg(16 * i + 15, 16 * i)
       }
     }
-  }.elsewhen(vsew === 2.U) {
+  }.elsewhen(vsew_reg === 2.U) {
     for (i <- 0 until 4) {
-      res_keep_old_vd_32(i) := ((~vm_reg & ~mask_selected_reg(i)) & ~ma_reg) | (ones_sum_base_reg + i.U < vstart_reg) | ((ones_sum_base_reg + i.U >= ones_sum_reg) & ~ta_reg)
-      res_agnostic_32(i) := ((ones_sum_base_reg + i.U >= ones_sum_reg) & ta_reg) | ((~vm_reg & ~mask_selected_reg(i)) & ma_reg)
-      when(res_keep_old_vd_32(i)) {
-        cmprs_vd_32(i) := old_vd_reg(32 * i + 31, 32 * i)
-      }.elsewhen(res_agnostic_32(i)) {
+      res_agnostic_32(i) := ((ones_sum_base_reg + i.U >= ones_sum_reg) & ta_reg)
+      when(res_agnostic_32(i)) {
         cmprs_vd_32(i) := Fill(32, 1.U)
       }.otherwise {
         cmprs_vd_32(i) := compressed_res_reg(32 * i + 31, 32 * i)
@@ -744,11 +729,8 @@ class Permutation extends Module {
     }
   }.otherwise {
     for (i <- 0 until 2) {
-      res_keep_old_vd_64(i) := ((~vm_reg & ~mask_selected_reg(i)) & ~ma_reg) | (ones_sum_base_reg + i.U < vstart_reg) | ((ones_sum_base_reg + i.U >= ones_sum_reg) & ~ta_reg)
-      res_agnostic_64(i) := ((ones_sum_base_reg + i.U >= ones_sum_reg) & ta_reg) | ((~vm_reg & ~mask_selected_reg(i)) & ma_reg)
-      when(res_keep_old_vd_64(i)) {
-        cmprs_vd_64(i) := old_vd_reg(64 * i + 63, 64 * i)
-      }.elsewhen(res_agnostic_64(i)) {
+      res_agnostic_64(i) := ((ones_sum_base_reg + i.U >= ones_sum_reg) & ta_reg)
+      when(res_agnostic_64(i)) {
         cmprs_vd_64(i) := Fill(64, 1.U)
       }.otherwise {
         cmprs_vd_64(i) := compressed_res_reg(64 * i + 63, 64 * i)
