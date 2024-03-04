@@ -62,7 +62,7 @@ trait CommonYunSuan extends YSModule with SbtModule { m =>
   override def moduleDeps = super.moduleDeps ++ Seq(
   )
 
-  object test extends Tests with TestModule.ScalaTest {
+  object test extends SbtModuleTests with TestModule.ScalaTest {
 
     override def forkArgs = m.forkArgs
 

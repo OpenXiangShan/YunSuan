@@ -6,6 +6,7 @@ extern "C" {
 }
 #include "iotype.h"
 #include "vpu_constant.h"
+#include <typeinfo>
 
 class VPUGoldenModel {
   private:
