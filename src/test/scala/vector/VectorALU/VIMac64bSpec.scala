@@ -36,6 +36,7 @@ class VIMac64bWrapper extends Module {
   })
 
   val vIMac = Module(new VIMac64b)
+  vIMac.io.fire := io.in.valid
   vIMac.io.info := io.in.bits.info
   vIMac.io.srcType := io.in.bits.srcType
   vIMac.io.vdType := io.in.bits.vdType
