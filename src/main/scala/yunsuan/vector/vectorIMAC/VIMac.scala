@@ -28,6 +28,7 @@ class VIMac extends Module {
 
   val vIMac64bs = Seq.fill(2)(Module(new VIMac64b))
   for (i <- 0 until 2) {
+    vIMac64bs(i).io.fire := io.in.valid
     vIMac64bs(i).io.info := io.in.bits.info
     vIMac64bs(i).io.srcType := io.in.bits.srcType
     vIMac64bs(i).io.vdType := io.in.bits.vdType

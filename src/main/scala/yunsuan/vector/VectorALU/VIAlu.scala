@@ -29,6 +29,7 @@ class VIAlu extends Module {
   val vstart_gte_vl = io.in.bits.info.vstart >= io.in.bits.info.vl
 
   val vIntFixpAlu = Module(new VIntFixpAlu)
+  vIntFixpAlu.io.fire := io.in.valid
   vIntFixpAlu.io.in.opcode := io.in.bits.opcode
   vIntFixpAlu.io.in.info := io.in.bits.info
   vIntFixpAlu.io.in.srcType := io.in.bits.srcType

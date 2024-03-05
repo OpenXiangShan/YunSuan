@@ -10,6 +10,7 @@ import yunsuan.vector._
  */
 class VIMac64b extends Module {
   val io = IO(new Bundle {
+    val fire = Input(Bool())
     // val opcode = Input(new VIMacOpcode)
     val info = Input(new VIFuInfo)
     val srcType = Input(Vec(2, UInt(4.W)))
@@ -27,6 +28,8 @@ class VIMac64b extends Module {
     val vxsat = Output(UInt(8.W))
   })
 
+  val fire = io.fire
+  val fireS1 = RegNext(fire)
   val vs2 = io.vs2
   val vs1 = io.vs1
   val oldVd = io.oldVd
@@ -161,16 +164,16 @@ class VIMac64b extends Module {
   val wallaceOut_mid = wallaceStage(nAddendsSeq.size - 1 - 3)  // Seq(6)(UInt(128.W))
   
   //------ To alleviate timing, move last 3 steps of wallace into the second pipeline stage
-  val wallaceOut_mid_reg = RegNext(VecInit(wallaceOut_mid))
+  val wallaceOut_mid_reg = RegEnable(VecInit(wallaceOut_mid), fire)
   //-------------------------------------------------------------------------------------
 
   /**
    *  Second pipeline stage: 128 + 128
    */
-  val sewS1 = RegNext(sew)
-  val highHalfS1 = RegNext(io.highHalf)
-  val widenS1 = RegNext(io.widen)
-  val uopIdxS1 = RegNext(uopIdx)
+  val sewS1 = RegEnable(sew, fire)
+  val highHalfS1 = RegEnable(io.highHalf, fire)
+  val widenS1 = RegEnable(io.widen, fire)
+  val uopIdxS1 = RegEnable(uopIdx, fire)
   val wallaceOutReg = reduce3to2(reduce3to2(reduce3to2(wallaceOut_mid_reg, sewS1), sewS1), sewS1) // Seq(2)(UInt(128.W))
 
   // Sum of final two 128b numbers
@@ -201,14 +204,14 @@ class VIMac64b extends Module {
    *    (1) get vd  (2) vsmul  (3) vs1*vs2-vd --> -vs1*vs2+vd (vnmsac/vnmsub)
    */
   val walOut = Wire(UInt(128.W))
-  walOut := RegNext(sum_wo.asUInt)
-  val sewS2 = RegNext(sewS1)
-  val highHalfS2 = RegNext(highHalfS1)
-  val widenS2 = RegNext(widenS1)
-  val uopIdxS2 = RegNext(uopIdxS1)
-  val vxrmS2 = RegNext(RegNext(io.info.vxrm))
-  val isSubS2 = RegNext(RegNext(io.isSub))
-  val isFixPS2 = RegNext(RegNext(io.isFixP))
+  walOut := RegEnable(sum_wo.asUInt, fireS1)
+  val sewS2 = RegEnable(sewS1, fireS1)
+  val highHalfS2 = RegEnable(highHalfS1, fireS1)
+  val widenS2 = RegEnable(widenS1, fireS1)
+  val uopIdxS2 = RegEnable(uopIdxS1, fireS1)
+  val vxrmS2 = RegEnable(RegEnable(io.info.vxrm, fire), fireS1)
+  val isSubS2 = RegEnable(RegEnable(io.isSub, fire), fireS1)
+  val isFixPS2 = RegEnable(RegEnable(io.isFixP, fire), fireS1)
   val vdS2 = PriorityMux(Seq(
            (sewS2.is64 || widenS2) -> Mux(sewS2.is64 && highHalfS2 || widenS2 && uopIdxS2(0), 
                                           walOut(127, 64), walOut(63, 0)),
