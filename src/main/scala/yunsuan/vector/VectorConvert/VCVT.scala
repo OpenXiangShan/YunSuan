@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 
 class CVTIO(width: Int) extends Bundle {
+  val fire = Input(Bool())
   val src = Input(UInt(width.W))
   val opType = Input(UInt(8.W))
   val sew = Input(UInt(2.W))
@@ -30,7 +31,8 @@ class VCVT(width: Int) extends Module{
 object VCVT {
   def apply(
              width: Int
-           )(input:   UInt,
+           )(fire:    Bool,
+             input:   UInt,
              opType:  UInt,
              sew:     UInt,
              rm:      UInt,
@@ -38,6 +40,7 @@ object VCVT {
              output1H:      UInt
            ): (UInt, UInt) = {
     val vcvtWraper = Module(new VCVT(width))
+    vcvtWraper.io.fire := fire
     vcvtWraper.io.src := input
     vcvtWraper.io.opType := opType
     vcvtWraper.io.sew := sew

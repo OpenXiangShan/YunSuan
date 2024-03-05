@@ -15,8 +15,9 @@ class CVT64(width: Int = 64) extends CVT(width){
   val widthExpAdder = 13 // 13bits is enough
 
   // input
-  val (src, sew, opType, rmNext, input1H, output1H) =
-      (io.src, io.sew, io.opType, io.rm, io.input1H, io.output1H)
+  val (fire, src, sew, opType, rmNext, input1H, output1H) =
+      (io.fire, io.src, io.sew, io.opType, io.rm, io.input1H, io.output1H)
+  val fireReg = RegNext(fire)
 
   // control for cycle 0
   val isWiden = !opType(4) && opType(3)
@@ -92,41 +93,41 @@ class CVT64(width: Int = 64) extends CVT(width){
     (!inIsFp, inIsFp && outIsFp && isWiden, inIsFp && outIsFp && isNarrow, !outIsFp)
 
   //contral sign to cycle1
-  val expNotZeroSrc = RegNext(expNotZeroSrcNext, false.B)
-  val expIsOnesSrc = RegNext(expIsOnesSrcNext, false.B)
-  val fracNotZeroSrc = RegNext(fracNotZeroSrcNext, false.B)
-  val expIsZeroSrc = RegNext(expIsZeroSrcNext, false.B)
-  val fracIsZeroSrc = RegNext(fracIsZeroSrcNext, false.B)
-  val isSubnormalSrc = RegNext(isSubnormalSrcNext, false.B)
-  val isnormalSrc = RegNext(isnormalSrcNext, false.B)
-  val isInfSrc = RegNext(isInfSrcNext, false.B)
-  val isZeroSrc = RegNext(isZeroSrcNext, false.B)
-  val isNaNSrc = RegNext(isNaNSrcNext, false.B)
-  val isSNaNSrc = RegNext(isSNaNSrcNext, false.B)
-  val isQNaNSrc = RegNext(isQNaNSrcNext, false.B)
-  val isNormalRec0 = RegNext(isNormalRec0Next, false.B)
-  val isNormalRec1 = RegNext(isNormalRec1Next, false.B)
-  val isNormalRec2 = RegNext(isNormalRec2Next, false.B)
-  val isSubnormalRec0 = RegNext(isSubnormalRec0Next, false.B)
-  val isSubnormalRec1 = RegNext(isSubnormalRec1Next, false.B)
-  val isSubnormalRec2 = RegNext(isSubnormalRec2Next, false.B)
+  val expNotZeroSrc = RegEnable(expNotZeroSrcNext, false.B, fire)
+  val expIsOnesSrc = RegEnable(expIsOnesSrcNext, false.B, fire)
+  val fracNotZeroSrc = RegEnable(fracNotZeroSrcNext, false.B, fire)
+  val expIsZeroSrc = RegEnable(expIsZeroSrcNext, false.B, fire)
+  val fracIsZeroSrc = RegEnable(fracIsZeroSrcNext, false.B, fire)
+  val isSubnormalSrc = RegEnable(isSubnormalSrcNext, false.B, fire)
+  val isnormalSrc = RegEnable(isnormalSrcNext, false.B, fire)
+  val isInfSrc = RegEnable(isInfSrcNext, false.B, fire)
+  val isZeroSrc = RegEnable(isZeroSrcNext, false.B, fire)
+  val isNaNSrc = RegEnable(isNaNSrcNext, false.B, fire)
+  val isSNaNSrc = RegEnable(isSNaNSrcNext, false.B, fire)
+  val isQNaNSrc = RegEnable(isQNaNSrcNext, false.B, fire)
+  val isNormalRec0 = RegEnable(isNormalRec0Next, false.B, fire)
+  val isNormalRec1 = RegEnable(isNormalRec1Next, false.B, fire)
+  val isNormalRec2 = RegEnable(isNormalRec2Next, false.B, fire)
+  val isSubnormalRec0 = RegEnable(isSubnormalRec0Next, false.B, fire)
+  val isSubnormalRec1 = RegEnable(isSubnormalRec1Next, false.B, fire)
+  val isSubnormalRec2 = RegEnable(isSubnormalRec2Next, false.B, fire)
 
-  val isRec = RegNext(isRecNext, false.B)
+  val isRec = RegEnable(isRecNext, false.B, fire)
 
-  val isInt2Fp = RegNext(isInt2FpNext, false.B)
-  val isFpWiden = RegNext(isFpWidenNext, false.B)
-  val isFpNarrow = RegNext(isFpNarrowNext, false.B)
-  val isEstimate7 = RegNext(isEstimate7Next, false.B)
-  val isFp2Int = RegNext(isFp2IntNext, false.B)
+  val isInt2Fp = RegEnable(isInt2FpNext, false.B, fire)
+  val isFpWiden = RegEnable(isFpWidenNext, false.B, fire)
+  val isFpNarrow = RegEnable(isFpNarrowNext, false.B, fire)
+  val isEstimate7 = RegEnable(isEstimate7Next, false.B, fire)
+  val isFp2Int = RegEnable(isFp2IntNext, false.B, fire)
 
   // for fpnarrow sub
-  val trunSticky = RegNext(fracSrc.tail(f32.fracWidth).orR, false.B)
+  val trunSticky = RegEnable(fracSrc.tail(f32.fracWidth).orR, false.B, fire)
 
-  val signSrc = RegNext(signSrcNext, false.B)
-  val rm = RegNext(rmNext, false.B)
+  val signSrc = RegEnable(signSrcNext, false.B, fire)
+  val rm = RegEnable(rmNext, 0.U(3.W), fire)
 
-  val hasSignInt = RegNext(hasSignIntNext, false.B)
-  val isZeroIntSrc = RegNext(isZeroIntSrcNext, false.B)
+  val hasSignInt = RegEnable(hasSignIntNext, false.B, fire)
+  val isZeroIntSrc = RegEnable(isZeroIntSrcNext, false.B, fire)
   val signNonNan = !isNaNSrc && signSrc
 
 
@@ -159,31 +160,31 @@ class CVT64(width: Int = 64) extends CVT(width){
    */
 
   // for cycle1
-  val output1HReg = RegNext(output1H, 0.U(4.W))
+  val output1HReg = RegEnable(output1H, 0.U(4.W), fire)
   val float1HOut = Wire(UInt(3.W))
   float1HOut := output1HReg.head(3)
   val int1HOut = Wire(UInt(4.W))
   int1HOut := output1HReg
 
   val expNext = Wire(UInt(widthExpAdder.W))
-  val expReg = RegNext(expNext, 0.U(widthExpAdder.W))
+  val expReg = RegEnable(expNext, 0.U(widthExpAdder.W), fire)
   val exp = Wire(UInt(widthExpAdder.W))
   exp := expReg
 
   val fracNormaledNext =  Wire(UInt(64.W))
-  val fracNormaled = RegNext(fracNormaledNext, 0.U(64.W))
+  val fracNormaled = RegEnable(fracNormaledNext, 0.U(64.W), fire)
 
   val rounderMapInNext = Wire(UInt(64.W))
-  val rounderMapInReg = RegNext(rounderMapInNext, 0.U(64.W))
+  val rounderMapInReg = RegEnable(rounderMapInNext, 0.U(64.W), fire)
   val rounderMapIn = Wire(UInt(64.W))
   rounderMapIn := rounderMapInReg
 
   //for cycle2 -> output
   val nv, dz, of, uf, nx = Wire(Bool()) //cycle1
   val fflagsNext = Wire(UInt(5.W))
-  val fflags = RegNext(fflagsNext, 0.U(5.W))
+  val fflags = RegEnable(fflagsNext, 0.U(5.W), fireReg)
   val resultNext = Wire(UInt(64.W))
-  val result = RegNext(resultNext, 0.U(64.W))
+  val result = RegEnable(resultNext, 0.U(64.W), fireReg)
 
   /** clz
    * for: int->fp, fp->fp widen, estimate7,  reuse clz according to fracSrc << (64 - f64.fracWidth)
@@ -234,7 +235,7 @@ class CVT64(width: Int = 64) extends CVT(width){
 
   // for estimate7
   val expNormaled = Mux(isSubnormalSrcNext, leadZeros(0), expSrc(0)) //only the last bit is needed
-  val expNormaled0 = RegNext(expNormaled(0), false.B)
+  val expNormaled0 = RegEnable(expNormaled(0), false.B, fire)
 
   /** shift left
    * for: int->fp, fp->fp widen, estimate7, reuse shift left according to fracSrc << (64 - f64.fracWidth)
@@ -261,8 +262,8 @@ class CVT64(width: Int = 64) extends CVT(width){
     ) - expSrc
   val shamt = Mux(shamtWidth >= 65.U, 65.U, shamtWidth)
   val (inRounderNext, stickyNext) = ShiftRightJam(shamtIn, shamt)
-  val inRounder = RegNext(inRounderNext, 0.U(65.W))
-  val sticky = RegNext(stickyNext, false.B)
+  val inRounder = RegEnable(inRounderNext, 0.U(65.W), fire)
+  val sticky = RegEnable(stickyNext, false.B, fire)
 
 
   /** rounder

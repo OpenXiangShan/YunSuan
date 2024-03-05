@@ -14,6 +14,8 @@ class CVT32(width: Int = 32) extends CVT(width){
    * fp2fp
    */
   // control path
+  val fire = io.fire
+  val fireReg = RegNext(io.fire)
   val is_sew_8  = io.sew === "b00".U
   val is_sew_16 = io.sew === "b01".U
   val is_sew_32 = io.sew === "b10".U
@@ -21,46 +23,46 @@ class CVT32(width: Int = 32) extends CVT(width){
   val is_single = io.opType.tail(3).head(2) === "b00".U
   val is_widen = io.opType.tail(3).head(2) === "b01".U
   val is_narrow = io.opType.tail(3).head(2) === "b10".U
-  val is_single_reg0 = RegNext(is_single)
-  val is_widen_reg0 = RegNext(is_widen)
-  val is_narrow_reg0 = RegNext(is_narrow)
+  val is_single_reg0 = RegEnable(is_single, fire)
+  val is_widen_reg0 = RegEnable(is_widen, fire)
+  val is_narrow_reg0 = RegEnable(is_narrow, fire)
 
 
   val is_vfr = io.opType(5).asBool && (is_sew_16 || is_sew_32)
   val is_fp2int = io.opType.head(2) === "b10".U && (is_sew_32 && is_single || is_sew_16 && is_narrow || is_sew_16 && is_widen || is_sew_16 && is_single || is_sew_8 && is_narrow)
   val is_int2fp = io.opType.head(2) === "b01".U && (is_sew_32 && is_single || is_sew_16 && is_narrow || is_sew_16 && is_widen || is_sew_16 && is_single || is_sew_8 && is_widen)
   val is_fp2fp = io.opType.head(3) === "b110".U && (is_sew_16 && (is_narrow || is_widen))
-  val is_vfr_reg0 = RegNext(is_vfr, false.B)
-  val is_fp2int_reg0 = RegNext(is_fp2int, false.B)
-  val is_int2fp_reg0 = RegNext(is_int2fp, false.B)
-  val is_fp2fp_reg0 = RegNext(is_fp2fp, false.B)
+  val is_vfr_reg0 = RegEnable(is_vfr, false.B, fire)
+  val is_fp2int_reg0 = RegEnable(is_fp2int, false.B, fire)
+  val is_int2fp_reg0 = RegEnable(is_int2fp, false.B, fire)
+  val is_fp2fp_reg0 = RegEnable(is_fp2fp, false.B, fire)
 
   val is_vfrsqrt7 = is_vfr && !io.opType(0).asBool
   val is_vfrec7 = is_vfr && io.opType(0).asBool
-  val is_vfrsqrt7_reg0 = RegNext(is_vfrsqrt7, false.B)
-  val is_vfrec7_reg0 = RegNext(is_vfrec7, false.B)
+  val is_vfrsqrt7_reg0 = RegEnable(is_vfrsqrt7, false.B, fire)
+  val is_vfrec7_reg0 = RegEnable(is_vfrec7, false.B, fire)
 
   val is_signed_int = io.opType(0)
-  val is_signed_int_reg0 = RegNext(is_signed_int, false.B)
+  val is_signed_int_reg0 = RegEnable(is_signed_int, false.B, fire)
 
   val result = Wire(UInt(32.W))
   val NV, DZ, OF, UF, NX = WireInit(false.B)
   val fflags = WireInit(Cat(NV, DZ, OF, UF, NX))
 
   val result0 = Wire(UInt(32.W))
-  val result0_reg0 = RegNext(result0, 0.U(32.W))
+  val result0_reg0 = RegEnable(result0, 0.U(32.W), fire)
   val fflags0 = WireInit(Cat(NV, DZ, OF, UF, NX))
-  val fflags0_reg0 = RegNext(fflags0)
+  val fflags0_reg0 = RegEnable(fflags0, fire)
 
   val round_in = Wire(UInt(24.W))
   val round_roundIn = Wire(Bool())
   val round_stickyIn = Wire(Bool())
   val round_signIn = Wire(Bool())
-  val round_in_reg0 = RegNext(round_in, 0.U(24.W))
-  val round_roundIn_reg0 = RegNext(round_roundIn, false.B)
-  val round_stickyIn_reg0 = RegNext(round_stickyIn, false.B)
-  val round_signIn_reg0 = RegNext(round_signIn, false.B)
-  val rm_reg0 = RegNext(io.rm)
+  val round_in_reg0 = RegEnable(round_in, 0.U(24.W), fire)
+  val round_roundIn_reg0 = RegEnable(round_roundIn, false.B, fire)
+  val round_stickyIn_reg0 = RegEnable(round_stickyIn, false.B, fire)
+  val round_signIn_reg0 = RegEnable(round_signIn, false.B, fire)
+  val rm_reg0 = RegEnable(io.rm, fire)
 
   val is_normal = Wire(Bool())
   val is_inf = Wire(Bool())
@@ -77,38 +79,38 @@ class CVT32(width: Int = 32) extends CVT(width){
   val is_pos2_bminus1_b = Wire(Bool())
   val is_pos2_b_bplus1 = Wire(Bool())
 
-  val is_normal_reg0 = RegNext(is_normal, false.B)
-  val is_inf_reg0 = RegNext(is_inf, false.B)
-  val is_nan_reg0 = RegNext(is_nan, false.B)
-  val is_neginf_reg0 = RegNext(is_neginf, false.B)
-  val is_neginf_negzero_reg0 = RegNext(is_neginf_negzero, false.B)
-  val is_negzero_reg0 = RegNext(is_negzero, false.B)
-  val is_poszero_reg0 = RegNext(is_poszero, false.B)
-  val is_snan_reg0 = RegNext(is_snan, false.B)
-  val is_neg2_bplus1_b_reg0 = RegNext(is_neg2_bplus1_b, false.B)
-  val is_neg2_b_bminus1_reg0 = RegNext(is_neg2_b_bminus1, false.B)
-  val is_neg2_negbminus1_negzero_reg0 = RegNext(is_neg2_negbminus1_negzero, false.B)
-  val is_pos2_poszero_negbminus1_reg0 = RegNext(is_pos2_poszero_negbminus1, false.B)
-  val is_pos2_bminus1_b_reg0 = RegNext(is_pos2_bminus1_b, false.B)
-  val is_pos2_b_bplus1_reg0 = RegNext(is_pos2_b_bplus1, false.B)
+  val is_normal_reg0 = RegEnable(is_normal, false.B, fire)
+  val is_inf_reg0 = RegEnable(is_inf, false.B, fire)
+  val is_nan_reg0 = RegEnable(is_nan, false.B, fire)
+  val is_neginf_reg0 = RegEnable(is_neginf, false.B, fire)
+  val is_neginf_negzero_reg0 = RegEnable(is_neginf_negzero, false.B, fire)
+  val is_negzero_reg0 = RegEnable(is_negzero, false.B, fire)
+  val is_poszero_reg0 = RegEnable(is_poszero, false.B, fire)
+  val is_snan_reg0 = RegEnable(is_snan, false.B, fire)
+  val is_neg2_bplus1_b_reg0 = RegEnable(is_neg2_bplus1_b, false.B, fire)
+  val is_neg2_b_bminus1_reg0 = RegEnable(is_neg2_b_bminus1, false.B, fire)
+  val is_neg2_negbminus1_negzero_reg0 = RegEnable(is_neg2_negbminus1_negzero, false.B, fire)
+  val is_pos2_poszero_negbminus1_reg0 = RegEnable(is_pos2_poszero_negbminus1, false.B, fire)
+  val is_pos2_bminus1_b_reg0 = RegEnable(is_pos2_bminus1_b, false.B, fire)
+  val is_pos2_b_bplus1_reg0 = RegEnable(is_pos2_b_bplus1, false.B, fire)
 
   // fp2fp
   val nor_in = Wire(UInt(10.W))
   val nor_roundBit = Wire(Bool())
   val nor_stickyBit = Wire(Bool())
   val nor_signBit = Wire(Bool())
-  val nor_in_reg0 = RegNext(nor_in)
-  val nor_roundBit_reg0 = RegNext(nor_roundBit)
-  val nor_stickyBit_reg0 = RegNext(nor_stickyBit)
-  val nor_signBit_reg0 = RegNext(nor_signBit)
+  val nor_in_reg0 = RegEnable(nor_in, fire)
+  val nor_roundBit_reg0 = RegEnable(nor_roundBit, fire)
+  val nor_stickyBit_reg0 = RegEnable(nor_stickyBit, fire)
+  val nor_signBit_reg0 = RegEnable(nor_signBit, fire)
   val subnor_in = Wire(UInt(10.W))
   val subnor_roundBit = Wire(Bool())
   val subnor_stickyBit = Wire(Bool())
   val subnor_signBit = Wire(Bool())
-  val subnor_in_reg0 = RegNext(subnor_in)
-  val subnor_roundBit_reg0 = RegNext(subnor_roundBit)
-  val subnor_stickyBit_reg0 = RegNext(subnor_stickyBit)
-  val subnor_signBit_reg0 = RegNext(subnor_signBit)
+  val subnor_in_reg0 = RegEnable(subnor_in, fire)
+  val subnor_roundBit_reg0 = RegEnable(subnor_roundBit, fire)
+  val subnor_stickyBit_reg0 = RegEnable(subnor_stickyBit, fire)
+  val subnor_signBit_reg0 = RegEnable(subnor_signBit, fire)
 
 
   // cycle0
@@ -121,13 +123,13 @@ class CVT32(width: Int = 32) extends CVT(width){
   val fp16toint16 = Wire(Bool())
   val fp16toint8 = Wire(Bool())
 
-  val in_is_fp16_reg0 = RegNext(in_is_fp16)
-  val in_is_fp32_reg0 = RegNext(in_is_fp32)
-  val fp32toint32_reg0 = RegNext(fp32toint32)
-  val fp32toint16_reg0 = RegNext(fp32toint16)
-  val fp16toint32_reg0 = RegNext(fp16toint32)
-  val fp16toint16_reg0 = RegNext(fp16toint16)
-  val fp16toint8_reg0 = RegNext(fp16toint8)
+  val in_is_fp16_reg0 = RegEnable(in_is_fp16, fire)
+  val in_is_fp32_reg0 = RegEnable(in_is_fp32, fire)
+  val fp32toint32_reg0 = RegEnable(fp32toint32, fire)
+  val fp32toint16_reg0 = RegEnable(fp32toint16, fire)
+  val fp16toint32_reg0 = RegEnable(fp16toint32, fire)
+  val fp16toint16_reg0 = RegEnable(fp16toint16, fire)
+  val fp16toint8_reg0 = RegEnable(fp16toint8, fire)
 
   val out_is_fp16 = Wire(Bool())
   val out_is_fp32 = Wire(Bool())
@@ -136,13 +138,13 @@ class CVT32(width: Int = 32) extends CVT(width){
   val int32tofp16 = Wire(Bool())
   val int16tofp16 = Wire(Bool())
   val int8tofp16 = Wire(Bool())
-  val out_is_fp16_reg0 = RegNext(out_is_fp16)
-  val out_is_fp32_reg0 = RegNext(out_is_fp32)
-  val int32tofp32_reg0 = RegNext(int32tofp32)
-  val int16tofp32_reg0 = RegNext(int16tofp32)
-  val int32tofp16_reg0 = RegNext(int32tofp16)
-  val int16tofp16_reg0 = RegNext(int16tofp16)
-  val int8tofp16_reg0 = RegNext(int8tofp16)
+  val out_is_fp16_reg0 = RegEnable(out_is_fp16, fire)
+  val out_is_fp32_reg0 = RegEnable(out_is_fp32, fire)
+  val int32tofp32_reg0 = RegEnable(int32tofp32, fire)
+  val int16tofp32_reg0 = RegEnable(int16tofp32, fire)
+  val int32tofp16_reg0 = RegEnable(int32tofp16, fire)
+  val int16tofp16_reg0 = RegEnable(int16tofp16, fire)
+  val int8tofp16_reg0 = RegEnable(int8tofp16, fire)
 
   in_is_fp16 := Mux1H(
     Seq(is_fp2int,
@@ -222,11 +224,11 @@ class CVT32(width: Int = 32) extends CVT(width){
     )
   )
   val in_orR = Wire(Bool())
-  val in_orR_reg0 = RegNext(in_orR, false.B)
+  val in_orR_reg0 = RegEnable(in_orR, false.B, fire)
   in_orR := in_sext.orR
 
   val in = Wire(UInt(33.W))
-  val in_reg0 = RegNext(in, 0.U(33.W))
+  val in_reg0 = RegEnable(in, 0.U(33.W), fire)
   in := Mux1H(
     Seq(is_fp2int,
       is_int2fp,
@@ -236,7 +238,7 @@ class CVT32(width: Int = 32) extends CVT(width){
       Cat(0.U, src))
   )
   val sign = Wire(Bool())
-  val sign_reg0 = RegNext(sign, false.B)
+  val sign_reg0 = RegEnable(sign, false.B, fire)
   sign := Mux1H(
     Seq(is_fp2int || is_int2fp,
       is_vfr,
@@ -277,7 +279,7 @@ class CVT32(width: Int = 32) extends CVT(width){
   )
 
   val exp_of = Wire(Bool())
-  val exp_of_reg0 = RegNext(exp_of, false.B)
+  val exp_of_reg0 = RegEnable(exp_of, false.B, fire)
   exp_of := Mux1H(
     Seq(is_fp2int && in_is_fp32,
       is_fp2int && in_is_fp16),
@@ -301,7 +303,7 @@ class CVT32(width: Int = 32) extends CVT(width){
       (31 - f16.fracWidth).U)
   )
   val lpath_sig_shifted = Wire(UInt(32.W))
-  val lpath_sig_shifted_reg0 = RegNext(lpath_sig_shifted)
+  val lpath_sig_shifted_reg0 = RegEnable(lpath_sig_shifted, fire)
   lpath_sig_shifted := Mux1H(
     Seq(fp32toint32,
       fp16toint16 || fp16toint32),
@@ -310,12 +312,12 @@ class CVT32(width: Int = 32) extends CVT(width){
   )
 
   val lpath_iv = Wire(Bool())
-  val lpath_iv_reg0 = RegNext(lpath_iv, false.B)
+  val lpath_iv_reg0 = RegEnable(lpath_iv, false.B, fire)
 
   lpath_iv := (fp32toint32 || fp16toint16 || fp16toint32) && !is_signed_int && sign
 
   val lpath_of = Wire(Bool())
-  val lpath_of_reg0 = RegNext(lpath_of)
+  val lpath_of_reg0 = RegEnable(lpath_of, fire)
   lpath_of := (fp32toint32 || fp16toint16 || fp16toint32) && is_signed_int && (exp === max_int_exp) && (!sign || (sign && in.tail(9).orR))
 
   // right
@@ -331,7 +333,7 @@ class CVT32(width: Int = 32) extends CVT(width){
   ) - exp
 
   val rpath_sig_shifted0 = Wire(UInt(25.W))
-  val rpath_sig_shifted_reg0 = RegNext(rpath_sig_shifted0, 0.U(25.W))
+  val rpath_sig_shifted_reg0 = RegEnable(rpath_sig_shifted0, 0.U(25.W), fire)
   val (rpath_sig_shifted, rpath_sticky) = ShiftRightJam(Cat(sig, 0.U), rpath_shamt)
   rpath_sig_shifted0 := rpath_sig_shifted
 
@@ -360,7 +362,7 @@ class CVT32(width: Int = 32) extends CVT(width){
   )
 
   val exp_raw = Wire(UInt(8.W))
-  val exp_raw_reg0 = RegNext(exp_raw, 0.U(8.W))
+  val exp_raw_reg0 = RegEnable(exp_raw, 0.U(8.W), fire)
   exp_raw := Mux1H(
     Seq(is_int2fp && out_is_fp32,
       is_int2fp && out_is_fp16),
@@ -428,7 +430,7 @@ class CVT32(width: Int = 32) extends CVT(width){
   round_signIn := (is_fp2int || is_int2fp) && sign
 
   val sel_lpath = Wire(Bool())
-  val sel_lpath_reg0 = RegNext(sel_lpath)
+  val sel_lpath_reg0 = RegEnable(sel_lpath, fire)
   sel_lpath := exp >= Mux1H(
     Seq(is_fp2int && in_is_fp32,
       is_fp2int && in_is_fp16),
@@ -453,7 +455,7 @@ class CVT32(width: Int = 32) extends CVT(width){
       Cat(is_signed_int, 0.U(7.W)))
   )
   val max_min_int = Wire(UInt(32.W))
-  val max_min_int_reg0 = RegNext(max_min_int, 0.U(32.W))
+  val max_min_int_reg0 = RegEnable(max_min_int, 0.U(32.W), fire)
 
   val sign_or_nan = Mux1H(
     Seq(fp32toint32 || fp32toint16,
@@ -569,8 +571,8 @@ class CVT32(width: Int = 32) extends CVT(width){
 
   val exp_normalized_5 = Wire(UInt(5.W))
   val exp_normalized_8 = Wire(UInt(8.W))
-  val exp_normalized_5_reg0 = RegNext(exp_normalized_5)
-  val exp_normalized_8_reg0 = RegNext(exp_normalized_8)
+  val exp_normalized_5_reg0 = RegEnable(exp_normalized_5, fire)
+  val exp_normalized_8_reg0 = RegEnable(exp_normalized_8, fire)
   exp_normalized_5 := Mux1H(
     Seq(in_is_fp16 && (is_vfrsqrt7 && is_poszero_posinf && is_normal || (is_vfrec7 && is_normal)),
        in_is_fp16 && (is_vfrsqrt7 && is_poszero_posinf && !is_normal || (is_vfrec7 && !is_normal))),
@@ -585,9 +587,9 @@ class CVT32(width: Int = 32) extends CVT(width){
   )
 
   val sig_normalized_11 = Wire(UInt(11.W))
-  val sig_normalized_11_reg0 = RegNext(sig_normalized_11)
+  val sig_normalized_11_reg0 = RegEnable(sig_normalized_11, fire)
   val sig_normalized_24 = Wire(UInt(24.W))
-  val sig_normalized_24_reg0 = RegNext(sig_normalized_24)
+  val sig_normalized_24_reg0 = RegEnable(sig_normalized_24, fire)
 
   sig_normalized_11 := Mux1H(
     Seq(in_is_fp16 && (is_vfrsqrt7 && is_poszero_posinf && is_normal || (is_vfrec7 && is_normal)),
@@ -603,8 +605,8 @@ class CVT32(width: Int = 32) extends CVT(width){
   )
   val clz_fp16 = Wire(UInt(4.W))
   val clz_fp32 = Wire(UInt(8.W))
-  val clz_fp16_reg0 = RegNext(clz_fp16)
-  val clz_fp32_reg0 = RegNext(clz_fp32)
+  val clz_fp16_reg0 = RegEnable(clz_fp16, fire)
+  val clz_fp32_reg0 = RegEnable(clz_fp32, fire)
 
   clz_fp16 := Mux(in_is_fp16 && is_vfr, CLZ(sig_normalized_11), 0.U)
   clz_fp32 := Mux(in_is_fp32 && is_vfr, CLZ(sig_normalized_24), 0.U)
@@ -614,7 +616,7 @@ class CVT32(width: Int = 32) extends CVT(width){
   val out_exp_normalized_fp32 = Mux(is_vfrec7 && in_is_fp32, 253.U - exp_normalized_8, 0.U)
 
   val out_exp_zero_negone = Wire(Bool())
-  val out_exp_zero_negone_reg0 = RegNext(out_exp_zero_negone)
+  val out_exp_zero_negone_reg0 = RegEnable(out_exp_zero_negone, fire)
   out_exp_zero_negone := Mux1H(
     Seq(is_vfrec7 && in_is_fp16,
       is_vfrec7 && in_is_fp32),
@@ -623,7 +625,7 @@ class CVT32(width: Int = 32) extends CVT(width){
   )
 
   val out_exp_fp16 = Wire(UInt(5.W))
-  val out_exp_fp16_reg0 = RegNext(out_exp_fp16, 0.U(5.W))
+  val out_exp_fp16_reg0 = RegEnable(out_exp_fp16, 0.U(5.W), fire)
   out_exp_fp16 := Mux1H(
     Seq(in_is_fp16 && is_vfrsqrt7 && is_normal,
       in_is_fp16 && is_vfrsqrt7 && !is_normal,
@@ -635,7 +637,7 @@ class CVT32(width: Int = 32) extends CVT(width){
       out_exp_normalized_fp16)
   )
   val out_exp_fp32 = Wire(UInt(8.W))
-  val out_exp_fp32_reg0 = RegNext(out_exp_fp32, 0.U(8.W))
+  val out_exp_fp32_reg0 = RegEnable(out_exp_fp32, 0.U(8.W), fire)
   out_exp_fp32 := Mux1H(
     Seq(in_is_fp32 && is_vfrsqrt7 && is_normal,
       in_is_fp32 && is_vfrsqrt7 && !is_normal,
@@ -649,7 +651,7 @@ class CVT32(width: Int = 32) extends CVT(width){
   )
 
   val out_sign = Wire(Bool())
-  val out_sign_reg0 = RegNext(out_sign)
+  val out_sign_reg0 = RegEnable(out_sign, fire)
   out_sign := is_vfrsqrt7 && is_poszero_posinf && sign
 
 
@@ -658,7 +660,7 @@ class CVT32(width: Int = 32) extends CVT(width){
 
   val down_exp_s = fp_in.exp.zext - exp_delta.S
   val down_exp = Wire(UInt(9.W))
-  val down_exp_reg0 = RegNext(down_exp)
+  val down_exp_reg0 = RegEnable(down_exp, fire)
   down_exp := down_exp_s.asUInt
 
   // normal
@@ -676,52 +678,52 @@ class CVT32(width: Int = 32) extends CVT(width){
   subnor_signBit := fp_in.sign
 
   val may_be_subnor = Wire(Bool())
-  val may_be_subnor_reg0 = RegNext(may_be_subnor)
+  val may_be_subnor_reg0 = RegEnable(may_be_subnor, fire)
   may_be_subnor := down_exp_s < 1.S
 
   val rmin = is_fp2fp && is_narrow &&  (io.rm === RTZ || (io.rm === RDN & !fp_in.sign) || (io.rm === RUP && fp_in.sign))
 
   val nor_of_exp = Wire(UInt(5.W))
-  val nor_of_exp_reg0 = RegNext(nor_of_exp)
+  val nor_of_exp_reg0 = RegEnable(nor_of_exp, fire)
   nor_of_exp := Mux(rmin | io.opType(0).asBool, // ROD
     VectorFloat.maxNormExp(f16.expWidth).U(f16.expWidth.W),
     (VectorFloat.maxNormExp(f16.expWidth) + 1).U(f16.expWidth.W))
 
   val nor_of_sig = Wire(UInt(10.W))
-  val nor_of_sig_reg0 = RegNext(nor_of_sig)
+  val nor_of_sig_reg0 = RegEnable(nor_of_sig, fire)
   nor_of_sig := Mux(rmin | io.opType(0).asBool, ~0.U((f16.precision - 1).W), 0.U((f16.precision - 1).W))
 
   val special_case = Wire(Bool())
-  val special_case_reg0 = RegNext(special_case)
+  val special_case_reg0 = RegEnable(special_case, fire)
   special_case := is_fp2fp && is_narrow && fp_in.decode.expIsOnes
 
   val fp2fp_iv = Wire(Bool())
-  val fp2fp_iv_reg0 = RegNext(fp2fp_iv)
+  val fp2fp_iv_reg0 = RegEnable(fp2fp_iv, fire)
   val fp2fp_dz = Wire(Bool())
-  val fp2fp_dz_reg0 = RegNext(fp2fp_dz)
+  val fp2fp_dz_reg0 = RegEnable(fp2fp_dz, fire)
   fp2fp_iv := is_fp2fp && is_narrow && fp_in.decode.isSNaN
   fp2fp_dz := is_fp2fp && is_narrow && false.B
 
   val in_isnan_neg = Wire(Bool())
-  val in_isnan_neg_reg0 = RegNext(in_isnan_neg)
+  val in_isnan_neg_reg0 = RegEnable(in_isnan_neg, fire)
   val in_sigNotZero = Wire(Bool())
-  val in_sigNotZero_reg0 = RegNext(in_sigNotZero)
+  val in_sigNotZero_reg0 = RegEnable(in_sigNotZero, fire)
   in_isnan_neg := is_fp2fp && is_narrow && !fp_in.decode.isNaN && fp_in.sign
   in_sigNotZero := is_fp2fp && is_narrow && fp_in.decode.sigNotZero
 
   // fp2fp widen
   val nor_exp = Wire(UInt(8.W))
-  val nor_exp_reg0 = RegNext(nor_exp)
+  val nor_exp_reg0 = RegEnable(nor_exp, fire)
   nor_exp := Mux(is_fp2fp && is_widen, exp_delta.U(f32.expWidth.W) + fp_in.exp, 0.U)
 
   val nor_sig = Wire(UInt(10.W))
-  val nor_sig_reg0 = RegNext(nor_sig)
+  val nor_sig_reg0 = RegEnable(nor_sig, fire)
   nor_sig := Mux(is_fp2fp && is_widen, fp_in.sig.head(10), 0.U)
 
   val subnor_exp = Wire(UInt(8.W))
-  val subnor_exp_reg0 = RegNext(subnor_exp)
+  val subnor_exp_reg0 = RegEnable(subnor_exp, fire)
   val subnor_sig_w = Wire(UInt(10.W))
-  val subnor_sig_w_reg0 = RegNext(subnor_sig_w)
+  val subnor_sig_w_reg0 = RegEnable(subnor_sig_w, fire)
   val subnor_shamt = CLZ(fp_in.sig.head(10))
   subnor_exp := exp_delta.U(f32.expWidth.W) - subnor_shamt
   subnor_sig_w := Cat((fp_in.sig.head(10) << subnor_shamt)(f16.precision - 3, 0), 0.U(1.W))
@@ -733,12 +735,12 @@ class CVT32(width: Int = 32) extends CVT(width){
   val isZero = Wire(Bool())
   val isSubnormal = Wire(Bool())
   val sigNotZero = Wire(Bool())
-  val isNaN_reg0 = RegNext(isNaN)
-  val expIsOnes_reg0 = RegNext(expIsOnes)
-  val expIsZero_reg0 = RegNext(expIsZero)
-  val isZero_reg0 = RegNext(isZero)
-  val isSubnormal_reg0 = RegNext(isSubnormal)
-  val sigNotZero_reg0 = RegNext(sigNotZero)
+  val isNaN_reg0 = RegEnable(isNaN, fire)
+  val expIsOnes_reg0 = RegEnable(expIsOnes, fire)
+  val expIsZero_reg0 = RegEnable(expIsZero, fire)
+  val isZero_reg0 = RegEnable(isZero, fire)
+  val isSubnormal_reg0 = RegEnable(isSubnormal, fire)
+  val sigNotZero_reg0 = RegEnable(sigNotZero, fire)
 
   isNaN := is_fp2fp && is_widen && fp_in.exp.tail(3).andR && fp_in.sig.head(10).orR
   expIsOnes := is_fp2fp && is_widen && fp_in.exp.tail(3).andR

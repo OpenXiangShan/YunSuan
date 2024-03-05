@@ -36,6 +36,7 @@ class VIntFixpDecode extends Bundle {
 
 class VIntFixpAlu64b extends Module {
   val io = IO(new Bundle {
+    val fire = Input(Bool())
     val opcode = Input(new VAluOpcode)
     val info = Input(new VIFuInfo)
     val srcType = Input(Vec(2, UInt(4.W)))
@@ -58,10 +59,11 @@ class VIntFixpAlu64b extends Module {
     val vxsat = Output(UInt(8.W))
   })
 
+  val fire = io.fire
   val srcTypeVs2 = io.srcType(0)
 
   val vIntAdder64b = Module(new VIntAdder64b)
-  vIntAdder64b.io.opcode := io.opcode 
+  vIntAdder64b.io.opcode := io.opcode
   vIntAdder64b.io.info := io.info
   vIntAdder64b.io.srcType := io.srcType
   vIntAdder64b.io.vdType := io.vdType
@@ -74,7 +76,7 @@ class VIntFixpAlu64b extends Module {
   vIntAdder64b.io.widen_vs2 := io.widen_vs2
 
   val vIntMisc64b = Module(new VIntMisc64b)
-  vIntMisc64b.io.opcode := io.opcode 
+  vIntMisc64b.io.opcode := io.opcode
   vIntMisc64b.io.info := io.info
   vIntMisc64b.io.srcType := io.srcType
   vIntMisc64b.io.vdType := io.vdType
@@ -83,22 +85,22 @@ class VIntFixpAlu64b extends Module {
   vIntMisc64b.io.vmask := io.vmask
   vIntMisc64b.io.narrow := io.narrow
 
-  val vdAdderS1 = RegNext(vIntAdder64b.io.vd)
-  val vdMiscS1 = RegNext(vIntMisc64b.io.vd)
-  val isMiscS1 = RegNext(io.isMisc)
-  val narrowVdMiscS1 = RegNext(vIntMisc64b.io.narrowVd)
-  val cmpOutS1 = RegNext(vIntAdder64b.io.cmpOut)
-  val isFixpS1 = RegNext(io.isFixp)
+  val vdAdderS1 = RegEnable(vIntAdder64b.io.vd, fire)
+  val vdMiscS1 = RegEnable(vIntMisc64b.io.vd, fire)
+  val isMiscS1 = RegEnable(io.isMisc, fire)
+  val narrowVdMiscS1 = RegEnable(vIntMisc64b.io.narrowVd, fire)
+  val cmpOutS1 = RegEnable(vIntAdder64b.io.cmpOut, fire)
+  val isFixpS1 = RegEnable(io.isFixp, fire)
 
   val vFixPoint64b = Module(new VFixPoint64b)
-  vFixPoint64b.io.opcode := RegNext(io.opcode)
-  vFixPoint64b.io.info := RegNext(io.info)
-  vFixPoint64b.io.sew := RegNext(SewOH(io.vdType(1, 0)))
-  vFixPoint64b.io.isSub := RegNext(io.isSub)
-  vFixPoint64b.io.isSigned := RegNext(srcTypeVs2(3, 2) === 1.U)
-  vFixPoint64b.io.isNClip := RegNext(io.opcode.isScalingShift && io.vdType(1,0) =/= srcTypeVs2(1,0))
-  vFixPoint64b.io.fromAdder := RegNext(vIntAdder64b.io.toFixP)
-  vFixPoint64b.io.fromMisc := RegNext(vIntMisc64b.io.toFixP)
+  vFixPoint64b.io.opcode := RegEnable(io.opcode, fire)
+  vFixPoint64b.io.info := RegEnable(io.info, fire)
+  vFixPoint64b.io.sew := RegEnable(SewOH(io.vdType(1, 0)), fire)
+  vFixPoint64b.io.isSub := RegEnable(io.isSub, fire)
+  vFixPoint64b.io.isSigned := RegEnable(srcTypeVs2(3, 2) === 1.U, fire)
+  vFixPoint64b.io.isNClip := RegEnable(io.opcode.isScalingShift && io.vdType(1,0) =/= srcTypeVs2(1,0), fire)
+  vFixPoint64b.io.fromAdder := RegEnable(vIntAdder64b.io.toFixP, fire)
+  vFixPoint64b.io.fromMisc := RegEnable(vIntMisc64b.io.toFixP, fire)
 
   io.vd := Mux(isFixpS1, vFixPoint64b.io.vd, Mux(isMiscS1, vdMiscS1, vdAdderS1))
   io.narrowVd := Mux(isFixpS1, vFixPoint64b.io.narrowVd, narrowVdMiscS1)
@@ -109,6 +111,7 @@ class VIntFixpAlu64b extends Module {
 
 class VIntFixpAlu extends Module {
   val io = IO(new Bundle {
+    val fire = Input(Bool())
     val in = Input(new Bundle {
       val opcode = Input(new VAluOpcode)
       val info = new VIFuInfo
@@ -126,6 +129,7 @@ class VIntFixpAlu extends Module {
     val out = Output(new VIFuOutput)
   })
 
+  val fire = io.fire
   val opcode = io.in.opcode
   val vs1 = io.in.vs1
   val vs2 = io.in.vs2
@@ -152,6 +156,7 @@ class VIntFixpAlu extends Module {
   //------- Two 64b modules form one 128b unit ------
   val vIntFixpAlu64bs = Seq.fill(2)(Module(new VIntFixpAlu64b))
   for (i <- 0 until 2) {
+    vIntFixpAlu64bs(i).io.fire := fire
     vIntFixpAlu64bs(i).io.opcode := opcode
     vIntFixpAlu64bs(i).io.info := io.in.info
     vIntFixpAlu64bs(i).io.srcType := io.in.srcType
@@ -211,20 +216,20 @@ class VIntFixpAlu extends Module {
   /**
    * Output stage
    */
-  val uopIdxS1 = RegNext(uopIdx)
-  val opcodeS1 = RegNext(opcode)
+  val uopIdxS1 = RegEnable(uopIdx, fire)
+  val opcodeS1 = RegEnable(opcode, fire)
   val old_vd_S1 = Wire(UInt(128.W))
-  old_vd_S1 := RegNext(io.in.old_vd)
-  val eewVs1S1 = RegNext(eewVs1)
-  val eewVdS1 = RegNext(eewVd)
-  val narrowS1 = RegNext(narrow)
-  val cmpFlagS1 = RegNext(vIntFixpDecode.cmp) // Compare and carry-out
-  val vmS1 = RegNext(io.in.info.vm)
-  val taS1 = RegNext(io.in.info.ta)
-  val maS1 = RegNext(io.in.info.ma)
-  val mask16bS1 = RegNext(io.in.mask16b)
-  val vl_S1 = RegNext(vl)
-  val vstartS1 = RegNext(vstart)
+  old_vd_S1 := RegEnable(io.in.old_vd, fire)
+  val eewVs1S1 = RegEnable(eewVs1, fire)
+  val eewVdS1 = RegEnable(eewVd, fire)
+  val narrowS1 = RegEnable(narrow, fire)
+  val cmpFlagS1 = RegEnable(vIntFixpDecode.cmp, fire) // Compare and carry-out
+  val vmS1 = RegEnable(io.in.info.vm, fire)
+  val taS1 = RegEnable(io.in.info.ta, fire)
+  val maS1 = RegEnable(io.in.info.ma, fire)
+  val mask16bS1 = RegEnable(io.in.mask16b, fire)
+  val vl_S1 = RegEnable(vl, fire)
+  val vstartS1 = RegEnable(vstart, fire)
   //---- Narrowing vd rearrangement ----
   val catNarrowVd = Cat(vIntFixpAlu64bs(1).io.narrowVd, vIntFixpAlu64bs(0).io.narrowVd)
   val vdOfNarrow = Mux(uopIdxS1(0), Cat(catNarrowVd, old_vd_S1(63, 0)),
@@ -249,13 +254,13 @@ class VIntFixpAlu extends Module {
   //---- Tail gen ----
   // val tail = TailGen(vl, uopIdx, Mux(narrow, eewVs2, eewVd))
   val tail = TailGen(Mux(opcode.isVmvsx, 1.U, vl), uopIdx, eewVd, narrow)
-  val tailS1 = RegNext(tail)
+  val tailS1 = RegEnable(tail, fire)
   //---- Prestart gen ----
   // val prestart = PrestartGen(vstart, uopIdx, Mux(narrow, eewVs2, eewVd))
   val prestart = PrestartGen(vstart, uopIdx, eewVd, narrow)
-  val prestartS1 = RegNext(prestart)
+  val prestartS1 = RegEnable(prestart, fire)
   //---- vstart >= vl ----
-  val vstart_gte_vl_S1 = RegNext(io.ctrl.vstart_gte_vl)
+  val vstart_gte_vl_S1 = RegEnable(io.ctrl.vstart_gte_vl, fire)
 
   val tailReorg = MaskReorg.splash(tailS1, eewVdS1)
   val prestartReorg = MaskReorg.splash(prestartS1, eewVdS1)
@@ -291,8 +296,8 @@ class VIntFixpAlu extends Module {
   val bitsReplace_1b = Mux(vstart_gte_vl_S1, old_vd_S1, 
                        prestart_1b & old_vd_S1 | tail_1b)
 
-  val bitsKeepFinal = Mux(RegNext(eewVd_is_1b), bitsKeep_1b, bitsKeep)
-  val bitsReplaceFinal = Mux(RegNext(eewVd_is_1b), bitsReplace_1b, bitsReplace)
+  val bitsKeepFinal = Mux(RegEnable(eewVd_is_1b, fire), bitsKeep_1b, bitsKeep)
+  val bitsReplaceFinal = Mux(RegEnable(eewVd_is_1b, fire), bitsReplace_1b, bitsReplace)
 
   val vdResult = Mux(narrowS1, vdOfNarrow, 
               Mux(cmpFlagS1, cmpOutResult, Cat(vIntFixpAlu64bs.map(_.io.vd).reverse)))

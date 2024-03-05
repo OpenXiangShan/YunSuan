@@ -5,6 +5,7 @@ import chisel3.util._
 import chisel3.util.experimental.decode._
 
 class VectorCvtIO(width: Int) extends Bundle {
+  val fire = Input(Bool())
   val src = Input(UInt(width.W))
   val opType = Input(UInt(8.W))
   val sew = Input(UInt(2.W))
@@ -17,7 +18,7 @@ class VectorCvtIO(width: Int) extends Bundle {
 class VectorCvt(xlen :Int) extends Module{
 
   val io = IO(new VectorCvtIO(xlen))
-  val (src, opType, sew, rm) = (io.src, io.opType, io.sew, io.rm)
+  val (fire, src, opType, sew, rm) = (io.fire, io.src, io.opType, io.sew, io.rm)
   val widen = opType(4, 3) // 0->single 1->widen 2->norrow => width of result
 
   // input width 8， 16， 32， 64
@@ -67,7 +68,7 @@ class VectorCvt(xlen :Int) extends Module{
   dontTouch(output1H)
 
   val inputWidth1H = input1H
-  val outputWidth1H = RegNext(RegNext(output1H))
+  val outputWidth1H = RegEnable(RegEnable(output1H, fire), RegNext(fire))
 
 
   val element8 = Wire(Vec(8,UInt(8.W)))
@@ -86,10 +87,10 @@ class VectorCvt(xlen :Int) extends Module{
   val in3 = Mux1H(inputWidth1H, Seq(element8(3), element16(3), 0.U, 0.U))
 
 
-  val (result0, fflags0) = VCVT(64)(in0, opType, sew, rm, input1H, output1H)
-  val (result1, fflags1) = VCVT(32)(in1, opType, sew, rm, input1H, output1H)
-  val (result2, fflags2) = VCVT(16)(in2, opType, sew, rm, input1H, output1H)
-  val (result3, fflags3) = VCVT(16)(in3, opType, sew, rm, input1H, output1H)
+  val (result0, fflags0) = VCVT(64)(fire, in0, opType, sew, rm, input1H, output1H)
+  val (result1, fflags1) = VCVT(32)(fire, in1, opType, sew, rm, input1H, output1H)
+  val (result2, fflags2) = VCVT(16)(fire, in2, opType, sew, rm, input1H, output1H)
+  val (result3, fflags3) = VCVT(16)(fire, in3, opType, sew, rm, input1H, output1H)
 
   io.result := Mux1H(outputWidth1H, Seq(
     result3(7,0) ## result2(7,0) ## result1(7,0) ## result0(7,0),
