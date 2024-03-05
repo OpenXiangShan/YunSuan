@@ -150,6 +150,7 @@ class SimTop() extends VPUTestModule {
     val vcvt = Module(new VectorCvt(XLEN))
 
     require(vfa.io.fp_a.getWidth == XLEN)
+    vfa.io.fire := busy
     vfa.io.fp_a := src1
     vfa.io.fp_b := src2
     //io.widen_a Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
@@ -229,6 +230,7 @@ class SimTop() extends VPUTestModule {
     via_result.fflags(i) := 0.U // DontCare
     via_result.vxsat := 0.U // DontCare
 
+    vff.io.fire := busy
     vff.io.fp_a := src1
     vff.io.fp_b := src2
     vff.io.fp_c := src3
@@ -252,6 +254,7 @@ class SimTop() extends VPUTestModule {
     vff_result.vxsat := 0.U // DontCare
 
     // connect vcvt's io
+    vcvt.io.fire := busy
     vcvt.io.sew := sew
     vcvt.io.opType := opcode
     vcvt.io.rm := rm
