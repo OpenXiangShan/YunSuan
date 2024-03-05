@@ -383,7 +383,7 @@ class Permutation extends Module {
   }.elsewhen(vslide1dn) {
     vlRemain := Mux(vl >= (uopIdx(5, 1) << vsew_plus1), vl - (uopIdx(5, 1) << vsew_plus1), 0.U)
   }.otherwise {
-    vlRemain := Mux1H(Seq.tabulate(8)(i => (vdId === i.U) -> Mux(vslideup_vl >= (ele_cnt * i.U), vslideup_vl - (ele_cnt * i.U), 0.U)))
+    vlRemain := Mux1H(Seq.tabulate(8)(i => (vdId === i.U) -> (if (i == 0) vslideup_vl else Mux(vslideup_vl >= (ele_cnt * i.U), vslideup_vl - (ele_cnt * i.U), 0.U))))
   }
 
   vmask_uop := vmask0
@@ -623,7 +623,7 @@ class Permutation extends Module {
   }.elsewhen(vslide1dn) {
     vstartRemain := Mux(vstart >= (uopIdx(5, 1) << vsew_plus1), vstart - (uopIdx(5, 1) << vsew_plus1), 0.U)
   }.otherwise {
-    vstartRemain := Mux1H(Seq.tabulate(8)(i => (vdId === i.U) -> Mux(vslideup_vstart >= (ele_cnt * i.U), vslideup_vstart - (ele_cnt * i.U), 0.U)))
+    vstartRemain := Mux1H(Seq.tabulate(8)(i => (vdId === i.U) -> (if (i == 0) vslideup_vstart else Mux(vslideup_vstart >= (ele_cnt * i.U), vslideup_vstart - (ele_cnt * i.U), 0.U))))
   }
 
   val vd_reg = RegInit(0.U(VLEN.W))
