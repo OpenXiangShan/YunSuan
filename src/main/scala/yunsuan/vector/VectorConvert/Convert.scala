@@ -3,6 +3,7 @@ package yunsuan.vector.VectorConvert
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.decode._
+import yunsuan.util._
 
 class VectorCvtIO(width: Int) extends Bundle {
   val fire = Input(Bool())
@@ -68,7 +69,7 @@ class VectorCvt(xlen :Int) extends Module{
   dontTouch(output1H)
 
   val inputWidth1H = input1H
-  val outputWidth1H = RegEnable(RegEnable(output1H, fire), RegNext(fire))
+  val outputWidth1H = RegEnable(RegEnable(output1H, fire), GatedValidRegNext(fire))
 
 
   val element8 = Wire(Vec(8,UInt(8.W)))

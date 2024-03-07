@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import scala.collection.mutable.ListBuffer
 import yunsuan.VfmaOpCode
+import yunsuan.util._
 
 class VectorFloatFMA() extends Module{
   val exponentWidth : Int = 11
@@ -55,8 +56,8 @@ class VectorFloatFMA() extends Module{
     if (printfen) printf(pable)
   }
   val fire = io.fire
-  val fire_reg0 = RegNext(fire)
-  val fire_reg1 = RegNext(fire_reg0)
+  val fire_reg0 = GatedValidRegNext(fire)
+  val fire_reg1 = GatedValidRegNext(fire_reg0)
   val is_vfmul   = io.op_code === VfmaOpCode.vfmul
   val is_vfmacc  = io.op_code === VfmaOpCode.vfmacc
   val is_vfnmacc = io.op_code === VfmaOpCode.vfnmacc

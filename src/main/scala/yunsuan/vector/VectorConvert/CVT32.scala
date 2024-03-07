@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import yunsuan.vector.VectorConvert.util._
 import yunsuan.vector.VectorConvert.RoundingModle._
+import yunsuan.util._
 
 
 class CVT32(width: Int = 32) extends CVT(width){
@@ -15,7 +16,7 @@ class CVT32(width: Int = 32) extends CVT(width){
    */
   // control path
   val fire = io.fire
-  val fireReg = RegNext(io.fire)
+  val fireReg = GatedValidRegNext(io.fire)
   val is_sew_8  = io.sew === "b00".U
   val is_sew_16 = io.sew === "b01".U
   val is_sew_32 = io.sew === "b10".U

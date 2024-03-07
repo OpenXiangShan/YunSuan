@@ -5,6 +5,7 @@ import chisel3.util._
 import yunsuan.vector.VectorConvert.util._
 import yunsuan.vector.VectorConvert.utils._
 import yunsuan.vector.VectorConvert.RoundingModle._
+import yunsuan.util._
 
 class CVT64(width: Int = 64) extends CVT(width){
 
@@ -17,7 +18,7 @@ class CVT64(width: Int = 64) extends CVT(width){
   // input
   val (fire, src, sew, opType, rmNext, input1H, output1H) =
       (io.fire, io.src, io.sew, io.opType, io.rm, io.input1H, io.output1H)
-  val fireReg = RegNext(fire)
+  val fireReg = GatedValidRegNext(fire)
 
   // control for cycle 0
   val isWiden = !opType(4) && opType(3)

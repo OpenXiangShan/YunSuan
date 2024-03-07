@@ -25,10 +25,10 @@ object RegNextWithEnable {
   def apply[T <: Data](data: Valid[T], hasInit: Boolean = true): Valid[T] = {
     val next = Wire(data.cloneType)
     if (hasInit) {
-      next.valid := RegNext(data.valid, false.B)
+      next.valid := GatedValidRegNext(data.valid, false.B)
     }
     else {
-      next.valid := RegNext(data.valid)
+      next.valid := GatedValidRegNext(data.valid)
     }
     next.bits := RegEnable(data.bits, data.valid)
     next
