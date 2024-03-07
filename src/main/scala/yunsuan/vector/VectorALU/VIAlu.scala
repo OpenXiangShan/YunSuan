@@ -6,6 +6,7 @@ import chisel3.util._
 import yunsuan.vector._
 import yunsuan.vector.alu.VAluOpcode._
 import yunsuan.vector.alu.VSew._
+import yunsuan.util._
 
 class VIAlu extends Module {
   val io = IO(new Bundle {
@@ -14,7 +15,7 @@ class VIAlu extends Module {
   })
 
   // Latency of ALU is 1 cycles plus
-  io.out.valid := RegNext(io.in.valid)
+  io.out.valid := GatedValidRegNext(io.in.valid)
 
   val srcTypeVs1 = io.in.bits.srcType(1)
   val srcTypeVs2 = io.in.bits.srcType(0)

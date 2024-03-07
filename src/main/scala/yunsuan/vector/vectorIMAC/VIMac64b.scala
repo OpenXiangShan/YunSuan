@@ -3,6 +3,7 @@ package yunsuan.vector.mac
 import chisel3._
 import chisel3.util._
 import yunsuan.vector._
+import yunsuan.util._
 
 /** 64-bit vector multiply and accumlation unit
  *  
@@ -29,7 +30,7 @@ class VIMac64b extends Module {
   })
 
   val fire = io.fire
-  val fireS1 = RegNext(fire)
+  val fireS1 = GatedValidRegNext(fire)
   val vs2 = io.vs2
   val vs1 = io.vs1
   val oldVd = io.oldVd
