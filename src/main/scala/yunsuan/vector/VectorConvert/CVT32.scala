@@ -51,9 +51,9 @@ class CVT32(width: Int = 32) extends CVT(width){
   val fflags = WireInit(Cat(NV, DZ, OF, UF, NX))
 
   val result0 = Wire(UInt(32.W))
-  val result0_reg0 = RegEnable(result0, 0.U(32.W), fire)
+  val result0_reg1 = RegEnable(result0, 0.U(32.W), fireReg)
   val fflags0 = WireInit(Cat(NV, DZ, OF, UF, NX))
-  val fflags0_reg0 = RegEnable(fflags0, fire)
+  val fflags0_reg1 = RegEnable(fflags0, fireReg)
 
   val round_in = Wire(UInt(24.W))
   val round_roundIn = Wire(Bool())
@@ -1160,8 +1160,8 @@ class CVT32(width: Int = 32) extends CVT(width){
   )
 
   // cycle2
-  result := result0_reg0
-  fflags := fflags0_reg0
+  result := result0_reg1
+  fflags := fflags0_reg1
 
   io.result := result
   io.fflags := fflags
