@@ -1572,7 +1572,7 @@ class VectorFloatDividerR64() extends Module {
     Mux(
       is_vec_q & !fp_format_q_is_fp64,
       Mux(
-        fp_format_is_fp32,
+        fp_format_q_is_fp32,
         Cat(0.U(29.W), out_frac_post_0_f32_0),
         Cat(0.U(42.W), out_frac_post_0_f16_0)
       ),
