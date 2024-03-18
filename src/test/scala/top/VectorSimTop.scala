@@ -358,9 +358,7 @@ class SimTop() extends VPUTestModule {
 
 
 object SimTop extends App {
-  override def main(args: Array[String]): Unit = {
-    (new ChiselStage).execute(args, Seq(
-      ChiselGeneratorAnnotation(() => new SimTop())
-    ))
-  }
+  (new ChiselStage).execute(args, Seq(
+    ChiselGeneratorAnnotation(() => new SimTop())
+  ))
 }
