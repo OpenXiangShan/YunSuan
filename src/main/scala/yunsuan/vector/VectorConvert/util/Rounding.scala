@@ -20,16 +20,15 @@ class RoundingUnit(val width: Int) extends Module {
   val inexact = r | s
   val r_up = MuxLookup(
     io.rm,
-    false.B,
-    Seq(
-      RNE -> ((r && s) || (r && !s && g)),
-      RTZ -> false.B,
-      RUP -> (inexact & !io.signIn),
-      RDN -> (inexact & io.signIn),
-      RMM -> r,
-      RTO -> ((r || s) && !g),
-    )
-  )
+    false.B
+  )(Seq(
+    RNE -> ((r && s) || (r && !s && g)),
+    RTZ -> false.B,
+    RUP -> (inexact & !io.signIn),
+    RDN -> (inexact & io.signIn),
+    RMM -> r,
+    RTO -> ((r || s) && !g),
+  ))
 
   io.inexact := inexact
   io.r_up := r_up
