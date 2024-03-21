@@ -19,6 +19,6 @@ class VPermWrapper extends Module {
 
 
   vPerm.io.in.valid := io.in.valid
-  io.out.valid := RegNext(io.in.valid)
+  io.out.valid := RegNext(RegNext(io.in.valid))
   io.in.ready := io.out.ready
 }
