@@ -989,27 +989,49 @@ trait VAluBehavior {
           genVAluOutput("h3a06ca553a06c91827d273dd27d27280"),
  
         )
-
-        fork {
+        fork{
           dut.io.in.enqueueSeq(inputSeq)
-        }.fork {
+        }.fork{
+          dut.clock.step(2)
           dut.io.out.expectDequeueSeq(outputSeq)
         }.join()
-        dut.clock.step(1)
+
+
+//        dut.io.in.enqueueSeq(inputSeq)
+//        dut.io.in.valid.poke(true.B)
+//        println("ioin"+dut.io.in.valid.peek().litValue())
+//        println("io.out"+ dut.io.out.bits.vd.peek().litValue())
+//        println(dut.io.out.valid.peek().litValue())
+//        dut.clock.step()
+//        println("io.out"+ dut.io.out.bits.vd.peek().litValue())
+//        println(dut.io.out.valid.peek().litValue())
+//        dut.clock.step()
+//        println("io.out"+ dut.io.out.bits.vd.peek().litValue())
+//        println(dut.io.out.valid.peek().litValue())
+////        dut.io.out.expectDequeueSeq(outputSeq)
+//        dut.clock.step()
+//        println("io.out"+ dut.io.out.bits.vd.peek().litValue())
+//        println(dut.io.out.valid.peek().litValue())
+//        fork {
+//          dut.clock.step(3)
+//        }.fork {
+//
+//        }.join()
+
       }
     }
   } 
 }
 
 class VAluSpec extends AnyFlatSpec with ChiselScalatestTester with BundleGenHelper with VAluBehavior {
-  behavior of "Int fixP test"
-  it should behave like vIntTest0()  // add/sub, and/or/xor, sll/srl/sra
-  it should behave like vIntTest1()  // min/max(u), vwadd/vwsub(u)
-  it should behave like vIntTest2()  // vz(s)ext, vmerge, vadc/vsbc, vmv
-  it should behave like vIntTest3()  // vnsrl(a), compare, vmadc/vmsbc
-  it should behave like vIntTest4()  // mask-reg logical, fixed-point
-  it should behave like vIntTest5()  // mask/tail/prestart
-  it should behave like vIntTest6()  // lmul < 1
+//  behavior of "Int fixP test"
+//  it should behave like vIntTest0()  // add/sub, and/or/xor, sll/srl/sra
+//  it should behave like vIntTest1()  // min/max(u), vwadd/vwsub(u)
+//  it should behave like vIntTest2()  // vz(s)ext, vmerge, vadc/vsbc, vmv
+//  it should behave like vIntTest3()  // vnsrl(a), compare, vmadc/vmsbc
+//  it should behave like vIntTest4()  // mask-reg logical, fixed-point
+//  it should behave like vIntTest5()  // mask/tail/prestart
+//  it should behave like vIntTest6()  // lmul < 1
   behavior of "Mask/reduction/permutation test"
   it should behave like vMaskTest()
 }

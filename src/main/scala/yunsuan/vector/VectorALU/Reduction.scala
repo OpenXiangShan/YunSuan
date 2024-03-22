@@ -273,42 +273,43 @@ class Reduction extends Module {
   when(vredand_vs) {
     vs1_zero_logical := Mux1H(eewVd.oneHot, Seq(8, 16, 32).map(n => Cat(Fill(xLen - n, 1.U), vs1(n - 1, 0))) :+ vs1(63, 0))
   }
-
+  // end stage 0
   for (i <- 0 until 4) {
     vd_logical(i) := 0.U
   }
   // stage 1
-  when(vredand_vs) {
+  when(vredand_vs_reg_s1) {
     vd_logical(0) := vs1_zero_logical_reg_s1 & vs12m_bits_reg_s1(127, 64) & vs12m_bits_reg_s1(63, 0)
-  }.elsewhen(vredor_vs) {
+  }.elsewhen(vredor_vs_reg_s1) {
     vd_logical(0) := vs1_zero_logical_reg_s1 | vs12m_bits_reg_s1(127, 64) | vs12m_bits_reg_s1(63, 0)
-  }.elsewhen(vredxor_vs) {
+  }.elsewhen(vredxor_vs_reg_s1) {
     vd_logical(0) := vs1_zero_logical_reg_s1 ^ vs12m_bits_reg_s1(127, 64) ^ vs12m_bits_reg_s1(63, 0)
   }
 
-  when(vredand_vs) {
+  when(vredand_vs_reg_s1) {
     vd_logical(1) := vd_logical(0)(63, 32) & vd_logical(0)(31, 0)
-  }.elsewhen(vredor_vs) {
+  }.elsewhen(vredor_vs_reg_s1) {
     vd_logical(1) := vd_logical(0)(63, 32) | vd_logical(0)(31, 0)
-  }.elsewhen(vredxor_vs) {
+  }.elsewhen(vredxor_vs_reg_s1) {
     vd_logical(1) := vd_logical(0)(63, 32) ^ vd_logical(0)(31, 0)
   }
 
-  when(vredand_vs) {
+  when(vredand_vs_reg_s1) {
     vd_logical(2) := vd_logical(1)(31, 16) & vd_logical(1)(15, 0)
-  }.elsewhen(vredor_vs) {
+  }.elsewhen(vredor_vs_reg_s1) {
     vd_logical(2) := vd_logical(1)(31, 16) | vd_logical(1)(15, 0)
-  }.elsewhen(vredxor_vs) {
+  }.elsewhen(vredxor_vs_reg_s1) {
     vd_logical(2) := vd_logical(1)(31, 16) ^ vd_logical(1)(15, 0)
   }
 
-  when(vredand_vs) {
+  when(vredand_vs_reg_s1) {
     vd_logical(3) := vd_logical(2)(15, 8) & vd_logical(2)(7, 0)
-  }.elsewhen(vredor_vs) {
+  }.elsewhen(vredor_vs_reg_s1) {
     vd_logical(3) := vd_logical(2)(15, 8) | vd_logical(2)(7, 0)
-  }.elsewhen(vredxor_vs) {
+  }.elsewhen(vredxor_vs_reg_s1) {
     vd_logical(3) := vd_logical(2)(15, 8) ^ vd_logical(2)(7, 0)
   }
+  // end stage 1
   // stage 1 to 2
   val vd_reg = RegInit(0.U(128.W))
   val old_vd_reg = RegEnable(Mux(alu_uop_reg_s1 || widen_alu_uop_reg_s1, lo_vs, old_vd_reg_s1), 0.U, fire_reg_s1)
