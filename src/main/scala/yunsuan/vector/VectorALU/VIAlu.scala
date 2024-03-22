@@ -25,9 +25,10 @@ class VIAlu extends Module {
   val mask = io.in.bits.mask
   val uopIdx = io.in.bits.info.uopIdx
   val narrow = srcTypeVs2(1, 0) === 3.U && vdType(1, 0) === 2.U ||
-               srcTypeVs2(1, 0) === 2.U && vdType(1, 0) === 1.U ||
-               srcTypeVs2(1, 0) === 1.U && vdType(1, 0) === 0.U
+    srcTypeVs2(1, 0) === 2.U && vdType(1, 0) === 1.U ||
+    srcTypeVs2(1, 0) === 1.U && vdType(1, 0) === 0.U
   val vstart_gte_vl = io.in.bits.info.vstart >= io.in.bits.info.vl
+
 
   val vIntFixpAlu = Module(new VIntFixpAlu)
   vIntFixpAlu.io.fire := io.in.valid
@@ -59,16 +60,21 @@ class VIAlu extends Module {
     (vsew === e64) -> vs2(63,0)
   )) , io.in.valid)
 
+
   /**
    * Output stage
    */
   val opcodeS1 = RegEnable(io.in.bits.opcode, io.in.valid)
-  val vdFinal = Mux(opcodeS1.isVmvxs, vs2Ext,
-                    Mux(opcodeS1.isIntFixp, vIntFixpAlu.io.out.vd,
-                        Mux(opcodeS1.isReduction, vReduAlu.io.out.vd, vMaskAlu.io.out.vd)))
+  val validS1 = RegNext(io.in.valid)
+  val opcodeS2 = RegEnable(opcodeS1, validS1)
+  val vs2ExtS2 = RegEnable(vs2Ext,validS1)
+  val vxsatS2 = RegEnable(vIntFixpAlu.io.out.vxsat, validS1)
+  val vdFinal = Mux(opcodeS2.isVmvxs, vs2ExtS2,
+    //                    Mux(opcodeS1.isIntFixp, vIntFixpAlu.io.out.vd, 冗余代码
+    Mux(opcodeS2.isReduction, vReduAlu.io.out.vd, vMaskAlu.io.out.vd))
 
   io.out.bits.vd := vdFinal
-  io.out.bits.vxsat := vIntFixpAlu.io.out.vxsat
+  io.out.bits.vxsat := vxsatS2
 }
 
 object VerilogAlu extends App {

@@ -68,6 +68,30 @@ class VMask extends Module {
   val vd_mask = Wire(UInt(VLEN.W))
   val vs2m = Wire(Vec(VLEN, UInt(1.W)))
 
+  // to ensure timing requirements delay onecyle
+  val fire_reg_s1 = RegNext(fire)
+  val vl_reg_s1 = RegEnable(vl, 0.U, fire)
+  val vstart_reg_s1 = RegEnable(vstart, 0.U, fire)
+  val vm_reg_s1 = RegEnable(vm, false.B, fire)
+  val ma_reg_s1 = RegEnable(ma, false.B, fire)
+  val ta_reg_s1 = RegEnable(ta, false.B, fire)
+  val vsew_reg_s1 = RegEnable(vsew, 0.U, fire)
+  val uopIdx_reg_s1 = RegEnable(uopIdx, 0.U, fire)
+  val vlRemainBytes_reg_s1 = RegEnable(vlRemainBytes, 0.U, fire)
+  val vs1_reg_s1 = RegEnable(vs1, 0.U, fire)
+  val ele_cnt_reg_s1 = RegEnable(ele_cnt,0.U,fire)
+
+  val old_vd_reg_s1 = RegEnable(old_vd, 0.U, fire)
+  val vmask_reg_s1 = RegEnable(vmask, 0.U, fire)
+  val vcpop_m_reg_s1 = RegEnable(vcpop_m, false.B, fire)
+  val vfirst_m_reg_s1 = RegEnable(vfirst_m, false.B, fire)
+  val vmsbf_m_reg_s1 = RegEnable(vmsbf_m, false.B, fire)
+  val vmsif_m_reg_s1 = RegEnable(vmsif_m, false.B, fire)
+  val vmsof_m_reg_s1 = RegEnable(vmsof_m, false.B, fire)
+  val viota_m_reg_s1 = RegEnable(viota_m, false.B, fire)
+  val vid_v_reg_s1 = RegEnable(vid_v, false.B, fire)
+  val vs2m_reg_s1 = RegEnable(vs2m, VecInit(Seq.fill(VLEN)(0.U(1.W))),fire)
+  //stage 0
   def sbf(data: UInt): UInt = {
     val w = data.getWidth
     val result = Wire(UInt(w.W))
@@ -104,18 +128,23 @@ class VMask extends Module {
       vs2m(i) := vs2(i) & (vmask(i) | vm) & (i.U < vl)
     }
   }
-
+  // end stage 0
+  // stage 1
   vmsof := ~vmsbf & vmsif
-  vmsbf := sbf(Cat(vs2m.reverse))
+  vmsbf := sbf(Cat(vs2m_reg_s1.reverse))
   vmfirst := Mux(
-    vs2m.asUInt.orR,
-    ZeroExt(vfirst(Cat(vs2m.reverse)), xLen),
+    vs2m_reg_s1.asUInt.orR,
+    ZeroExt(vfirst(Cat(vs2m_reg_s1.reverse)), xLen),
     Fill(xLen, 1.U(1.W))
   )
-
+  // end stage 1
+  // stage 0
   // viota/vid/vcpop
   val vs2m_uop = Cat(vs2m.reverse) >> Mux(vcpop_m, uopIdx << vsew_plus1, uopIdx(5, 1) << vsew_plus1)
-  val one_sum = vs1(7, 0)
+  val vs2m_uop_vid = Mux(vid_v, Fill(16, vid_v), vs2m_uop(15, 0))
+  // end stage0
+  // stage_1
+  val one_sum = vs1_reg_s1(7, 0)
   val one_cnt = Wire(Vec(vlenb + 1, UInt(8.W)))
   val one_cnt_uop = Wire(Vec(vlenb + 1, UInt(5.W)))
   val one_cnt_uop_sew8 = Wire(Vec(vlenb + 1, UInt(5.W)))
@@ -127,8 +156,13 @@ class VMask extends Module {
   val vid_vd_sew16 = Wire(Vec(vlenb, UInt(8.W)))
   val vid_vd_sew32 = Wire(Vec(vlenb, UInt(8.W)))
   val vid_vd_sew64 = Wire(Vec(vlenb, UInt(8.W)))
-  val vs2m_uop_vid = Mux(vid_v, Fill(16, vid_v), vs2m_uop(15, 0))
 
+
+  // to ensure timing requirements delay onecyle
+  // stage 0 to stage 1
+  val vs2m_uop_vid_reg_s1 = RegEnable(vs2m_uop_vid, 0.U, fire)
+
+  // stage 1
   for (i <- 0 until vlenb + 1) {
     one_cnt_uop(i) := 0.U
     one_cnt_uop_sew8(i) := 0.U
@@ -138,29 +172,29 @@ class VMask extends Module {
   }
 
   for (i <- 0 until vlenb) {
-    one_cnt_uop_sew8(i + 1) := PopCount(vs2m_uop_vid(i, 0))
+    one_cnt_uop_sew8(i + 1) := PopCount(vs2m_uop_vid_reg_s1(i, 0))
   }
 
   for (i <- 0 until vlenb / 2) {
-    one_cnt_uop_sew16(i + 1) := PopCount(vs2m_uop_vid(i, 0))
+    one_cnt_uop_sew16(i + 1) := PopCount(vs2m_uop_vid_reg_s1(i, 0))
   }
 
   for (i <- 0 until vlenb / 4) {
-    one_cnt_uop_sew32(i + 1) := PopCount(vs2m_uop_vid(i, 0))
+    one_cnt_uop_sew32(i + 1) := PopCount(vs2m_uop_vid_reg_s1(i, 0))
   }
 
   for (i <- 0 until vlenb / 8) {
-    one_cnt_uop_sew64(i + 1) := PopCount(vs2m_uop_vid(i, 0))
+    one_cnt_uop_sew64(i + 1) := PopCount(vs2m_uop_vid_reg_s1(i, 0))
   }
 
   for (i <- 0 until vlenb + 1) {
-    when(vsew === 0.U) {
+    when(vsew_reg_s1 === 0.U) {
       one_cnt_uop(i) := one_cnt_uop_sew8(i)
-    }.elsewhen(vsew === 1.U) {
+    }.elsewhen(vsew_reg_s1 === 1.U) {
       one_cnt_uop(i) := one_cnt_uop_sew16(i)
-    }.elsewhen(vsew === 2.U) {
+    }.elsewhen(vsew_reg_s1 === 2.U) {
       one_cnt_uop(i) := one_cnt_uop_sew32(i)
-    }.elsewhen(vsew === 3.U) {
+    }.elsewhen(vsew_reg_s1 === 3.U) {
       one_cnt_uop(i) := one_cnt_uop_sew64(i)
     }
   }
@@ -168,46 +202,54 @@ class VMask extends Module {
   for (i <- 0 until vlenb + 1) {
     one_cnt(i) := one_sum + one_cnt_uop(i)
   }
+  // end stage 1
 
   val tail_vd = Wire(UInt(VLEN.W))
   val vd_reg = RegInit(0.U(VLEN.W))
   val vd_out = Wire(UInt(VLEN.W))
-
-  when(vmsbf_m && fire) {
+  // stage 1 to stage 2
+  when(vmsbf_m_reg_s1 && fire_reg_s1) {
     vd_reg := vmsbf
-  }.elsewhen(vmsif_m && fire) {
+  }.elsewhen(vmsif_m_reg_s1 && fire_reg_s1) {
     vd_reg := vmsif
-  }.elsewhen(vmsof_m && fire) {
+  }.elsewhen(vmsof_m_reg_s1 && fire_reg_s1) {
     vd_reg := vmsof
-  }.elsewhen(vfirst_m && fire) {
+  }.elsewhen(vfirst_m_reg_s1 && fire_reg_s1) {
     vd_reg := Cat(0.U((VLEN - xLen).W), vmfirst)
-  }.elsewhen((vid_v || viota_m) && fire && !uopIdx(0)) {
+  }.elsewhen((vid_v_reg_s1 || viota_m_reg_s1) && fire_reg_s1 && !uopIdx_reg_s1(0)) {
     vd_reg := Cat(one_cnt.reverse)(VLEN - 1, 0)
-  }.elsewhen((((vid_v || viota_m) && uopIdx(0)) || vcpop_m) && fire) {
-    vd_reg := one_cnt(ele_cnt)
+  }.elsewhen((((vid_v_reg_s1 || viota_m_reg_s1) && uopIdx_reg_s1(0)) || vcpop_m_reg_s1) && fire_reg_s1) {
+    vd_reg := one_cnt(ele_cnt_reg_s1)
   }
+  //end stage 1 to stage 2
 
   val vstartRemain = Wire(UInt(7.W))
+  // stage 0
   vstartRemain := Mux(vid_v, Mux(vstart >= (uopIdx(5, 1) << vsew_plus1), (vstart - (uopIdx(5, 1) << vsew_plus1)), 0.U), 0.U)
+  val vstartRemain_reg_s1 = RegEnable(vstartRemain, 0.U, fire)
+  // end stage 0
+  // stage 1 to stage 2
+  val vl_reg = RegEnable(vl_reg_s1, 0.U, fire_reg_s1)
+  val vstart_reg = RegEnable(vstart_reg_s1, 0.U, fire_reg_s1)
+  val vm_reg = RegEnable(vm_reg_s1, false.B, fire_reg_s1)
+  val ma_reg = RegEnable(ma_reg_s1, false.B, fire_reg_s1)
+  val ta_reg = RegEnable(ta_reg_s1, false.B, fire_reg_s1)
+  val vsew_reg = RegEnable(vsew_reg_s1, 0.U, fire_reg_s1)
+  val uopIdx_reg = RegEnable(uopIdx_reg_s1, 0.U, fire_reg_s1)
+  val vlRemainBytes_reg = RegEnable(vlRemainBytes_reg_s1, 0.U, fire_reg_s1)
+  val vstartRemain_reg = RegEnable(vstartRemain_reg_s1, 0.U, fire_reg_s1)
+  val old_vd_reg = RegEnable(old_vd_reg_s1, 0.U, fire_reg_s1)
+  val vmask_reg = RegEnable(vmask_reg_s1, 0.U, fire_reg_s1)
+  val reg_vcpop_m = RegEnable(vcpop_m_reg_s1, false.B, fire_reg_s1)
+  val reg_vfirst_m = RegEnable(vfirst_m_reg_s1, false.B, fire_reg_s1)
+  val reg_vmsbf_m = RegEnable(vmsbf_m_reg_s1, false.B, fire_reg_s1)
+  val reg_vmsif_m = RegEnable(vmsif_m_reg_s1, false.B, fire_reg_s1)
+  val reg_vmsof_m = RegEnable(vmsof_m_reg_s1, false.B, fire_reg_s1)
+  val reg_viota_m = RegEnable(viota_m_reg_s1, false.B, fire_reg_s1)
+  val reg_vid_v = RegEnable(vid_v_reg_s1, false.B, fire_reg_s1)
+  //end stage 1 to stage 2
 
-  val vl_reg = RegEnable(vl, 0.U, fire)
-  val vstart_reg = RegEnable(vstart, 0.U, fire)
-  val vm_reg = RegEnable(vm, false.B, fire)
-  val ma_reg = RegEnable(ma, false.B, fire)
-  val ta_reg = RegEnable(ta, false.B, fire)
-  val vsew_reg = RegEnable(vsew, 0.U, fire)
-  val uopIdx_reg = RegEnable(uopIdx, 0.U, fire)
-  val vlRemainBytes_reg = RegEnable(vlRemainBytes, 0.U, fire)
-  val vstartRemain_reg = RegEnable(vstartRemain, 0.U, fire)
-  val old_vd_reg = RegEnable(old_vd, 0.U, fire)
-  val vmask_reg = RegEnable(vmask, 0.U, fire)
-  val reg_vcpop_m = RegEnable(vcpop_m, false.B, fire)
-  val reg_vfirst_m = RegEnable(vfirst_m, false.B, fire)
-  val reg_vmsbf_m = RegEnable(vmsbf_m, false.B, fire)
-  val reg_vmsif_m = RegEnable(vmsif_m, false.B, fire)
-  val reg_vmsof_m = RegEnable(vmsof_m, false.B, fire)
-  val reg_viota_m = RegEnable(viota_m, false.B, fire)
-  val reg_vid_v = RegEnable(vid_v, false.B, fire)
+  //stage 2
   val vsew_plus1_reg = Wire(UInt(3.W))
   vsew_plus1_reg := Cat(0.U(1.W), ~vsew_reg) + 1.U
 
@@ -318,6 +360,7 @@ class VMask extends Module {
   }.elsewhen((reg_vid_v || reg_viota_m) && !uopIdx_reg(0)) {
     vd_out := vid_tail_mask_vd
   }
+  // end stage 2
 
   io.out.vd := vd_out
   io.out.vxsat := false.B
