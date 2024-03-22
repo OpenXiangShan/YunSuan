@@ -15,7 +15,7 @@ class VIAlu extends Module {
   })
 
   // Latency of ALU is 1 cycles plus
-  io.out.valid := GatedValidRegNext(io.in.valid)
+
 
   val srcTypeVs1 = io.in.bits.srcType(1)
   val srcTypeVs2 = io.in.bits.srcType(0)
@@ -72,9 +72,9 @@ class VIAlu extends Module {
   val vdFinal = Mux(opcodeS2.isVmvxs, vs2ExtS2,
     //                    Mux(opcodeS1.isIntFixp, vIntFixpAlu.io.out.vd, 冗余代码
     Mux(opcodeS2.isReduction, vReduAlu.io.out.vd, vMaskAlu.io.out.vd))
-
   io.out.bits.vd := vdFinal
   io.out.bits.vxsat := vxsatS2
+  io.out.valid := GatedValidRegNext(validS1)
 }
 
 object VerilogAlu extends App {
