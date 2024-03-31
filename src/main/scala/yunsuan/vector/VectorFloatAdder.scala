@@ -25,6 +25,7 @@ import yunsuan.{VfaddOpCode, VectorElementFormat}
   *15: Classify
   **/
 class VectorFloatAdder() extends Module {
+  val VLEN = 128
   val exponentWidth = 11
   val significandWidth = 53
   val floatWidth = exponentWidth + significandWidth
@@ -40,12 +41,15 @@ class VectorFloatAdder() extends Module {
     val is_vec        = Input (Bool())
     val round_mode    = Input (UInt(3.W))
     val fp_format     = Input (VectorElementFormat()) // result format b01->fp16,b10->fp32,b11->fp64
-    val opb_widening  = Input (Bool())    // ture -> opb widening
+    val opb_widening  = Input (Bool())    // true -> opb widening
     val res_widening  = Input (Bool())    // true -> widening operation
     val op_code       = Input (UInt(5.W))
     val fp_aIsFpCanonicalNAN = Input (Bool())
     val fp_bIsFpCanonicalNAN = Input (Bool())
     val maskForReduction = Input(UInt(8.W))
+    val is_vfwredosum = Input (Bool()) // true -> vfwredosum inst
+    val is_fold       = Input (UInt(3.W))
+    val vs2_fold      = Input (UInt(VLEN.W))
 
     val fp_result     = Output(UInt(floatWidth.W))
     val fflags        = Output(UInt(20.W))
@@ -79,20 +83,45 @@ class VectorFloatAdder() extends Module {
 
   val fast_is_sub = io.op_code(0)
 
+  val fold = Wire(UInt(3.W))
+  val widen_a_foldTo1_2 = Wire(UInt(floatWidth.W))
+  val widen_a_foldTo1_4 = Wire(UInt(floatWidth.W))
+  val widen_a_foldTo1_8 = Wire(UInt(floatWidth.W))
+
+  fold := io.is_fold
+  widen_a_foldTo1_2 := io.vs2_fold(127, 64)
+  widen_a_foldTo1_4 := io.vs2_fold(63, 32)
+  widen_a_foldTo1_8 := io.vs2_fold(31, 16)
+
   val U_Widen_Fotmat = Module(new FloatAdderWidenFormat())
   U_Widen_Fotmat.io.uop_idx := io.uop_idx
   U_Widen_Fotmat.io.widen_a := io.widen_a
   U_Widen_Fotmat.io.widen_b := io.widen_b
   U_Widen_Fotmat.io.is_frs1 := io.is_frs1
   U_Widen_Fotmat.io.frs1 := io.frs1
+  val U_Widen_Fotmat_64_fold = Module(new FloatAdderWidenFormat())
+  U_Widen_Fotmat_64_fold.io.uop_idx := false.B
+  U_Widen_Fotmat_64_fold.io.widen_a := widen_a_foldTo1_2
+  U_Widen_Fotmat_64_fold.io.widen_b := 0.U
+  U_Widen_Fotmat_64_fold.io.is_frs1 := false.B
+  U_Widen_Fotmat_64_fold.io.frs1 := false.B
+  val U_Widen_Fotmat_32_fold = Module(new FloatAdderWidenFormat())
+  U_Widen_Fotmat_32_fold.io.uop_idx := false.B
+  U_Widen_Fotmat_32_fold.io.widen_a := widen_a_foldTo1_4
+  U_Widen_Fotmat_32_fold.io.widen_b := 0.U
+  U_Widen_Fotmat_32_fold.io.is_frs1 := false.B
+  U_Widen_Fotmat_32_fold.io.frs1 := false.B
+
+  val f32_a_temp = Wire(UInt(32.W))
+  f32_a_temp := Fill(32, fold(1)) & io.vs2_fold(63,32) | Fill(16, fold(2)) & io.vs2_fold(31,16)
+
   val U_F32_Mixed_0 = Module(new FloatAdderF32WidenF16MixedPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F32_Mixed_0.io.fire := fire
-  U_F32_Mixed_0.io.fp_a := io.fp_a(31,0)
+  U_F32_Mixed_0.io.fp_a := Mux(fold.orR, f32_a_temp, io.fp_a(31,0))
   U_F32_Mixed_0.io.fp_b := Mux(io.is_frs1,io.frs1(31,0),io.fp_b(31,0))
-  U_F32_Mixed_0.io.widen_a := U_Widen_Fotmat.io.widen_a_f32_0
+  U_F32_Mixed_0.io.widen_a := Mux(fold(2), U_Widen_Fotmat_32_fold.io.widen_a_f32_0, U_Widen_Fotmat.io.widen_a_f32_0)
   U_F32_Mixed_0.io.widen_b := U_Widen_Fotmat.io.widen_b_f32_0
   U_F32_Mixed_0.io.mask := io.mask(0)
-  U_F32_Mixed_0.io.uop_idx := io.uop_idx
   U_F32_Mixed_0.io.is_sub := fast_is_sub
   U_F32_Mixed_0.io.round_mode   := io.round_mode
   U_F32_Mixed_0.io.fp_format    := fp_format
@@ -102,6 +131,7 @@ class VectorFloatAdder() extends Module {
   U_F32_Mixed_0.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
   U_F32_Mixed_0.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
   U_F32_Mixed_0.io.maskForReduction := Cat(io.maskForReduction(4), io.maskForReduction(0))
+  U_F32_Mixed_0.io.is_vfwredosum := io.is_vfwredosum
   val U_F32_0_result = U_F32_Mixed_0.io.fp_c
   val U_F32_0_fflags = U_F32_Mixed_0.io.fflags
   val U_F16_0_result = U_F32_Mixed_0.io.fp_c(15,0)
@@ -114,7 +144,6 @@ class VectorFloatAdder() extends Module {
   U_F32_Mixed_1.io.widen_a := U_Widen_Fotmat.io.widen_a_f32_1
   U_F32_Mixed_1.io.widen_b := U_Widen_Fotmat.io.widen_b_f32_1
   U_F32_Mixed_1.io.mask := Mux(fp_format === 1.U, io.mask(1), io.mask(2))
-  U_F32_Mixed_1.io.uop_idx := io.uop_idx
   U_F32_Mixed_1.io.is_sub  := fast_is_sub
   U_F32_Mixed_1.io.round_mode   := io.round_mode
   U_F32_Mixed_1.io.fp_format    := fp_format
@@ -128,6 +157,7 @@ class VectorFloatAdder() extends Module {
     Cat(io.maskForReduction(5), io.maskForReduction(1)),
     Cat(io.maskForReduction(6), io.maskForReduction(2))
   )
+  U_F32_Mixed_1.io.is_vfwredosum := io.is_vfwredosum
   val U_F32_1_result = U_F32_Mixed_1.io.fp_c
   val U_F32_1_fflags = U_F32_Mixed_1.io.fflags
   val U_F16_2_result = U_F32_Mixed_1.io.fp_c(15,0)
@@ -135,12 +165,11 @@ class VectorFloatAdder() extends Module {
 
   val U_F64_Widen_0 = Module(new FloatAdderF64WidenPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F64_Widen_0.io.fire := fire
-  U_F64_Widen_0.io.fp_a := io.fp_a
+  U_F64_Widen_0.io.fp_a := Mux(fold(0), io.vs2_fold(127, 64), io.fp_a)
   U_F64_Widen_0.io.fp_b := Mux(io.is_frs1,io.frs1,io.fp_b)
-  U_F64_Widen_0.io.widen_a := U_Widen_Fotmat.io.widen_a_f64
+  U_F64_Widen_0.io.widen_a := Mux(fold(0), U_Widen_Fotmat_64_fold.io.widen_a_f64, U_Widen_Fotmat.io.widen_a_f64)
   U_F64_Widen_0.io.widen_b := U_Widen_Fotmat.io.widen_b_f64
   U_F64_Widen_0.io.mask := io.mask(0)
-  U_F64_Widen_0.io.uop_idx := io.uop_idx
   U_F64_Widen_0.io.is_sub := fast_is_sub
   U_F64_Widen_0.io.round_mode := io.round_mode
   U_F64_Widen_0.io.res_widening := io.res_widening
@@ -149,6 +178,7 @@ class VectorFloatAdder() extends Module {
   U_F64_Widen_0.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
   U_F64_Widen_0.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
   U_F64_Widen_0.io.maskForReduction := Cat(io.maskForReduction(4), io.maskForReduction(0))
+  U_F64_Widen_0.io.is_vfwredosum := io.is_vfwredosum
   val U_F64_Widen_0_result = U_F64_Widen_0.io.fp_c
   val U_F64_Widen_0_fflags = U_F64_Widen_0.io.fflags
 
@@ -286,7 +316,6 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     val fp_c         = Output(UInt(floatWidth.W))
     val is_sub       = Input (Bool())
     val mask         = Input (Bool())
-    val uop_idx      = Input (Bool())
     val round_mode   = Input (UInt(3.W))
     val fflags       = Output(UInt(5.W))
     val fp_format    = Input (UInt(2.W))
@@ -296,6 +325,7 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     val fp_aIsFpCanonicalNAN = Input (Bool())
     val fp_bIsFpCanonicalNAN = Input (Bool())
     val maskForReduction = Input(UInt(2.W))
+    val is_vfwredosum = Input(Bool())
   })
   val fire = io.fire
   val res_is_f32 = io.fp_format(0).asBool
@@ -315,7 +345,7 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
 //    fp_a_is_denormal_to_f32_exp,
 //    Mux(io.widen_a(14), Cat("b1000".U,io.widen_a(13,10)), Cat("b0111".U,io.widen_a(13,10)))
 //  )
-  val fp_a_to32 = Mux(io.res_widening,io.widen_a,Mux(res_is_f32,io.fp_a,fp_a_16as32))
+  val fp_a_to32 = Mux(io.res_widening & !io.opb_widening,io.widen_a,Mux(res_is_f32,io.fp_a,fp_a_16as32))
 
 //  val fp_b_16to32_is_denormal = !io.widen_b(14,10).orR
 //  val fp_b_lshift = Wire(UInt(10.W))
@@ -330,8 +360,7 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
 //    fp_b_is_denormal_to_f32_exp,
 //    Mux(io.widen_b(14), Cat("b1000".U,io.widen_b(13,10)), Cat("b0111".U,io.widen_b(13,10)))
 //  )
-  val fp_b_to32 = Mux(io.res_widening & !io.opb_widening,io.widen_b,
-    Mux(res_is_f32,io.fp_b,fp_b_16as32))
+  val fp_b_to32 = Mux(io.res_widening & !io.is_vfwredosum,io.widen_b, Mux(res_is_f32,io.fp_b,fp_b_16as32))
 
   val EOP = (fp_a_to32.head(1) ^ io.is_sub ^ fp_b_to32.head(1)).asBool
   val U_far_path = Module(new FarPathF32WidenF16MixedPipeline(is_print=is_print, hasMinMaxCompare=hasMinMaxCompare))
@@ -353,8 +382,8 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
   val fp_b_mantissa            = fp_b_to32.tail(1 + exponentWidth)
   val fp_a_mantissa_isnot_zero = fp_a_to32.tail(1 + exponentWidth).orR
   val fp_b_mantissa_isnot_zero = fp_b_to32.tail(1 + exponentWidth).orR
-  val fp_a_is_f16 = !res_is_f32 | io.res_widening
-  val fp_b_is_f16 = !res_is_f32 | (io.res_widening & !io.opb_widening)
+  val fp_a_is_f16 = !res_is_f32 | (io.res_widening & !io.opb_widening)
+  val fp_b_is_f16 = !res_is_f32 | io.res_widening
   val Efp_a = fp_a_to32(floatWidth-2, floatWidth-1-exponentWidth)
   val Efp_b = fp_b_to32(floatWidth-2, floatWidth-1-exponentWidth)
   val Efp_a_is_zero  = !Efp_a.orR | (fp_a_is_f16 & Efp_a==="b01100110".U)
@@ -1228,7 +1257,6 @@ private[this] class FarPathFloatAdderF64WidenPipeline(
     val fp_a, fp_b  = Input (UInt(floatWidth.W))
     val fp_c        = Output(UInt(floatWidth.W))
     val is_sub      = Input (Bool())
-    val opb_widening = Input(Bool())
     val round_mode  = Input (UInt(3.W))
     val fflags      = Output(UInt(5.W))
     val absEaSubEb  = Output(UInt(exponentWidth.W))
@@ -1342,7 +1370,7 @@ private[this] class FarPathFloatAdderF64WidenPipeline(
   val far_case_overflow = FS0.head(1).asBool
   val lgs_normal_reg = Cat(FS0(0),Mux(EOP_reg,(~Cat(B_guard_normal_reg,B_rsticky_normal_reg)).asUInt+1.U,Cat(B_guard_normal_reg,B_rsticky_normal_reg)))
 
-  val far_sign_result_reg = RegEnable(Mux(io.opb_widening && io.is_sub, Mux(isEfp_bGreater, ~efficient_fp_b_sign, ~fp_a_sign), Mux(isEfp_bGreater, efficient_fp_b_sign, fp_a_sign)), fire)
+  val far_sign_result_reg = RegEnable(Mux(isEfp_bGreater, efficient_fp_b_sign, fp_a_sign), fire)
   val far_case_normal_round_up = (EOP_reg & !lgs_normal_reg(1) & !lgs_normal_reg(0)) |
     (RNE_reg & lgs_normal_reg(1) & (lgs_normal_reg(2) | lgs_normal_reg(0))) |
     (RDN_reg & far_sign_result_reg & (lgs_normal_reg(1) | lgs_normal_reg(0))) |
@@ -1420,8 +1448,6 @@ private[this] class ClosePathFloatAdderF64WidenPipeline(
     val fire        = Input (Bool())
     val fp_a, fp_b  = Input (UInt(floatWidth.W))
     val fp_c        = Output(UInt(floatWidth.W))
-    val is_sub      = Input (Bool())
-    val opb_widening = Input(Bool())
     val round_mode  = Input (UInt(3.W))
     val fflags      = Output(UInt(5.W))
     val CS1         = if (hasMinMaxCompare) Output(UInt((significandWidth+1).W)) else Output(UInt(0.W))
@@ -1583,8 +1609,8 @@ private[this] class ClosePathFloatAdderF64WidenPipeline(
       fp_a_sign,
       RDN,
       !fp_a_sign,
-      Mux(io.opb_widening & io.is_sub, !fp_a_sign, fp_a_sign),
-      Mux(io.opb_widening & io.is_sub,fp_a_sign, !fp_a_sign),
+      fp_a_sign,
+      !fp_a_sign,
       Mux(Efp_b_is_greater,!fp_a_sign,fp_a_sign)
     )
   ), fire)
@@ -1610,7 +1636,6 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     val widen_b     = Input (UInt(64.W))
     val fp_c        = Output(UInt(floatWidth.W))
     val mask        = Input (Bool())
-    val uop_idx     = Input (Bool())
     val is_sub      = Input (Bool())
     val round_mode  = Input (UInt(3.W))
     val fflags      = Output(UInt(5.W))
@@ -1620,6 +1645,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     val fp_aIsFpCanonicalNAN = Input(Bool())
     val fp_bIsFpCanonicalNAN = Input(Bool())
     val maskForReduction = Input(UInt(2.W))
+    val is_vfwredosum = Input (Bool())
   })
   val fire = io.fire
 //  val fp_a_to64_is_denormal = !io.widen_a(30,23).orR
@@ -1634,7 +1660,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
 //    fp_a_is_denormal_to_f64_exp,
 //    Mux(io.widen_a(30), Cat("b1000".U,io.widen_a(29,23)), Cat("b0111".U,io.widen_a(29,23)))
 //  )
-  val fp_a_to64 = Mux(io.res_widening,io.widen_a,io.fp_a)
+  val fp_a_to64 = Mux(io.res_widening & !io.opb_widening,io.widen_a,io.fp_a)
 
 //  val fp_b_to64_is_denormal = !io.widen_b(30,23).orR
 //  val fp_b_lshift = Wire(UInt(23.W))
@@ -1648,7 +1674,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
 //    fp_b_is_denormal_to_f64_exp,
 //    Mux(io.widen_b(30), Cat("b1000".U,io.widen_b(29,23)), Cat("b0111".U,io.widen_b(29,23)))
 //  )
-  val fp_b_to64 = Mux(io.res_widening & !io.opb_widening,io.widen_b,io.fp_b)
+  val fp_b_to64 = Mux(io.res_widening & !io.is_vfwredosum,io.widen_b,io.fp_b)
 
   val EOP = (fp_a_to64.head(1) ^ io.is_sub ^ fp_b_to64.head(1)).asBool
   val U_far_path = Module(new FarPathFloatAdderF64WidenPipeline(exponentWidth = exponentWidth,significandWidth = significandWidth, is_print = is_print, hasMinMaxCompare=hasMinMaxCompare))
@@ -1656,14 +1682,11 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
   U_far_path.io.fp_a := fp_a_to64
   U_far_path.io.fp_b := fp_b_to64
   U_far_path.io.is_sub := io.is_sub
-  U_far_path.io.opb_widening := io.opb_widening
   U_far_path.io.round_mode := io.round_mode
   val U_close_path = Module(new ClosePathFloatAdderF64WidenPipeline(exponentWidth = exponentWidth,significandWidth = significandWidth, is_print = is_print, hasMinMaxCompare=hasMinMaxCompare))
   U_close_path.io.fire := fire
   U_close_path.io.fp_a := fp_a_to64
   U_close_path.io.fp_b := fp_b_to64
-  U_close_path.io.is_sub := io.is_sub
-  U_close_path.io.opb_widening := io.opb_widening
   U_close_path.io.round_mode := io.round_mode
   val absEaSubEb = U_far_path.io.absEaSubEb
 
@@ -1671,8 +1694,8 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
   val fp_b_mantissa            = fp_b_to64.tail(1 + exponentWidth)
   val fp_a_mantissa_isnot_zero = fp_a_to64.tail(1 + exponentWidth).orR
   val fp_b_mantissa_isnot_zero = fp_b_to64.tail(1 + exponentWidth).orR
-  val fp_a_is_f32 = io.res_widening
-  val fp_b_is_f32 = io.res_widening & !io.opb_widening
+  val fp_a_is_f32 = io.res_widening & !io.opb_widening
+  val fp_b_is_f32 = io.res_widening
   val Efp_a = fp_a_to64(floatWidth-2, floatWidth-1-exponentWidth)
   val Efp_b = fp_b_to64(floatWidth-2, floatWidth-1-exponentWidth)
   val Efp_a_is_zero  = !Efp_a.orR | (fp_a_is_f32 & Efp_a==="b01101101001".U)
@@ -1705,9 +1728,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
   when(RegEnable(fp_a_is_NAN | fp_b_is_NAN | (EOP & fp_a_is_infinite & fp_b_is_infinite), fire) ){
     float_adder_result := RegEnable(Cat(0.U,Fill(exponentWidth,1.U),1.U,Fill(significandWidth-2,0.U)), fire)
   }.elsewhen(RegEnable(fp_a_is_infinite | fp_b_is_infinite, fire)) {
-    float_adder_result := RegEnable(Cat(Mux(io.opb_widening & io.is_sub,
-      Mux(fp_a_is_infinite,~fp_a_to64.head(1),~(io.is_sub^fp_b_to64.head(1))),
-      Mux(fp_a_is_infinite,fp_a_to64.head(1),io.is_sub^fp_b_to64.head(1))), Fill(exponentWidth,1.U),Fill(significandWidth-1,0.U)), fire)
+    float_adder_result := RegEnable(Cat(Mux(fp_a_is_infinite,fp_a_to64.head(1),io.is_sub^fp_b_to64.head(1)), Fill(exponentWidth,1.U),Fill(significandWidth-1,0.U)), fire)
   }.elsewhen(res_widening_reg & fp_a_is_zero_reg & fp_b_is_zero_reg){
     float_adder_result := RegEnable(Cat(Mux(io.round_mode==="b010".U & EOP | (fp_a_to64.head(1).asBool & !EOP),1.U,0.U),0.U(63.W)), fire)
   }.elsewhen(res_widening_reg & fp_a_is_zero_reg){
