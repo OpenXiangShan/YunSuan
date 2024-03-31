@@ -180,6 +180,9 @@ class SimTop() extends VPUTestModule {
     vfa.io.fp_aIsFpCanonicalNAN := false.B
     vfa.io.fp_bIsFpCanonicalNAN := false.B
     vfa.io.maskForReduction := 0.U
+    vfa.io.is_vfwredosum := false.B
+    vfa.io.is_fold := 0.U
+    vfa.io.vs2_fold := Cat(in.src(0)(1), in.src(0)(0))
     vfa_result.result(i) := vfa.io.fp_result
     vfa_result.fflags(i) := vfa.io.fflags
     vfa_result.vxsat := 0.U // DontCare
