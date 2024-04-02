@@ -86,12 +86,10 @@ class VectorFloatAdder() extends Module {
   val fold = Wire(UInt(3.W))
   val widen_a_foldTo1_2 = Wire(UInt(floatWidth.W))
   val widen_a_foldTo1_4 = Wire(UInt(floatWidth.W))
-  val widen_a_foldTo1_8 = Wire(UInt(floatWidth.W))
 
   fold := io.is_fold
   widen_a_foldTo1_2 := io.vs2_fold(127, 64)
   widen_a_foldTo1_4 := io.vs2_fold(63, 32)
-  widen_a_foldTo1_8 := io.vs2_fold(31, 16)
 
   val U_Widen_Fotmat = Module(new FloatAdderWidenFormat())
   U_Widen_Fotmat.io.uop_idx := io.uop_idx
@@ -111,15 +109,86 @@ class VectorFloatAdder() extends Module {
   U_Widen_Fotmat_32_fold.io.widen_b := 0.U
   U_Widen_Fotmat_32_fold.io.is_frs1 := false.B
   U_Widen_Fotmat_32_fold.io.frs1 := false.B
+  /**
+   * 1 F64, 2 F32, 2 F16
+   *
+   * vfwredosum inst
+   * vfwredosum 32->64
+   * only F64 valid
+   * need widen_a
+   * fold1_2 = 0
+   * widen_a = U_Widen_Fotmat.io.widen_a_f64
+   * fold1_2 = 1
+   * widen_a = io.vs2_fold(127,64) -> U_Widen_Fotmat_64_fold.io.widen_a_f64
+   *
+   * vfwredosum 16->32
+   * only F32 valid
+   * need widen_a
+   * fold1_4 = 0
+   * widen_a = U_Widen_Fotmat.io.widen_a_f32_0
+   * fold1_4 = 1
+   * widen_a = io.vs2_fold(63,32) -> U_Widen_Fotmat_32_fold.io.widen_a_32_0
+   *
+   * vfredosum inst
+   * vfredosum 64->64                       vfredosum 32->32            vfredosum 16->16
+   * only F64 valid                         only F32_0 valid            only F32_0 valid
+   * need fp_a                              need fp_a                   need fp_a
+   * fold1_2 = 0                            fold1_4 = 0                 fold1_8 = 0
+   * fp_a = io.fp_a                         fp_a = io.fp_a(31,0)        fp_a = io.fp_a(15,0) [io.fp_a(31,0)]
+   * fold1_2 = 1                            fold1_4 = 1                 fold1_8 = 1
+   * fp_a = io.vs2_fold(127,64)             fp_a = io.vs2_fold(63,32)   fp_a = io.vs2_fold(31,16)
+   *
+   * vfredmax/vfredmin inst
+   * vfredmax 64->64                        vfredmax 32->32                         vfredmax 16->16
+   * only F64 valid                         when fold1_2 = 1, F32_0, F32_1 valid    when fold1_2 = 1, F32_0,F16_1,F32_1,F16_3 valid
+   * need fp_a                              need fp_a                               need fp_a
+   * fold1_2 = 0                            fold = 0                                fold = 0
+   * fp_a = io.fp_a                         f32_0_fp_a = io.fp_a(31,0)              f32_0_fp_a = io.fp_a(15,0)[io.fp_a(31,0)]
+   * fold1_2 = 1                            f32_1_fp_a = io.fp_a(63,32)             f16_1_fp_a = io.fp_a(31,16)
+   * fp_a = io.vs2_fold(127,64)             fold1_2 = 1                             f32_1_fp_a = io.fp_a(47,32)[io.fp_a(63,32)]
+   *                                        f32_0_fp_a = io.vs2_fold(95,64)         f16_3_fp_a = io.fp_a(63,48)
+   *                                        f32_1_fp_a = io.vs2_fold(127,96)        fold1_2 = 1
+   *                                        when fold1_4 = 1, F32_0 valid           f32_0_fp_a = io.vs2_fold(79,64)
+   *                                        fold1_4 = 1                             f16_1_fp_a = io.vs2_fold(95,80)
+   *                                        f32_0_fp_a = io.vs2_fold(63,32)         f32_1_fp_a = io.vs2_fold(111,96)
+   *                                                                                f16_3_fp_a = io.vs2_fold(127,112)
+   *                                                                                when fold1_4 = 1, F32_0,F32_1 valid
+   *                                                                                f32_0_fp_a = io.vs2_fold(63,32)
+   *                                                                                f32_1_fp_a = io.vs2_fold(96,64)
+   *                                                                                when fold1_8 = 1, F32_0 valid
+   *                                                                                f32_0_fp_a = io.vs2_fold(31,16)
+   * other inst don't change
+   */
+  val f64_fp_a = Wire(UInt(floatWidth.W))
+  val f32_0_fp_a = Wire(UInt(floatWidth.W))
+  val f32_1_fp_a = Wire(UInt(floatWidth.W))
+  val f16_1_fp_a = Wire(UInt(floatWidth.W))
+  val f16_3_fp_a = Wire(UInt(floatWidth.W))
 
-  val f32_a_temp = Wire(UInt(32.W))
-  f32_a_temp := Fill(32, fold(1)) & io.vs2_fold(63,32) | Fill(16, fold(2)) & io.vs2_fold(31,16)
+  f64_fp_a := Mux(fold(0), io.vs2_fold(127, 64), io.fp_a)
+  f32_0_fp_a := Mux1H(
+    Seq(
+      fold(0) -> io.vs2_fold(95, 64),
+      fold(1) -> io.vs2_fold(63, 32),
+      fold(2) -> io.vs2_fold(31, 16),
+      !fold.orR -> io.fp_a(31, 0),
+    )
+  )
+  f32_1_fp_a := Mux1H(
+    Seq(
+      fold(0) -> io.vs2_fold(127, 96),
+      fold(1) -> io.vs2_fold(95, 64),
+      !fold.orR -> io.fp_a(63, 32),
+    )
+  )
+  f16_1_fp_a := Mux(fold(0), io.vs2_fold(95, 80), io.fp_a(31, 16))
+  f16_3_fp_a := Mux(fold(0), io.vs2_fold(127, 112), io.fp_a(63, 48))
 
   val U_F32_Mixed_0 = Module(new FloatAdderF32WidenF16MixedPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F32_Mixed_0.io.fire := fire
-  U_F32_Mixed_0.io.fp_a := Mux(fold.orR, f32_a_temp, io.fp_a(31,0))
+  U_F32_Mixed_0.io.fp_a := f32_0_fp_a
   U_F32_Mixed_0.io.fp_b := Mux(io.is_frs1,io.frs1(31,0),io.fp_b(31,0))
-  U_F32_Mixed_0.io.widen_a := Mux(fold(2), U_Widen_Fotmat_32_fold.io.widen_a_f32_0, U_Widen_Fotmat.io.widen_a_f32_0)
+  U_F32_Mixed_0.io.widen_a := Mux(fold(1), U_Widen_Fotmat_32_fold.io.widen_a_f32_0, U_Widen_Fotmat.io.widen_a_f32_0)
   U_F32_Mixed_0.io.widen_b := U_Widen_Fotmat.io.widen_b_f32_0
   U_F32_Mixed_0.io.mask := io.mask(0)
   U_F32_Mixed_0.io.is_sub := fast_is_sub
@@ -139,7 +208,7 @@ class VectorFloatAdder() extends Module {
 
   val U_F32_Mixed_1 = Module(new FloatAdderF32WidenF16MixedPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F32_Mixed_1.io.fire := fire
-  U_F32_Mixed_1.io.fp_a := io.fp_a(63,32)
+  U_F32_Mixed_1.io.fp_a := f32_1_fp_a
   U_F32_Mixed_1.io.fp_b := Mux(io.is_frs1,io.frs1(31,0),io.fp_b(63,32))
   U_F32_Mixed_1.io.widen_a := U_Widen_Fotmat.io.widen_a_f32_1
   U_F32_Mixed_1.io.widen_b := U_Widen_Fotmat.io.widen_b_f32_1
@@ -165,7 +234,7 @@ class VectorFloatAdder() extends Module {
 
   val U_F64_Widen_0 = Module(new FloatAdderF64WidenPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F64_Widen_0.io.fire := fire
-  U_F64_Widen_0.io.fp_a := Mux(fold(0), io.vs2_fold(127, 64), io.fp_a)
+  U_F64_Widen_0.io.fp_a := f64_fp_a
   U_F64_Widen_0.io.fp_b := Mux(io.is_frs1,io.frs1,io.fp_b)
   U_F64_Widen_0.io.widen_a := Mux(fold(0), U_Widen_Fotmat_64_fold.io.widen_a_f64, U_Widen_Fotmat.io.widen_a_f64)
   U_F64_Widen_0.io.widen_b := U_Widen_Fotmat.io.widen_b_f64
@@ -184,7 +253,7 @@ class VectorFloatAdder() extends Module {
 
   val U_F16_1 = Module(new FloatAdderF16Pipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F16_1.io.fire := fire
-  U_F16_1.io.fp_a := io.fp_a(31,16)
+  U_F16_1.io.fp_a := f16_1_fp_a
   U_F16_1.io.fp_b := Mux(io.is_frs1,io.frs1(15,0),io.fp_b(31,16))
   U_F16_1.io.mask := io.mask(1)
   U_F16_1.io.is_sub := fast_is_sub
@@ -198,7 +267,7 @@ class VectorFloatAdder() extends Module {
 
   val U_F16_3 = Module(new FloatAdderF16Pipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F16_3.io.fire := fire
-  U_F16_3.io.fp_a := io.fp_a(63,48)
+  U_F16_3.io.fp_a := f16_3_fp_a
   U_F16_3.io.fp_b := Mux(io.is_frs1,io.frs1(15,0),io.fp_b(63,48))
   U_F16_3.io.mask := io.mask(3)
   U_F16_3.io.is_sub := fast_is_sub
