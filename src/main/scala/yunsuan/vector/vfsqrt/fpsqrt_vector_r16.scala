@@ -642,12 +642,13 @@ class fpsqrt_vector_r16(
       (Fill(1, fp_format_i === 1.U(2.W)) & op_frac_is_zero_1 & ~op_exp_1(0)) |
       (Fill(1, fp_format_i === 2.U(2.W)) & op_frac_is_zero_0 & ~op_exp_0(0))
     )
-  early_finish :=
-    Mux((fp_format_i === 2.U(2.W)), (res_is_nan_0_d | res_is_inf_0_d | res_is_exact_zero_0_d | op_frac_is_zero_0),
-      (~vector_mode_i & (
-        Mux((fp_format_i === 0.U(2.W)), (res_is_nan_3_d | res_is_inf_3_d | res_is_exact_zero_3_d | op_frac_is_zero_3),
-          (res_is_nan_1_d | res_is_inf_1_d | res_is_exact_zero_1_d | op_frac_is_zero_1)
-        ))))
+  early_finish := Mux(vector_mode_i, false.B,
+    Mux(fp_format_i === 2.U(2.W), res_is_nan_0_d | res_is_inf_0_d | res_is_exact_zero_0_d | res_is_sqrt_2_d,
+      Mux(fp_format_i === 0.U(2.W), res_is_nan_3_d | res_is_inf_3_d | res_is_exact_zero_3_d | res_is_sqrt_2_d,
+        res_is_nan_1_d | res_is_inf_1_d | res_is_exact_zero_1_d | res_is_sqrt_2_d
+      )
+    )
+  )
   need_2_cycles_init :=
     Mux((fp_format_i === 2.U(2.W)), op_exp_is_zero_0,
       (vector_mode_i | (Mux((fp_format_i === 0.U(2.W)), op_exp_is_zero_3, op_exp_is_zero_1))))
