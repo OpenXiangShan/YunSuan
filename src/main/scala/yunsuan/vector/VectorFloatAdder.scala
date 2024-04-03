@@ -610,7 +610,7 @@ private[vector] class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = 
     result_fle := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_greater | fp_b_is_equal)
     result_fgt := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_less)
     result_fge := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_less | fp_b_is_equal)
-    result_fclass := Mux(io.fp_aIsFpCanonicalNAN, (1 << 8).U, Reverse(Cat(
+    result_fclass := Mux(io.fp_aIsFpCanonicalNAN, (1 << 9).U, Reverse(Cat(
       fp_a_sign & fp_a_is_infinite,
       fp_a_sign & !Efp_a_is_zero & !Efp_a_is_all_one,
       fp_a_sign & Efp_a_is_zero & fp_a_mantissa_isnot_zero,
@@ -1895,7 +1895,7 @@ private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,va
     result_fle := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_greater | fp_b_is_equal)
     result_fgt := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_less)
     result_fge := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_less | fp_b_is_equal)
-    result_fclass := Mux(io.fp_aIsFpCanonicalNAN, (1 << 8).U, Reverse(Cat(
+    result_fclass := Mux(io.fp_aIsFpCanonicalNAN, (1 << 9).U, Reverse(Cat(
       fp_a_sign & fp_a_is_infinite,
       fp_a_sign & !Efp_a_is_zero & !Efp_a_is_all_one,
       fp_a_sign & Efp_a_is_zero & fp_a_mantissa_isnot_zero,
@@ -2564,7 +2564,7 @@ private[vector] class FloatAdderF16Pipeline(val is_print:Boolean = false,val has
     result_fle := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_greater | fp_b_is_equal)
     result_fgt := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_less)
     result_fge := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_less | fp_b_is_equal)
-    result_fclass := Mux(io.fp_aIsFpCanonicalNAN, (1<<8).U, Reverse(Cat(
+    result_fclass := Mux(io.fp_aIsFpCanonicalNAN, (1 << 9).U, Reverse(Cat(
       fp_a_sign & fp_a_is_infinite,
       fp_a_sign & !Efp_a_is_zero & !Efp_a_is_all_one,
       fp_a_sign & Efp_a_is_zero & fp_a_mantissa_isnot_zero,
