@@ -262,6 +262,7 @@ class SimTop() extends VPUTestModule {
     vcvt.io.opType := opcode
     vcvt.io.rm := rm
     vcvt.io.src := src1 // 128 bit->vcvt
+    vcvt.io.isFpToVecInst := false.B
     vcvt_result.vxsat := 0.U
     vcvt_result.result(i) := vcvt.io.result
     vcvt_result.fflags(i) := vcvt.io.fflags

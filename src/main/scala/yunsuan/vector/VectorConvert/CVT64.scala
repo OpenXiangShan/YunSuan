@@ -16,8 +16,8 @@ class CVT64(width: Int = 64) extends CVT(width){
   val widthExpAdder = 13 // 13bits is enough
 
   // input
-  val (fire, src, sew, opType, rmNext, input1H, output1H) =
-      (io.fire, io.src, io.sew, io.opType, io.rm, io.input1H, io.output1H)
+  val (fire, src, sew, opType, rmNext, input1H, output1H, isFpToVecInst) =
+      (io.fire, io.src, io.sew, io.opType, io.rm, io.input1H, io.output1H, io.isFpToVecInst)
   val fireReg = GatedValidRegNext(fire)
 
   // control for cycle 0
@@ -26,6 +26,27 @@ class CVT64(width: Int = 64) extends CVT(width){
   val inIsFpNext = opType.head(1).asBool
   val outIsFpNext = opType.tail(1).head(1).asBool
   val hasSignIntNext = opType(0).asBool
+
+  val s0_outIsF64 =  outIsFpNext && output1H(3)
+  val s0_outIsU32 = !outIsFpNext && output1H(2) && !hasSignIntNext
+  val s0_outIsS32 = !outIsFpNext && output1H(2) && hasSignIntNext
+  val s0_outIsU64 = !outIsFpNext && output1H(3) && !hasSignIntNext
+  val s0_outIsS64 = !outIsFpNext && output1H(3) && hasSignIntNext
+  val s0_fpCanonicalNAN = isFpToVecInst & inIsFpNext & (input1H(1) & !src.head(48).andR | input1H(2) & !src.head(32).andR)
+
+  val s1_outIsF64 = RegEnable(s0_outIsF64, fire)
+  val s1_outIsU32 = RegEnable(s0_outIsU32, fire)
+  val s1_outIsS32 = RegEnable(s0_outIsS32, fire)
+  val s1_outIsU64 = RegEnable(s0_outIsU64, fire)
+  val s1_outIsS64 = RegEnable(s0_outIsS64, fire)
+  val s1_fpCanonicalNAN = RegEnable(s0_fpCanonicalNAN, fire)
+
+  val s2_outIsF64 = RegEnable(s1_outIsF64, fireReg)
+  val s2_outIsU32 = RegEnable(s1_outIsU32, fireReg)
+  val s2_outIsS32 = RegEnable(s1_outIsS32, fireReg)
+  val s2_outIsU64 = RegEnable(s1_outIsU64, fireReg)
+  val s2_outIsS64 = RegEnable(s1_outIsS64, fireReg)
+  val s2_fpCanonicalNAN = RegEnable(s1_fpCanonicalNAN, fireReg)
 
   val int1HSrcNext = input1H
   val float1HSrcNext = input1H.head(3)//exclude f8
@@ -609,7 +630,16 @@ class CVT64(width: Int = 64) extends CVT(width){
 
   fflagsNext := Cat(nv, dz, of, uf, nx)
 
-  io.result := result
-  io.fflags := fflags
+  val s1_resultForfpCanonicalNAN = Mux1H(
+    Seq(s1_outIsF64, s1_outIsU32, s1_outIsS32, s1_outIsU64, s1_outIsS64),
+    Seq(~0.U((f64.expWidth+1).W) ## 0.U((f64.fracWidth-1).W),
+      ~0.U(32.W),
+      ~0.U(31.W),
+      ~0.U(64.W),
+      ~0.U(63.W))
+  )
+  val s2_resultForfpCanonicalNAN = RegEnable(s1_resultForfpCanonicalNAN, fireReg)
+  io.result := Mux(s2_fpCanonicalNAN, s2_resultForfpCanonicalNAN, result)
+  io.fflags := Mux(s2_fpCanonicalNAN && !s2_outIsF64, "b10000".U, fflags)
 }
 
