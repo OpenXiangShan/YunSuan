@@ -277,7 +277,6 @@ package object yunsuan {
     def viota_m                        = "b01010000".U(OpTypeWidth.W) // viota
     def vid_v                          = "b01010001".U(OpTypeWidth.W) // vid
     // 1
-    def vmv_s_x                        = "b01010010".U(OpTypeWidth.W) // vmvsx TODO Integer Scalar Move vmv.s.x vd, rs1
     def vmv_x_s                        = "b01010011".U(OpTypeWidth.W) // vmvxs
   }
 
