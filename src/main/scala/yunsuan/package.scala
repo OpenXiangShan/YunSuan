@@ -255,7 +255,7 @@ package object yunsuan {
 
   object VipuType {
     def dummy                          = "b11111111".U(OpTypeWidth.W) // exu not implemented
-    // 8
+
     def vredsum_vs                     = "b00111001".U(OpTypeWidth.W) // vredsum
     def vredmaxu_vs                    = "b00111010".U(OpTypeWidth.W) // vredmax
     def vredmax_vs                     = "b00111011".U(OpTypeWidth.W) // vredmax
@@ -264,20 +264,19 @@ package object yunsuan {
     def vredand_vs                     = "b00111110".U(OpTypeWidth.W) // vredand
     def vredor_vs                      = "b00111111".U(OpTypeWidth.W) // vredor
     def vredxor_vs                     = "b01000000".U(OpTypeWidth.W) // vredxor
-    // 2
+
     def vwredsumu_vs                   = "b01000001".U(OpTypeWidth.W) // vredsum
     def vwredsum_vs                    = "b01000010".U(OpTypeWidth.W) // vredsum
-    // 5
+
     def vcpop_m                        = "b01001011".U(OpTypeWidth.W) // vcpop
     def vfirst_m                       = "b01001100".U(OpTypeWidth.W) // vfirst
     def vmsbf_m                        = "b01001101".U(OpTypeWidth.W) // vmsbf
     def vmsif_m                        = "b01001110".U(OpTypeWidth.W) // vmsif
     def vmsof_m                        = "b01001111".U(OpTypeWidth.W) // vmsof
-    // 2
+
     def viota_m                        = "b01010000".U(OpTypeWidth.W) // viota
     def vid_v                          = "b01010001".U(OpTypeWidth.W) // vid
-    // 1
-    def vmv_s_x                        = "b01010010".U(OpTypeWidth.W) // vmvsx TODO Integer Scalar Move vmv.s.x vd, rs1
+
     def vmv_x_s                        = "b01010011".U(OpTypeWidth.W) // vmvxs
   }
 
