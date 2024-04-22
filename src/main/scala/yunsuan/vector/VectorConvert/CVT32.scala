@@ -315,7 +315,7 @@ class CVT32(width: Int = 32) extends CVT(width){
 
   val lpath_of = Wire(Bool())
   val lpath_of_reg0 = RegEnable(lpath_of, fire)
-  lpath_of := (fp32toint32 || fp16toint16 || fp16toint32) && is_signed_int && (exp === max_int_exp) && (!sign || (sign && in.tail(9).orR))
+  lpath_of := (fp32toint32 || fp16toint16 || fp16toint32) && is_signed_int && (exp === max_int_exp) && (!sign || (sign && in.tail(10).orR))
 
   // right
   val rpath_shamt = Mux1H(
