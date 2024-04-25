@@ -563,27 +563,28 @@ object VfcvtType {
     def apply() = UInt(width.W)
   }
   object FaddOpCode {
-    def width = 4
-    def dummy    = "b1111".U(width.W)
-    def fadd     = "b0000".U(width.W)
-    def fsub     = "b0001".U(width.W)
-    def feq      = "b0010".U(width.W)
-    def flt      = "b0011".U(width.W)
-    def fle      = "b0100".U(width.W)
-    def fmin     = "b0101".U(width.W)
-    def fmax     = "b0110".U(width.W)
-    def fclass   = "b0111".U(width.W)
-    def fsgnj    = "b1000".U(width.W)
-    def fsgnjx   = "b1001".U(width.W)
-    def fsgnjn   = "b1010".U(width.W)
+    def width = 5
+
+    def dummy    = "b11111".U(width.W)
+    def fadd     = "b00000".U(width.W)
+    def fsub     = "b00001".U(width.W)
+    def feq      = "b01001".U(width.W)
+    def flt      = "b01011".U(width.W)
+    def fle      = "b01100".U(width.W)
+    def fmin     = "b00010".U(width.W)
+    def fmax     = "b00011".U(width.W)
+    def fclass   = "b01111".U(width.W)
+    def fsgnj    = "b00110".U(width.W)
+    def fsgnjx   = "b01000".U(width.W)
+    def fsgnjn   = "b00111".U(width.W)
   }
   object FmaOpCode {
-    def width   = 3
+    def width = 4
 
-    def fmul     = "b000".U(width.W)
-    def fmacc    = "b001".U(width.W)
-    def fmsac    = "b010".U(width.W)
-    def fnmacc   = "b011".U(width.W)
-    def fnmsac   = "b100".U(width.W)
+    def fmul    = "b0000".U(width.W)
+    def fmacc   = "b0001".U(width.W)
+    def fmsac   = "b0011".U(width.W)
+    def fnmacc  = "b0010".U(width.W)
+    def fnmsac  = "b0100".U(width.W)
   }
 }

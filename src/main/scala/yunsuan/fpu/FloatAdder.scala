@@ -13,7 +13,7 @@ class FloatAdder() extends Module  {
     val fp_a, fp_b    = Input (UInt(floatWidth.W)) // fp_a -> vs2, fp_b -> vs1
     val round_mode    = Input (UInt(3.W))
     val fp_format     = Input (VectorElementFormat()) // result format b01->fp16,b10->fp32,b11->fp64
-    val op_code       = Input (UInt(4.W))
+    val op_code       = Input (UInt(5.W))
     val fp_aIsFpCanonicalNAN = Input (Bool())
     val fp_bIsFpCanonicalNAN = Input (Bool())
     val fp_result     = Output(UInt(floatWidth.W))
@@ -116,7 +116,7 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
     val round_mode   = Input (UInt(3.W))
     val fflags       = Output(UInt(5.W))
     val fp_format    = Input (UInt(2.W))
-    val op_code = if (hasMinMaxCompare) Input(UInt(4.W)) else Input(UInt(0.W))
+    val op_code = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
     val fp_aIsFpCanonicalNAN = Input (Bool())
     val fp_bIsFpCanonicalNAN = Input (Bool())
   })
@@ -346,7 +346,7 @@ private[fpu] class FloatAdderF64Pipeline(val is_print:Boolean = false,val hasMin
     val is_sub      = Input (Bool())
     val round_mode  = Input (UInt(3.W))
     val fflags      = Output(UInt(5.W))
-    val op_code = if (hasMinMaxCompare) Input(UInt(4.W)) else Input(UInt(0.W))
+    val op_code = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
     val fp_aIsFpCanonicalNAN = Input(Bool())
     val fp_bIsFpCanonicalNAN = Input(Bool())
   })
