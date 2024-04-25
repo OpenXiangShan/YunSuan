@@ -747,7 +747,7 @@ private[this] class ShiftLeftPriorityWithF32EXPResult(val srcW:Int, priorityShif
   io.exp_result := lshift_result_lzd_exp.tail(srcW)
 }
 
-private[this] class FarPathF32WidenF16MixedAdderPipeline(val AW:Int, val AdderType:String, val stage0AdderWidth: Int = 0) extends Module {
+class FarPathF32WidenF16MixedAdderPipeline(val AW:Int, val AdderType:String, val stage0AdderWidth: Int = 0) extends Module {
   val io = IO(new Bundle() {
     val fire= Input (Bool())
     val A   = Input (UInt(AW.W))
@@ -777,7 +777,7 @@ private[this] class FarPathF32WidenF16MixedAdderPipeline(val AW:Int, val AdderTy
   }
 }
 
-private[this] class Adder(val aw:Int,val bw:Int,val cw:Int, val is_sub:Boolean = false) extends Module {
+class Adder(val aw:Int,val bw:Int,val cw:Int, val is_sub:Boolean = false) extends Module {
   val io = IO(new Bundle() {
     val a = Input (UInt(aw.W))
     val b = Input (UInt(bw.W))
@@ -791,7 +791,7 @@ private[this] class Adder(val aw:Int,val bw:Int,val cw:Int, val is_sub:Boolean =
   }
 }
 
-private[this] class FarShiftRightWithMuxInvFirst(val srcW:Int,shiftValueW:Int) extends Module {
+class FarShiftRightWithMuxInvFirst(val srcW:Int,shiftValueW:Int) extends Module {
   val io = IO(new Bundle() {
     val src        = Input (UInt(srcW.W))
     val shiftValue = Input (UInt(shiftValueW.W))
@@ -810,7 +810,7 @@ private[this] class FarShiftRightWithMuxInvFirst(val srcW:Int,shiftValueW:Int) e
   io.result := shiftRightWithMuxInvFirst(io.src,io.shiftValue,io.EOP)
 }
 
-private[this] class FarPathF32WidenF16MixedPipeline(
+class FarPathF32WidenF16MixedPipeline(
                                                      exponentWidth : Int = 8,
                                                      significandWidth : Int = 24,
                                                      val is_print:Boolean = false,
@@ -1021,7 +1021,7 @@ private[this] class FarPathF32WidenF16MixedPipeline(
   else io.isEfp_bGreater := 0.U
 }
 
-private[this] class ClosePathF32WidenF16MixedPipelineAdder(val adderWidth:Int, val adderType:String) extends Module {
+class ClosePathF32WidenF16MixedPipelineAdder(val adderWidth:Int, val adderType:String) extends Module {
   val io = IO(new Bundle() {
     val adder_op0    = Input(UInt(adderWidth.W))
     val adder_op1    = Input(UInt(adderWidth.W))
@@ -1035,11 +1035,11 @@ private[this] class ClosePathF32WidenF16MixedPipelineAdder(val adderWidth:Int, v
   }
 }
 
-private[this] object LZD {
+object LZD {
   def apply(in: UInt): UInt = PriorityEncoder(Reverse(Cat(in, 1.U)))
 }
 
-private[this] class CloseShiftLeftWithMux(val srcW:Int,shiftValueW:Int) extends Module {
+class CloseShiftLeftWithMux(val srcW:Int,shiftValueW:Int) extends Module {
   val io = IO(new Bundle() {
     val src        = Input (UInt(srcW.W))
     val shiftValue = Input (UInt(shiftValueW.W))
@@ -1057,7 +1057,7 @@ private[this] class CloseShiftLeftWithMux(val srcW:Int,shiftValueW:Int) extends 
   io.result := shiftLeftWithMux(io.src,io.shiftValue)
 }
 
-private[this] class ClosePathF32WidenF16MixedPipeline(
+class ClosePathF32WidenF16MixedPipeline(
                                                        exponentWidth : Int = 8,
                                                        var significandWidth : Int = 24,
                                                        val is_print:Boolean = false,
@@ -1285,7 +1285,7 @@ private[this] class ShiftLeftPriorityWithF64EXPResult(val srcW:Int, priorityShif
   io.exp_result := lshift_result_lzd_exp.tail(srcW)
 }
 
-private[this] class FarPathAdderF64WidenPipeline(val AW:Int, val AdderType:String, val stage0AdderWidth: Int = 0) extends Module {
+class FarPathAdderF64WidenPipeline(val AW:Int, val AdderType:String, val stage0AdderWidth: Int = 0) extends Module {
   val io = IO(new Bundle() {
     val fire = Input(Bool())
     val A   = Input (UInt(AW.W))
@@ -1315,7 +1315,7 @@ private[this] class FarPathAdderF64WidenPipeline(val AW:Int, val AdderType:Strin
   }
 }
 
-private[this] class FarPathFloatAdderF64WidenPipeline(
+class FarPathFloatAdderF64WidenPipeline(
                                                        exponentWidth : Int = 11,
                                                        significandWidth : Int = 53,
                                                        val is_print:Boolean = false,
@@ -1493,7 +1493,7 @@ private[this] class FarPathFloatAdderF64WidenPipeline(
 }
 
 
-private[this] class ClosePathAdder(val adderWidth:Int, val adderType:String) extends Module {
+class ClosePathAdder(val adderWidth:Int, val adderType:String) extends Module {
   val io = IO(new Bundle() {
     val adder_op0    = Input(UInt(adderWidth.W))
     val adder_op1    = Input(UInt(adderWidth.W))
@@ -1507,7 +1507,7 @@ private[this] class ClosePathAdder(val adderWidth:Int, val adderType:String) ext
   }
 }
 
-private[this] class ClosePathFloatAdderF64WidenPipeline(
+class ClosePathFloatAdderF64WidenPipeline(
                                                          exponentWidth : Int = 11,
                                                          var significandWidth : Int = 53,
                                                          val is_print:Boolean = false,
@@ -1694,7 +1694,7 @@ private[this] class ClosePathFloatAdderF64WidenPipeline(
 
 }
 
-private[vector] class FloatAdderF64WidenPipeline(val is_print:Boolean = false,val hasMinMaxCompare:Boolean = false) extends Module {
+class FloatAdderF64WidenPipeline(val is_print:Boolean = false,val hasMinMaxCompare:Boolean = false) extends Module {
   val exponentWidth = 11
   val significandWidth = 53
   val floatWidth = exponentWidth + significandWidth
