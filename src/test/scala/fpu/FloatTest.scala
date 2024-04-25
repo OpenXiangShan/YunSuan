@@ -12,7 +12,7 @@ import firrtl.stage.RunFirrtlTransformAnnotation
 import firrtl.AnnotationSeq
 import firrtl.options.TargetDirAnnotation
 object GenTest extends App {
-  val path = """./generated/FloatAdder"""
+  val path = """./generated/FloatFMA"""
   (new ChiselStage).execute(Array("--emission-options=disableMemRandomization,disableRegisterRandomization",
-    "--target-dir", path), Seq(ChiselGeneratorAnnotation(() => new FloatAdder)))
+    "--target-dir", path), Seq(ChiselGeneratorAnnotation(() => new FloatFMA)))
 }
