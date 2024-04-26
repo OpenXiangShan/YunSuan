@@ -135,7 +135,7 @@ private[vector] class ClosePathAdderReductionF32WidenF16(val adderWidth:Int, val
 }
 
 
-private[vector] class ShiftLeftPriorityWithLZDResult(val srcW:Int, priorityShiftValueW:Int) extends Module {
+class ShiftLeftPriorityWithLZDResult(val srcW:Int, priorityShiftValueW:Int) extends Module {
   val io = IO(new Bundle() {
     val src        = Input (UInt(srcW.W))
     val priority_shiftValue = Input (UInt(priorityShiftValueW.W))
