@@ -1,6 +1,5 @@
 package yunsuan.fpu
 import chisel3._
-import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
 import chisel3.util._
 import yunsuan.vector._
 import yunsuan.{FaddOpCode, VectorElementFormat}
