@@ -156,9 +156,10 @@ class FloatAdder() extends Module {
   val res_is_f32 = fp_format_reg === 2.U
   val res_is_f64 = fp_format_reg === 3.U
 
+  val resultNeedBox = RegEnable(is_add || is_sub || is_min || is_max || is_fsgnj || is_fsgnjn || is_fsgnjx, fire)
   val fp_f64_result = U_F64_Widen_0_result
-  val fp_f32_result = Cat(Fill(32, 1.U), U_F32_0_result)
-  val fp_f16_result = Cat(Fill(48, 1.U), U_F16_0_result)
+  val fp_f32_result = Cat(Fill(32, resultNeedBox), U_F32_0_result)
+  val fp_f16_result = Cat(Fill(48, resultNeedBox), U_F16_0_result)
 
   io.fp_result := Mux1H(
     Seq(
