@@ -407,7 +407,7 @@ class CVT64(width: Int = 64) extends CVT(width){
       isSubnormalSrc || isnormalSrc
     )
 
-    nv := isSNaNSrc
+    nv := isSNaNSrc && !s1_fpCanonicalNAN
     dz := false.B
     of := false.B
     uf := false.B
