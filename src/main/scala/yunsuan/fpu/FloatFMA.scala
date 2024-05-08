@@ -592,15 +592,15 @@ class FloatFMA() extends Module{
   val has_nan_f32 = fp_a_is_nan_f32 | fp_b_is_nan_f32 | fp_c_is_nan_f32
   val has_nan_f16 = fp_a_is_nan_f16 | fp_b_is_nan_f16 | fp_c_is_nan_f16
 
-  val fp_a_is_snan_f64 = io.fp_aIsFpCanonicalNAN | Ea_f64.andR & !fp_a_significand_f64.tail(1).head(1) & fp_a_significand_f64.tail(2).orR
-  val fp_a_is_snan_f32 = io.fp_aIsFpCanonicalNAN | Ea_f32.andR & !fp_a_significand_f32.tail(1).head(1) & fp_a_significand_f32.tail(2).orR
-  val fp_a_is_snan_f16 = io.fp_aIsFpCanonicalNAN | Ea_f16.andR & !fp_a_significand_f16.tail(1).head(1) & fp_a_significand_f16.tail(2).orR
-  val fp_b_is_snan_f64 = io.fp_bIsFpCanonicalNAN | Eb_f64.andR & !fp_b_significand_f64.tail(1).head(1) & fp_b_significand_f64.tail(2).orR
-  val fp_b_is_snan_f32 = io.fp_bIsFpCanonicalNAN | Eb_f32.andR & !fp_b_significand_f32.tail(1).head(1) & fp_b_significand_f32.tail(2).orR
-  val fp_b_is_snan_f16 = io.fp_bIsFpCanonicalNAN | Eb_f16.andR & !fp_b_significand_f16.tail(1).head(1) & fp_b_significand_f16.tail(2).orR
-  val fp_c_is_snan_f64 = io.fp_cIsFpCanonicalNAN | Ec_f64.andR & !fp_c_significand_f64.tail(1).head(1) & fp_c_significand_f64.tail(2).orR
-  val fp_c_is_snan_f32 = io.fp_cIsFpCanonicalNAN | Ec_f32.andR & !fp_c_significand_f32.tail(1).head(1) & fp_c_significand_f32.tail(2).orR
-  val fp_c_is_snan_f16 = io.fp_cIsFpCanonicalNAN | Ec_f16.andR & !fp_c_significand_f16.tail(1).head(1) & fp_c_significand_f16.tail(2).orR
+  val fp_a_is_snan_f64 =  Ea_f64.andR & !fp_a_significand_f64.tail(1).head(1) & fp_a_significand_f64.tail(2).orR
+  val fp_a_is_snan_f32 =  Ea_f32.andR & !fp_a_significand_f32.tail(1).head(1) & fp_a_significand_f32.tail(2).orR
+  val fp_a_is_snan_f16 =  Ea_f16.andR & !fp_a_significand_f16.tail(1).head(1) & fp_a_significand_f16.tail(2).orR
+  val fp_b_is_snan_f64 =  Eb_f64.andR & !fp_b_significand_f64.tail(1).head(1) & fp_b_significand_f64.tail(2).orR
+  val fp_b_is_snan_f32 =  Eb_f32.andR & !fp_b_significand_f32.tail(1).head(1) & fp_b_significand_f32.tail(2).orR
+  val fp_b_is_snan_f16 =  Eb_f16.andR & !fp_b_significand_f16.tail(1).head(1) & fp_b_significand_f16.tail(2).orR
+  val fp_c_is_snan_f64 =  Ec_f64.andR & !fp_c_significand_f64.tail(1).head(1) & fp_c_significand_f64.tail(2).orR
+  val fp_c_is_snan_f32 =  Ec_f32.andR & !fp_c_significand_f32.tail(1).head(1) & fp_c_significand_f32.tail(2).orR
+  val fp_c_is_snan_f16 =  Ec_f16.andR & !fp_c_significand_f16.tail(1).head(1) & fp_c_significand_f16.tail(2).orR
   
   val has_snan_f64 = fp_a_is_snan_f64 | fp_b_is_snan_f64 | fp_c_is_snan_f64
   val has_snan_f32 = fp_a_is_snan_f32 | fp_b_is_snan_f32 | fp_c_is_snan_f32

@@ -165,9 +165,9 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
     io.fp_b(30,23).andR
   )
   val fp_a_is_NAN        = io.fp_aIsFpCanonicalNAN | Efp_a_is_all_one & fp_a_mantissa_isnot_zero
-  val fp_a_is_SNAN       = io.fp_aIsFpCanonicalNAN | Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !fp_a_to32(significandWidth-2)
+  val fp_a_is_SNAN       =  Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !fp_a_to32(significandWidth-2)
   val fp_b_is_NAN        = io.fp_bIsFpCanonicalNAN | Efp_b_is_all_one & fp_b_mantissa_isnot_zero
-  val fp_b_is_SNAN       = io.fp_bIsFpCanonicalNAN | Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !fp_b_to32(significandWidth-2)
+  val fp_b_is_SNAN       =  Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !fp_b_to32(significandWidth-2)
   val fp_a_is_infinite   = Efp_a_is_all_one & (!fp_a_mantissa_isnot_zero)
   val fp_b_is_infinite   = Efp_b_is_all_one & (!fp_b_mantissa_isnot_zero)
   val fp_a_is_zero       = Efp_a_is_zero & !fp_a_mantissa_isnot_zero
@@ -378,9 +378,9 @@ private[fpu] class FloatAdderF64Pipeline(val is_print:Boolean = false,val hasMin
   val Efp_a_is_all_one   = Efp_a.andR
   val Efp_b_is_all_one   = Efp_b.andR
   val fp_a_is_NAN        = io.fp_aIsFpCanonicalNAN | Efp_a_is_all_one & fp_a_mantissa_isnot_zero
-  val fp_a_is_SNAN       = io.fp_aIsFpCanonicalNAN | Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !fp_a_to64(significandWidth-2)
+  val fp_a_is_SNAN       =  Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !fp_a_to64(significandWidth-2)
   val fp_b_is_NAN        = io.fp_bIsFpCanonicalNAN | Efp_b_is_all_one & fp_b_mantissa_isnot_zero
-  val fp_b_is_SNAN       = io.fp_bIsFpCanonicalNAN | Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !fp_b_to64(significandWidth-2)
+  val fp_b_is_SNAN       =  Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !fp_b_to64(significandWidth-2)
   val fp_a_is_infinite   = Efp_a_is_all_one & (!fp_a_mantissa_isnot_zero)
   val fp_b_is_infinite   = Efp_b_is_all_one & (!fp_b_mantissa_isnot_zero)
   val fp_a_is_zero = Efp_a_is_zero & !fp_a_mantissa_isnot_zero
