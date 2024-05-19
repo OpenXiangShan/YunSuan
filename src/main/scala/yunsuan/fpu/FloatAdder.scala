@@ -72,10 +72,21 @@ class FloatAdder() extends Module  {
   val res_is_f16 = fp_format_reg === 1.U
   val res_is_f32 = fp_format_reg === 2.U
   val res_is_f64 = fp_format_reg === 3.U
-
+  val is_add    = io.op_code === FaddOpCode.fadd
+  val is_sub    = io.op_code === FaddOpCode.fsub
+  val is_min    = io.op_code === FaddOpCode.fmin
+  val is_max    = io.op_code === FaddOpCode.fmax
+  val is_fsgnj  = io.op_code === FaddOpCode.fsgnj
+  val is_fsgnjn = io.op_code === FaddOpCode.fsgnjn
+  val is_fsgnjx = io.op_code === FaddOpCode.fsgnjx
+  val is_feq    = io.op_code === FaddOpCode.feq
+  val is_flt    = io.op_code === FaddOpCode.flt
+  val is_fle    = io.op_code === FaddOpCode.fle
+  val is_fclass = io.op_code === FaddOpCode.fclass
+  val resultNeedBox = RegEnable(is_add || is_sub || is_min || is_max || is_fsgnj || is_fsgnjn || is_fsgnjx, fire)
   val fp_f64_result = F64_result
-  val fp_f32_result = Cat(Fill(32, 1.U), F32_result)
-  val fp_f16_result = Cat(Fill(48, 1.U), F16_result)
+  val fp_f32_result = Cat(Fill(32, resultNeedBox), F32_result)
+  val fp_f16_result = Cat(Fill(48, resultNeedBox), F16_result)
 
   io.fp_result := Mux1H(
     Seq(
@@ -165,13 +176,13 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
     io.fp_b(30,23).andR
   )
   val fp_a_is_NAN        = io.fp_aIsFpCanonicalNAN | Efp_a_is_all_one & fp_a_mantissa_isnot_zero
-  val fp_a_is_SNAN       =  Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !fp_a_to32(significandWidth-2)
+  val fp_a_is_SNAN       = !io.fp_aIsFpCanonicalNAN & Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !fp_a_to32(significandWidth-2)
   val fp_b_is_NAN        = io.fp_bIsFpCanonicalNAN | Efp_b_is_all_one & fp_b_mantissa_isnot_zero
-  val fp_b_is_SNAN       =  Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !fp_b_to32(significandWidth-2)
-  val fp_a_is_infinite   = Efp_a_is_all_one & (!fp_a_mantissa_isnot_zero)
-  val fp_b_is_infinite   = Efp_b_is_all_one & (!fp_b_mantissa_isnot_zero)
-  val fp_a_is_zero       = Efp_a_is_zero & !fp_a_mantissa_isnot_zero
-  val fp_b_is_zero       = Efp_b_is_zero & !fp_b_mantissa_isnot_zero
+  val fp_b_is_SNAN       = !io.fp_bIsFpCanonicalNAN & Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !fp_b_to32(significandWidth-2)
+  val fp_a_is_infinite   = !io.fp_aIsFpCanonicalNAN & Efp_a_is_all_one & (!fp_a_mantissa_isnot_zero)
+  val fp_b_is_infinite   = !io.fp_bIsFpCanonicalNAN & Efp_b_is_all_one & (!fp_b_mantissa_isnot_zero)
+  val fp_a_is_zero       = !io.fp_aIsFpCanonicalNAN & Efp_a_is_zero & !fp_a_mantissa_isnot_zero
+  val fp_b_is_zero       = !io.fp_bIsFpCanonicalNAN & Efp_b_is_zero & !fp_b_mantissa_isnot_zero
 
 
   val is_far_path     = !EOP | (EOP & absEaSubEb(absEaSubEb.getWidth - 1, 1).orR) | (absEaSubEb === 1.U & (Efp_a_is_zero ^ Efp_b_is_zero))
@@ -378,13 +389,13 @@ private[fpu] class FloatAdderF64Pipeline(val is_print:Boolean = false,val hasMin
   val Efp_a_is_all_one   = Efp_a.andR
   val Efp_b_is_all_one   = Efp_b.andR
   val fp_a_is_NAN        = io.fp_aIsFpCanonicalNAN | Efp_a_is_all_one & fp_a_mantissa_isnot_zero
-  val fp_a_is_SNAN       =  Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !fp_a_to64(significandWidth-2)
+  val fp_a_is_SNAN       = !io.fp_aIsFpCanonicalNAN & Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !fp_a_to64(significandWidth-2)
   val fp_b_is_NAN        = io.fp_bIsFpCanonicalNAN | Efp_b_is_all_one & fp_b_mantissa_isnot_zero
-  val fp_b_is_SNAN       =  Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !fp_b_to64(significandWidth-2)
-  val fp_a_is_infinite   = Efp_a_is_all_one & (!fp_a_mantissa_isnot_zero)
-  val fp_b_is_infinite   = Efp_b_is_all_one & (!fp_b_mantissa_isnot_zero)
-  val fp_a_is_zero = Efp_a_is_zero & !fp_a_mantissa_isnot_zero
-  val fp_b_is_zero = Efp_b_is_zero & !fp_b_mantissa_isnot_zero
+  val fp_b_is_SNAN       = !io.fp_bIsFpCanonicalNAN & Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !fp_b_to64(significandWidth-2)
+  val fp_a_is_infinite   = !io.fp_aIsFpCanonicalNAN & Efp_a_is_all_one & (!fp_a_mantissa_isnot_zero)
+  val fp_b_is_infinite   = !io.fp_bIsFpCanonicalNAN & Efp_b_is_all_one & (!fp_b_mantissa_isnot_zero)
+  val fp_a_is_zero = !io.fp_aIsFpCanonicalNAN & Efp_a_is_zero & !fp_a_mantissa_isnot_zero
+  val fp_b_is_zero = !io.fp_bIsFpCanonicalNAN & Efp_b_is_zero & !fp_b_mantissa_isnot_zero
   val fp_a_is_zero_reg   = RegEnable(fp_a_is_zero, fire)
   val fp_b_is_zero_reg   = RegEnable(fp_b_is_zero, fire)
 
