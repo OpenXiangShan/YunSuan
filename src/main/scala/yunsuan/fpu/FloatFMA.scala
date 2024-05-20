@@ -607,15 +607,15 @@ class FloatFMA() extends Module{
   val has_snan_f16 = fp_a_is_snan_f16 | fp_b_is_snan_f16 | fp_c_is_snan_f16
 
   val fp_a_is_inf_f64 = !io.fp_aIsFpCanonicalNAN & Ea_f64.andR & !fp_a_significand_f64.tail(1).orR
-  val fp_a_is_inf_f32 = !io.fp_aIsFpCanonicalNAN & !fp_a_significand_f32.tail(1).orR
-  val fp_a_is_inf_f16 = !io.fp_aIsFpCanonicalNAN & !fp_a_significand_f16.tail(1).orR
-  val fp_b_is_inf_f64 = !io.fp_bIsFpCanonicalNAN & !fp_b_significand_f64.tail(1).orR
-  val fp_b_is_inf_f32 = !io.fp_bIsFpCanonicalNAN & !fp_b_significand_f32.tail(1).orR
-  val fp_b_is_inf_f16 = !io.fp_bIsFpCanonicalNAN & !fp_b_significand_f16.tail(1).orR
-  val fp_c_is_inf_f64 = !io.fp_cIsFpCanonicalNAN & !fp_c_significand_f64.tail(1).orR
-  val fp_c_is_inf_f32 = !io.fp_cIsFpCanonicalNAN & !fp_c_significand_f32.tail(1).orR
-  val fp_c_is_inf_f16 = !io.fp_cIsFpCanonicalNAN & !fp_c_significand_f16.tail(1).orR
-  
+  val fp_a_is_inf_f32 = !io.fp_aIsFpCanonicalNAN & Ea_f32.andR & !fp_a_significand_f32.tail(1).orR
+  val fp_a_is_inf_f16 = !io.fp_aIsFpCanonicalNAN & Ea_f16.andR & !fp_a_significand_f16.tail(1).orR
+  val fp_b_is_inf_f64 = !io.fp_bIsFpCanonicalNAN & Eb_f64.andR & !fp_b_significand_f64.tail(1).orR
+  val fp_b_is_inf_f32 = !io.fp_bIsFpCanonicalNAN & Eb_f32.andR & !fp_b_significand_f32.tail(1).orR
+  val fp_b_is_inf_f16 = !io.fp_bIsFpCanonicalNAN & Eb_f16.andR & !fp_b_significand_f16.tail(1).orR
+  val fp_c_is_inf_f64 = !io.fp_cIsFpCanonicalNAN & Ec_f64.andR & !fp_c_significand_f64.tail(1).orR
+  val fp_c_is_inf_f32 = !io.fp_cIsFpCanonicalNAN & Ec_f32.andR & !fp_c_significand_f32.tail(1).orR
+  val fp_c_is_inf_f16 = !io.fp_cIsFpCanonicalNAN & Ec_f16.andR & !fp_c_significand_f16.tail(1).orR
+
   val has_inf_f64 = fp_a_is_inf_f64 | fp_b_is_inf_f64 | fp_c_is_inf_f64
   val has_inf_f32 = fp_a_is_inf_f32 | fp_b_is_inf_f32 | fp_c_is_inf_f32
   val has_inf_f16 = fp_a_is_inf_f16 | fp_b_is_inf_f16 | fp_c_is_inf_f16
