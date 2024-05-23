@@ -636,11 +636,6 @@ class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = false,val hasMin
       io.fp_b,
       0.U(floatWidth.W)
     )
-    val outInf = Mux(
-      res_is_f32,
-      Cat(is_fmax_re, Fill(8, 1.U), 0.U(23.W)),
-      Cat(0.U(16.W), is_fmax_re, Fill(5, 1.U), 0.U(10.W))
-    )
     val re_masked_one_out = Mux(
       io.maskForReduction(0),
       Mux(fp_a_is_NAN, out_NAN, io.fp_a),
@@ -648,12 +643,12 @@ class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = false,val hasMin
     )
     val result_fmax_re = Mux(
       io.maskForReduction === 0.U,
-      outInf,
+      out_NAN,
       Mux(io.maskForReduction.andR, result_max, re_masked_one_out)
     )
     val result_fmin_re = Mux(
       io.maskForReduction === 0.U,
-      outInf,
+      out_NAN,
       Mux(io.maskForReduction.andR, result_min, re_masked_one_out)
     )
     val result_stage0 = Mux1H(
@@ -1929,12 +1924,12 @@ class FloatAdderF64WidenPipeline(val is_print:Boolean = false,val hasMinMaxCompa
     )
     val result_fmax_re = Mux(
       io.maskForReduction === 0.U,
-      outInf,
+      out_NAN,
       Mux(io.maskForReduction.andR, result_max, re_masked_one_out)
     )
     val result_fmin_re = Mux(
       io.maskForReduction === 0.U,
-      outInf,
+      out_NAN,
       Mux(io.maskForReduction.andR, result_min, re_masked_one_out)
     )
     val result_stage0 = Mux1H(
@@ -2598,12 +2593,12 @@ class FloatAdderF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:Bo
     )
     val result_fmax_re = Mux(
       io.maskForReduction === 0.U,
-      outInf,
+      out_NAN,
       Mux(io.maskForReduction.andR, result_max, re_masked_one_out)
     )
     val result_fmin_re = Mux(
       io.maskForReduction === 0.U,
-      outInf,
+      out_NAN,
       Mux(io.maskForReduction.andR, result_min, re_masked_one_out)
     )
     val result_stage0 = Mux1H(
