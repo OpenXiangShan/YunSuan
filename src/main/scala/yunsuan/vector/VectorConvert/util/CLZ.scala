@@ -6,14 +6,14 @@ import chisel3.util._
 class CLZ(len: Int, zero: Boolean) extends Module {
 
   val inWidth = len
-  val outWidth = (inWidth - 1).U.getWidth
+  val outWidth = inWidth.U.getWidth
 
   val io = IO(new Bundle() {
     val in = Input(UInt(inWidth.W))
     val out = Output(UInt(outWidth.W))
   })
 
-  io.out := PriorityEncoder(io.in.asBools.reverse)
+  io.out := PriorityEncoder(Cat(io.in, 1.U).asBools.reverse)
 }
 
 object CLZ {
