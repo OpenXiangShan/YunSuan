@@ -652,7 +652,7 @@ class Permutation extends Module {
   }
 
   // vslideup/vslide1up
-  val slide_ele = Mux(vslide1up || vslide1dn, 1.U, vs1(xLen, 0))
+  val slide_ele = Mux(vslide1up || vslide1dn, 1.U, vs1(xLen - 1, 0))
   val slide_bytes = slide_ele << vsew
   val vslideup_vd_reg0 = Wire(Vec(vlenb, UInt(8.W)))
   val vslide1up_vd_reg0 = Wire(Vec(vlenb, UInt(8.W)))
