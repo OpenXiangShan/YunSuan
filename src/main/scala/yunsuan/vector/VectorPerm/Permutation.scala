@@ -512,7 +512,8 @@ class Permutation extends Module {
 
   // vrgather/vrgather16
   val vlmax_bytes = Wire(UInt(5.W))
-  val vrgather_byte_sel = Wire(Vec(vlenb, UInt(64.W)))
+  // we may append at most 3bits to vrgather_byte_sel, so the width of vrgather_byte_sel is 64+3 = 67
+  val vrgather_byte_sel = Wire(Vec(vlenb, UInt(67.W)))
   val first_gather = (vlmul >= 4.U) || vs2Id === 0.U
   val vs2_bytes_min = Mux1H(Seq.tabulate(8)(i => (vs2Id === i.U) -> (vlenb * i).U))
   val vs2_bytes_max = Mux1H(Seq(
