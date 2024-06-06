@@ -108,6 +108,8 @@ class fpsqrt_r16(
   val op_invalid_0_q = Reg(Bool())
   val res_is_sqrt_2_d = Wire(Bool())
   val res_is_sqrt_2_q = Reg(Bool())
+  val res_is_sqrt_2_odd_d = Wire(Bool())
+  val res_is_sqrt_2_odd_q = Reg(Bool())
   val early_finish = Wire(Bool())
   val need_2_cycles_init = Wire(Bool())
   val op_l_shift_num_pre_0 = Wire(UInt(log2Ceil(F64_FRAC_W).W))
@@ -274,8 +276,8 @@ class fpsqrt_r16(
   op_exp_is_max_0 := (op_exp_0 === (Mux((fp_format_i === 0.U(2.W)), 31.U(11.W), Mux((fp_format_i === 1.U(2.W)), 255.U(11.W), 2047.U(11.W)))))
   op_is_zero_0 := !fp_aIsFpCanonicalNAN & op_exp_is_zero_0 & op_frac_is_zero_0
   op_is_inf_0 := !fp_aIsFpCanonicalNAN & op_exp_is_max_0 & op_frac_is_zero_0
-  op_is_qnan_0 := fp_aIsFpCanonicalNAN | op_exp_is_max_0 & (Mux((fp_format_i === 0.U(2.W)), op_i(57), Mux((fp_format_i === 1.U(2.W)), op_i(54), op_i(51))))
-  op_is_snan_0 := !fp_aIsFpCanonicalNAN & op_exp_is_max_0 & ~op_frac_is_zero_0 & (Mux((fp_format_i === 0.U(2.W)), ~op_i(57), Mux((fp_format_i === 1.U(2.W)), ~op_i(54), ~op_i(51))))
+  op_is_qnan_0 := fp_aIsFpCanonicalNAN | op_exp_is_max_0 & (Mux((fp_format_i === 0.U(2.W)), op_i(9), Mux((fp_format_i === 1.U(2.W)), op_i(22), op_i(51))))
+  op_is_snan_0 := !fp_aIsFpCanonicalNAN & op_exp_is_max_0 & ~op_frac_is_zero_0 & (Mux((fp_format_i === 0.U(2.W)), ~op_i(9), Mux((fp_format_i === 1.U(2.W)), ~op_i(22), ~op_i(51))))
   op_is_nan_0 := (op_is_qnan_0 | op_is_snan_0)
   op_invalid_0_d := (op_sign_0 & ~op_is_zero_0 & ~op_is_qnan_0) | op_is_snan_0
   res_is_nan_0_d := op_is_nan_0 | op_invalid_0_d
@@ -285,8 +287,9 @@ class fpsqrt_r16(
   out_exp_0_d := out_exp_pre_0(F64_EXP_W, 1)
   fp_fmt_d := Cat(fp_format_i === 2.U(2.W), fp_format_i === 1.U(2.W), fp_format_i === 0.U(2.W))
   rm_d := rm_i
+  res_is_sqrt_2_odd_d := op_frac_is_zero_0 & op_exp_0(0)
   res_is_sqrt_2_d :=  op_frac_is_zero_0 & ~op_exp_0(0)
-  early_finish := res_is_nan_0_d | res_is_inf_0_d | res_is_exact_zero_0_d | res_is_sqrt_2_d
+  early_finish := res_is_nan_0_d | res_is_inf_0_d | res_is_exact_zero_0_d | op_frac_is_zero_0
   need_2_cycles_init := op_exp_is_zero_0
   op_frac_pre_shifted_0 :=
     (Fill(F64_FRAC_W, fp_format_i === 0.U(2.W)) & Cat("b0".U(1.W), op_i(0 + F16_FRAC_W - 1 - 1, 0), Fill(F64_FRAC_W - F16_FRAC_W, "b0".U(1.W)))) |
@@ -566,8 +569,8 @@ class fpsqrt_r16(
   f16_res_is_sqrt_2 := res_is_sqrt_2_q & fp_fmt_q(0)
   rt_for_inc := Mux(res_is_sqrt_2_q, (
     (Fill(56, f64_res_is_sqrt_2) & Cat(SQRT_2_WITH_ROUND_BIT, rt_q(1, 0))) |
-      (Fill(56, f32_res_is_sqrt_2) & Cat(rt_q(55, 28), SQRT_2_WITH_ROUND_BIT(53, 53 - 25 + 1), rt_q(2, 0))) |
-      (Fill(56, f16_res_is_sqrt_2) & Cat(rt_q(55, 14), SQRT_2_WITH_ROUND_BIT(53, 53 - 12 + 1), rt_q(1, 0)))
+      (Fill(56, f32_res_is_sqrt_2) & Cat(SQRT_2_WITH_ROUND_BIT(53, 53 - 25 + 1), rt_q(2, 0), 0.U(28.W))) |
+      (Fill(56, f16_res_is_sqrt_2) & Cat(SQRT_2_WITH_ROUND_BIT(53, 53 - 12 + 1), rt_q(1, 0), 0.U(42.W)))
     ), rt_q)
   rt_pre_inc := Cat(
     rt_for_inc(54, 42), Mux(
@@ -615,7 +618,7 @@ class fpsqrt_r16(
       (Fill(1, fp_fmt_q(1)) & rt_for_inc(31)) |
       (Fill(1, fp_fmt_q(2)) & rt_for_inc(2))
 
-  sticky_bit_rt_0 := rem_is_not_zero_0
+  sticky_bit_rt_0 := rem_is_not_zero_0 | res_is_sqrt_2_q
 
   inexact_rt_0 := round_bit_rt_0 | sticky_bit_rt_0
 
@@ -660,17 +663,17 @@ class fpsqrt_r16(
 
   f16_frac_res_0 := Mux(
     res_is_nan_0_q, Cat("b1".U(1.W), "b0".U(9.W)),
-    Mux((res_is_inf_0_q | res_is_exact_zero_0_q), "b0".U(10.W),
+    Mux((res_is_inf_0_q | res_is_exact_zero_0_q | res_is_sqrt_2_odd_q), "b0".U(10.W),
       frac_rounded_0(51, 51 - 10 + 1)))
 
   f32_frac_res_0 := Mux(
     res_is_nan_0_q, Cat("b1".U(1.W), "b0".U(22.W)),
-    Mux((res_is_inf_0_q | res_is_exact_zero_0_q), "b0".U(23.W),
+    Mux((res_is_inf_0_q | res_is_exact_zero_0_q | res_is_sqrt_2_odd_q), "b0".U(23.W),
       frac_rounded_0(51, 51 - 23 + 1)))
 
   f64_frac_res_0 := Mux(
     res_is_nan_0_q, Cat("b1".U(1.W), "b0".U(51.W)),
-    Mux((res_is_inf_0_q | res_is_exact_zero_0_q), "b0".U(52.W),
+    Mux((res_is_inf_0_q | res_is_exact_zero_0_q | res_is_sqrt_2_odd_q), "b0".U(52.W),
       frac_rounded_0(0 + 52 - 1, 0)))
   f16_res_0 := Cat(out_sign_0_q, f16_exp_res_0, f16_frac_res_0)
 
@@ -720,6 +723,7 @@ class fpsqrt_r16(
     fp_fmt_q := fp_fmt_d
     rm_q := rm_d
     res_is_sqrt_2_q := res_is_sqrt_2_d
+    res_is_sqrt_2_odd_q := res_is_sqrt_2_odd_d
     op_invalid_0_q := op_invalid_0_d
     res_is_nan_0_q := res_is_nan_0_d
     res_is_inf_0_q := res_is_inf_0_d
