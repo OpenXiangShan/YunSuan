@@ -219,17 +219,7 @@ class Permutation extends Module {
   }
 
   val eNum = Mux1H(UIntToOH(vsew), Seq(4, 3, 2, 1).map(num => num.U))
-  val maskUopIdx1H = Seq(
-    uopIdx >= 0.U  && uopIdx <= 1.U,
-    uopIdx >= 2.U  && uopIdx <= 4.U,
-    uopIdx >= 5.U  && uopIdx <= 8.U,
-    uopIdx >= 9.U  && uopIdx <= 13.U,
-    uopIdx >= 14.U && uopIdx <= 19.U,
-    uopIdx >= 20.U && uopIdx <= 26.U,
-    uopIdx >= 27.U && uopIdx <= 34.U,
-    uopIdx >= 35.U && uopIdx <= 42.U
-  )
-  mask_start_idx := Mux1H(maskUopIdx1H, Seq.tabulate(8){num => num.U << eNum})
+  mask_start_idx := 1.U << eNum
 
   val baseUopIdx1H = Seq(
     uopIdx === 0.U  || uopIdx === 2.U  || uopIdx === 5.U  || uopIdx === 9.U  || uopIdx === 14.U || uopIdx === 20.U || uopIdx === 27.U || uopIdx === 35.U,
@@ -250,10 +240,10 @@ class Permutation extends Module {
 
   val vs1_mask = Wire(Vec(vlenb, UInt(1.W)))
   for (i <- 0 until vlenb) {
-    vs1_mask(i) := vs1(mask_start_idx + i.U)
+    vs1_mask(i) := vs1(i)
   }
 
-  in_previous_ones_sum := vmask(7, 0)
+  in_previous_ones_sum := Mux(uopIdx === 0.U || uopIdx === 1.U, 0.U, vs1(127, 120))
   out_previous_ones_sum := current_uop_ones_sum(elements - 1.U)
 
   for (i <- 0 until vlenb) {
@@ -277,8 +267,8 @@ class Permutation extends Module {
    */
   val vsew_reg0 = RegEnable(vsew, 0.U, fire)
   val elements_reg0 = RegEnable(elements, 0.U, fire)
-  val mask_start_idx_reg0 = RegEnable(mask_start_idx, 0.U, fire)
   val vs1_reg0 = RegEnable(vs1, 0.U, fire)
+  val vs1_next_reg0 = RegEnable(vs1 >> mask_start_idx, 0.U, fire)
   val vs2_reg0 = RegEnable(vs2, 0.U, fire)
   val old_vd_reg0 = RegEnable(old_vd, 0.U, fire)
   val current_ones_sum_reg0 = RegEnable(current_ones_sum, fire)
@@ -312,33 +302,33 @@ class Permutation extends Module {
   when(vsew_reg0 === 0.U) {
     for (i <- 0 until 16) {
       when(i.U < elements_reg0) {
-        compressed_vs2_en_reg0(i) := (vs1_reg0(mask_start_idx_reg0 + i.U) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) << (ones_sum_reg0(i) - ones_sum_base_reg0)(3, 0)
+        compressed_vs2_en_reg0(i) := (vs1_reg0(i) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) << (ones_sum_reg0(i) - ones_sum_base_reg0)(3, 0)
         compressed_vs2_reg0(i) := vs2_reg0(8 * i + 7, 8 * i) << ((ones_sum_reg0(i) - ones_sum_base_reg0)(3, 0) << 3.U)
-        compressed_vs2_masked_reg0(i) := Fill(VLEN, vs1_reg0(mask_start_idx_reg0 + i.U) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) & compressed_vs2_reg0(i)
+        compressed_vs2_masked_reg0(i) := Fill(VLEN, vs1_reg0(i) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) & compressed_vs2_reg0(i)
       }
     }
   }.elsewhen(vsew_reg0 === 1.U) {
     for (i <- 0 until 8) {
       when(i.U < elements_reg0) {
-        compressed_vs2_en_reg0(i) := (vs1_reg0(mask_start_idx_reg0 + i.U) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) << (ones_sum_reg0(i) - ones_sum_base_reg0)(3, 0)
+        compressed_vs2_en_reg0(i) := (vs1_reg0(i) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) << (ones_sum_reg0(i) - ones_sum_base_reg0)(3, 0)
         compressed_vs2_reg0(i) := vs2_reg0(16 * i + 15, 16 * i) << ((ones_sum_reg0(i) - ones_sum_base_reg0)(3, 0) << 4.U)
-        compressed_vs2_masked_reg0(i) := Fill(VLEN, vs1_reg0(mask_start_idx_reg0 + i.U) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) & compressed_vs2_reg0(i)
+        compressed_vs2_masked_reg0(i) := Fill(VLEN, vs1_reg0(i) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) & compressed_vs2_reg0(i)
       }
     }
   }.elsewhen(vsew_reg0 === 2.U) {
     for (i <- 0 until 4) {
       when(i.U < elements_reg0) {
-        compressed_vs2_en_reg0(i) := (vs1_reg0(mask_start_idx_reg0 + i.U) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) << (ones_sum_reg0(i) - ones_sum_base_reg0)(3, 0)
+        compressed_vs2_en_reg0(i) := (vs1_reg0(i) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) << (ones_sum_reg0(i) - ones_sum_base_reg0)(3, 0)
         compressed_vs2_reg0(i) := vs2_reg0(32 * i + 31, 32 * i) << ((ones_sum_reg0(i) - ones_sum_base_reg0)(3, 0) << 5.U)
-        compressed_vs2_masked_reg0(i) := Fill(VLEN, vs1_reg0(mask_start_idx_reg0 + i.U) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) & compressed_vs2_reg0(i)
+        compressed_vs2_masked_reg0(i) := Fill(VLEN, vs1_reg0(i) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) & compressed_vs2_reg0(i)
       }
     }
   }.otherwise {
     for (i <- 0 until 2) {
       when(i.U < elements_reg0) {
-        compressed_vs2_en_reg0(i) := (vs1_reg0(mask_start_idx_reg0 + i.U) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) << (ones_sum_reg0(i) - ones_sum_base_reg0)(3, 0)
+        compressed_vs2_en_reg0(i) := (vs1_reg0(i) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) << (ones_sum_reg0(i) - ones_sum_base_reg0)(3, 0)
         compressed_vs2_reg0(i) := vs2_reg0(64 * i + 63, 64 * i) << ((ones_sum_reg0(i) - ones_sum_base_reg0)(3, 0) << 6.U)
-        compressed_vs2_masked_reg0(i) := Fill(VLEN, vs1_reg0(mask_start_idx_reg0 + i.U) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) & compressed_vs2_reg0(i)
+        compressed_vs2_masked_reg0(i) := Fill(VLEN, vs1_reg0(i) & (0.U <= (ones_sum_reg0(i) - ones_sum_base_reg0)) & ((ones_sum_reg0(i) - ones_sum_base_reg0) < ele_cnt_reg0)) & compressed_vs2_reg0(i)
       }
     }
   }
@@ -790,6 +780,7 @@ class Permutation extends Module {
   val ones_sum_eles_reg1 = RegEnable(ones_sum_eles_reg0, fire_reg0)
   val ones_sum_base_reg1 = RegEnable(ones_sum_base_reg0, fire_reg0)
   val compressed_res_reg1 = RegEnable(compressed_res_reg0, fire_reg0)
+  val vs1_next_reg1 = RegEnable(vs1_next_reg0, fire_reg0)
 
   val vstartRemainBytes_reg0 = vstartRemain_reg0 << vsew_reg0
 
@@ -899,7 +890,7 @@ class Permutation extends Module {
   }.elsewhen(is_vcompress_reg1) {
     when(uopIdx_reg1 === 1.U || uopIdx_reg1 === 4.U || uopIdx_reg1 === 8.U || uopIdx_reg1 === 13.U || uopIdx_reg1 === 19.U ||
       uopIdx_reg1 === 26.U || uopIdx_reg1 === 34.U) {
-      perm_vd := ones_sum_eles_reg1
+      perm_vd := Cat(ones_sum_eles_reg1, vs1_next_reg1(119, 0))  // reuse vs1
     }.otherwise {
       perm_vd := cmprs_vd
     }
