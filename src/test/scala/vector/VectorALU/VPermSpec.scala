@@ -36,7 +36,7 @@ trait VPermBehavior {
         // vcomprss lmul=2
         genVPermInput(SrcBundle("hc4d5e6dbc4d5e6d8b2a19063b2a19060", "h7c048cfb7c048cf869d0368369d03680",  "h579be00b579be0084567899345678990", "h0"), vcompress.copy(u8, u8, mask, vm = true, ta = false, ma=false, vlmul=1, vl=32)),
         genVPermInput(SrcBundle("hc4d5e6dbc4d5e6d8b2a19063b2a19060", "h7c048cfb7c048cf869d0368369d03680",  "h579be00b579be0084567899345678990", "h0"), vcompress.copy(u8, u8, mask, vm = true, ta = false, ma=false, vlmul=1, vl=32, uopIdx = 1)),
-        genVPermInput(SrcBundle("he93e93cbe93e93c8d70a3d53d70a3d50", "h7c048cfb7c048cf869d0368369d03680",  "h579be00b579be008456789e6dbd5e6b2", "h5"), vcompress.copy(u8, u8, mask, vm = true, ta = false, ma=false, vlmul=1, vl=32, uopIdx = 2)),
+        genVPermInput(SrcBundle("he93e93cbe93e93c8d70a3d53d70a3d50", "h5007c048cfb7c048cf869d0368369d0",  "h579be00b579be008456789e6dbd5e6b2", "h5"), vcompress.copy(u8, u8, mask, vm = true, ta = false, ma=false, vlmul=1, vl=32, uopIdx = 2)),
         genVPermInput(SrcBundle("he93e93cbe93e93c8d70a3d53d70a3d50", "h7c048cfb7c048cf869d0368369d03680",  "h7c048cfb7c048cf869d0368369d03680", "h5"), vcompress.copy(u8, u8, mask, vm = true, ta = false, ma=false, vlmul=1, vl=32, uopIdx = 3)),
         // vslide1up lmul=1
         genVPermInput(SrcBundle("h6d3a06d06d3a06d75b05b0585b05b05f", "h07070707070707070707070707070707",  "h48d159e048d159e7369d0368369d036f", "h2468acf02468acf7123456781234567f"), vslide1up.copy(u8, u8, u8, vm = false, ta = false, ma = false, vl=16)),
@@ -89,7 +89,7 @@ trait VPermBehavior {
         genVAluOutput("h8344c0aa5b76129530ac75dc32000f06"),
         // vcompress, lmul=2
         genVAluOutput("h579be00b579be008456789e6dbd5e6b2"),
-        genVAluOutput("h5"),
+        genVAluOutput("h5007c048cfb7c048cf869d0368369d0"),
         genVAluOutput("h579be00b3e93e9c8d70a53e6dbd5e6b2"),
         genVAluOutput("h7c048cfb7c048cf869d0368369d03680"),
         // vslide1up, lmul=1
