@@ -452,7 +452,7 @@ class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = false,val hasMin
   val fp_a_mantissa_isnot_zero = fp_a_to32.tail(1 + exponentWidth).orR
   val fp_b_mantissa_isnot_zero = fp_b_to32.tail(1 + exponentWidth).orR
   val fp_a_is_f16 = !res_is_f32 | (io.res_widening & !io.opb_widening)
-  val fp_b_is_f16 = !res_is_f32 | io.res_widening
+  val fp_b_is_f16 = !res_is_f32 | (io.res_widening & !io.is_vfwredosum)
   val Efp_a = fp_a_to32(floatWidth-2, floatWidth-1-exponentWidth)
   val Efp_b = fp_b_to32(floatWidth-2, floatWidth-1-exponentWidth)
   val Efp_a_is_zero  = !Efp_a.orR | (fp_a_is_f16 & Efp_a==="b01100110".U)
@@ -1760,7 +1760,7 @@ class FloatAdderF64WidenPipeline(val is_print:Boolean = false,val hasMinMaxCompa
   val fp_a_mantissa_isnot_zero = fp_a_to64.tail(1 + exponentWidth).orR
   val fp_b_mantissa_isnot_zero = fp_b_to64.tail(1 + exponentWidth).orR
   val fp_a_is_f32 = io.res_widening & !io.opb_widening
-  val fp_b_is_f32 = io.res_widening
+  val fp_b_is_f32 = io.res_widening & !io.is_vfwredosum
   val Efp_a = fp_a_to64(floatWidth-2, floatWidth-1-exponentWidth)
   val Efp_b = fp_b_to64(floatWidth-2, floatWidth-1-exponentWidth)
   val Efp_a_is_zero  = !Efp_a.orR | (fp_a_is_f32 & Efp_a==="b01101101001".U)
