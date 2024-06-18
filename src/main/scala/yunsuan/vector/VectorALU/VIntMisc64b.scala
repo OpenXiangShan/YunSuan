@@ -490,26 +490,57 @@ class VIntMisc64b extends Module {
 
   /**
    * vwsll.vv vwsll.vx vwsll.vi
+   * select vs2,vs1 according to uopidx
+   *
+   * sew=32, eewVd=64
+   *                      Fu1                                                                                                                   Fu0
+   *                 vs2[3]/vs2[1]                                                                                                        vs2[2]/vs2[0]
+   * uopidx=0 vd = zeroExt(vs2[1]) shift log2(vs1[1](5,0))                                                             vd = zeroExt(vs2[0]) shift log2(vs1[0](5,0))
+   * uopidx=1 vd = zeroExt(vs2[3]) shift log2(vs1[3](5,0))                                                             vd = zeroExt(vs2[2]) shift log2(vs1[2](5,0))
+   * 
+   * sew=16, eewVd=32
+   *                              Fu1                                                                                                         Fu0
+   *                      vs2[7],vs2[5]/vs2[3],vs2[1]                                                                               vs2[6],vs2[4]/vs2[2],vs2[0]
+   * uopidx=0 vd = Cat(zeroExt(vs2[3]) shift log2(vs1[3](4,0)), zeroExt(vs2[1]) shift log2(vs1[1](4,0)))            vd = Cat(zeroExt(vs2[2]) shift log2(vs1[2](4,0)), zeroExt(vs2[0]) shift log2(vs1[0](4,0)))
+   * uopidx=1 vd = Cat(zeroExt(vs2[7]) shift log2(vs1[7](4,0)), zeroExt(vs2[5]) shift log2(vs1[5](4,0)))            vd = Cat(zeroExt(vs2[6]) shift log2(vs1[6](4,0)), zeroExt(vs2[4]) shift log2(vs1[4](4,0)))
+   * 
+   * sew=8, eewVd=16
+   *                              Fu1                                                                                                        Fu0
+   *        vs2[15],vs2[13],vs2[11],vs2[9]/vs2[7],vs2[5],vs2[3],vs2[1]                                                  vs2[14],vs2[12],vs2[10],vs2[8]/vs2[6],vs2[4],vs2[2],vs2[0]
+   * uopidx=0         vd = Cat(zeroExt(vs2[7]) shift log2(vs1[7](3,0)) ... )                                        vd = Cat(zeroExt(vs2[6]) shift log2(vs1[6](3,0)) ... )
+   * uopidx=1         vd = Cat(zeroExt(vs2[15]) shift log2(vs1[15](3,0)) ... )                                      vd = Cat(zeroExt(vs2[14]) shift log2(vs1[14](3,0)) ... )
    */
   val wsllResult = Wire(UInt(64.W))
-  val wsllResult_8  = Wire(Vec(4, UInt(8.W)))
-  val wsllResult_16 = Wire(Vec(2, UInt(16.W)))
-  val wsllResult_32 = Wire(Vec(1, UInt(32.W)))
-  wsllResult_8  := vs2.asTypeOf(wsllResult_8)
-  wsllResult_16 := vs2.asTypeOf(wsllResult_16)
-  wsllResult_32 := vs2.asTypeOf(wsllResult_32)
+  val vs1_tmp_8  = Wire(Vec(4, UInt(8.W)))
+  val vs1_tmp_16 = Wire(Vec(2, UInt(16.W)))
+  val vs1_tmp_32 = Wire(Vec(1, UInt(32.W)))
+  val vs2_tmp_8  = Wire(Vec(4, UInt(8.W)))
+  val vs2_tmp_16 = Wire(Vec(2, UInt(16.W)))
+  val vs2_tmp_32 = Wire(Vec(1, UInt(32.W)))
+  val uopIdx = io.info.uopIdx
+  val selectHigh32 = uopIdx(0).asBool
+  val vs1_tmp = Wire(UInt(32.W))
+  val vs2_tmp = Wire(UInt(32.W))
+  vs1_tmp := Mux(selectHigh32, vs1(63, 32) ,vs1(31, 0))
+  vs2_tmp := Mux(selectHigh32, vs2(63, 32) ,vs2(31, 0))
+  vs1_tmp_8  := vs1_tmp.asTypeOf(vs1_tmp_8)
+  vs1_tmp_16 := vs1_tmp.asTypeOf(vs1_tmp_16)
+  vs1_tmp_32 := vs1_tmp.asTypeOf(vs1_tmp_32)
+  vs2_tmp_8  := vs2_tmp.asTypeOf(vs2_tmp_8)
+  vs2_tmp_16 := vs2_tmp.asTypeOf(vs2_tmp_16)
+  vs2_tmp_32 := vs2_tmp.asTypeOf(vs2_tmp_32)
 
   val wsllResult_8_tmp  = Wire(Vec(4, UInt(16.W)))
   val wsllResult_16_tmp = Wire(Vec(2, UInt(32.W)))
   val wsllResult_32_tmp = Wire(Vec(1, UInt(64.W)))
   for (i <- 0 until 4) {
-    wsllResult_8_tmp(i) := VecInit(shiftOneElement(vs1(8*i+3, 8*i), VecInit(Cat(Fill(8, 0.U), wsllResult_8(i)).asBools.reverse).asUInt, 16)._1.asBools.reverse).asUInt
+    wsllResult_8_tmp(i) := VecInit(shiftOneElement(vs1_tmp_8(i)(3, 0), VecInit(Cat(Fill(8, 0.U), vs2_tmp_8(i)).asBools.reverse).asUInt, 16)._1.asBools.reverse).asUInt
   }
   for (i <- 0 until 2) {
-    wsllResult_16_tmp(i) := VecInit(shiftOneElement(vs1(16*i+4, 16*i), VecInit(Cat(Fill(16, 0.U), wsllResult_16(i)).asBools.reverse).asUInt, 32)._1.asBools.reverse).asUInt
+    wsllResult_16_tmp(i) := VecInit(shiftOneElement(vs1_tmp_16(i)(4, 0), VecInit(Cat(Fill(16, 0.U), vs2_tmp_16(i)).asBools.reverse).asUInt, 32)._1.asBools.reverse).asUInt
   }
   for (i <- 0 until 1) {
-    wsllResult_32_tmp(i) := VecInit(shiftOneElement(vs1(32*i+5, 32*i), VecInit(Cat(Fill(32, 0.U), wsllResult_32(i)).asBools.reverse).asUInt, 64)._1.asBools.reverse).asUInt
+    wsllResult_32_tmp(i) := VecInit(shiftOneElement(vs1_tmp_32(i)(5, 0), VecInit(Cat(Fill(32, 0.U), vs2_tmp_32(i)).asBools.reverse).asUInt, 64)._1.asBools.reverse).asUInt
   }
   wsllResult := Mux1H(
     Seq(
