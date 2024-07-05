@@ -457,14 +457,13 @@ class Permutation extends Module {
   // dontTouch(vdId)
   // dontTouch(vs2Id)
 
-  val vslideup_vl = Wire(UInt(8.W))
-  vlRemain := vslideup_vl
+  vlRemain := vl
   when(vslide1up) {
     vlRemain := Mux(vl >= (uopIdx << vsew_plus1), vl - (uopIdx << vsew_plus1), 0.U)
   }.elsewhen(vslide1dn) {
     vlRemain := Mux(vl >= (uopIdx(5, 1) << vsew_plus1), vl - (uopIdx(5, 1) << vsew_plus1), 0.U)
   }.otherwise {
-    vlRemain := Mux1H(Seq.tabulate(8)(i => (vdId === i.U) -> (if (i == 0) vslideup_vl else Mux(vslideup_vl >= (ele_cnt * i.U), vslideup_vl - (ele_cnt * i.U), 0.U))))
+    vlRemain := Mux1H(Seq.tabulate(8)(i => (vdId === i.U) -> (if (i == 0) vl else Mux(vl >= (ele_cnt * i.U), vl - (ele_cnt * i.U), 0.U))))
   }
 
   vmask_uop := vmask0
@@ -784,7 +783,6 @@ class Permutation extends Module {
 
   val vstartRemainBytes_reg0 = vstartRemain_reg0 << vsew_reg0
 
-  vslideup_vl := Mux(vslideup & (slide_ele > vl), Mux(slide_ele > VLEN.U, VLEN.U, slide_ele), vl)
   val tail_bytes = Mux(vlRemainBytes_reg0 >= vlenb.U, 0.U, vlenb.U - vlRemainBytes_reg0)
   val tail_bits = Cat(tail_bytes, 0.U(3.W))
   val vmask_tail_bits = Wire(UInt(VLEN.W))
