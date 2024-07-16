@@ -608,8 +608,7 @@ class SelBlock_v4(iter_w :Int) extends Module {
 
 
 
-  val rem_array = Wire(Vec(4,Vec(2,UInt(iter_w.W))))
-  rem_array := VecInit(Seq.tabulate(4) {i => io.rem_3_5})
+  val rem_array = Seq.tabulate(4) {i => io.rem_3_5}
 
   val cons_u = Wire(Vec(4,UInt(iter_w.W)))
   cons_u := Mux1H(io.q_j,io.cons.toSeq) // attention -q_j select for 4ud-mk
@@ -666,8 +665,7 @@ class SpecBlock_v4 extends Module {
 
   )
   for (i <-0 until 5) {
-    val rem_array = Wire(Vec(4, Vec(2, UInt(9.W))))
-    rem_array := VecInit(Seq.tabulate(4) { k => temp_2(i)})
+    val rem_array = Seq.tabulate(4) { k => temp_2(i) }
 
 
     val cons_u = Wire(Vec(4, UInt(9.W)))
