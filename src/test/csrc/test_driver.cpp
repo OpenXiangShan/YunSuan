@@ -82,11 +82,6 @@ uint8_t TestDriver::gen_random_optype() {
       break;
     }
     case VFloatCvt:{
-      // uint8_t vid_all_optype[VFCVT_NUM] = VFCVT_ALL_OPTYPES;
-      // return vid_all_optype[rand() % VFCVT_NUM];
-      // uint8_t vid_all_optype[2] = {VFRSQRT7, VFREC7};
-      // return vid_all_optype[rand() % 2];
-      // break;
       if (input.sew == 0) {
         uint8_t vfcvt_8_optype[VFCVT_8_NUM] = VFCVT_8_OPTYPES;
         return vfcvt_8_optype[rand() % VFCVT_8_NUM];
@@ -105,6 +100,26 @@ uint8_t TestDriver::gen_random_optype() {
         break;
       }
     }
+    case FloatCvtF2X:{
+      if(input.sew == 1){
+        uint8_t fcvt_16_optype[FCVT_16_NUM] = FCVT_16_OPTYPES;
+        return fcvt_16_optype[rand() % FCVT_16_NUM];
+        break;
+      }else if(input.sew == 2){
+        uint8_t fcvt_32_optype[FCVT_32_NUM] = FCVT_32_OPTYPES;
+        return fcvt_32_optype[rand() % FCVT_32_NUM];
+        break;
+      }else if(input.sew == 3){
+        uint8_t fcvt_64_optype[FCVT_64_NUM] = FCVT_64_OPTYPES;
+        return fcvt_64_optype[rand() % FCVT_64_NUM];
+        break;
+      }
+    }
+    case FloatCvtI2F:{
+        uint8_t i2fcvt_64_optype[I2FCVT_64_NUM] = I2FCVT_64_OPTYPES;
+        return i2fcvt_64_optype[rand() % I2FCVT_64_NUM];
+        break;
+    }
     default:
       printf("Unsupported FuType %d\n", input.fuType);
       exit(1);
@@ -119,6 +134,8 @@ uint8_t TestDriver::gen_random_sew() {
     case VIntegerALU: return rand()%4; break;
     case VPermutation: return rand()%4; break;
     case VFloatCvt: return rand()%4; break;
+    case FloatCvtF2X: return (rand()%3)+1 ; break;
+    case FloatCvtI2F: return 0 ; break;
     default: return (rand()%3)+1; break;
   }
 }
@@ -357,8 +374,21 @@ void TestDriver::get_random_input() {
 
   if (!test_type.pick_fuType) { input.fuType = gen_random_futype(ALL_FUTYPES); }
   else { input.fuType = test_type.fuType; }
-
   if(input.fuType == VFloatCvt){
+    input.sew = gen_random_sew();
+    input.is_frs1 = false;
+    input.is_frs2 = false;
+    input.widen = false;
+    if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
+    else { input.fuOpType = test_type.fuOpType; }
+  }else if(input.fuType == FloatCvtF2X){
+    input.sew = gen_random_sew();
+    input.is_frs1 = false;
+    input.is_frs2 = false;
+    input.widen = false;
+    if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
+    else { input.fuOpType = test_type.fuOpType; }
+  }else if(input.fuType == FloatCvtI2F){
     input.sew = gen_random_sew();
     input.is_frs1 = false;
     input.is_frs2 = false;
@@ -428,6 +458,12 @@ void TestDriver::get_expected_output() {
     case VFloatCvt:
       if (verbose) { printf("FuType:%d, choose VFloatCvt %d\n", input.fuType, VFloatCvt); }
       expect_output = vcvt.get_expected_output(input); return;     
+    case FloatCvtF2X:
+      if (verbose) { printf("FuType:%d, choose FloatCvtF2X %d\n", input.fuType, FloatCvtF2X); }
+      expect_output = scvt.get_expected_output(input); return;   
+    case FloatCvtI2F:
+      if (verbose) { printf("FuType:%d, choose FloatCvtI2F %d\n", input.fuType, FloatCvtI2F); }
+      expect_output = scvt.get_expected_output(input); return; 
     default:
       printf("Unsupported FuType %d\n", input.fuType);
       exit(1);
