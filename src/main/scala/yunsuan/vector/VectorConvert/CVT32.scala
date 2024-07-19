@@ -176,7 +176,7 @@ class CVT32(width: Int = 32) extends CVT(width){
     Seq(is_int2fp,
       is_vfr,
       is_fp2fp),
-    Seq(is_sew_32 && is_narrow || is_sew_16 && is_single || is_sew_8 && is_widen,
+    Seq(is_sew_16 && is_narrow || is_sew_16 && is_single || is_sew_8 && is_widen,
       is_sew_16,
       is_narrow)
   )
@@ -275,15 +275,6 @@ class CVT32(width: Int = 32) extends CVT(width){
     )
   )
 
-  val exp_of = Wire(Bool())
-  val exp_of_reg0 = RegEnable(exp_of, false.B, fire)
-  exp_of := Mux1H(
-    Seq(is_fp2int && in_is_fp32,
-      is_fp2int && in_is_fp16),
-    Seq(exp > max_int_exp,
-      exp > max_int_exp || src.tail(4).head(f16.expWidth).andR)
-  )
-
   val lpath_shamt = exp - Mux1H(
     Seq(fp32toint32,
       fp16toint16 || fp16toint32
@@ -347,6 +338,17 @@ class CVT32(width: Int = 32) extends CVT(width){
       in)
   )
   val in_abs_reg0 = RegEnable(in_abs, fire)
+
+  val exp_of = Wire(Bool())
+  val exp_of_reg0 = RegEnable(exp_of, false.B, fire)
+  exp_of := Mux1H(
+    Seq(is_fp2int && in_is_fp32,
+      is_fp2int && in_is_fp16,
+      int32tofp16),
+    Seq(exp > max_int_exp,
+      exp > max_int_exp || src.tail(4).head(f16.expWidth).andR,
+      in_abs.tail(1).head(16).orR)
+  )
 
   val int2fp_clz = Mux1H(
     Seq(out_is_fp32 || exp_of,
