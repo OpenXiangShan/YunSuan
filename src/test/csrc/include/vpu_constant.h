@@ -22,11 +22,21 @@ extern "C"{
 #define VIntegerALUV2 (5)
 #define VIntegerDivider (6)
 #define VFloatCvt (7)
+#define FloatCvtF2X (8) //f->i/ui/f
+#define FloatCvtI2F (9) //i/ui->f
 // #define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt}
 
 //will be delated
-#define FU_NUM 6 
-#define ALL_FUTYPES {VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerDivider,VFloatCvt}
+// #define FU_NUM 7 
+// #define ALL_FUTYPES {VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerDivider,VFloatCvt,FloatCvt}
+// #define FU_NUM 1
+// #define ALL_FUTYPES {VFloatCvt}
+// #define FU_NUM 1 
+// #define ALL_FUTYPES {FloatCvtF2X}
+#define FU_NUM 2 
+#define ALL_FUTYPES {FloatCvtF2X,FloatCvtI2F}
+// #define FU_NUM 1 
+// #define ALL_FUTYPES {FloatCvtI2F}
 
 #define INT_ROUNDING(result, xrm, gb) \
   do { \
@@ -288,6 +298,44 @@ extern "C"{
   #define VFRSQRT7         (binstoi("11100000")) 
   #define VFREC7           (binstoi("11100001")) 
 
+  //FloatCvtF2X
+  //sew == 1
+  #define FCVT_S_H         (binstoi("11001000"))
+  #define FCVT_D_H         (binstoi("11011000"))
+  #define FCVT_W_H         (binstoi("10001001"))
+  #define FCVT_WU_H        (binstoi("10001000"))
+  #define FCVT_L_H         (binstoi("10011001"))
+  #define FCVT_LU_H        (binstoi("10011000"))
+  #define FCVT_H_S         (binstoi("11010000"))
+  //sew == 2
+  #define FCVT_W_S         (binstoi("10000001"))     
+  #define FCVT_WU_S        (binstoi("10000000"))     
+  #define FCVT_L_S         (binstoi("10001001"))     
+  #define FCVT_LU_S        (binstoi("10001000"))     
+  #define FCVT_W_D         (binstoi("10010001"))     
+  #define FCVT_WU_D        (binstoi("10010000"))     
+  #define FCVT_S_D         (binstoi("11010100"))     
+  #define FCVT_D_S         (binstoi("11001100"))     
+  //sew == 3
+  #define FCVT_H_D         (binstoi("11011000"))
+  #define FCVT_L_D         (binstoi("10000001"))     
+  #define FCVT_LU_D        (binstoi("10000000"))     
+
+  //FloatCvtI2F
+  #define FCVT_H_WU        (binstoi("00000000"))
+  #define FCVT_H_W         (binstoi("00000001"))
+  #define FCVT_H_LU        (binstoi("00001000"))
+  #define FCVT_H_L         (binstoi("00001001"))
+
+  #define FCVT_S_WU        (binstoi("00000010"))
+  #define FCVT_S_W         (binstoi("00000011"))
+  #define FCVT_S_LU        (binstoi("00001010"))
+  #define FCVT_S_L         (binstoi("00001011"))
+
+  #define FCVT_D_WU        (binstoi("00000100"))
+  #define FCVT_D_W         (binstoi("00000101"))
+  #define FCVT_D_LU        (binstoi("00001100"))
+  #define FCVT_D_L         (binstoi("00001101"))
 
 
   #define VFCVT_ALL_OPTYPES {VFCVT_XUFV, VFCVT_XFV, VFCVT_FXUV, VFCVT_FXV, VFCVT_RTZ_XUFV, VFCVT_RTZ_XFV, \
@@ -306,6 +354,20 @@ extern "C"{
   #define VFCVT_64_NUM  8
   #define VFCVT_64_OPTYPES {VFCVT_XUFV,VFCVT_XFV,VFCVT_FXUV,VFCVT_FXV,VFCVT_RTZ_XUFV,VFCVT_RTZ_XFV,VFRSQRT7,VFREC7}
 
+  //F2X
+  //sew == 1 
+  #define FCVT_16_NUM  7
+  #define FCVT_16_OPTYPES {FCVT_H_S,FCVT_S_H,FCVT_D_H,FCVT_W_H,FCVT_WU_H,FCVT_L_H,FCVT_LU_H}
+  //sew == 2
+  #define FCVT_32_NUM  8
+  #define FCVT_32_OPTYPES {FCVT_W_S,FCVT_WU_S,FCVT_D_S,FCVT_L_S,FCVT_LU_S,FCVT_S_D,FCVT_W_D,FCVT_WU_D}
+  //sew == 3
+  #define FCVT_64_NUM  3
+  #define FCVT_64_OPTYPES {FCVT_H_D,FCVT_L_D,FCVT_LU_D}
+
+  //I2F
+  #define I2FCVT_64_NUM  12
+  #define I2FCVT_64_OPTYPES {FCVT_H_WU,FCVT_H_W,FCVT_H_LU,FCVT_H_L,FCVT_S_WU,FCVT_S_W,FCVT_S_LU,FCVT_S_L,FCVT_D_WU,FCVT_D_W,FCVT_D_LU,FCVT_D_L}
 
 // pre-compile stoi
 constexpr uint8_t binstoi(const char str[]) {

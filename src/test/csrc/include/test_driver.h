@@ -43,7 +43,7 @@ private:
   VGMIntegerALUF vialuF;
   VGMIntegerDividier vid;
   VGMFloatCvt vcvt;
-
+  SGMFloatCvt scvt;
 
 public:
   TestDriver();

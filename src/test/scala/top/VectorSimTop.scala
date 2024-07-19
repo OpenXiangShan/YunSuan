@@ -6,6 +6,8 @@ import chisel3.util._
 import yunsuan.util._
 import yunsuan.vector.VectorConvert.VectorCvt
 import yunsuan.vector._
+import yunsuan.scalar.INT2FP
+import yunsuan.scalar.FPCVT
 
 trait VSPParameter {
   val VLEN       : Int = 128
@@ -29,9 +31,11 @@ object VPUTestFuType { // only use in test, difftest with xs
   def viaf = "b0000_0101".U(8.W)
   def vid = "b0000_0110".U(8.W)
   def vcvt= "b0000_0111".U(8.W)
+  def fcvtf2x= "b0000_1000".U(8.W)
+  def fcvti2f= "b0000_1001".U(8.W)
 
   def unknown(typ: UInt) = {
-    (typ > 7.U)
+    (typ > 9.U)
   }
 }
 
@@ -104,7 +108,9 @@ class SimTop() extends VPUTestModule {
       VPUTestFuType.vperm -> VPERM_latency.U,
       VPUTestFuType.viaf -> VIAF_latency.U,
       VPUTestFuType.vid -> VID_latency.U,
-      VPUTestFuType.vcvt -> VCVT_latency.U
+      VPUTestFuType.vcvt -> VCVT_latency.U,
+      VPUTestFuType.fcvtf2x -> VCVT_latency.U,
+      VPUTestFuType.fcvti2f -> VCVT_latency.U
     )) // fuType --> latency, spec case for div
     assert(!VPUTestFuType.unknown(io.in.bits.fuType))
   }
@@ -135,6 +141,8 @@ class SimTop() extends VPUTestModule {
   val vid_result = Wire(new VSTOutputIO)
   val vid_result_valid = Wire(Bool())
   val vcvt_result = Wire(new VSTOutputIO)
+  val i2f_result = Wire(new VSTOutputIO)
+  val fpcvt_result = Wire(new VSTOutputIO)
   when (io.in.fire() || io.out.fire()) {
     vfd_result_valid.map(_ := false.B)
   }
@@ -148,6 +156,8 @@ class SimTop() extends VPUTestModule {
     val vfd = Module(new VectorFloatDivider)
     val via = Module(new VectorIntAdder)
     val vcvt = Module(new VectorCvt(XLEN))
+    val i2fcvt = Module(new INT2FP(2, XLEN))
+    val fpcvt = Module(new FPCVT(XLEN))
 
     require(vfa.io.fp_a.getWidth == XLEN)
     vfa.io.fire := busy
@@ -266,6 +276,29 @@ class SimTop() extends VPUTestModule {
     vcvt_result.vxsat := 0.U
     vcvt_result.result(i) := vcvt.io.result
     vcvt_result.fflags(i) := vcvt.io.fflags
+
+    // i2fcvt
+    i2fcvt.regEnables(0) := true.B
+    i2fcvt.regEnables(1) := true.B
+    i2fcvt.io.wflags := busy
+    i2fcvt.io.opType := opcode(4,0)
+    i2fcvt.io.rm := rm
+    i2fcvt.io.rmInst := 7.U
+    i2fcvt.io.src := src1
+    i2f_result.vxsat := 0.U
+    i2f_result.result(i) := i2fcvt.io.result
+    i2f_result.fflags(i) := i2fcvt.io.fflags
+
+    //fpcvt
+    fpcvt.io.fire := busy
+    fpcvt.io.sew := sew
+    fpcvt.io.opType := opcode
+    fpcvt.io.rm := rm
+    fpcvt.io.src := src1
+    fpcvt.io.isFpToVecInst := true.B
+    fpcvt_result.vxsat := 0.U
+    fpcvt_result.result(i) := fpcvt.io.result
+    fpcvt_result.fflags(i) := fpcvt.io.fflags
   }
 
   val vperm = Module(new VPermTop)
@@ -352,7 +385,9 @@ class SimTop() extends VPUTestModule {
     VPUTestFuType.vperm -> vperm_result,
     VPUTestFuType.viaf -> viaf_result,
     VPUTestFuType.vid -> vid_result,
-    VPUTestFuType.vcvt -> vcvt_result
+    VPUTestFuType.vcvt -> vcvt_result,
+    VPUTestFuType.fcvtf2x -> fpcvt_result,
+    VPUTestFuType.fcvti2f -> i2f_result
   ))
 }
 
