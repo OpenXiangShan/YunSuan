@@ -29,21 +29,6 @@ class VIAlu extends Module {
     srcTypeVs2(1, 0) === 1.U && vdType(1, 0) === 0.U
   val vstart_gte_vl = io.in.bits.info.vstart >= io.in.bits.info.vl
 
-
-  val vIntFixpAlu = Module(new VIntFixpAlu)
-  vIntFixpAlu.io.fire := io.in.valid
-  vIntFixpAlu.io.in.opcode := io.in.bits.opcode
-  vIntFixpAlu.io.in.info := io.in.bits.info
-  vIntFixpAlu.io.in.srcType := io.in.bits.srcType
-  vIntFixpAlu.io.in.vdType := io.in.bits.vdType
-  vIntFixpAlu.io.in.vs1 := io.in.bits.vs1
-  vIntFixpAlu.io.in.vs2 := io.in.bits.vs2
-  vIntFixpAlu.io.in.old_vd := io.in.bits.old_vd
-  val eewVm = Mux(vdType === 15.U, eewVs1, eewVd)
-  val maskIdx = Mux(narrow, uopIdx >> 1, uopIdx)
-  vIntFixpAlu.io.in.mask16b := MaskExtract(mask, maskIdx, eewVm)
-  vIntFixpAlu.io.ctrl.narrow := narrow
-  vIntFixpAlu.io.ctrl.vstart_gte_vl := vstart_gte_vl
   val vsew = vdType(1, 0)
   val vs2 = io.in.bits.vs2
 
@@ -68,12 +53,10 @@ class VIAlu extends Module {
   val validS1 = RegNext(io.in.valid)
   val opcodeS2 = RegEnable(opcodeS1, validS1)
   val vs2ExtS2 = RegEnable(vs2Ext,validS1)
-  val vxsatS2 = RegEnable(vIntFixpAlu.io.out.vxsat, validS1)
   val vdFinal = Mux(opcodeS2.isVmvxs, vs2ExtS2,
-    //                    Mux(opcodeS1.isIntFixp, vIntFixpAlu.io.out.vd, 冗余代码
     Mux(opcodeS2.isReduction, vReduAlu.io.out.vd, vMaskAlu.io.out.vd))
   io.out.bits.vd := vdFinal
-  io.out.bits.vxsat := vxsatS2
+  io.out.bits.vxsat := false.B
   io.out.valid := GatedValidRegNext(validS1)
 }
 
