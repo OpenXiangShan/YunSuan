@@ -574,7 +574,8 @@ class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = false,val hasMin
       Cat(0.U(16.W), fp_bFix(15, 0))
     )
     val out_NAN = Mux(res_is_f32, Cat(0.U,Fill(8,1.U),1.U,0.U(22.W)), Cat(0.U(17.W),Fill(5,1.U),1.U,0.U(9.W)))
-    val out_Nzero = Mux(res_is_f32, Cat(1.U, 0.U(31.W)), Cat(0.U(16.W), 1.U, 0.U(15.W)))
+    val zero_sign = Mux(io.round_mode ==="b010".U, 0.U, 1.U)
+    val out_Nzero = Mux(res_is_f32, Cat(zero_sign, 0.U(31.W)), Cat(0.U(16.W), zero_sign, 0.U(15.W)))
     val fp_a_16_or_32 = Mux(res_is_f32, fp_aFix(31, 0), Cat(0.U(16.W), fp_aFix(15, 0)))
     val fp_b_16_or_32 = Mux(res_is_f32, fp_bFix(31, 0), Cat(0.U(16.W), fp_bFix(15, 0)))
     result_min := Mux1H(
@@ -1858,7 +1859,7 @@ class FloatAdderF64WidenPipeline(val is_print:Boolean = false,val hasMinMaxCompa
     val result_fmerge = Mux(io.mask, fp_bFix, fp_aFix)
     val result_fmove = fp_bFix
     val out_NAN = Cat(0.U, Fill(exponentWidth, 1.U), 1.U, Fill(significandWidth - 2, 0.U))
-    val out_Nzero = Cat(1.U, Fill(floatWidth - 1, 0.U))
+    val out_Nzero = Cat(Mux(io.round_mode ==="b010".U, 0.U, 1.U), Fill(floatWidth - 1, 0.U))
     result_min := Mux1H(
       Seq(
         !fp_a_is_NAN & !fp_b_is_NAN,
@@ -2529,7 +2530,7 @@ class FloatAdderF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:Bo
     val result_fmerge = Mux(io.mask, fp_bFix, fp_aFix)
     val result_fmove  = fp_bFix
     val out_NAN = Cat(0.U,Fill(exponentWidth,1.U),1.U,Fill(significandWidth-2,0.U))
-    val out_Nzero = Cat(1.U, Fill(floatWidth - 1, 0.U))
+    val out_Nzero = Cat(Mux(io.round_mode ==="b010".U, 0.U, 1.U), Fill(floatWidth - 1, 0.U))
     result_min := Mux1H(
       Seq(
         !fp_a_is_NAN & !fp_b_is_NAN,
