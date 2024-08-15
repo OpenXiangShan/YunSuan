@@ -698,7 +698,7 @@ class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = false,val hasMin
     val fflags_NV_stage0 = ((is_min | is_max) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_feq | is_fne) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN)) |
-      ((is_fmax_re | is_fmin_re) & (io.maskForReduction(0) & fp_a_is_SNAN) | (io.maskForReduction(1) & fp_b_is_SNAN))
+      ((is_fmax_re | is_fmin_re) & ((io.maskForReduction(0) & fp_a_is_SNAN) | (io.maskForReduction(1) & fp_b_is_SNAN)))
     val fflags_stage0 = Cat(fflags_NV_stage0,0.U(4.W))
     io.fp_c := Mux(RegEnable(is_add | is_sub | is_fsum_ure_notmasked | is_fsum_ore_notmasked, fire),float_adder_result,RegEnable(result_stage0, fire))
     io.fflags := Mux(RegEnable(is_add | is_sub | is_fsum_ure_notmasked | is_fsum_ore_notmasked, fire),float_adder_fflags,RegEnable(fflags_stage0, fire))
@@ -1981,7 +1981,7 @@ class FloatAdderF64WidenPipeline(val is_print:Boolean = false,val hasMinMaxCompa
     val fflags_NV_stage0 = ((is_min | is_max) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_feq | is_fne) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN)) |
-      ((is_fmax_re | is_fmin_re) & (io.maskForReduction(0) & fp_a_is_SNAN) | (io.maskForReduction(1) & fp_b_is_SNAN))
+      ((is_fmax_re | is_fmin_re) & ((io.maskForReduction(0) & fp_a_is_SNAN) | (io.maskForReduction(1) & fp_b_is_SNAN)))
     val fflags_stage0 = Cat(fflags_NV_stage0, 0.U(4.W))
     io.fp_c := Mux(RegEnable(is_add | is_sub | is_fsum_ure_notmasked | is_fsum_ore_notmasked, fire), float_adder_result, RegEnable(result_stage0, fire))
     io.fflags := Mux(RegEnable(is_add | is_sub | is_fsum_ure_notmasked | is_fsum_ore_notmasked, fire), float_adder_fflags, RegEnable(fflags_stage0, fire))
@@ -2652,7 +2652,7 @@ class FloatAdderF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:Bo
     val fflags_NV_stage0 = ((is_min | is_max) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_feq | is_fne) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN)) |
-      ((is_fmax_re | is_fmin_re) & (io.maskForReduction(0) & fp_a_is_SNAN) | (io.maskForReduction(1) & fp_b_is_SNAN))
+      ((is_fmax_re | is_fmin_re) & ((io.maskForReduction(0) & fp_a_is_SNAN) | (io.maskForReduction(1) & fp_b_is_SNAN)))
     val fflags_stage0 = Cat(fflags_NV_stage0, 0.U(4.W))
     io.fp_c := Mux(RegEnable(is_add | is_sub | is_fsum_ure_notmasked | is_fsum_ore_notmasked, fire), float_adder_result, RegEnable(result_stage0, fire))
     io.fflags := Mux(RegEnable(is_add | is_sub | is_fsum_ure_notmasked | is_fsum_ore_notmasked, fire), float_adder_fflags, RegEnable(fflags_stage0, fire))
