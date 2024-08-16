@@ -45,7 +45,9 @@ class SRT4Divint8(bit_width: Int=8) extends Module {
 
   io.div_ready := stateReg(idle)
   io.div_out_valid := stateReg(output)
-  when(stateReg(idle) && in_handshake) {
+  when(io.flush) {
+    stateReg := oh_idle
+  }.elsewhen(stateReg(idle) && in_handshake) {
     stateReg := oh_pre
   }.elsewhen(stateReg(pre)) {
     stateReg := Mux(early_finish, oh_post, oh_iter)
@@ -54,8 +56,6 @@ class SRT4Divint8(bit_width: Int=8) extends Module {
   }.elsewhen(stateReg(post)) {
     stateReg := oh_output
   }.elsewhen(stateReg(output) & io.div_out_ready) {
-    stateReg := oh_idle
-  }.elsewhen(io.flush) {
     stateReg := oh_idle
   }.otherwise {
     stateReg := stateReg
