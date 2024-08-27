@@ -273,6 +273,8 @@ class SimTop() extends VPUTestModule {
     vcvt.io.rm := rm
     vcvt.io.src := src1 // 128 bit->vcvt
     vcvt.io.isFpToVecInst := false.B
+    vcvt.io.isFround := 0.U
+    vcvt.io.isFcvtmod := false.B
     vcvt_result.vxsat := 0.U
     vcvt_result.result(i) := vcvt.io.result
     vcvt_result.fflags(i) := vcvt.io.fflags
@@ -296,6 +298,8 @@ class SimTop() extends VPUTestModule {
     fpcvt.io.rm := rm
     fpcvt.io.src := src1
     fpcvt.io.isFpToVecInst := true.B
+    fpcvt.io.isFround := 0.U
+    fpcvt.io.isFcvtmod := false.B
     fpcvt_result.vxsat := 0.U
     fpcvt_result.result(i) := fpcvt.io.result
     fpcvt_result.fflags(i) := fpcvt.io.fflags

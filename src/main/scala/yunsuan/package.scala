@@ -582,6 +582,10 @@ object VfcvtType {
     def fsgnj    = "b00110".U(width.W)
     def fsgnjx   = "b01000".U(width.W)
     def fsgnjn   = "b00111".U(width.W)
+    def fminm    = "b11110".U(width.W)
+    def fmaxm    = "b10011".U(width.W)
+    def fleq     = "b11100".U(width.W)
+    def fltq     = "b11011".U(width.W)
   }
   object FmaOpCode {
     def width = 4

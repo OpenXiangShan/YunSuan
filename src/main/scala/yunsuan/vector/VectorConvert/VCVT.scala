@@ -12,6 +12,8 @@ class CVTIO(width: Int) extends Bundle {
   val input1H = Input(UInt(4.W))
   val output1H = Input(UInt(4.W))
   val isFpToVecInst = Input(Bool())
+  val isFround = Input(UInt(2.W))
+  val isFcvtmod = Input(Bool())
   val result = Output(UInt(width.W))
   val fflags = Output(UInt(5.W))
 }
@@ -39,7 +41,9 @@ object VCVT {
              rm:      UInt,
              input1H:      UInt,
              output1H:      UInt,
-             isFpToVecInst: Bool
+             isFpToVecInst: Bool,
+             isFround: UInt,
+             isFcvtmod: Bool
            ): (UInt, UInt) = {
     val vcvtWraper = Module(new VCVT(width))
     vcvtWraper.io.fire := fire
@@ -50,6 +54,8 @@ object VCVT {
     vcvtWraper.io.input1H := input1H
     vcvtWraper.io.output1H := output1H
     vcvtWraper.io.isFpToVecInst := isFpToVecInst
+    vcvtWraper.io.isFround := isFround
+    vcvtWraper.io.isFcvtmod := isFcvtmod
     (vcvtWraper.io.result, vcvtWraper.io.fflags)
   }
 }
