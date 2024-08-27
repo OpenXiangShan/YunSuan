@@ -85,6 +85,8 @@ class FpCvtIO(width: Int) extends Bundle {
   val sew = Input(UInt(2.W))
   val rm = Input(UInt(3.W))
   val isFpToVecInst = Input(Bool())
+  val isFround = Input(UInt(2.W))
+  val isFcvtmod = Input(Bool())
 
   val result = Output(UInt(width.W))
   val fflags = Output(UInt(5.W))
@@ -151,6 +153,8 @@ class FPCVT(xlen :Int) extends Module{
   fcvt.io.opType := io.opType
   fcvt.io.rm := io.rm
   fcvt.io.isFpToVecInst := io.isFpToVecInst
+  fcvt.io.isFround := io.isFround
+  fcvt.io.isFcvtmod := io.isFcvtmod
   fcvt.io.input1H := input1H
   fcvt.io.output1H := output1H
 
