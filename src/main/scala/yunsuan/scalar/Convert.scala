@@ -145,7 +145,7 @@ class FPCVT(xlen :Int) extends Module{
   )
   dontTouch(input1H)
   dontTouch(output1H)
-  val fcvt = Module(new CVT64(64, false))
+  val fcvt = Module(new CVT64(xlen, isVectorCvt=false))
   fcvt.io.sew := io.sew
   fcvt.io.fire := io.fire
   fcvt.io.src := io.src

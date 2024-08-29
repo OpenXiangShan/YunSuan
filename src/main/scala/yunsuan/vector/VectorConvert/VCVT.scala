@@ -27,7 +27,7 @@ class VCVT(width: Int) extends Module{
   val vcvtImpl = width match {
     case 16 => Module(new CVT16(16))
     case 32 => Module(new CVT32(32))
-    case 64 => Module(new CVT64(64, true))
+    case 64 => Module(new CVT64(64, isVectorCvt=true))
   }
   io <> vcvtImpl.io
 }
