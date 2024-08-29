@@ -27,16 +27,8 @@ extern "C"{
 // #define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt}
 
 //will be delated
-// #define FU_NUM 7 
-// #define ALL_FUTYPES {VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerDivider,VFloatCvt,FloatCvt}
-// #define FU_NUM 1
-// #define ALL_FUTYPES {VFloatCvt}
-// #define FU_NUM 1 
-// #define ALL_FUTYPES {FloatCvtF2X}
-#define FU_NUM 2 
-#define ALL_FUTYPES {FloatCvtF2X,FloatCvtI2F}
-// #define FU_NUM 1 
-// #define ALL_FUTYPES {FloatCvtI2F}
+#define FU_NUM 8 
+#define ALL_FUTYPES {VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerDivider,VFloatCvt,FloatCvtF2X,FloatCvtI2F}
 
 #define INT_ROUNDING(result, xrm, gb) \
   do { \
