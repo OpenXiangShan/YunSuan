@@ -449,6 +449,10 @@ package object yunsuan {
     def vfredmin  = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmin_re)
     def vfredosum = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fsum_ore)
     def vfwredosum= LiteralCat(0.U(1.W), 0.U(1.W), 1.U(1.W), VfaddOpCode.fsum_ore)
+    def fminm     = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fminm)
+    def fmaxm     = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmaxm)
+    def fleq      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fleq)
+    def fltq      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fltq)
   }
 
   object VfaddOpCode {
@@ -475,6 +479,10 @@ package object yunsuan {
     def fmin_re  = "b10100".U(5.W)
     def fmax_re  = "b10101".U(5.W)
     def fsum_ore = "b10110".U(5.W) // ordered
+    def fminm    = "b11110".U(5.W)
+    def fmaxm    = "b10011".U(5.W)
+    def fleq     = "b11100".U(5.W)
+    def fltq     = "b11011".U(5.W)
   }
 
   object VfmaType{
@@ -522,7 +530,7 @@ package object yunsuan {
   }
 
 object VfcvtType {
-  def width = 8
+  def width = 9
   //  f/i(input) ## f/i(output) ## intr's func1
   def vfcvt_xufv        = "b10_000000".U(8.W)
   def vfcvt_xfv         = "b10_000001".U(8.W)
@@ -555,6 +563,9 @@ object VfcvtType {
   def fcvt_wu_h         = "b10_001000".U(8.W)
   def fcvt_l_h          = "b10_011001".U(8.W)
   def fcvt_lu_h         = "b10_011000".U(8.W)
+  def fround            = "b11_000000".U(8.W)
+  def froundnx          = "b11_000100".U(8.W)
+  def fcvtmod_w_d     = "b1_10_010001".U(9.W)
 }
 
 
