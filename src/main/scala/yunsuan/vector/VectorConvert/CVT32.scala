@@ -828,7 +828,7 @@ class CVT32(width: Int = 32) extends CVT(width){
   val rpath_neg_of_reg0 = is_fp2int_reg0 && in_reg0.head(1).asBool && Mux1H(
     Seq(fp32toint16_reg0,
       fp16toint8_reg0),
-    Seq(in_reg0.tail(1).head(8) === 142.U && (rounder.io.in.tail(8).orR || rounder.io.r_up),
+    Seq(in_reg0.tail(1).head(8) === 142.U && (rounder.io.in.tail(9).orR || rounder.io.r_up),
       in_reg0.tail(1).head(8) === 22.U && (rounder.io.in.tail(17).orR || rounder.io.r_up))
   )
   val rpath_of_reg0 = Mux1H(
