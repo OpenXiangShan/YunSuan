@@ -22,6 +22,7 @@ trait FloatFormat{
   def maxExp = (BigInt(1) << expWidth) - 2
   def minExp = 1
   def froundMaxExp = fracWidth + bias
+  def froundShiftMask = bias + f64.fracWidth
 }
 
 object f16 extends FloatFormat {
