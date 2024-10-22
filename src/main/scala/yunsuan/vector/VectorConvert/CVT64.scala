@@ -64,6 +64,7 @@ class CVT64(width: Int = 64, isVectorCvt: Boolean) extends CVT(width){
   val s2_isInt2Fp = RegEnable(s1_isInt2Fp, fireReg)
   val s2_isEstimate7 = RegEnable(s1_isEstimate7, fireReg)
   val s2_isFPsrc = RegEnable(s1_isFPsrc, fireReg)
+  val s2_isFround = RegEnable(isFroundReg, fireReg)
   //inst FPTOINT and FPTOFP module
   val fpcvt = Module(new FP_INCVT(width))
   fpcvt.io.fire := fire
@@ -118,7 +119,7 @@ class CVT64(width: Int = 64, isVectorCvt: Boolean) extends CVT(width){
     val result = fpcvt.io.result
     val fflags = fpcvt.io.fflags
     io.result := Mux(s2_fpCanonicalNAN, s2_resultForfpCanonicalNAN, result)
-    io.fflags := Mux(s2_fpCanonicalNAN && !s2_outIsFP, "b10000".U, fflags)
+    io.fflags := Mux(s2_fpCanonicalNAN && !s2_outIsFP, "b10000".U, Mux(s2_fpCanonicalNAN && s2_isFround, 0.U, fflags))
   }
 }
 class CVT_IO(width: Int) extends Bundle{
@@ -287,7 +288,7 @@ class FP_INCVT(width: Int) extends Module {
   // common
   val fracValueSrc = (expNotZeroSrcNext && !expIsOnesSrcNext) ## fracSrc
   val shamtInNext = fracValueSrc ## 0.U(11.W) ## false.B  //fp Narrow & fp->int
-  val shamtWidth = Mux(!outIsFpNext, Mux1H(float1HSrcNext, fpParam.fpMap.map(fp => (63+fp.bias).U)),
+  val shamtWidth = Mux(!outIsFpNext || isFroundOrFroundnxNext, Mux1H(float1HSrcNext, fpParam.fpMap.map(fp => (63+fp.bias).U)),
     Mux(isCrossLow, (fpParam.biasDeltaMap(2) + 1).U, Mux1H(float1HOutNext.tail(1), fpParam.biasDeltaMap.take(2).map(delta => (delta + 1).U)))
   ) - expSrcNext
   val shamtNext = Mux(shamtWidth >= 65.U, 65.U, shamtWidth)
@@ -305,23 +306,20 @@ class FP_INCVT(width: Int) extends Module {
    * frac
    * cycle: 0
    */
-  val froundExpDeltaNext = Wire(UInt(6.W))
-  val froundFracShiftNext = Wire(UInt(64.W))
-  val froundExpSubBias = Wire(UInt(f64.expWidth.W))
 
   val froundMaxExpNext = Mux1H(float1HOutNext, fpParam.fpMap.map(fp => fp.froundMaxExp.U))
-  val froundFracNext = fracValueSrc ## 0.U(11.W)
+  val froundExpGreaterThanMaxExpNext = expSrcNext >= froundMaxExpNext
+
+  val fracShiftMaskNext = Mux1H(float1HOutNext, fpParam.fpMap.map(fp => fp.froundShiftMask.U)) - expSrcNext
+
+  val froundDeltaNext = Wire(UInt(f64.expWidth.W))
+  froundDeltaNext := froundMaxExpNext - expSrcNext - 1.U
+
+  val froundFracNext = (fracValueSrc ## 0.U(11.W)) >> froundDeltaNext
 
   val froundExpLessThanBiasNext = Mux1H(float1HOutNext, fpParam.fpMap.map(fp => !expSrcNext(fp.expWidth-1) && !expSrcNext(fp.expWidth-2, 0).andR))
-  val froundExpGreaterThanMaxExpNext = expSrcNext > froundMaxExpNext
 
-  froundExpSubBias := Mux1H(float1HOutNext, fpParam.fpMap.map(fp => fp.bias.U)) - expSrcNext
-  froundExpDeltaNext := Mux(froundExpLessThanBiasNext, froundExpSubBias, 1.U + ~froundExpSubBias)
-  froundFracShiftNext := Mux(froundExpLessThanBiasNext, froundFracNext >> froundExpDeltaNext, froundFracNext << froundExpDeltaNext)
-
-  val fracShiftMaskNext = f64.fracWidth.U - froundExpDeltaNext
-
-  val froundFracShift = RegEnable(froundFracShiftNext, 0.U, fire)
+  val froundFrac = RegEnable(froundFracNext, 0.U, fire)
   val froundExpLessThanBias = RegEnable(froundExpLessThanBiasNext, false.B, fire)
   val froundExpGreaterThanMaxExp = RegEnable(froundExpGreaterThanMaxExpNext, false.B, fire)
   val fracShiftMask = RegEnable(fracShiftMaskNext, 0.U, fire)
@@ -330,12 +328,18 @@ class FP_INCVT(width: Int) extends Module {
 
   // cycle1
   val froundShiftMask = Wire(UInt(64.W))
-  val froundUpShiftMask = Wire(UInt(52.W))
+  val froundUpShiftMask = Wire(UInt(64.W))
   val froundOldInput = Wire(UInt(64.W))
   val froundUpInput = Wire(UInt(64.W))
 
-  froundShiftMask := ~0.U(64.W) << fracShiftMask
-  froundUpShiftMask := 1.U << fracShiftMask
+  froundShiftMask := Mux1H(
+    (0 until (1 << 6)).map(i =>
+      (i.U === fracShiftMask) -> Cat(~0.U((64-i).W), 0.U(i.W)))
+  )
+  froundUpShiftMask := Mux1H(
+    (0 until (1 << 6)).map(i =>
+      (i.U === fracShiftMask) -> Cat(1.U((64-i).W), 0.U(i.W)))
+  )
   froundOldInput := Cat(signSrc, froundOldExp, froundOldFrac) & froundShiftMask
   froundUpInput := froundOldInput + froundUpShiftMask
 
@@ -344,7 +348,8 @@ class FP_INCVT(width: Int) extends Module {
    * cycle: 1
    */
   val rounderMapIn = Wire(UInt(64.W))
-  rounderMapIn := Mux(isFpNarrow || isFpCrossLow, fracSrcLeft, shiftLeft)
+  rounderMapIn := Mux(isFpNarrow || isFpCrossLow, fracSrcLeft,
+    Mux(isFroundOrFroundnxReg, froundFrac, shiftLeft))
 
   val rounderMap =
     fpParam.fpMap.map(fp => Seq(
@@ -358,15 +363,16 @@ class FP_INCVT(width: Int) extends Module {
   val (rounderInputMap, rounerInMap, rounderStikyMap, isOnesRounderInputMap) = {
     (rounderMap(0), rounderMap(1), rounderMap(2), rounderMap(3))
   }
-  val rounderInput = Mux(isFp2Int, inRounder.head(64),  Mux1H(float1HOut, rounderInputMap))
 
-  val froundRoundIn = froundFracShift.tail(1).head(1).asBool
-  val froundStickyIn = Mux1H(float1HOut, fpParam.fpMap.map(fp => froundFracShift.tail(2).head(fp.fracWidth - 1).orR))
+  val selectInRounder = isFp2Int || isFroundOrFroundnxReg && froundExpLessThanBias
+  val rounderInput = Mux(selectInRounder, inRounder.head(64),  Mux1H(float1HOut, rounderInputMap))
+  val rounderRoundIn = Mux(selectInRounder, inRounder(0), Mux1H(float1HOut, rounerInMap))
+  val rounderStickyIn = Mux(selectInRounder, sticky, Mux1H(float1HOut, rounderStikyMap))
 
   val rounder = Module(new RoundingUnit(64))
-  rounder.io.in := Mux(isFroundOrFroundnxReg, froundFracShift, rounderInput)
-  rounder.io.roundIn := Mux(isFroundOrFroundnxReg, froundRoundIn, Mux(isFp2Int, inRounder(0), Mux1H(float1HOut, rounerInMap)))
-  rounder.io.stickyIn := Mux(isFroundOrFroundnxReg, froundStickyIn, Mux(isFp2Int, sticky, Mux1H(float1HOut, rounderStikyMap)))
+  rounder.io.in := rounderInput
+  rounder.io.roundIn := rounderRoundIn
+  rounder.io.stickyIn := rounderStickyIn
   rounder.io.signIn := signSrc
   rounder.io.rm := rm
 
@@ -499,13 +505,13 @@ class FP_INCVT(width: Int) extends Module {
     dz := false.B
     of := false.B
     uf := false.B
-    nx := isFroundnxReg && nxRounded && !isNaNSrc
+    nx := isFroundnxReg && nxRounded && !froundOrFroundnxIsZeroOrInf && !froundExpGreaterThanMaxExp
 
     val result1H = Cat(
       froundOrFroundnxIsZeroOrInf || froundExpGreaterThanMaxExp && !isNaNSrc,
       isNaNSrc,
-      froundExpLessThanBias,
-      !froundExpLessThanBias && !froundOrFroundnxIsZeroOrInf && !froundExpGreaterThanMaxExp,
+      froundExpLessThanBias && !froundOrFroundnxIsZeroOrInf,
+      !froundExpLessThanBias && !froundExpGreaterThanMaxExp,
     )
 
     def froundResultMapGen(fp: FloatFormat): Seq[UInt] = {
