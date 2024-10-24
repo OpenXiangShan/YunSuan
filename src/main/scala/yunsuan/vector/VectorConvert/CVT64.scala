@@ -192,9 +192,9 @@ class FP_INCVT(width: Int) extends Module {
       outIsFpNext && isCrossHigh, outIsFpNext && isCrossLow)
 
   val froundOrFroundnxIsZeroOrInfNext = isFroundOrFroundnxNext && (isZeroSrcNext || isInfSrcNext)
-  val fcvtmodIsInfOrNaNNext = isFcvtmod && (isInfSrcNext || isNaNSrcNext)
 
   //s1
+  val expNotZeroSrc = RegEnable(expNotZeroSrcNext, false.B, fire)
   val expIsOnesSrc = RegEnable(expIsOnesSrcNext, false.B, fire)
   val fracNotZeroSrc = RegEnable(fracNotZeroSrcNext, false.B, fire)
   val isInfSrc = RegEnable(isInfSrcNext, false.B, fire)
@@ -214,8 +214,8 @@ class FP_INCVT(width: Int) extends Module {
 
   val isFroundnxReg = RegEnable(isFroundnxNext, false.B, fire)
   val isFroundOrFroundnxReg = RegEnable(isFroundOrFroundnxNext, false.B, fire)
+  val isFcvtmodReg = RegEnable(isFcvtmod, false.B, fire)
   val froundOrFroundnxIsZeroOrInf = RegEnable(froundOrFroundnxIsZeroOrInfNext, false.B, fire)
-  val fcvtmodIsInfOrNaN = RegEnable(fcvtmodIsInfOrNaNNext, false.B, fire)
 
   // for fpnarrow sub
   val trunSticky = RegEnable(fracSrc.tail(f32.fracWidth).orR, false.B, fire)
@@ -342,6 +342,54 @@ class FP_INCVT(width: Int) extends Module {
   )
   froundOldInput := Cat(signSrc, froundOldExp, froundOldFrac) & froundShiftMask
   froundUpInput := froundOldInput + froundUpShiftMask
+
+
+  /**
+   * fcvtmod
+   * cycle: 0
+   */
+  val fcvtmodExpGreatThanShiftMask = expSrcNext >= f64.froundShiftMask.U
+
+  val fcvtmodNx         = WireInit(false.B)
+  val fcvtmodFrac       = Wire(UInt(64.W))
+  val fcvtmodTrueExp    = Wire(UInt(f64.expWidth.W))
+  val fcvtmodShiftDelta = Wire(UInt(f64.expWidth.W))
+  val fcvtmodShift      = Wire(UInt(f64.expWidth.W))
+  val fcvtmodShiftLeftMask = Wire(UInt(f64.expWidth.W))
+
+  val fcvtmodFracTmp = 0.U(11.W) ## fracValueSrc
+
+  val fcvtmodExpLessThanBiasNext = !expSrcNext(f64.expWidth-1) && !expSrcNext(f64.expWidth-2, 0).andR
+
+  fcvtmodTrueExp    := expSrcNext - f64.bias.U
+  fcvtmodShiftDelta := expSrcNext - f64.froundShiftMask.U
+  fcvtmodShift      := Mux(fcvtmodExpGreatThanShiftMask, fcvtmodShiftDelta, (~fcvtmodShiftDelta).asUInt + 1.U)
+  fcvtmodShiftLeftMask := expSrcNext - 1011.U // expSrcNext - f64.froundShiftMask.U + 64.U
+
+  when (fcvtmodExpGreatThanShiftMask && fcvtmodShift.head(5).orR) {
+    fcvtmodFrac := 0.U
+  }.elsewhen(fcvtmodExpGreatThanShiftMask && !fcvtmodShift.head(5).orR) {
+    fcvtmodFrac := Mux1H(
+      (0 until (1 << 6)).map(i =>
+        (i.U === fcvtmodShift) -> Cat(fcvtmodFracTmp(63 - i, 0), 0.U(i.W))
+      )
+    )
+  }.elsewhen(!fcvtmodExpGreatThanShiftMask && !fcvtmodShift.head(5).orR) {
+    fcvtmodFrac := fcvtmodFracTmp >> fcvtmodShift
+    fcvtmodNx := Mux1H(
+      (0 until (1 << 6)).map(i =>
+        (i.U === fcvtmodShiftLeftMask) -> Cat(fcvtmodFracTmp(63 - i, 0), 0.U(i.W))
+      )
+    ).orR
+  }.otherwise {
+    fcvtmodFrac := 0.U
+    fcvtmodNx := true.B
+  }
+
+  val fcvtmodFracReg    = RegEnable(fcvtmodFrac, 0.U, fire)
+  val fcvtmodTrueExpReg = RegEnable(fcvtmodTrueExp, 0.U, fire)
+  val fcvtmodNxReg      = RegEnable(fcvtmodNx, false.B, fire)
+  val fcvtmodExpLessThanBias = RegEnable(fcvtmodExpLessThanBiasNext, false.B, fire)
 
   /** rounder
    * for: int->fp, fp-fp Narrow, fp->int
@@ -527,6 +575,32 @@ class FP_INCVT(width: Int) extends Module {
 
     val froundResultMap: Seq[UInt] = fpParam.fpMap.map(fp => Mux1H(result1H.asBools.reverse, froundResultMapGen(fp)))
     resultNext := Mux1H(float1HOut, froundResultMap)
+  }.elsewhen(isFcvtmodReg) {
+    val expIsOf  = !fcvtmodExpLessThanBias && fcvtmodTrueExpReg.head(f64.expWidth-5).orR
+    val fracIsOf = Mux(signSrc, fcvtmodFracReg.head(32).orR || !fcvtmodFracReg.head(32).orR && fcvtmodFracReg.tail(32).head(1).asBool && fcvtmodFracReg.tail(33).orR, fcvtmodFracReg.head(33).orR)
+    val fcvtmodIsOf = expIsOf || fracIsOf
+
+    val fcvtmodNx1H = Seq(
+      !expNotZeroSrc,
+      expIsOnesSrc,
+      expNotZeroSrc && !expIsOnesSrc
+    )
+
+    val fcvtmodNxOut1H = Seq(
+      fracNotZeroSrc,
+      false.B,
+      !fcvtmodIsOf && fcvtmodNxReg
+    )
+
+    nv := expIsOnesSrc || fcvtmodIsOf
+    dz := false.B
+    of := false.B
+    uf := false.B
+    nx := Mux1H(fcvtmodNx1H, fcvtmodNxOut1H)
+
+    val fcvtmodResult = Mux(signSrc, (~fcvtmodFracReg).asUInt + 1.U, fcvtmodFracReg)
+
+    resultNext := Cat(Fill(32, fcvtmodResult.tail(32).head(1).asBool), fcvtmodResult.tail(32))
   }.otherwise{
     /** out is int, any fp->any int/uint
      * drop the shift left!
@@ -569,10 +643,10 @@ class FP_INCVT(width: Int) extends Module {
     uf := false.B
     nx := Mux(hasSignInt, toInx, toUnx)
     val result1H = Cat(
-      ((!hasSignInt && !toUnv) || (hasSignInt && !toInv)) && !fcvtmodIsInfOrNaN, //toUnv include nan & inf
-      !hasSignInt && toUnv && (isNaNSrc || !signSrc && (isInfSrc || ofExpRounded)) && !fcvtmodIsInfOrNaN,
-      !hasSignInt && toUnv && signSrc && !isNaNSrc || fcvtmodIsInfOrNaN,
-      hasSignInt && toInv && !fcvtmodIsInfOrNaN
+      (!hasSignInt && !toUnv) || (hasSignInt && !toInv), //toUnv include nan & inf
+      !hasSignInt && toUnv && (isNaNSrc || !signSrc && (isInfSrc || ofExpRounded)),
+      !hasSignInt && toUnv && signSrc && !isNaNSrc,
+      hasSignInt && toInv,
     )
     resultNext := Mux1H(result1H.asBools.reverse, Seq(
       normalResult,
