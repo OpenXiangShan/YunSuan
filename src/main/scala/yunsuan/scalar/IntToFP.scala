@@ -72,6 +72,7 @@ class IntToFP_postnorm(val expWidth: Int, val precision: Int) extends Module {
     (io.in.norm_int, io.in.lzc, io.in.is_zero, io.in.sign, io.rm)
 
   val exp_raw = (63 + FloatPoint.expBias(expWidth)).U(11.W) - lzc
+
   val sig_raw = in.head(precision - 1) // exclude hidden bit
   val round_bit = in.tail(precision - 1).head(1)
   val sticky_bit = in.tail(precision).orR
@@ -92,6 +93,8 @@ class IntToFP_postnorm(val expWidth: Int, val precision: Int) extends Module {
   val fp_sig = rounder.io.out
   val flow = fp_exp>((1<<expWidth)-2).U  // underflow or overflow
 
+  val final_fp_exp = fp_exp(expWidth-1,0)
+
   nv := false.B
   dz := false.B
   of := !in_sign && flow
@@ -99,7 +102,7 @@ class IntToFP_postnorm(val expWidth: Int, val precision: Int) extends Module {
   nx := flow || ix
 
   io.result := Mux(flow, Mux(rmin, Cat(in_sign, FloatPoint.maxNormExp(expWidth).U(expWidth.W), ~0.U((precision-1).W)),
-                  Cat(in_sign, ~0.U(expWidth.W), 0.U((precision-1).W))), Cat(in_sign, fp_exp, fp_sig))
+                  Cat(in_sign, ~0.U(expWidth.W), 0.U((precision-1).W))), Cat(in_sign, final_fp_exp, fp_sig))
   io.fflags := Cat(nv, dz, of, uf, nx)
 }
 
