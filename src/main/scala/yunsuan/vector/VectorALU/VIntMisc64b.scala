@@ -293,18 +293,15 @@ class VIntMisc64b extends Module {
   val countResult_32 = Wire(UInt(32.W))
   val countResult_64 = Wire(UInt(64.W))
   val pop_8  = Wire(Vec(8, UInt(8.W)))
-  val pop_16 = Wire(Vec(4, UInt(16.W)))
-  val pop_32 = Wire(Vec(2, UInt(32.W)))
-  val pop_64 = Wire(Vec(1, UInt(64.W)))
+  val pop_16 = Wire(Vec(4, UInt(5.W)))
+  val pop_32 = Wire(Vec(2, UInt(6.W)))
+  val pop_64 = Wire(Vec(1, UInt(7.W)))
   val cnt8  = Wire(Vec(8, UInt(8.W)))
   val cnt16 = Wire(Vec(4, UInt(16.W)))
   val cnt32 = Wire(Vec(2, UInt(32.W)))
   val cnt64 = Wire(Vec(1, UInt(64.W)))
 
   pop_8 := vs2.asTypeOf(pop_8)
-  pop_16 := vs2.asTypeOf(pop_16)
-  pop_32 := vs2.asTypeOf(pop_32)
-  pop_64 := vs2.asTypeOf(pop_64)
 
   for (i <- 0 until 4) {
     countResult_8(i) := Mux(opcode.isClz, vs2(8*i+7, 8*i), VecInit(vs2(8*i+7, 8*i).asBools.reverse).asUInt)
@@ -361,13 +358,24 @@ class VIntMisc64b extends Module {
   cnt8(5)  := Mux(opcode.isVcpop, PopCount(pop_8(5)), cnt16_1_tmp)
   cnt8(6)  := Mux(opcode.isVcpop, PopCount(pop_8(6)), cnt32_tmp)
   cnt8(7)  := Mux(opcode.isVcpop, PopCount(pop_8(7)), cnt64_tmp)
-  cnt16(0) := Mux(opcode.isVcpop, PopCount(pop_16(0)), cnt16_0_tmp)
-  cnt16(1) := Mux(opcode.isVcpop, PopCount(pop_16(1)), cnt16_1_tmp)
-  cnt16(2) := Mux(opcode.isVcpop, PopCount(pop_16(2)), cnt32_tmp)
-  cnt16(3) := Mux(opcode.isVcpop, PopCount(pop_16(3)), cnt64_tmp)
-  cnt32(0) := Mux(opcode.isVcpop, PopCount(pop_32(0)), cnt32_tmp)
-  cnt32(1) := Mux(opcode.isVcpop, PopCount(pop_32(1)), cnt64_tmp)
-  cnt64(0) := Mux(opcode.isVcpop, PopCount(pop_64(0)), cnt64_tmp)
+
+  pop_16(0) := cnt8(0) +& cnt8(1)
+  pop_16(1) := cnt8(2) +& cnt8(3)
+  pop_16(2) := cnt8(4) +& cnt8(5)
+  pop_16(3) := cnt8(6) +& cnt8(7)
+
+  pop_32(0) := pop_16(0) +& pop_16(1)
+  pop_32(1) := pop_16(2) +& pop_16(3)
+
+  pop_64(0) := pop_32(0) +& pop_32(1)
+
+  cnt16(0) := Mux(opcode.isVcpop, pop_16(0), cnt16_0_tmp)
+  cnt16(1) := Mux(opcode.isVcpop, pop_16(1), cnt16_1_tmp)
+  cnt16(2) := Mux(opcode.isVcpop, pop_16(2), cnt32_tmp)
+  cnt16(3) := Mux(opcode.isVcpop, pop_16(3), cnt64_tmp)
+  cnt32(0) := Mux(opcode.isVcpop, pop_32(0), cnt32_tmp)
+  cnt32(1) := Mux(opcode.isVcpop, pop_32(1), cnt64_tmp)
+  cnt64(0) := Mux(opcode.isVcpop, pop_64(0), cnt64_tmp)
 
   countResult := Mux1H(
     Seq(
