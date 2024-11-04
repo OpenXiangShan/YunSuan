@@ -568,6 +568,7 @@ object VfcvtType {
   def fcvtmod_w_d     = "b1_10_010001".U(9.W)
 }
 
+  val VmguType = yunsuan.vector.VectorMergeEncode
 
   object VectorElementFormat {
     def width = 2
