@@ -4,100 +4,64 @@ import chisel3._
 import chisel3.util._
 import yunsuan.util.LiteralCat
 import yunsuan.util.Reflect.{getUIntMaxWidthOfObject, getUIntWidthOfObject}
-import yunsuan.vector.Common.VectorConfig
+import yunsuan.vector.Common._
 
-import scala.language.{existentials, postfixOps}
+import scala.language.{existentials, postfixOps, implicitConversions}
 
-class VectorSlideUp(val vlen: Int) extends Module with VectorConfig {
-  val io = IO(new Bundle {
-    val in = Input(ValidIO(new Bundle {
-      val uopIdx = UInt(3.W)
-      val src1 = UInt(vlen.W)
-      val src2 = UInt(vlen.W)
-      val vl = UInt(VlWidth.W)
-      val eew = UInt(2.W)
-    }))
 
-    val out = Output(ValidIO(new Bundle {
-      val dest = UInt(vlen.W)
-    }))
+class VectorSlideUp(vlen: Int) extends VectorShuffleBaseModule(vlen) {
+  ////////
+  // stage 0: rotate up to be aligned in vreg, and the elements in vreg in range[e8offsetInVreg,VLENB) is the final result
+  //
 
-    val rdataVec = Input(Vec(8, UInt(vlen.W)))
-    val wdataVec = Output(Vec(8, Vec(vlen / 8, ValidIO(UInt(8.W)))))
-  })
+  val s0_uopIdx = s0.bits.uopIdx
+  val s0_vs8bVec = WireInit(s0.bits.src2.to8bitVec)
 
-  val valid = io.in.valid
-  val uopIdx = io.in.bits.uopIdx
+  val s0_alignedVs8bVec = s0_vs8bVec.rotateUp(e8offset)
 
-  val data8bVec = Wire(Vec(8, Vec(vlen / 8, UInt( 8.W))))
-  data8bVec := io.rdataVec.asTypeOf(data8bVec)
-
-  val i_e8vl = (io.in.bits.vl << io.in.bits.eew).asUInt(VlWidth - 1, 0)
-  val i_e8offset = (io.in.bits.src1(VlWidth - 1, 0) << io.in.bits.eew).asUInt(VlWidth - 1, 0)
-  val i_vregOffset = (i_e8offset >> ElemIdxWidth).asUInt
-  val i_vs = Wire(Vec(vlen / 8, UInt(8.W)))
-  val i_inBypass = i_vregOffset =/= 0.U
-  val i_uopIdx = io.in.bits.uopIdx
-
-  i_vs := io.in.bits.src2.asTypeOf(i_vs)
-
-  val reg_e8vl        = RegEnable(i_e8vl,       valid && uopIdx === 0.U)
-  val reg_e8offset    = RegEnable(i_e8offset,   valid && uopIdx === 0.U)
-  val reg_vregOffset  = RegEnable(i_vregOffset, valid && uopIdx === 0.U)
-  val reg_inBypass    = RegEnable(i_inBypass,   valid && uopIdx === 0.U)
-
-  val e8vl        = Mux(valid && uopIdx === 0.U, i_e8vl, reg_e8vl)
-  val e8offset    = Mux(valid && uopIdx === 0.U, i_e8offset, reg_e8offset)
-  val vregOffset  = Mux(valid && uopIdx === 0.U, i_vregOffset, reg_vregOffset)
-  val inBypass    = Mux(valid && uopIdx === 0.U, i_inBypass, reg_inBypass)
-
-  val dataVecIdx = (vregOffset +& uopIdx)(VIdxWidth - 1, 0)
-
-  val vsIdxVec = Wire(Vec(vlen, UInt(3.W)))
-  val vsE8InVregIdxVec = WireInit(VecInit((0 until VLENB).map(i => (i.U - e8offset)(ElemIdxWidth - 1, 0))))
-  val vsE8IdxVec = Wire(Vec(vlen, UInt(VstartWidth.W)))
-
-  val wdataVec = Wire(chiselTypeOf(io.wdataVec))
-
-  for (regIdx <- 0 until 8) {
-    for (eIdx <- 0 until VLENB) {
-      vsIdxVec(regIdx * VLENB + eIdx) := Mux(
-        eIdx.U > e8offset(ElemIdxWidth - 1, 0),
-        vregOffset + (regIdx + 1).U,
-        vregOffset + regIdx.U,
+  for (dregE8IdxHigh <- 0 until 8) {
+    for (dregE8IdxLow <- 0 until VLENB) {
+      wdataVec(dregE8IdxHigh)(dregE8IdxLow).valid := s0.valid && (
+        (dregE8IdxHigh + 1).U === s0.bits.uopIdx ||
       )
-      vsE8IdxVec(regIdx * VLENB + eIdx) := Cat(vsIdxVec(regIdx * VLENB + eIdx), vsE8InVregIdxVec(eIdx))
-
-      val vsEIdx = vsE8IdxVec(regIdx * VLENB + eIdx)
-      val vsEIdxInVreg = vsEIdx(ElemIdxWidth - 1, 0)
-
-      wdataVec(regIdx)(eIdx).valid := vsEIdx >= 0.U && vsEIdx < VLENB.U
-      wdataVec(regIdx)(eIdx).bits := i_vs(vsEIdxInVreg)
+      wdataVec(dregE8IdxHigh)(dregE8IdxLow).bits := Mux1H(Seq(
+        (dregE8IdxHigh.U < e8offsetVreg && dregE8IdxHigh.U === s0_uopIdx) -> s0_vs8bVec(dregE8IdxLow),
+        ((dregE8IdxHigh != 7).B && dregE8IdxHigh.U >= e8offsetVreg && dregE8IdxHigh.U === (s0_uopIdx +& e8offsetVreg)) -> s0_alignedVs8bVec(dregE8IdxLow),
+        ((dregE8IdxHigh == 7).B && dregE8IdxHigh.U >= e8offsetVreg && dregE8IdxHigh.U === (s0_uopIdx +& e8offsetVreg) && dregE8IdxLow.U >= e8offsetInVreg) -> s0_alignedVs8bVec(dregE8IdxLow),
+        ((dregE8IdxHigh == 7).B && s0_uopIdx === e8offsetVreg && dregE8IdxLow.U < e8offsetInVreg) -> s0_vs8bVec(dregE8IdxLow),
+      ))
     }
   }
 
+  ////////
+  // stage 1: seleft final result
+  //
+
+  val s1_uopIdx = s1.bits.uopIdx
+
   val vd = Wire(Vec(vlen / 8, UInt(8.W)))
 
+  val dregIdx = s1.bits.uopIdx
+  val dregGapOffset = e8offsetInVreg
+
   for (i <- 0 until VLENB) {
-    val vsE8IdxInVreg = vsE8InVregIdxVec(i)
-    val vsIdx = vsIdxVec(i)
-    val dataVecEIdx = (i % VLENB).U
-    when(!inBypass) {
-      vd(i) := Mux1H(Seq(
-        (i.U  < e8offset && i.U < e8vl) -> i_vs(i),
-        (i.U >= e8offset && i.U < e8vl) -> data8bVec(dataVecIdx)(dataVecEIdx),
-      ))
-    }.otherwise {
-      vd(i) := Mux1H(Seq(
-        (i.U  < e8offset && i.U < e8vl) -> i_vs(i),
-        (i.U >= e8offset && i.U < e8vl && vsIdx < i_uopIdx) -> data8bVec(dataVecIdx)(dataVecEIdx),
-        (i.U >= e8offset && i.U < e8vl && vsIdx === i_uopIdx) -> i_vs(vsE8IdxInVreg),
-      ))
-    }
+    val vdE8Idx = Cat(s1_uopIdx, i.U(ElemIdxWidth.W))
+    vd(i) := Mux1H(Seq(
+      (s1_uopIdx < e8offsetVreg) -> dreg8bMatrix(dregIdx)(i),
+      (s1_uopIdx === e8offsetVreg && i  < e8offsetInVreg) -> dreg8bMatrix(7)(i),
+      (s1_uopIdx === e8offsetVreg && i >= e8offsetInVreg) -> dreg8bMatrix(dregIdx)(i),
+      (s1_uopIdx > e8offsetVreg && vdE8Idx < e8vl) ->
+        Mux1H(Seq(
+          (i.U >= e8offsetInVreg) -> dreg8bMatrix(dregIdx)(i),
+          (i.U <  e8offsetInVreg) -> dreg8bMatrix(dregIdx - 1.U)(i),
+        )),
+      (vdE8Idx >= e8vl) -> fill8b1s,
+    ))
   }
 
   io.wdataVec := wdataVec
 
-  io.out.valid := io.in.valid
-  io.out.bits.dest := vd.asTypeOf(io.out.bits.dest)
+  io.out.valid      := s1.valid
+  io.out.bits.dest  := vd.asTypeOf(io.out.bits.dest)
+  io.out.bits.vdIdx := s1_uopIdx
 }

@@ -15,6 +15,8 @@ object Common {
     val VlWidth = log2Up(vlen) + 1
     val VLENB = vlen / 8
     val ElemIdxWidth = log2Up(VLENB)
+    val MaxLMUL = 8
+    val VdIdxWidth = log2Up(MaxLMUL)
 
     def UIntVlen: UInt = UInt(vlen.W)
 
@@ -25,6 +27,8 @@ object Common {
     def VecE32: Vec[UInt] = Vec(vlen / 32, UInt(32.W))
 
     def VecE64: Vec[UInt] = Vec(vlen / 64, UInt(64.W))
+
+    def VdIdx: UInt = UInt(VdIdxWidth.W)
   }
 
   /**
@@ -156,6 +160,58 @@ object Common {
   implicit def castToUIntUtil(uint: UInt): VecUIntUtil = new VecUIntUtil(uint)
 
   implicit def castToUIntUtil(v: Vec[UInt]): VecUIntUtil = new VecUIntUtil(v)
+
+  class VecUtilType[T <: Data](val vec: Vec[T]) {
+    val length = vec.length
+    def rotateUp(n: Int): Vec[T] = {
+      n match {
+        case _ if (n == 0)      => vec
+        case _ if (n >= length) => rotateUp(n % length)
+        case _ if (n < 0)       => rotateDown(-n)
+        case _                  => VecInit(vec.takeRight(n) ++ vec.dropRight(n))
+      }
+    }
+
+    def rotateUp(n: UInt): Vec[T] = {
+      val slideNum = n.take(log2Up(length))
+      VecInit.tabulate(length)(l => this.rotateUp(l))(slideNum)
+    }
+
+    def rotateDown(n: Int): Vec[T] = {
+      n match {
+        case _ if n == 0      => vec
+        case _ if n < 0       => rotateUp(-n)
+        case _ if n >= length => rotateDown(n % length)
+        case _                => VecInit(vec.drop(n) ++ vec.take(n))
+      }
+    }
+
+    def rotateDown(n: UInt): Vec[T] = {
+      val slideNum = n.take(log2Up(length))
+      VecInit.tabulate(length)(l => this.rotateDown(l))(slideNum)
+    }
+
+    def rotateLeft(n: Int): Vec[T] = this.rotateUp(n)
+
+    def rotateRight(n: Int): Vec[T] = this.rotateDown(n)
+
+    def compress(mask: UInt): Vec[Valid[T]] = {
+      VectorShuffle.Compress(mask, vec)
+    }
+  }
+
+  implicit def caseToVecUtilType[T <: Data](v: Vec[T]): VecUtilType[T] = new VecUtilType[T](v)
+
+  class UIntUtil(val uint: UInt) {
+    val length = uint.getWidth
+
+    def drop(n: Int): UInt = {
+      require(n < length, s"Can not drop $n bits, since the operand is $length bits width")
+      uint(length - 1, n)
+    }
+  }
+
+  implicit def caseToUIntUtil(uint: UInt): UIntUtil = new UIntUtil(uint)
 
   def fill8b1s  = Fill(8, 1.U(1.W))
   def fill16b1s = Fill(16, 1.U(1.W))
