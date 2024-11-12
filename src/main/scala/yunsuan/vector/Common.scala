@@ -1,9 +1,10 @@
 package yunsuan.vector
 
-import chisel3.{UInt, _}
+import chisel3._
 import chisel3.util._
 import chisel3.experimental.SourceInfo
-import yunsuan.util.NamedUInt
+import yunsuan.util.{NamedUInt, ParallelOR}
+import chisel3.experimental.BundleLiterals._
 
 import scala.language.implicitConversions
 
@@ -173,15 +174,14 @@ object Common {
     }
 
     def rotateUp(n: UInt): Vec[T] = {
-      val slideNum = n.take(log2Up(length))
-      VecInit.tabulate(length)(l => this.rotateUp(l))(slideNum)
+      VectorShuffle.RotateUp(vec, n)
     }
 
     def rotateDown(n: Int): Vec[T] = {
       n match {
         case _ if n == 0      => vec
-        case _ if n < 0       => rotateUp(-n)
         case _ if n >= length => rotateDown(n % length)
+        case _ if n < 0       => rotateUp(-n)
         case _                => VecInit(vec.drop(n) ++ vec.take(n))
       }
     }
@@ -212,6 +212,16 @@ object Common {
   }
 
   implicit def caseToUIntUtil(uint: UInt): UIntUtil = new UIntUtil(uint)
+
+  def Mux1HValidIO[T <: Data](seq: Seq[ValidIO[T]]): ValidIO[T] = {
+    val valid = ParallelOR(seq.map(_.valid))
+    val bits = chisel3.util.Mux1H(seq.map(x => x.valid -> x.bits))
+    makeValidIO(valid, bits)
+  }
+
+  def makeValidIO[T <: Data](valid: Bool, bits: T): ValidIO[T] = {
+    Pipe(valid, bits, 0)
+  }
 
   def fill8b1s  = Fill(8, 1.U(1.W))
   def fill16b1s = Fill(16, 1.U(1.W))

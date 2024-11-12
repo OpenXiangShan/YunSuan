@@ -8,6 +8,9 @@ import yunsuan.vector.Common._
 
 
 class Compress(length: Int, gen: => UInt) extends Module {
+  private val width = gen.getWidth
+
+  override def desiredName: String = s"CompressW${width}L${length}"
   val io = IO(new Bundle {
     val vecT = Input(Vec(length, gen))
     val mask = Input(UInt(length.W))
@@ -33,11 +36,11 @@ class Compress(length: Int, gen: => UInt) extends Module {
 }
 
 object Compress {
-  def apply[T <: Data](mask: UInt, vec: Vec[T], count: Option[UInt]): Vec[ValidIO[T]] = {
+  def apply[T <: Data](mask: UInt, vec: Vec[T], count: Option[UInt] = None): Vec[ValidIO[T]] = {
     val length = vec.length
     require(length == mask.getWidth)
     require(count.forall(_.getWidth == log2Up(length + 1)))
-    val mod = Module(new Compress(length, vec.head.asUInt)).suggestName(s"Compress_${length}bits")
+    val mod = Module(new Compress(length, chiselTypeOf(vec.head.asUInt)))
     mod.io.mask := mask
     mod.io.vecT := vec.map(_.asUInt)
     count.foreach(_ := mod.io.count)
@@ -57,15 +60,21 @@ class VectorCompress(vlen: Int) extends VectorShuffleBaseModule(vlen) {
 
   val s0_uopIdx = s0.bits.uopIdx
   val s0_vs8bVec = WireInit(s0.bits.src2.to8bitVec)
-  val s0_mask = WireInit(s0.bits.mask)
   val s0_countVec = Wire(Vec(8, UInt((ElemIdxWidth + 1).W)))
-  val s0_allMaskVec = s0.bits.allMask.toVf8Vec
+  val s0_srcMask = s0.bits.srcMask.toVf8Vec
+  val s0_isUop0 = s0.valid && s0_uopIdx === 0.U
+  val s0_mask = Mux(
+    s0_isUop0,
+    s0_srcMask(0),
+    Mux1H(1 until MaxLMUL map { i =>
+      (s0_uopIdx === i.U) -> e8mask.toVf8Vec(i)
+    })
+  ).ensuring(_.getWidth == VLENB)
 
   val s0_compressed8bVec: Vec[ValidIO[UInt]] = Compress(s0_mask, s0_vs8bVec, Some(s0_countVec.head))
-  val s0_isUop0 = s0.valid && s0_uopIdx === 0.U
 
   for (i <- 1 until 8) {
-    s0_countVec(i) := PopCount(s0_allMaskVec(i))
+    s0_countVec(i) := PopCount(s0_srcMask(i))
   }
 
   for (dregE8IdxHigh <- 0 until 8) {
@@ -79,27 +88,27 @@ class VectorCompress(vlen: Int) extends VectorShuffleBaseModule(vlen) {
   // stage 1: sum and rotate slide up data to right position
   //
 
-  val s1_sumNext  = Wire(UInt(log2Up(vlen + 1).W))
+  val s1_uopIdx   = s1.bits.uopIdx
   val s1_isUop0   = RegEnable(s0_isUop0,        s0.valid)
+  val s1_sumNext  = Wire(UInt(log2Up(vlen + 1).W))
   val s1_countCur = RegEnable(s0_countVec.head, s0.valid)
   val s1_countVec = RegEnable(s0_countVec,      s0.valid && s0_isUop0)
   val s2_sum      = RegEnable(s1_sumNext,       s1.valid)
   val s2_sumBf    = RegEnable(s2_sum,           s1.valid)
 
   when(s1_uopIdx === 0.U) {
-    s1_sumNext := s1_count
-  }.elsewhen {
+    s1_sumNext := s1_countCur
+  }.otherwise {
     s1_sumNext := s2_sum + s1_countCur
   }
 
-  val s1_uopIdx = s1.bits.uopIdx
-  val s1_rotatedVec8b = dreg8bMatrix(s1_uopIdx).rotateUp(s1_sumNext.take(VLENB))
+  val s1_rotatedVec8b = dreg8bMatrix(s1_uopIdx).rotateUp(s1_sumNext.take(ElemIdxWidth))
 
   ////////
   // stage 2: copy to out reg
   //
 
-  val countSum = RegEnable(ParallelOperation(s1_countVec, (a, b) => a +& b), s1.valid && s1_isUop0)
+  val countSum = RegEnable(ParallelOperation(s1_countVec, (a: UInt, b: UInt) => a +& b), s1.valid && s1_isUop0)
 
   val s2_rotatedVec8b = RegEnable(s1_rotatedVec8b, s1.valid)
   val s2_thisBegin = s2_sumBf.take(ElemIdxWidth)

@@ -23,8 +23,6 @@ class VectorSlideDown(vlen: Int) extends VectorShuffleBaseModule(vlen) {
     }
   }
 
-  io.wdataVec := wdataVec
-
   ////////
   // stage 1: rotate down to get right result
   //
@@ -34,7 +32,7 @@ class VectorSlideDown(vlen: Int) extends VectorShuffleBaseModule(vlen) {
 
   val vd = Wire(VecE8)
 
-  val dregIdx = s1.bits.uopIdx + e8offsetVreg
+  val dregIdx = WireInit(VdIdx, s1.bits.uopIdx + e8offsetVreg)
   val dregGapOffset = 0.U - e8offsetInVreg
 
   for (i <- 0 until VLENB) {
@@ -43,7 +41,7 @@ class VectorSlideDown(vlen: Int) extends VectorShuffleBaseModule(vlen) {
       (vdE8Idx < e8vl && vdE8Idx < zeroRegionFrom) ->
         Mux1H(Seq(
           (i.U <  dregGapOffset) -> dreg8bMatrix(dregIdx)(i),
-          (i.U >= dregGapOffset) -> dreg8bMatrix(dregIdx + 1)(i),
+          (i.U >= dregGapOffset) -> dreg8bMatrix(dregIdx + 1.U)(i),
         )),
       (vdE8Idx >= zeroRegionFrom && vdE8Idx < zeroRegionUntil) -> 0.U,
       (vdE8Idx >= e8vl) -> fill8b1s,
