@@ -71,6 +71,9 @@ emu: $(SOFTFLOAT) $(EMU)
 clean:
 	rm -rf build
 
+log-clean:
+	rm -rf log/
+
 bsp:
 	mill -i mill.bsp.BSP/install
 
@@ -79,3 +82,7 @@ idea:
 
 test:
 	mill YunSuan.test.test
+
+unit-test:
+	make emu
+	./build/emu -O 2

@@ -85,6 +85,7 @@ public:
     verbose = true;
     vfd.verbose_exec(); valu.verbose_exec();
     vperm.verbose_exec();vid.verbose_exec();
+    printf("verbose exec %d\n", verbose);
   }
   void keep_input() { keepinput = true; }
 };

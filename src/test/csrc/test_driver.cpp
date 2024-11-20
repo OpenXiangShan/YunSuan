@@ -26,6 +26,7 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
   dut_ptr->io_out_ready = true;
 }
 // fix set_test_type to select fuType
+// TODO:
 void TestDriver::set_test_type() {
   test_type.pick_fuType = false;
   test_type.pick_fuOpType = false;
@@ -40,6 +41,12 @@ void TestDriver::gen_next_test_case() {
   if (verbose) { display_ref_input(); }
   get_expected_output();
   if (verbose) { display_ref_output(); }
+
+  bool log_io = true;
+  if (log_io) {
+    display();
+    printf("--------------------\n");
+  }
 }
 
 
