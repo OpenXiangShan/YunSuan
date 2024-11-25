@@ -97,8 +97,8 @@ class IntToFP_postnorm(val expWidth: Int, val precision: Int) extends Module {
 
   nv := false.B
   dz := false.B
-  of := !in_sign && flow
-  uf :=  in_sign && flow
+  of := flow
+  uf := false.B
   nx := flow || ix
 
   io.result := Mux(flow, Mux(rmin, Cat(in_sign, FloatPoint.maxNormExp(expWidth).U(expWidth.W), ~0.U((precision-1).W)),
