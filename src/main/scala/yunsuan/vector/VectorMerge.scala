@@ -71,7 +71,7 @@ class VectorMerge(val vlen: Int) extends Module with VectorConfig {
   val valid = io.in.valid
   val vs1 = io.in.bits.src1
   val vs2 = io.in.bits.src2
-  val oldVd = io.in.bits.oldVd
+  val oldVd = vs2
   val srcMask = io.in.bits.srcMask
   val uopIdx = io.in.bits.uopIdx
   val vstart = io.in.bits.vstart
@@ -255,14 +255,14 @@ class VectorMerge(val vlen: Int) extends Module with VectorConfig {
       Fill(vlen / 32, vs1.to32bitVec(0)),
       Fill(vlen / 64, vs1.to64bitVec(0)),
     )),
-    (isVMERGE_V)   -> vs1,
+    (isVMERGE_V || isTypeMergeUop) -> vs1,
     (isTypeO2V) -> o2vVd.asUInt,
     (isTypeVEXT) -> vextVd.asUInt,
     (isTypeVMSIC) -> vidVd.asUInt,
   ))
   val mergeOldVd = vs2
   val mergeModVl = Mux(isO2V_S, Mux(vl === 0.U, 0.U, 1.U), vl)
-  val mergeModVm  = isTypeVMerge || isTypeO2V || isTypeVMV
+  val mergeModVm = Mux(isTypeVMerge || isTypeO2V || isTypeVMV, true.B, io.in.bits.vm)
 
   mergeMod.io.in.valid := isTypeVMerge || isTypeO2V || isTypeVEXT || isTypeVMSIC || isTypeMergeUop
   mergeMod.io.in.bits match {
@@ -302,14 +302,12 @@ class VectorMergeIO(val vlen: Int) extends Bundle with VectorConfig {
     val srcMask = UInt(vlen.W)
     val vstart  = UInt((VlWidth - 1).W)
     val vl      = UInt(VlWidth.W)
+    val vm      = Bool()
     // data veew
     val dveew   = VSew()
     val vta     = Bool()
     val vma     = Bool()
     val op      = UInt(VectorMergeEncode.width.W)
-
-    val oldVd   = UInt(vlen.W)
-//    def oldVd   = src2
   }))
   val out = Output(ValidIO(new Bundle {
     val vd = UInt(vlen.W)
@@ -363,8 +361,8 @@ class VectorDataMergeUnit(val vlen: Int) extends Module with VectorConfig {
   val e8Idxes = VecInit.tabulate(VLENB)(i => Cat(vdIdx, i.U(ElemIdxWidth.W)))
 
   prestartMask8b := Cat((0 until VLENB).map(i => e8Idxes(i)  < e8vstart                      ).reverse)
-  bodyMask8b     := Cat((0 until VLENB).map(i => e8Idxes(i) >= e8vstart && e8Idxes(i) <= e8vl).reverse)
-  tailMask8b     := Cat((0 until VLENB).map(i =>                           e8Idxes(i) >  e8vl).reverse)
+  bodyMask8b     := Cat((0 until VLENB).map(i => e8Idxes(i) >= e8vstart && e8Idxes(i) <  e8vl).reverse)
+  tailMask8b     := Cat((0 until VLENB).map(i =>                           e8Idxes(i) >= e8vl).reverse)
 
   val srcMask2x = Wire(UInt(vlen.W))
   val srcMask4x = Wire(UInt(vlen.W))
