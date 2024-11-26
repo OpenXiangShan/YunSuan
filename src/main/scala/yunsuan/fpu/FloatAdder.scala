@@ -214,9 +214,9 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
   }.elsewhen(RegEnable(fp_a_is_zero & fp_b_is_zero, fire)){
     float_adder_result := Cat(RegEnable(Mux(io.round_mode==="b010".U & EOP | (fp_a_to32.head(1).asBool & !EOP),1.U,0.U), fire),0.U(31.W))
   }.elsewhen(RegEnable(fp_a_is_zero, fire)){
-    float_adder_result := RegEnable(Cat(io.is_sub ^ fp_b_to32.head(1),fp_b_to32(30,0)), fire)
+    float_adder_result := RegEnable(Cat(0.U(16.W),Cat(io.is_sub ^ io.fp_b(15),io.fp_b(14,0))), fire)
   }.elsewhen(RegEnable(fp_b_is_zero, fire)){
-    float_adder_result := RegEnable(fp_a_to32, fire)
+    float_adder_result := RegEnable(io.fp_a, fire)
   }.otherwise{
     float_adder_result := out_fp32_to_fp16_or_fp32_reg
   }
