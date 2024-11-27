@@ -200,6 +200,10 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
   }.otherwise{
     float_adder_fflags := Mux(is_far_path_reg,U_far_path.io.fflags,U_close_path.io.fflags)
   }
+  val round_to_negative = io.round_mode==="b010".U & EOP
+  val res_negative = fp_a_to32.head(1).asBool & !EOP
+  val fadd0_result0 = Mux(res_is_f32,Cat(RegEnable(Mux(round_to_negative | res_negative,1.U,0.U), fire),0.U(31.W)),Cat(RegEnable(Mux(round_to_negative | res_negative,Fill(17,1.U),0.U(17.W)), fire),0.U(15.W))) 
+  val fadd0_result1 = Mux(res_is_f32,RegEnable(Cat(io.is_sub ^ io.fp_b(31),io.fp_b(30,0)), fire),RegEnable(Cat(0.U(16.W),Cat(io.is_sub ^ io.fp_b(15),io.fp_b(14,0))), fire))
   val res_is_f32_reg = RegEnable(res_is_f32, fire)
   val out_NAN_reg = Mux(res_is_f32_reg, Cat(0.U,Fill(8,1.U),1.U,0.U(22.W)), Cat(0.U(17.W),Fill(5,1.U),1.U,0.U(9.W)))
   val out_infinite_sign = Mux(fp_a_is_infinite,fp_a_to32.head(1),io.is_sub^fp_b_to32.head(1))
@@ -212,9 +216,9 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
   }.elsewhen(RegEnable(fp_a_is_infinite | fp_b_is_infinite, fire)) {
     float_adder_result := out_infinite_reg
   }.elsewhen(RegEnable(fp_a_is_zero & fp_b_is_zero, fire)){
-    float_adder_result := Cat(RegEnable(Mux(io.round_mode==="b010".U & EOP | (fp_a_to32.head(1).asBool & !EOP),1.U,0.U), fire),0.U(31.W))
+    float_adder_result := fadd0_result0
   }.elsewhen(RegEnable(fp_a_is_zero, fire)){
-    float_adder_result := RegEnable(Cat(0.U(16.W),Cat(io.is_sub ^ io.fp_b(15),io.fp_b(14,0))), fire)
+    float_adder_result := fadd0_result1
   }.elsewhen(RegEnable(fp_b_is_zero, fire)){
     float_adder_result := RegEnable(io.fp_a, fire)
   }.otherwise{
