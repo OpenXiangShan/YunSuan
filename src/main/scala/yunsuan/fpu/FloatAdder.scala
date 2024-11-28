@@ -202,9 +202,9 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
   }
   val round_to_negative = io.round_mode==="b010".U & EOP
   val res_negative = fp_a_to32.head(1).asBool & !EOP
+  val res_is_f32_reg = RegEnable(res_is_f32, fire)
   val fadd0_result0 = Mux(res_is_f32_reg,Cat(RegEnable(Mux(round_to_negative | res_negative,1.U,0.U), fire),0.U(31.W)),Cat(RegEnable(Mux(round_to_negative | res_negative,Fill(17,1.U),0.U(17.W)), fire),0.U(15.W))) 
   val fadd0_result1 = Mux(res_is_f32_reg,RegEnable(Cat(io.is_sub ^ io.fp_b(31),io.fp_b(30,0)), fire),RegEnable(Cat(0.U(16.W),Cat(io.is_sub ^ io.fp_b(15),io.fp_b(14,0))), fire))
-  val res_is_f32_reg = RegEnable(res_is_f32, fire)
   val out_NAN_reg = Mux(res_is_f32_reg, Cat(0.U,Fill(8,1.U),1.U,0.U(22.W)), Cat(0.U(17.W),Fill(5,1.U),1.U,0.U(9.W)))
   val out_infinite_sign = Mux(fp_a_is_infinite,fp_a_to32.head(1),io.is_sub^fp_b_to32.head(1))
   val out_infinite_sign_reg = RegEnable(out_infinite_sign, fire)
