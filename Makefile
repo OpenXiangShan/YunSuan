@@ -85,4 +85,4 @@ test:
 
 unit-test:
 	make emu
-	./build/emu -O 2
+	./build/emu -O 1000

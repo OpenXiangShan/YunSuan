@@ -10,7 +10,9 @@ import yunsuan.scalar.INT2FP
 import yunsuan.scalar.FPCVT
 
 trait VSPParameter {
-  val VLEN       : Int = 128
+  // val VLEN       : Int = 128 // TODO: change to 256
+  val VLEN      : Int = 256
+
   val XLEN       : Int = 64
   val VIA_latency: Int = 0 // TODO: change to 1
   val VIAF_latency: Int = 1 // TODO:
@@ -52,6 +54,7 @@ class VecInfoBundle extends VPUTestBundle {
   val ma        = Bool()        // 0: undisturbed, 1: agnostic
 }
 
+//INPUT
 class VSTInputIO extends VPUTestBundle {
   val src = Vec(4, Vec(VLEN/XLEN, UInt(XLEN.W)))
   val fuType = UInt(5.W)
@@ -70,6 +73,7 @@ class VSTInputIO extends VPUTestBundle {
   val vinfo = new VecInfoBundle
 }
 
+//OUTPUT
 class VSTOutputIO extends VPUTestBundle {
   val result = Vec(VLEN/XLEN, UInt(XLEN.W))
   val fflags = Vec(VLEN/XLEN, UInt((5*(XLEN/16)).W))
@@ -165,8 +169,11 @@ class SimTop() extends VPUTestModule {
     vfa.io.fp_b := src2
     //io.widen_a Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
     //io.widen_b Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
-    vfa.io.widen_a := Cat(in.src(0)(1)(31+i*32,0+i*32),in.src(0)(0)(31+i*32,0+i*32))
-    vfa.io.widen_b := Cat(in.src(1)(1)(31+i*32,0+i*32),in.src(1)(0)(31+i*32,0+i*32))
+    // vfa.io.widen_a := Cat(in.src(0)(1)(31+i*32,0+i*32),in.src(0)(0)(31+i*32,0+i*32))
+    // vfa.io.widen_b := Cat(in.src(1)(1)(31+i*32,0+i*32),in.src(1)(0)(31+i*32,0+i*32))
+    vfa.io.widen_a := Cat(in.src(0)((2+i)/2)(31+(i%2)*32,0+(i%2)*32),in.src((2+i)/2)(0)(31+(i%2)*32,0+(i%2)*32))
+    vfa.io.widen_b := Cat(in.src(1)((2+i)/2)(31+(i%2)*32,0+(i%2)*32),in.src((2+i)/2)(0)(31+(i%2)*32,0+(i%2)*32))
+    
     vfa.io.frs1  := in.src(1)(0) // VS1(63,0)
     vfa.io.fp_b := src2
     // TODO: change mask
@@ -249,8 +256,11 @@ class SimTop() extends VPUTestModule {
     vff.io.fp_c := src3
     //io.widen_a Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
     //io.widen_b Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
-    vff.io.widen_a := Cat(in.src(0)(1)(31+i*32,0+i*32),in.src(0)(0)(31+i*32,0+i*32))
-    vff.io.widen_b := Cat(in.src(1)(1)(31+i*32,0+i*32),in.src(1)(0)(31+i*32,0+i*32))
+    // vff.io.widen_a := Cat(in.src(0)(1)(31+i*32,0+i*32),in.src(0)(0)(31+i*32,0+i*32))
+    // vff.io.widen_b := Cat(in.src(1)(1)(31+i*32,0+i*32),in.src(1)(0)(31+i*32,0+i*32))
+    vff.io.widen_a := Cat(in.src(0)((2+i)/2)(31+(i%2)*32,0+(i%2)*32),in.src((2+i)/2)(0)(31+(i%2)*32,0+(i%2)*32))
+    vff.io.widen_b := Cat(in.src(1)((2+i)/2)(31+(i%2)*32,0+(i%2)*32),in.src((2+i)/2)(0)(31+(i%2)*32,0+(i%2)*32))
+
     vff.io.uop_idx := uop_idx(0)
     vff.io.frs1  := in.src(1)(0) // VS1(63,0)
     vff.io.round_mode := rm
@@ -306,10 +316,18 @@ class SimTop() extends VPUTestModule {
   }
 
   val vperm = Module(new VPermTop)
-  vperm.io.vs1 := Cat(in.src(0)(1), in.src(0)(0))
-  vperm.io.vs2 := Cat(in.src(1)(1), in.src(1)(0))
-  vperm.io.old_vd := Cat(in.src(2)(1), in.src(2)(0))
-  vperm.io.mask := Cat(in.src(3)(1), in.src(3)(0))
+  //TODO:
+  
+  vperm.io.vs1    := Cat(in.src(0)(3), in.src(0)(2), in.src(0)(1), in.src(0)(0))
+  vperm.io.vs2    := Cat(in.src(1)(3), in.src(1)(2), in.src(1)(1), in.src(1)(0))
+  vperm.io.old_vd := Cat(in.src(2)(3), in.src(2)(2), in.src(2)(1), in.src(2)(0))
+  vperm.io.mask   := Cat(in.src(3)(3), in.src(3)(2), in.src(3)(1), in.src(3)(0))
+  // for (i <- 0 until VLEN/XLEN) {
+  //   vperm.io.vs1 := Cat(vperm.io.vs1, in.src(0)(i))  // 
+  //   vperm.io.vs2 := Cat(vperm.io.vs2, in.src(1)(i))
+  //   vperm.io.old_vd := Cat(vperm.io.old_vd, in.src(2)(i))
+  //   vperm.io.mask := Cat(vperm.io.mask, in.src(3)(i))
+  // }
   vperm.io.vs1_type := ZeroExt(sew, 4)
   vperm.io.vs2_type := ZeroExt(sew, 4)
   vperm.io.vd_type := ZeroExt(sew, 4)
@@ -322,10 +340,11 @@ class SimTop() extends VPUTestModule {
   vperm.io.vm := vm
   vperm.io.ta := ta
   vperm.io.ma := ma
-  vperm_result.result(0) := vperm.io.res_vd(XLEN-1, 0)
-  vperm_result.result(1) := vperm.io.res_vd(VLEN-1, XLEN)
-  vperm_result.fflags(0) := 0.U
-  vperm_result.fflags(1) := 0.U
+  //Modify vlen to 256
+  for(i <- 0 until VLEN/XLEN) {
+  vperm_result.result(i) := vperm.io.res_vd(XLEN*(i+1) - 1, XLEN*i)
+  vperm_result.fflags(i) := 0.U
+  }
   vperm_result.vxsat := 0.U
 
   val viaf = Module(new VIAluFWrapper)
@@ -351,12 +370,17 @@ class SimTop() extends VPUTestModule {
   val vid_sign = vid_opcode(0)
   val vid_rem = vid_opcode(1)
   val vid = Module(new VectorIdiv)
-  val src1 = Cat(in.src(0)(1), in.src(0)(0))
-  val src2 = Cat(in.src(1)(1), in.src(1)(0))
+
+  // val src1 = Cat(in.src(0)(1), in.src(0)(0))
+  // val src2 = Cat(in.src(1)(1), in.src(1)(0))
+  val src1 = Cat(in.src(0)(3), in.src(0)(2), in.src(0)(1), in.src(0)(0))
+  val src2 = Cat(in.src(1)(3), in.src(1)(2), in.src(1)(1), in.src(1)(0))
+
   vid.io.div_in_valid := busy && !has_issued && fuType === VPUTestFuType.vid
   vid.io.sign := vid_sign
   vid.io.dividend_v := src1
   vid.io.divisor_v := src2
+
   vid.io.flush := false.B
   vid.io.sew := sew
   vid.io.div_out_ready := busy
@@ -372,11 +396,30 @@ class SimTop() extends VPUTestModule {
     2.U -> vid.io.d_zero(15, 2),
     3.U -> vid.io.d_zero(15, 1)
   ))
-  vid_result_valid := vid.io.div_out_valid
-  vid_result.result(0) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(XLEN - 1, 0)
-  vid_result.result(1) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(VLEN - 1, XLEN)
+  //TODO: check the fflags
+  val vid_fflags_2 = LookupTreeDefault(sew, 0.U, List(
+    0.U -> vid.io.d_zero(7, 0),
+    1.U -> vid.io.d_zero(3, 0),
+    2.U -> vid.io.d_zero(1, 0),
+    3.U -> vid.io.d_zero(0, 0)
+  ))
+
+  val vid_fflags_3 = LookupTreeDefault(sew, 0.U, List(
+    0.U -> vid.io.d_zero(15, 8),
+    1.U -> vid.io.d_zero(15, 4),
+    2.U -> vid.io.d_zero(15, 2),
+    3.U -> vid.io.d_zero(15, 1)
+  ))
+  // vid_result.result(0) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(XLEN - 1, 0)
+  // vid_result.result(1) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(VLEN - 1, XLEN)
   vid_result.fflags(0) := ZeroExt(vid_fflags_0, 20)
   vid_result.fflags(1) := ZeroExt(vid_fflags_1, 20)
+  vid_result.fflags(2) := ZeroExt(vid_fflags_2, 20)
+  vid_result.fflags(3) := ZeroExt(vid_fflags_3, 20)
+  for(i <- 0 until VLEN/XLEN) {
+  vid_result.result(i) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(XLEN*(i+1)- 1, XLEN*i)
+  }
+  vid_result_valid := vid.io.div_out_valid
   vid_result.vxsat := 0.U
 
   // arbiter

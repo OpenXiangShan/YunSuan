@@ -10,7 +10,8 @@ extern "C"{
 // NOTE: should keep same with chisel.
 // TODO: may dynamic generate this file when compiling chisel
 
-#define VLEN 128
+// #define VLEN 128
+#define VLEN 256
 #define XLEN 64
 
 // #define FU_NUM 8 // for random

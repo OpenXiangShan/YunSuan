@@ -1,7 +1,8 @@
 package yunsuan.vector
 
 object VIFuParam {
-  val VLEN = 128
+  // val VLEN = 128
+  val VLEN = 256
   val XLEN = 64
   val VLENB = VLEN/8
   val wVL = 8

@@ -7,7 +7,8 @@ import yunsuan.vector._
 import yunsuan.vector.permfsm.VPermFsmOpcode._
 
 class PermFsm extends Module {
-  val VLEN = 128
+  // val VLEN = 128
+  val VLEN = 256
   val vlenb = VLEN / 8
   val io = IO(new Bundle {
     val in = Input(new VPermFsmInput)

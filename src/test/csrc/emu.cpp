@@ -192,6 +192,7 @@ int Emulator::execute_operations(uint64_t ops) {
 
 bool Emulator::execute() {
   int trap_code;
+  // test_driver.verbose_exec();
   while ((cycles < args.max_cycles) && (operations < args.max_operations)) {
     trap_code = single_cycle();
     if ((trap_code != STATE_RUNNING) && (trap_code != STATE_FINISH_OPERATION)) {

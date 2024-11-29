@@ -1,6 +1,8 @@
 #ifndef __IO_TYPE_H
 #define __IO_TYPE_H
 
+#include "vpu_constant.h"
+
 struct VecInfo {
   uint8_t vstart; // 0-127
   uint8_t vl; // 0-128
@@ -11,10 +13,10 @@ struct VecInfo {
 };
 
 struct VecInput {
-  uint64_t src1[2];
-  uint64_t src2[2];
-  uint64_t src3[2];
-  uint64_t src4[2];
+  uint64_t src1[VLEN/64];
+  uint64_t src2[VLEN/64];
+  uint64_t src3[VLEN/64];
+  uint64_t src4[VLEN/64];
   uint8_t fuType; // only 5bits(or 2bits?)
   uint8_t fuOpType;
   uint8_t uop_idx; // only 6 bits
@@ -29,16 +31,16 @@ struct VecInput {
 };
 
 struct VecOutput {
-  uint64_t result[2] = {0,0};
-  uint32_t fflags[2] = {0,0}; // only 20bits for each op
+  uint64_t result[VLEN/64] = {0};
+  uint32_t fflags[VLEN/64] = {0}; // only 20bits for each op
   uint64_t vxsat = 0;    // NOTE: The length of the aligned structure must be an integer multiple of the largest alignment parameter (PPB) in the member
 };
 
 struct VecInputE8 {
-  uint8_t src1[16];
-  uint8_t src2[16];
-  uint8_t src3[16];
-  uint8_t src4[16];
+  uint8_t src1[VLEN/8];
+  uint8_t src2[VLEN/8];
+  uint8_t src3[VLEN/8];
+  uint8_t src4[VLEN/8];
   uint8_t fuType; // only 5bits(or 2bits?)
   uint8_t fuOpType;
   uint8_t uop_idx; // only 6 bits
@@ -51,10 +53,10 @@ struct VecInputE8 {
 };
 
 struct VecInputE16 {
-  uint16_t src1[8];
-  uint16_t src2[8];
-  uint16_t src3[8];
-  uint16_t src4[8];
+  uint16_t src1[VLEN/16];
+  uint16_t src2[VLEN/16];
+  uint16_t src3[VLEN/16];
+  uint16_t src4[VLEN/16];
   uint8_t fuType; // only 5bits(or 2bits?)
   uint8_t fuOpType;
   uint8_t uop_idx; // only 6 bits
@@ -67,10 +69,10 @@ struct VecInputE16 {
 };
 
 struct VecInputE32 {
-  uint32_t src1[4];
-  uint32_t src2[4];
-  uint32_t src3[4];
-  uint32_t src4[4];
+  uint32_t src1[VLEN/32];
+  uint32_t src2[VLEN/32];
+  uint32_t src3[VLEN/32];
+  uint32_t src4[VLEN/32];
   uint8_t fuType; // only 5bits(or 2bits?)
   uint8_t fuOpType;
   uint8_t uop_idx; // only 6 bits
@@ -83,21 +85,21 @@ struct VecInputE32 {
 };
 
 struct VecOutputE8 {
-  uint8_t result[16];
+  uint8_t result[VLEN/8];
   // uint8_t fflags[2]; // only 20bits for each op
-  uint8_t vxsat[16];
+  uint8_t vxsat[VLEN/8];
 };
 
 struct VecOutputE16 {
-  uint16_t result[8];
-  uint8_t fflags[8]; // only 20bits for each op
-  uint8_t vxsat[8];
+  uint16_t result[VLEN/16];
+  uint8_t fflags[VLEN/16]; // only 20bits for each op
+  uint8_t vxsat[VLEN/16];
 };
 
 struct VecOutputE32 {
-  uint32_t result[4];
-  uint8_t fflags[4]; // only 20bits for each op
-  uint8_t vxsat[4];
+  uint32_t result[VLEN/32];
+  uint8_t fflags[VLEN/32]; // only 20bits for each op
+  uint8_t vxsat[VLEN/32];
 };
 
 
