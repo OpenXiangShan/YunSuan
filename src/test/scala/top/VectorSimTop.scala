@@ -154,6 +154,7 @@ class SimTop() extends VPUTestModule {
   finish_uncertain := Mux(in.fuType === VPUTestFuType.vid, vid_result_valid,vfd_result_valid.reduce(_&&_))
 
   for (i <- 0 until (VLEN / XLEN)) {
+    // TODO:
     val (src1, src2, src3) = (in.src(0)(i), in.src(1)(i), in.src(2)(i))
     val vfa = Module(new VectorFloatAdder) // result at next cycle
     val vff = Module(new VectorFloatFMA)
@@ -167,6 +168,7 @@ class SimTop() extends VPUTestModule {
     vfa.io.fire := busy
     vfa.io.fp_a := src1
     vfa.io.fp_b := src2
+    //TODO:
     //io.widen_a Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
     //io.widen_b Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
     // vfa.io.widen_a := Cat(in.src(0)(1)(31+i*32,0+i*32),in.src(0)(0)(31+i*32,0+i*32))
@@ -322,12 +324,7 @@ class SimTop() extends VPUTestModule {
   vperm.io.vs2    := Cat(in.src(1)(3), in.src(1)(2), in.src(1)(1), in.src(1)(0))
   vperm.io.old_vd := Cat(in.src(2)(3), in.src(2)(2), in.src(2)(1), in.src(2)(0))
   vperm.io.mask   := Cat(in.src(3)(3), in.src(3)(2), in.src(3)(1), in.src(3)(0))
-  // for (i <- 0 until VLEN/XLEN) {
-  //   vperm.io.vs1 := Cat(vperm.io.vs1, in.src(0)(i))  // 
-  //   vperm.io.vs2 := Cat(vperm.io.vs2, in.src(1)(i))
-  //   vperm.io.old_vd := Cat(vperm.io.old_vd, in.src(2)(i))
-  //   vperm.io.mask := Cat(vperm.io.mask, in.src(3)(i))
-  // }
+  
   vperm.io.vs1_type := ZeroExt(sew, 4)
   vperm.io.vs2_type := ZeroExt(sew, 4)
   vperm.io.vd_type := ZeroExt(sew, 4)
@@ -371,6 +368,7 @@ class SimTop() extends VPUTestModule {
   val vid_rem = vid_opcode(1)
   val vid = Module(new VectorIdiv)
 
+  //TODO:
   // val src1 = Cat(in.src(0)(1), in.src(0)(0))
   // val src2 = Cat(in.src(1)(1), in.src(1)(0))
   val src1 = Cat(in.src(0)(3), in.src(0)(2), in.src(0)(1), in.src(0)(0))
@@ -384,6 +382,7 @@ class SimTop() extends VPUTestModule {
   vid.io.flush := false.B
   vid.io.sew := sew
   vid.io.div_out_ready := busy
+  //TODO:
   val vid_fflags_0 = LookupTreeDefault(sew, 0.U, List(
     0.U -> vid.io.d_zero(7, 0),
     1.U -> vid.io.d_zero(3, 0),

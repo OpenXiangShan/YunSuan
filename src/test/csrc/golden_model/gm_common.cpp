@@ -1,20 +1,25 @@
 #include "../include/gm_common.h"
 #include <typeinfo>
+// #include "../include/vpu_constant.h"
 
 #define	GET_BIT(x, bit)	((x & (1 << bit)) >> bit)
 
+#define GVLEN 256
 VPUGoldenModel::VPUGoldenModel():
   verbose(false)
 {}
 
 VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
   int sew = input.sew;
-  int number = (128 / 8) >> sew;
+  // int number = (128 / 8) >> sew;
+  int number = (GVLEN / 8) >> sew;
   int half_number = number >> 1;
   int result_shift_len = 8 << sew;
   int widenNorrow = (input.fuOpType >> 3) & 0X3;
   int i2f_inputType = (input.fuOpType >> 3) & 0X1;
-  int i2f_number = (128 / 8) >> (i2f_inputType+2);
+  // int i2f_number = (128 / 8) >> (i2f_inputType+2);
+  int i2f_number = (GVLEN / 8) >> (i2f_inputType+2);
+
   int i2f_half_number = i2f_number >> 1;
   int i2f_outputType = (input.fuOpType >> 1) & 0X3;
   softfloat_detectTininess = softfloat_tininess_afterRounding;
@@ -205,10 +210,11 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
     }
   }
   
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < GVLEN/XLEN; i++) {
     output.result[i] = 0;
     output.fflags[i] = 0;
-    for (int j = 0; j < half_number; j++) {
+    int cnt = half_number/2;
+    for (int j = 0; j < cnt; j++) {
       if(input.fuType == VIntegerDivider) {
         output.result[i] += (uint64_t)(output_part[i*half_number+j].result&mask) << (j*result_shift_len);
         output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << j;
@@ -272,8 +278,8 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
           output.fflags[i] = (uint32_t)output_part[i*half_number].fflags;
         }
       }else {
-        output.result[i] += ((uint64_t)output_part[i*half_number+j].result) << (j*result_shift_len);
-        output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << (j*5);
+        output.result[i] += ((uint64_t)output_part[i*cnt+j].result) << (j*result_shift_len);
+        output.fflags[i] += (uint32_t)output_part[i*cnt+j].fflags << (j*5);
       }
       if (verbose) {
         printf("%s::%s ResultJoint i:%d j:%d result:%lx fflags:%x\n", typeid(this).name(), __func__,i,j,output.result[i], output.fflags[i]);
@@ -290,7 +296,8 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
 
 ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
   int sew = input.sew;
-  int number = (128 / 8) >> sew;
+  // int number = (128 / 8) >> sew;
+  int number = (GVLEN / 8) >> sew;
   if (idx > number) { printf("Bad idx %d > %d at sew %d\n", idx, number, sew); exit(1); }
   int widen_idx = input.uop_idx % 2 == 0 ? idx : number + idx;
 
