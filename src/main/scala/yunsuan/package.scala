@@ -167,14 +167,14 @@ package object yunsuan {
     def vssra_vv    = LiteralCat(FMT.VVV  , SINT, VialuOpcode.vssra)  // "b00_1_100000".U(OpTypeWidth.W) // vssra // Todo
     def vnclipu_wv  = LiteralCat(FMT.WVV  , UINT, VialuOpcode.vssrl)  // "b11_0_011111".U(OpTypeWidth.W) // vssrl ---
     def vnclip_wv   = LiteralCat(FMT.WVV  , SINT, VialuOpcode.vssra)  // "b11_1_100000".U(OpTypeWidth.W) // vssra
-    def vmand_mm    = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vand)   // "b10_0_000111".U(OpTypeWidth.W) // vand
-    def vmnand_mm   = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vnand)  // "b10_0_001000".U(OpTypeWidth.W) // vnand
-    def vmandn_mm   = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vandn)  // "b10_0_001001".U(OpTypeWidth.W) // vandn
-    def vmxor_mm    = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vxor)   // "b10_0_001010".U(OpTypeWidth.W) // vxor
-    def vmor_mm     = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vor)    // "b10_0_001011".U(OpTypeWidth.W) // vor
-    def vmnor_mm    = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vnor)   // "b10_0_001100".U(OpTypeWidth.W) // vnor
-    def vmorn_mm    = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vorn)   // "b10_0_001101".U(OpTypeWidth.W) // vorn
-    def vmxnor_mm   = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vxnor)  // "b10_0_001110".U(OpTypeWidth.W) // vxnor
+    def vmand_mm    = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vand)   // "b11_0_000111".U(OpTypeWidth.W) // vand
+    def vmnand_mm   = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vnand)  // "b11_0_001000".U(OpTypeWidth.W) // vnand
+    def vmandn_mm   = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vandn)  // "b11_0_001001".U(OpTypeWidth.W) // vandn
+    def vmxor_mm    = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vxor)   // "b11_0_001010".U(OpTypeWidth.W) // vxor
+    def vmor_mm     = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vor)    // "b11_0_001011".U(OpTypeWidth.W) // vor
+    def vmnor_mm    = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vnor)   // "b11_0_001100".U(OpTypeWidth.W) // vnor
+    def vmorn_mm    = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vorn)   // "b11_0_001101".U(OpTypeWidth.W) // vorn
+    def vmxnor_mm   = LiteralCat(FMT.MMM  , UINT, VialuOpcode.vxnor)  // "b11_0_001110".U(OpTypeWidth.W) // vxnor
     def vmv_s_x     = LiteralCat(FMT.ZXV  , SINT, VialuOpcode.vmvsx)  // "b00_1_101110".U(OpTypeWidth.W) // vmvsx
     // Zvbb
     def vandn_vv    = LiteralCat(FMT.VVV  , UINT, VialuOpcode.vandn)  // "b00_0_001001".U(OPTypeWidth.W) // vandn
