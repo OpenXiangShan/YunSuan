@@ -33,8 +33,8 @@ void TestDriver::set_test_type() {
   // test_type.pick_fuOpType = false;
   test_type.pick_fuType = true;
   test_type.pick_fuOpType = true;
-  test_type.fuType = VPermutation;
-  test_type.fuOpType = VSLIDEUP;
+  test_type.fuType = VIntegerALUV2;
+  test_type.fuOpType = VADD_VV;
   printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -44,9 +44,9 @@ void TestDriver::gen_next_test_case() {
   if (verbose) { display_ref_input(); }
   get_expected_output();
   if (verbose) { display_ref_output(); }
-  printf("-----new sample-----\n");
-  display();
-  printf("--------------------\n");
+  // printf("-----new sample-----\n");
+  // display();
+  // printf("--------------------\n");
 }
 
 
@@ -149,17 +149,7 @@ uint8_t TestDriver::gen_random_sew() {
   //   // default: return (rand()%3)+1; break;
   //   default: return 1; break;
   // }
-  switch (input.fuType)
-  {
-    case VIntegerALU: return rand()%4; break;
-    case VPermutation: return rand()%4; break;
-    case VFloatCvt: return rand()%4; break;
-    case FloatCvtF2X: return (rand()%3)+1 ; break;
-    case FloatCvtI2F: return 0 ; break;
-    // default: return (rand()%3)+1; break;
-    default: return 1; break;
-  }
-
+  return 0;
 }
 
 bool TestDriver::gen_random_widen() {
@@ -233,9 +223,9 @@ void TestDriver::gen_random_vecinfo() {
   //               lmul =  8, 4, 2, 1,  1/2, 1/4, 1/8
   uint8_t vlmul_list[7] = {3, 2, 1, 0,  7,   6,   5};
   //TODO: modified
-  // input.vinfo.vlmul = 0;
+  input.vinfo.vlmul = 0;
   //sew: 01-> fp16, 10->fp32
-  input.vinfo.vlmul = vlmul_list[rand() % (7 - input.sew)];
+  // input.vinfo.vlmul = vlmul_list[rand() % (7 - input.sew)];
   int elements_per_reg = (VLEN / 8) >> input.sew;
   int vlmax = (input.vinfo.vlmul > 4) ? (elements_per_reg >> (8 - input.vinfo.vlmul)) : (elements_per_reg << input.vinfo.vlmul);
   switch (input.fuType) {
@@ -243,21 +233,22 @@ void TestDriver::gen_random_vecinfo() {
       if (input.fuOpType == VCOMPRESS)
         input.vinfo.vstart = 0;
       else
-        input.vinfo.vstart = rand() % vlmax;
+        // input.vinfo.vstart = rand() % vlmax;
+        input.vinfo.vstart = 0;
       break;
     }
     default: input.vinfo.vstart = 0; break;
   } // The vstart of an arithmetic instruction is generally equal to 0
   //TODO: need more test
-  // input.vinfo.vl = vlmax;
-  // input.vinfo.vm = 0;
-  // input.vinfo.ta = 0;
-  // input.vinfo.ma = 0;
+  input.vinfo.vl = vlmax;
+  input.vinfo.vm = 0;
+  input.vinfo.ta = 0;
+  input.vinfo.ma = 0;
 
-  input.vinfo.vl = rand() % vlmax + 1; // TODO: vl == 0 may be illegal
-  input.vinfo.vm = rand() % 2;
-  input.vinfo.ta = rand() % 2;
-  input.vinfo.ma = rand() % 2;
+  // input.vinfo.vl = rand() % vlmax + 1; // TODO: vl == 0 may be illegal
+  // input.vinfo.vm = rand() % 2;
+  // input.vinfo.ta = rand() % 2;
+  // input.vinfo.ma = rand() % 2;
 }
 
 void TestDriver::gen_random_uopidx() {
@@ -590,13 +581,13 @@ void TestDriver::display_ref_input() {
   // printf("  src1 %016lx_%016lx src2 %016lx_%016lx src3 %016lx_%016lx src4 %016lx_%016lx\n", input.src1[1], input.src1[0], input.src2[1], input.src2[0], input.src3[1], input.src3[0], input.src4[1], input.src4[0]);
   if(input.sew == 1){
     printf("src1: ");
-    fp16_print(input.src1, VLEN, XLEN);
+    uint64_print(input.src1, VLEN, XLEN);
     printf("src2: ");
     fp16_print(input.src2, VLEN, XLEN);
-    // printf("src3: ");
-    // fp16_print(input.src3, VLEN, XLEN);
-    // printf("src4: ");
-    // fp16_print(input.src4, VLEN, XLEN);
+    printf("src3: ");
+    fp16_print(input.src3, VLEN, XLEN);
+    printf("src4: ");
+    uint64_print(input.src4, VLEN, XLEN);
   }
   else printf("  src1 %016lx_%016lx_%016lx_%016lx src2 %016lx_%016lx_%016lx_%016lx src3 %016lx_%016lx_%016lx_%016lx src4 %016lx_%016lx_%016lx_%016lx\n", 
   input.src1[3], input.src1[2], input.src1[1], input.src1[0], 

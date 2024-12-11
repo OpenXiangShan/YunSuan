@@ -213,18 +213,19 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
   for (int i = 0; i < GVLEN/XLEN; i++) {
     output.result[i] = 0;
     output.fflags[i] = 0;
-    int cnt = half_number/2;
+    // int cnt = half_number/2;// related to VLEN, need to be modified
+    int cnt = VLEN/64;
     for (int j = 0; j < cnt; j++) {
       if(input.fuType == VIntegerDivider) {
         output.result[i] += (uint64_t)(output_part[i*half_number+j].result&mask) << (j*result_shift_len);
         output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << j;
       }else if(input.fuType == VFloatCvt){
         if(widenNorrow == 1){//widen
-          output.result[i] += ((uint64_t)output_part[(i<<1)*half_number+j].result&mask) << (j*result_shift_len);
-          output.fflags[i] += (uint32_t)output_part[(i<<1)*half_number+j].fflags << (j*5);
+          output.result[i] += ((uint64_t)output_part[(i<<1)*cnt+j].result&mask) << (j*result_shift_len);
+          output.fflags[i] += (uint32_t)output_part[(i<<1)*cnt+j].fflags << (j*5);
         }else {//single or norrow
-          output.result[i] += ((uint64_t)output_part[i*half_number+j].result&mask) << (j*result_shift_len);
-          output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << (j*5);
+          output.result[i] += ((uint64_t)output_part[i*cnt+j].result&mask) << (j*result_shift_len);
+          output.fflags[i] += (uint32_t)output_part[i*cnt+j].fflags << (j*5);
         }
       }else if(input.fuType == FloatCvtF2X){
         if(widenNorrow == 1){//widen

@@ -92,7 +92,7 @@ ElementOutput SGMFloatCvt::calculation_e32(ElementInput input) {
   fp_clear_exception();
   ElementOutput output;
   switch(input.fuOpType) {
-    //saclar
+    //scalar
     case FCVT_H_W:  // i32 ->f16
       output.result = i32_to_f16((uint32_t)input.src1).v;  break;
     case FCVT_H_WU:  // ui32 ->f16

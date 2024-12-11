@@ -54,29 +54,54 @@ VecOutput VGMPermutation::get_output_vslideup(VecInput input) {
 
   int uop_idx = input.uop_idx;
   int mask_start_idx;
-  if (uop_idx == 0) mask_start_idx = 0;
-  else if ((1 <= uop_idx) && (uop_idx <= 2)) mask_start_idx = 1;
-  else if ((3 <= uop_idx) && (uop_idx <= 5)) mask_start_idx = 2;
-  else if ((6 <= uop_idx) && (uop_idx <= 9)) mask_start_idx = 3;
-  else if ((10 <= uop_idx) && (uop_idx <= 14)) mask_start_idx = 4;
-  else if ((15 <= uop_idx) && (uop_idx <= 20)) mask_start_idx = 5;
-  else if ((21 <= uop_idx) && (uop_idx <= 27)) mask_start_idx = 6;
-  else if ((28 <= uop_idx) && (uop_idx <= 35)) mask_start_idx = 7;
-  else { printf("VGM Permutation vslideup, bad uop_idx %d\n", uop_idx); exit(1); }
+  // if (uop_idx == 0) mask_start_idx = 0;
+  // else if ((1 <= uop_idx) && (uop_idx <= 2)) mask_start_idx = 1;
+  // else if ((3 <= uop_idx) && (uop_idx <= 5)) mask_start_idx = 2;
+  // else if ((6 <= uop_idx) && (uop_idx <= 9)) mask_start_idx = 3;
+  // else if ((10 <= uop_idx) && (uop_idx <= 14)) mask_start_idx = 4;
+  // else if ((15 <= uop_idx) && (uop_idx <= 20)) mask_start_idx = 5;
+  // else if ((21 <= uop_idx) && (uop_idx <= 27)) mask_start_idx = 6;
+  // else if ((28 <= uop_idx) && (uop_idx <= 35)) mask_start_idx = 7;
+  // else { printf("VGM Permutation vslideup, bad uop_idx %d\n", uop_idx); exit(1); }
+  mask_start_idx = VLEN/XLEN;
+  for(int i =0; i < VLEN/XLEN; i++){
+    if(uop_idx >= i*(i+1)/2 && uop_idx <= i*(i+1)/2 + i){
+      mask_start_idx = i;
+    }
+  }
+  if(mask_start_idx == VLEN/XLEN){
+    printf("VGM Permutation vslideup, bad uop_idx %d\n", uop_idx); exit(1); 
+  }
   mask_start_idx = mask_start_idx * elements_per_reg;
 
   uint16_t mask_selected = (mask_start_idx >= 64) ? input.src4[1] >> (mask_start_idx - 64) : input.src4[0] >> mask_start_idx;
   
   int slide_base;
-  if ( uop_idx == 0 || uop_idx == 2 || uop_idx == 5 || uop_idx == 9 || uop_idx == 14 || uop_idx == 20 || uop_idx == 27 || uop_idx == 35 ) slide_base = 0;
-  else if ( uop_idx == 1 || uop_idx == 4 || uop_idx == 8 || uop_idx == 13 || uop_idx == 19 || uop_idx == 26 || uop_idx == 34 ) slide_base = 1;
-  else if ( uop_idx == 3 || uop_idx == 7 || uop_idx == 12 || uop_idx == 18 || uop_idx == 25 || uop_idx == 33 ) slide_base = 2;
-  else if ( uop_idx == 6 || uop_idx == 11 || uop_idx == 17 || uop_idx == 24 || uop_idx == 32 ) slide_base = 3;
-  else if ( uop_idx == 10 || uop_idx == 16 || uop_idx == 23 || uop_idx == 31 ) slide_base = 4;
-  else if ( uop_idx == 15 || uop_idx == 22 || uop_idx == 30 ) slide_base = 5;
-  else if ( uop_idx == 21 || uop_idx == 29 ) slide_base = 6;
-  else if ( uop_idx == 28 ) slide_base = 7;
-  else { printf("VGM Permutation vslideup, bad uop_idx %d\n", uop_idx); exit(1); }
+  // if ( uop_idx == 0 || uop_idx == 2 || uop_idx == 5 || uop_idx == 9 || uop_idx == 14 || uop_idx == 20 || uop_idx == 27 || uop_idx == 35 ) slide_base = 0;
+  // else if ( uop_idx == 1 || uop_idx == 4 || uop_idx == 8 || uop_idx == 13 || uop_idx == 19 || uop_idx == 26 || uop_idx == 34 ) slide_base = 1;
+  // else if ( uop_idx == 3 || uop_idx == 7 || uop_idx == 12 || uop_idx == 18 || uop_idx == 25 || uop_idx == 33 ) slide_base = 2;
+  // else if ( uop_idx == 6 || uop_idx == 11 || uop_idx == 17 || uop_idx == 24 || uop_idx == 32 ) slide_base = 3;
+  // else if ( uop_idx == 10 || uop_idx == 16 || uop_idx == 23 || uop_idx == 31 ) slide_base = 4;
+  // else if ( uop_idx == 15 || uop_idx == 22 || uop_idx == 30 ) slide_base = 5;
+  // else if ( uop_idx == 21 || uop_idx == 29 ) slide_base = 6;
+  // else if ( uop_idx == 28 ) slide_base = 7;
+  // else { printf("VGM Permutation vslideup, bad uop_idx %d\n", uop_idx); exit(1); }
+  slide_base = -1;
+  for (int i = 0; i <= VLEN/XLEN; ++i) {
+    int step = i + 2;
+    for(int j = i*(i+1)/2; j < (VLEN/XLEN)*((VLEN/XLEN)+1)/2; ){
+      if(j == uop_idx){
+        slide_base = i;
+        break;
+      }
+      j += step;
+      step ++;
+    }
+  }
+  if(slide_base == -1){
+    printf("VGM Permutation vslideup, bad uop_idx %d\n", uop_idx); exit(1); 
+  }
+  printf("slide_base: %d, mask_start_idx: %d, mask_selected:%d\n", slide_base, mask_start_idx, mask_selected);
   slide_base = slide_base * elements_per_reg;
 
   VSlideInput vslideup_input;
@@ -98,8 +123,9 @@ VecOutput VGMPermutation::get_output_vslideup(VecInput input) {
     }
     case 1: {
       VecOutputE16 output_e16 = vslideup_calculation_e16(&vslideup_input);
-      output.result[0] = *(uint64_t *)(&output_e16.result[0]);
-      output.result[1] = *(uint64_t *)(&output_e16.result[4]);
+      for(int i = 0; i < VLEN/XLEN; i++){
+        output.result[i] = *(uint64_t *)(&output_e16.result[4*i]);
+      }
       break;
     }
     case 2: {
@@ -185,7 +211,6 @@ VecOutputE16 VGMPermutation::vslideup_calculation_e16(VSlideInput *input) {
   bool vm = input->vinfo->vm;
   bool ta = input->vinfo->ta;
   bool ma = input->vinfo->ma;
-
   for (int i = 0; i < elements; i++) {
     int elements_idx = mask_start_idx + i;
     bool mask_i = (mask >> i) & 0x1;
@@ -211,7 +236,7 @@ VecOutputE16 VGMPermutation::vslideup_calculation_e16(VSlideInput *input) {
     }
   }
 
-  for (int i = elements; i < 8; i++) {
+  for (int i = elements; i < VLEN/16; i++) {
     output.result[i] = ta ? 0xffff : prev_data[i];
   }
 
