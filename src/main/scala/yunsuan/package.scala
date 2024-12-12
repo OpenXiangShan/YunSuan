@@ -3,6 +3,7 @@ import chisel3.util._
 import yunsuan.encoding.Opcode.VimacOpcode
 import yunsuan.util.LiteralCat
 import yunsuan.vector.alu.VAluOpcode
+import yunsuan.encoding.Opcode._
 
 package object yunsuan {
   def OpTypeWidth: Int = 9
@@ -567,6 +568,13 @@ object VfcvtType {
   def froundnx          = "b11_000100".U(8.W)
   def fcvtmod_w_d     = "b1_10_010001".U(9.W)
 }
+
+  object VclzType {
+    def dummy                          = BitPat.Y(OpTypeWidth)
+    def vclz_v                         = LiteralCat(0.U(7.W), VclzOpcode.vclz)
+    def vctz_v                         = LiteralCat(0.U(7.W), VclzOpcode.vctz)
+    def vfirst_m                       = LiteralCat(0.U(7.W), VclzOpcode.vfirst)
+  }
 
 
   object VectorElementFormat {
