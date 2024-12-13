@@ -2,6 +2,7 @@
 #include "../include/vfpu_functions.h"
 #include <typeinfo>
 #include <stdint.h>
+#include <math.h>
 
 
 //                               width of output
@@ -14,7 +15,9 @@ ElementOutput VGMFloatCvt::calculation_e8(ElementInput input) {
     case VFWCVT_FXUV: //ui8 -> f16
      output.result = ui32_to_f16((uint32_t)input.src1).v;  break;
     case VFWCVT_FXV:  //i8 -> f16 
-      output.result = i32_to_f16((int32_t)(int8_t)input.src1).v;  break; //todo
+    {
+      output.result = i32_to_f16((int32_t)(int8_t)input.src1).v; break; //todo
+    }
     default:
       printf("VFConvert Unsupported fuOpType %d\n", input.fuOpType);
       exit(1);
@@ -68,10 +71,13 @@ ElementOutput VGMFloatCvt::calculation_e16(ElementInput input) {
     // norrow 16->8
     case VFNCVT_XUFW: // f16 ->ui8
       output.result = f16_to_ui8(i2f16((uint16_t)input.src1), softfloat_roundingMode, true);  break; 
-    case VFNCVT_XFW: // f16 ->i8
-      output.result = f16_to_i8(i2f16((uint16_t)input.src1), softfloat_roundingMode, true);  break; 
+    case VFNCVT_XFW: {// f16 ->i8
+      output.result = f16_to_i8(i2f16((uint16_t)input.src1), softfloat_roundingMode, true); 
+      printf("\t%d\n", (int8_t)output.result); 
+      break; 
+    }
     case VFNCVT_RTZ_XUFW: //f16 -> ui8 trun
-      output.result = f16_to_ui8(i2f16((uint16_t)input.src1), softfloat_round_minMag, true);  break; 
+      output.result = f16_to_ui8(i2f16((uint16_t)input.src1), softfloat_round_minMag, true); break; 
     case VFNCVT_RTZ_XFW:  //f16 -> i8 trun
       output.result = f16_to_i8(i2f16((uint16_t)input.src1), softfloat_round_minMag, true);  break; 
     default:

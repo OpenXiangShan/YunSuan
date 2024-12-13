@@ -1,8 +1,12 @@
 #include "../include/gm_common.h"
 #include <typeinfo>
+
 // #include "../include/vpu_constant.h"
 
 #define	GET_BIT(x, bit)	((x & (1 << bit)) >> bit)
+
+typedef unsigned short half;
+float half_to_float(half h);
 
 #define GVLEN 256
 VPUGoldenModel::VPUGoldenModel():
@@ -13,7 +17,8 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
   int sew = input.sew;
   // int number = (128 / 8) >> sew;
   int number = (GVLEN / 8) >> sew;
-  int half_number = number >> 1;
+  // int half_number = number >> 1;
+  int half_number = (XLEN/8) >> sew;
   int result_shift_len = 8 << sew;
   int widenNorrow = (input.fuOpType >> 3) & 0X3;
   int i2f_inputType = (input.fuOpType >> 3) & 0X1;
@@ -26,6 +31,7 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
   uint64_t mask = 0;
   VecOutput output;
   ElementOutput output_part[number];
+
   if (input.fuType == VFloatCvt){
 
     if(widenNorrow == 1){ //widen
@@ -50,6 +56,8 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
       half_number = half_number >> 1;
       for(int i = 0; i < number/2; i++) {
         ElementInput element = select_element(input, i);
+        float result = half_to_float((half)element.src1);
+        printf("%12.4f ", result);
         switch (sew) {
           case 0: output_part[i] = calculation_e16(element); mask = 0xFF; break;
           case 1: output_part[i] = calculation_e32(element); mask = 0xFFFF; break;
@@ -213,19 +221,18 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
   for (int i = 0; i < GVLEN/XLEN; i++) {
     output.result[i] = 0;
     output.fflags[i] = 0;
-    // int cnt = half_number/2;// related to VLEN, need to be modified
-    int cnt = VLEN/64;
-    for (int j = 0; j < cnt; j++) {
+
+    for (int j = 0; j < half_number; j++) {
       if(input.fuType == VIntegerDivider) {
         output.result[i] += (uint64_t)(output_part[i*half_number+j].result&mask) << (j*result_shift_len);
         output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << j;
       }else if(input.fuType == VFloatCvt){
         if(widenNorrow == 1){//widen
-          output.result[i] += ((uint64_t)output_part[(i<<1)*cnt+j].result&mask) << (j*result_shift_len);
-          output.fflags[i] += (uint32_t)output_part[(i<<1)*cnt+j].fflags << (j*5);
+          output.result[i] += ((uint64_t)output_part[(i<<1)*half_number+j].result&mask) << (j*result_shift_len);
+          output.fflags[i] += (uint32_t)output_part[(i<<1)*half_number+j].fflags << (j*5);
         }else {//single or norrow
-          output.result[i] += ((uint64_t)output_part[i*cnt+j].result&mask) << (j*result_shift_len);
-          output.fflags[i] += (uint32_t)output_part[i*cnt+j].fflags << (j*5);
+          output.result[i] += ((uint64_t)output_part[i*half_number+j].result&mask) << (j*result_shift_len);
+          output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << (j*5);
         }
       }else if(input.fuType == FloatCvtF2X){
         if(widenNorrow == 1){//widen
@@ -279,8 +286,8 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
           output.fflags[i] = (uint32_t)output_part[i*half_number].fflags;
         }
       }else {
-        output.result[i] += ((uint64_t)output_part[i*cnt+j].result) << (j*result_shift_len);
-        output.fflags[i] += (uint32_t)output_part[i*cnt+j].fflags << (j*5);
+        output.result[i] += ((uint64_t)output_part[i*half_number+j].result) << (j*result_shift_len);
+        output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << (j*5);
       }
       if (verbose) {
         printf("%s::%s ResultJoint i:%d j:%d result:%lx fflags:%x\n", typeid(this).name(), __func__,i,j,output.result[i], output.fflags[i]);

@@ -409,15 +409,17 @@ class SimTop() extends VPUTestModule {
     2.U -> vid.io.d_zero(15, 2),
     3.U -> vid.io.d_zero(15, 1)
   ))
-  // vid_result.result(0) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(XLEN - 1, 0)
-  // vid_result.result(1) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(VLEN - 1, XLEN)
+  vid_result.result(0) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(XLEN - 1, 0)
+  vid_result.result(1) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(XLEN*2 - 1, XLEN)
+  vid_result.result(2) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(XLEN*3 - 1, XLEN*2)
+  vid_result.result(3) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(XLEN*4 - 1, XLEN*3)
+
   vid_result.fflags(0) := ZeroExt(vid_fflags_0, 20)
   vid_result.fflags(1) := ZeroExt(vid_fflags_1, 20)
   vid_result.fflags(2) := ZeroExt(vid_fflags_2, 20)
   vid_result.fflags(3) := ZeroExt(vid_fflags_3, 20)
-  for(i <- 0 until VLEN/XLEN) {
-  vid_result.result(i) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(XLEN*(i+1)- 1, XLEN*i)
-  }
+
+
   vid_result_valid := vid.io.div_out_valid
   vid_result.vxsat := 0.U
 
