@@ -3,7 +3,6 @@ package yunsuan.vector.VectorShuffle
 import circt.stage._
 import chisel3._
 import chisel3.util._
-import chisel3.stage._
 import yunsuan.util.{LiteralCat, RegNextWithEnable}
 import yunsuan.util.Reflect.{getUIntMaxWidthOfObject, getUIntWidthOfObject}
 import yunsuan.vector.Common._
@@ -263,10 +262,10 @@ abstract class VectorShuffleBaseModule(val vlen: Int) extends Module with Vector
 object VectorShuffleGen extends App {
   println("Generating the VectorShuffle hardware")
 
-  (new ChiselStage).execute(
-    Array("--target", "systemverilog", "--target-dir", "build/vector") ++ args,
+  (new chisel3.stage.ChiselStage).execute(
+    Array("--target-dir", "build/vector") ++ args,
     Seq(
-      ChiselGeneratorAnnotation(() => new VectorShuffle(128))
+      chisel3.stage.ChiselGeneratorAnnotation(() => new VectorShuffle(128))
     )
   )
 

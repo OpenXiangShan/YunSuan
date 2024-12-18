@@ -100,18 +100,3 @@ class VIFuOutput extends Bundle {
   val vd = UInt(128.W)
   val vxsat = Bool()
 }
-
-class SewOH extends Bundle {  // 0   1   2   3
-  val oneHot = UInt(4.W) // b0-b3: 8, 16, 32, 64
-  def is8 = oneHot(0)
-  def is16 = oneHot(1)
-  def is32 = oneHot(2)
-  def is64 = oneHot(3)
-}
-object SewOH {
-  def apply(vsew: UInt): SewOH = {
-    val sew = Wire(new SewOH)
-    sew.oneHot := VecInit(Seq.tabulate(4)(i => vsew === i.U)).asUInt
-    sew
-  }
-}

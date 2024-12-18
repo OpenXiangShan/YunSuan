@@ -7,6 +7,7 @@ import yunsuan.vector._
 import yunsuan.vector.alu.VAluOpcode._
 import yunsuan.vector.alu.VSew._
 import yunsuan.util._
+import yunsuan.vector.Common._
 
 class VIAlu extends Module {
   val io = IO(new Bundle {

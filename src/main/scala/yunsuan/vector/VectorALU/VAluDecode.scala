@@ -99,15 +99,3 @@ object VSew {
   val e32 = "b10".U(2.W)
   val e64 = "b11".U(2.W)
 }
-
-// object VAluDecode {
-//                       //             mask
-//                       //          redu|
-//                       //     IntFixp| | perm
-//                       //          | | | |
-//   val default =          BitPat("b? ? ? ?")
-//   val table   = Seq(
-//     BitPat(0.U(6.W))  -> BitPat("b1 0 0 0"),
-//     BitPat(1.U(6.W))  -> BitPat("b1 0 0 0"),
-//   )
-// }

@@ -19,6 +19,7 @@ import chisel3.util._
 import yunsuan.vector._
 import yunsuan.vector.alu.VAluOpcode._
 import yunsuan.vector.VectorConvert.util.CLZ
+import yunsuan.vector.Common._
 
 class VIntMisc64b extends Module {
   val io = IO(new Bundle {

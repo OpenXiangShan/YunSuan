@@ -3,6 +3,7 @@ package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
+import yunsuan.vector.Common._
 
 object UIntSplit {
   //Split into elements, e.g., if sew=8, UInt(64.W) => Seq(UInt(8.W) * 8)
