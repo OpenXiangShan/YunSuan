@@ -7,6 +7,7 @@ import scala.language.{existentials, postfixOps}
 import yunsuan.vector._
 import chisel3.util.experimental.decode.{QMCMinimizer, TruthTable, decoder}
 import yunsuan.util.GatedValidRegNext
+import yunsuan.vector.Common._
 
 class slideupVs2VdTable() extends Module {
   // convert uop index of slide instruction to offset of vs2 and vd

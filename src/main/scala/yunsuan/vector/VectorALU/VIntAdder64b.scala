@@ -14,7 +14,7 @@ package yunsuan.vector.alu
 import chisel3._
 import chisel3.util._
 import yunsuan.vector._
-import yunsuan.vector.alu.VAluOpcode._
+import yunsuan.vector.Common.SewOH
 
 class VIntAdder64b extends Module {
   val io = IO(new Bundle {

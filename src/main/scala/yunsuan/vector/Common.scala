@@ -12,10 +12,10 @@ object Common {
   trait VectorConfig {
     val vlen: Int
     val VIdxWidth = log2Up(8)
-    val VstartWidth = log2Up(vlen)
-    val VlWidth = log2Up(vlen) + 1
-    val VLENB = vlen / 8
-    val ElemIdxWidth = log2Up(VLENB)
+    def VstartWidth = log2Up(vlen)
+    def VlWidth = log2Up(vlen) + 1
+    def VLENB = vlen / 8
+    def ElemIdxWidth = log2Up(VLENB)
     val MaxLMUL = 8
     val VdIdxWidth = log2Up(MaxLMUL)
 
@@ -29,11 +29,16 @@ object Common {
 
     def VecE64: Vec[UInt] = Vec(vlen / 64, UInt(64.W))
 
+    def genMaskE8  = UInt(VLENB.W)
+    def genMaskE16 = UInt((VLENB / 2).W)
+    def genMaskE32 = UInt((VLENB / 4).W)
+    def genMaskE64 = UInt((VLENB / 8).W)
+
     def UIntVlenb: UInt = UInt(VLENB.W)
 
     def Vlenb1s = Fill(VLENB, 1.U(1.W))
 
-    val byte1s = "hff".U
+    def byte1s = "hff".U
 
     def VdIdx: UInt = UInt(VdIdxWidth.W)
   }
@@ -42,11 +47,25 @@ object Common {
     * vtype bundle, should not used as csr reg
     */
   class VType extends Bundle {
-    val illegal = Bool()
+    val vill = Bool()
     val vma = Bool()
     val vta = Bool()
     val vsew = VSew()
     val vlmul = VLmul()
+  }
+
+  object VType {
+    def apply(): VType = {
+      new VType
+    }
+
+    def mu: UInt = 0.U(1.W)
+
+    def ma: UInt = 1.U(1.W)
+
+    def tu: UInt = 0.U(1.W)
+
+    def ta: UInt = 1.U(1.W)
   }
 
   // modify the width when support more vector data width
@@ -71,19 +90,45 @@ object Common {
     }
   }
 
-  object SewOH extends NamedUInt(4) {
-    def e8 : UInt = "b0001".U(width.W)
+  class SewOH extends Bundle { // 0   1   2   3
+    val oneHot = UInt(4.W) // b0-b3: 8, 16, 32, 64
 
-    def e16: UInt = "b0010".U(width.W)
+    def is8 = oneHot(0)
+    def is16 = oneHot(1)
+    def is32 = oneHot(2)
+    def is64 = oneHot(3)
 
-    def e32: UInt = "b0100".U(width.W)
+    def toWiden: SewOH = this.widenUInt.asTypeOf(new SewOH)
 
-    def e64: UInt = "b1000".U(width.W)
+    def widenUInt: UInt = Cat(oneHot.take(3), 0.U(1.W))
+    // remove E64 OH bit
+    def rmE64: UInt = this.oneHot.take(3)
+    // remove E32 and E64 OH bit
+    def rmGeE32: UInt = this.oneHot.take(2)
+    // remove E8 OH bit
+    def rmE8: UInt = this.oneHot.drop(1)
+    // remove E8 and E16 OH bit
+    def rmLeE16: UInt = this.oneHot.drop(2)
+  }
+
+  object SewOH {
+    def e8 : UInt = "b0001".U(4.W)
+    def e16: UInt = "b0010".U(4.W)
+    def e32: UInt = "b0100".U(4.W)
+    def e64: UInt = "b1000".U(4.W)
 
     def convertFromVSew(vsew: UInt): UInt = {
       require(vsew.getWidth >= 2 && vsew.getWidth <= 3)
-      UIntToOH(vsew, this.width)
+      UIntToOH(vsew, 4)
     }
+
+    def apply(vsew: UInt): SewOH = {
+      val sew = Wire(new SewOH)
+      sew.oneHot := VecInit(Seq.tabulate(4)(i => vsew === i.U)).asUInt
+      sew
+    }
+
+    def apply(): SewOH = new SewOH
   }
 
   object VLmul extends NamedUInt(3) {
@@ -112,6 +157,24 @@ object Common {
       checkInputWidth(uint)
       Mux(uint(2), m1, uint)
     }
+  }
+
+  class Vxrm extends Bundle {
+    val bits = UInt(2.W)
+
+    def isRnu = Vxrm.rnu === bits
+    def isRne = Vxrm.rne === bits
+    def isRdn = Vxrm.rdn === bits
+    def isRod = Vxrm.rod === bits
+  }
+
+  object Vxrm {
+    def apply(): Vxrm = new Vxrm()
+
+    def rnu = 0.U(2.W)
+    def rne = 1.U(2.W)
+    def rdn = 2.U(2.W)
+    def rod = 3.U(2.W)
   }
 
   class VecUIntUtil(val uint: UInt) {
@@ -161,6 +224,11 @@ object Common {
       val splitedVec = Wire(Vec(num, UInt(w.W)))
       splitedVec := uint.asTypeOf(splitedVec)
       splitedVec
+    }
+
+    def splitToVecN(num: Int): Vec[UInt] = {
+      val w = uint.getWidth / num
+      this.splitToVec(num, w)
     }
   }
 
@@ -213,6 +281,11 @@ object Common {
 
     val length = uint.getWidth
 
+    def take(n: Int): UInt = {
+      require(n <= length, s"Can not take $n bits, since the operand is $length bits width")
+      uint(n - 1, 0)
+    }
+
     def drop(n: Int): UInt = {
       require(n < length, s"Can not drop $n bits, since the operand is $length bits width")
       uint(length - 1, n)
@@ -221,6 +294,17 @@ object Common {
     def &>(b: Bool): UInt = {
       Mux(b, uint, 0.U)
     }
+
+    def isOneOf(seq: Seq[UInt]): Bool = {
+      require(seq.nonEmpty)
+      seq.map(_ === this.uint).reduce(_ || _)
+    }
+
+    def isOneOf(a: UInt, seq: UInt*): Bool = this.isOneOf(a +: seq)
+
+    def isOneOf[T](t: T)(a: T => UInt, seq: (T => UInt)*): Bool = this.isOneOf(a(t) +: seq.map(_(t)))
+
+    def bitReverse: UInt = Cat(this.uint.asBools)
   }
 
   implicit def caseToUIntUtil(uint: UInt): UIntUtil = new UIntUtil(uint)

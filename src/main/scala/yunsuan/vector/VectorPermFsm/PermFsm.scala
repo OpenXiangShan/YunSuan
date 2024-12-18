@@ -5,6 +5,7 @@ import chisel3.util._
 import scala.language.postfixOps
 import yunsuan.vector._
 import yunsuan.vector.permfsm.VPermFsmOpcode._
+import yunsuan.vector.Common._
 
 class PermFsm extends Module {
   val VLEN = 128

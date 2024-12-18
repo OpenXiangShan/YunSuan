@@ -7,6 +7,7 @@ import yunsuan.util.ZeroExt
 import scala.language.postfixOps
 import yunsuan.vector._
 import yunsuan.vector.alu.VAluOpcode._
+import yunsuan.vector.Common._
 
 class VMask extends Module {
   val VLEN = 128

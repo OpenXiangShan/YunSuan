@@ -460,7 +460,7 @@ class VectorMaskMergeUnit(val vlen: Int) extends Module with VectorConfig {
   val vmaskm  = io.in.bits.vmaskm
   val uopIdx  = io.in.bits.uopIdx
   val dveew   = io.in.bits.dveew
-  val eewOH   = io.in.bits.dveewOH
+  val eewOH   = io.in.bits.dveewOH.oneHot
   val vl      = io.in.bits.vl
   val vma     = io.in.bits.vma
 
@@ -580,7 +580,7 @@ class VectorMaskDataMergeUnit(val vlen: Int) extends Module with VectorConfig {
         ))
         bits.vl     := vl
         bits.dveew  := dveew
-        bits.dveewOH:= eewOH
+        bits.dveewOH.oneHot := eewOH
         bits.vma    := vma
     }
   }

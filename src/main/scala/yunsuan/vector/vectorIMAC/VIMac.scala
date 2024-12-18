@@ -3,6 +3,7 @@ package yunsuan.vector.mac
 import chisel3._
 import chisel3.util._
 import yunsuan.vector._
+import yunsuan.vector.Common._
 
 class VIMac extends Module {
   val io = IO(new Bundle {

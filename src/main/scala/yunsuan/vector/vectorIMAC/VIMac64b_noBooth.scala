@@ -3,6 +3,7 @@ package yunsuan.vector.mac
 import chisel3._
 import chisel3.util._
 import yunsuan.vector._
+import yunsuan.vector.Common._
 
 /** 64-bit vector multiply and accumlation unit
  *  

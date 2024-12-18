@@ -1,3 +1,5 @@
+package yunsuan.vector.v2.VectorInt
+
 /**
   * Fixed-Point instructions:
   *     12.1  vsadd, ...
@@ -5,12 +7,11 @@
   *     12.4  vssrl, ...
   *     12.5  vnclip, ...
   */
-package yunsuan.vector.alu
 
 import chisel3._
 import chisel3.util._
-import yunsuan.vector.Common.SewOH
 import yunsuan.vector._
+import yunsuan.vector.Common._
 import yunsuan.vector.alu.VAluOpcode._
 
 class AdderToFixP extends Bundle {
@@ -27,23 +28,34 @@ class MiscToFixP extends Bundle {
 
 class VFixPoint64b extends Module {
   val io = IO(new Bundle {
-    val opcode = Input(new VAluOpcode)
-    val info = Input(new VIFuInfo)
-    val sew = Input(new SewOH)
-    val isSub = Input(Bool())
+    val op = Input(new Bundle{
+      val sat = Bool()
+      // vssrl, vssra, vnclipu, vnclip
+      val scaleShift = Bool()
+
+      val sub = Bool()
+      // only vnclip[u] set vxsat
+      val narrow = Bool()
+    })
+    val vxrm = Input(Vxrm())
+    // sewOH.toWiden when narrow, else sewOH
+    val vs2eew = Input(new SewOH)
     val isSigned = Input(Bool())
-    val isNClip = Input(Bool())
     val fromAdder = Input(new AdderToFixP)
     val fromMisc = Input(new MiscToFixP)
+
     val vd = Output(UInt(64.W))
     val narrowVd = Output(UInt(32.W))
+    // duplicated when sew is not 8
+    // vxsat res is "b01".U and sew is 64, vxsat will be assigned to Fill(8, false.B) ## Fill(8, true.B)
     val vxsat = Output(UInt(8.W))
   })
 
-  val opcode = io.opcode
-  val vxrm = io.info.vxrm
-  val sew = io.sew
-  val sub = io.isSub
+  val op = io.op
+  val vxrm = io.vxrm
+  val vs2eew = io.vs2eew
+  val sub = op.sub
+  val narrow = op.narrow
   val signed = io.isSigned
   val rnd_high = io.fromMisc.rnd_high
   val rnd_tail = io.fromMisc.rnd_tail
@@ -66,34 +78,34 @@ class VFixPoint64b extends Module {
   }
   // Whether a 8-bit portion is under saturating state
   val saturate = Mux1H(Seq(
-    sew.is8  -> Cat(sat.reverse),
-    sew.is16 -> Cat(Fill(2, sat(7)), Fill(2, sat(5)), Fill(2, sat(3)), Fill(2, sat(1))),
-    sew.is32 -> Cat(Fill(4, sat(7)), Fill(4, sat(3))),
-    sew.is64 -> Fill(8, sat(7))
+    vs2eew.is8  -> Cat(sat.reverse),
+    vs2eew.is16 -> Cat(Fill(2, sat(7)), Fill(2, sat(5)), Fill(2, sat(3)), Fill(2, sat(1))),
+    vs2eew.is32 -> Cat(Fill(4, sat(7)), Fill(4, sat(3))),
+    vs2eew.is64 -> Fill(8, sat(7))
   ))
 
   val vdSat = Wire(Vec(8, UInt(8.W)))
   for (i <- 0 until 8) {
     // If this 8-bit portion is in up-overflow case (unsigned) when overflow happens
     val upOverflowU = Mux1H(Seq(
-      sew.is8  -> adderCout(i),
-      sew.is16 -> adderCout((i/2)*2+1),
-      sew.is32 -> adderCout((i/4)*4+3),
-      sew.is64 -> adderCout(7),
+      vs2eew.is8  -> adderCout(i),
+      vs2eew.is16 -> adderCout((i/2)*2+1),
+      vs2eew.is32 -> adderCout((i/4)*4+3),
+      vs2eew.is64 -> adderCout(7),
     ))
     // If this 8-bit portion is in down-overflow case (signed) when overflow happens
     val downOverflowS = Mux1H(Seq(
-      sew.is8  -> vs2H(i),
-      sew.is16 -> vs2H((i/2)*2+1),
-      sew.is32 -> vs2H((i/4)*4+3),
-      sew.is64 -> vs2H(7),
+      vs2eew.is8  -> vs2H(i),
+      vs2eew.is16 -> vs2H((i/2)*2+1),
+      vs2eew.is32 -> vs2H((i/4)*4+3),
+      vs2eew.is64 -> vs2H(7),
     ))
     // If this 8-bit portion is the highest bits of a SEW-bit element
     val highestBits = Mux1H(Seq(
-      sew.is8  -> true.B,
-      sew.is16 -> {if ((i % 2) == 1) true.B else false.B},
-      sew.is32 -> {if ((i % 4) == 3) true.B else false.B},
-      sew.is64 -> {if (i == 7) true.B else false.B},
+      vs2eew.is8  -> true.B,
+      vs2eew.is16 -> {if ((i % 2) == 1) true.B else false.B},
+      vs2eew.is32 -> {if ((i % 4) == 3) true.B else false.B},
+      vs2eew.is64 -> {if (i == 7) true.B else false.B},
     ))
     when (saturate(i)) {
       when (signed) {
@@ -105,20 +117,6 @@ class VFixPoint64b extends Module {
       vdSat(i) := adderOut(i)
     }
   }
-
-  /**
-    * Rounding methods
-    */
-  // Rounding Increment
-  def roundingInc(v: UInt, d: Int): Bool = {
-    Mux1H(Seq(
-      (vxrm === 0.U) -> v(d-1),
-      (vxrm === 1.U) -> (v(d-1) && ((if (d == 1) false.B else {v(d-2, 0) =/= 0.U}) || v(d))),
-      (vxrm === 2.U) -> false.B,
-      (vxrm === 3.U) -> (!v(d) && v(d-1, 0) =/= 0.U),
-    ))
-  }
-  // // cin is 1 bit carry-in
 
   //---- Rewrite to shorten critical path of vnclip(u) ----
   class Adder_8b_rnd(in1: UInt, cin: Bool) {
@@ -132,8 +130,8 @@ class VFixPoint64b extends Module {
     val io = IO(new Bundle {
       val din = Input(Vec(8, UInt(8.W)))
       val rndInc = Input(Vec(8, Bool()))
-      val isNClip = Input(Bool())
-      val sew = Input(new SewOH)
+      // narrow eew handled outside
+      val eew = Input(new SewOH)
       val dout = Output(Vec(8, UInt(8.W)))
       val cout = Output(Vec(8, Bool()))
       val all_1s = Output(Vec(8, Bool()))
@@ -143,7 +141,7 @@ class VFixPoint64b extends Module {
     for (i <- 0 until 8) {
       val adder_8b_rnd = new Adder_8b_rnd(io.din(i), cin(i))
       val eewCin = Wire(new SewOH)
-      eewCin.oneHot := Mux(io.isNClip, (io.sew.oneHot << 1)(3, 0), io.sew.oneHot)
+      eewCin := io.eew
       if (i == 0) {
         cin(i) := io.rndInc(i)
       } else if (i == 4) {
@@ -168,7 +166,7 @@ class VFixPoint64b extends Module {
   for (i <- 0 until 8) {
     highBitAvg(i) := adderCout(i) ^ sub ^ Mux(signed, vs1H(i) ^ vs2H(i), false.B)
   }
-  val avgRndInc = adderOut.map(x => roundingInc(x, 1))
+  val avgRndInc = adderOut.map(x => IntRoundInc(x, 1, vxrm))
   val avgBeforeRnd = Wire(Vec(8, UInt(8.W)))
   val high_avgBeforeRnd = Wire(Vec(8, Bool()))
   // ------------------------------------------------------
@@ -177,7 +175,7 @@ class VFixPoint64b extends Module {
   //                                   ----
   //                     Select according to sew: (1) highest bit (2) b0 of higher segment
   for (i <- 0 until 8) {
-    high_avgBeforeRnd(i) := Mux1H(sew.oneHot, Seq(1, 2, 4, 8).map(n => 
+    high_avgBeforeRnd(i) := Mux1H(vs2eew.oneHot, Seq(1, 2, 4, 8).map(n =>
       if ((i % n) == (n - 1)) highBitAvg(i) else adderOut(i+1)(0)
     ))
   }
@@ -189,23 +187,21 @@ class VFixPoint64b extends Module {
   val dataFromMisc = UIntSplit(io.fromMisc.shiftOut, 8)
   val shiftRndInc = Wire(Vec(8, Bool()))
   for (i <- 0 until 8) {
-    shiftRndInc(i) := Mux1H(Seq(
-      (vxrm === 0.U) -> rnd_high(i),
-      (vxrm === 1.U) -> (rnd_high(i) && (!rnd_tail(i) || dataFromMisc(i)(0))),
-      (vxrm === 2.U) -> false.B,
-      (vxrm === 3.U) -> (!dataFromMisc(i)(0) && (rnd_high(i) || !rnd_tail(i))),
-    ))
+    shiftRndInc(i) := IntRoundInc(
+      v = Cat(dataFromMisc(i)(0), rnd_high(i), !rnd_tail(i)),
+      d = 2,
+      vxrm = vxrm,
+    )
   }
 
-  val beforeRnd = dataFromMisc zip avgBeforeRnd map {case (d, a) => Mux(opcode.isScalingShift, d, a)}
-  val rndInc = shiftRndInc zip avgRndInc map {case (s, a) => Mux(opcode.isScalingShift, s, a)}
+  val beforeRnd = dataFromMisc zip avgBeforeRnd map {case (d, a) => Mux(op.scaleShift, d, a)}
+  val rndInc = shiftRndInc zip avgRndInc map {case (s, a) => Mux(op.scaleShift, s, a)}
   // val afterRnd = Adder_chain_rnd(beforeRnd, rndInc)
   //---- Rewrite to shorten critical path of vnclip(u) ----
   val adder_chain_rnd = Module(new Adder_chain_rnd)
   adder_chain_rnd.io.din := beforeRnd
   adder_chain_rnd.io.rndInc := rndInc
-  adder_chain_rnd.io.isNClip := io.isNClip
-  adder_chain_rnd.io.sew := sew
+  adder_chain_rnd.io.eew := vs2eew
   val afterRnd = adder_chain_rnd.io.dout
   val cout = adder_chain_rnd.io.cout
   val all_1s = adder_chain_rnd.io.all_1s
@@ -245,28 +241,67 @@ class VFixPoint64b extends Module {
   //---- Rewrite to shorten critical path of vnclip(u) ----
   val afterRndUInt = Cat(afterRnd.reverse)
   // val nclipResult32 = narrowClip(afterRndUInt, 32)
-  val nclipResult32 = narrow_clip(afterRndUInt, 32, all_1s.drop(4).reduce(_ && _), 
-                                  all_0s.drop(4).reduce(_ && _), cout(3))
+  val nclipResult32 = narrow_clip(afterRndUInt, 32, all_1s.drop(4).reduce(_ && _),
+    all_0s.drop(4).reduce(_ && _), cout(3))
   // val nclipResult16 = UIntSplit(afterRndUInt, 32).map(x => narrowClip(x, 16))
-  val nclipResult16 = UIntSplit(afterRndUInt, 32).zipWithIndex.map({case (data, i) => 
-                      narrow_clip(data, 16, all_1s(i*4+2) && all_1s(i*4+3), 
-                                  all_0s(i*4+2) && all_0s(i*4+3), cout(i*4+1))})
+  val nclipResult16 = UIntSplit(afterRndUInt, 32).zipWithIndex.map({case (data, i) =>
+    narrow_clip(data, 16, all_1s(i*4+2) && all_1s(i*4+3),
+      all_0s(i*4+2) && all_0s(i*4+3), cout(i*4+1))})
   // val nclipResult8 = UIntSplit(afterRndUInt, 16).map(x => narrowClip(x, 8))
-  val nclipResult8 = UIntSplit(afterRndUInt, 16).zipWithIndex.map({case (data, i) => 
-                     narrow_clip(data, 8, all_1s(i*2+1), 
-                                  all_0s(i*2+1), cout(i*2))})
+  val nclipResult8 = UIntSplit(afterRndUInt, 16).zipWithIndex.map({case (data, i) =>
+    narrow_clip(data, 8, all_1s(i*2+1),
+      all_0s(i*2+1), cout(i*2))})
   io.narrowVd := Mux1H(Seq(
-    sew.is32 -> nclipResult32._1,
-    sew.is16 -> Cat(nclipResult16.map(_._1).reverse),
-    sew.is8  -> Cat(nclipResult8.map(_._1).reverse),
+    vs2eew.is32 -> nclipResult32._1,
+    vs2eew.is16 -> Cat(nclipResult16.map(_._1).reverse),
+    vs2eew.is8  -> Cat(nclipResult8.map(_._1).reverse),
   ))
   val nclipSat = Mux1H(Seq(
-    sew.is32 -> Fill(4, nclipResult32._2),
-    sew.is16 -> Cat(Fill(2, nclipResult16(1)._2), Fill(2, nclipResult16(0)._2)),
-    sew.is8  -> Cat(nclipResult8.map(_._2).reverse)
+    vs2eew.is32 -> Fill(4, nclipResult32._2),
+    vs2eew.is16 -> Cat(Fill(2, nclipResult16(1)._2), Fill(2, nclipResult16(0)._2)),
+    vs2eew.is8  -> Cat(nclipResult8.map(_._2).reverse)
   ))
-  
-  io.vxsat := Mux(io.isNClip, nclipSat, 
-                  Mux(opcode.isSatAdd, saturate, 0.U))
-  io.vd := Mux(opcode.isSatAdd, Cat(vdSat.reverse), afterRndUInt)
+
+  io.vxsat := Mux1H(Seq(
+    op.narrow -> nclipSat,
+    op.sat -> saturate,
+  ))
+
+  io.vd := Mux(op.sat, Cat(vdSat.reverse), afterRndUInt)
+}
+
+class IntRoundInc(dWidth: Int, d: Int) extends Module {
+  override def desiredName: String = s"IntRoundIncD${d}W${dWidth}"
+
+  val vxrm = IO(Input(Vxrm()))
+  val v = IO(Input(UInt(dWidth.W)))
+
+  val r = IO(Output(Bool()))
+
+  val t = (
+    if (d == 1) /* must be zero, so false */ false.B
+    else v(d - 2, 0) =/= 0.U
+    )
+
+  r := Mux1H(Seq(
+    vxrm.isRnu -> v(d-1),
+    vxrm.isRne -> (v(d-1) && (t || v(d))),
+    vxrm.isRdn -> false.B,
+    vxrm.isRod -> (!v(d) && v(d-1, 0) =/= 0.U),
+  ))
+}
+
+object IntRoundInc {
+  def apply(v: UInt, d: Int, vxrm: Vxrm): Bool = {
+    val mod = Module(new IntRoundInc(v.getWidth, d))
+    mod.vxrm := vxrm
+    mod.v := v
+    mod.r
+  }
+}
+
+object VFixPoint64bMain extends App {
+  println("Generating the VFixPoint64b hardware")
+  emitVerilog(new VFixPoint64b(), Array("--target-dir", "build/vector", "--throw-on-first-error", "--full-stacktrace"))
+  println("done")
 }

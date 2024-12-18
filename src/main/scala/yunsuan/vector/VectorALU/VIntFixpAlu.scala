@@ -27,6 +27,7 @@ import chisel3.util.experimental.decode._
 import yunsuan.vector._
 import yunsuan.vector.alu.VAluOpcode._
 import yunsuan.vector.VIFuParam._
+import yunsuan.vector.Common._
 
 class VIntFixpDecode extends Bundle {
   val sub = Bool()
