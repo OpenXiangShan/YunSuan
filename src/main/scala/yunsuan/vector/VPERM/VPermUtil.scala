@@ -6,7 +6,7 @@ import yunsuan.util._
 
 trait VPermParameter {
     // val VLEN : Int = 128
-    val VLEN : Int = 256
+    val VLEN : Int = 2048
     val XLEN : Int = 64
 }
 

@@ -26,7 +26,7 @@ import yunsuan.{VfaddOpCode, VectorElementFormat}
   **/
 class VectorFloatAdder() extends Module {
   // val VLEN = 128
-  val VLEN = 256
+  val VLEN = 2048
   val exponentWidth = 11
   val significandWidth = 53
   val floatWidth = exponentWidth + significandWidth

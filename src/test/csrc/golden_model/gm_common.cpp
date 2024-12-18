@@ -8,7 +8,6 @@
 typedef unsigned short half;
 float half_to_float(half h);
 
-#define GVLEN 256
 VPUGoldenModel::VPUGoldenModel():
   verbose(false)
 {}
@@ -16,14 +15,14 @@ VPUGoldenModel::VPUGoldenModel():
 VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
   int sew = input.sew;
   // int number = (128 / 8) >> sew;
-  int number = (GVLEN / 8) >> sew;
+  int number = (VLEN / 8) >> sew;
   // int half_number = number >> 1;
   int half_number = (XLEN/8) >> sew;
   int result_shift_len = 8 << sew;
   int widenNorrow = (input.fuOpType >> 3) & 0X3;
   int i2f_inputType = (input.fuOpType >> 3) & 0X1;
   // int i2f_number = (128 / 8) >> (i2f_inputType+2);
-  int i2f_number = (GVLEN / 8) >> (i2f_inputType+2);
+  int i2f_number = (VLEN / 8) >> (i2f_inputType+2);
 
   int i2f_half_number = i2f_number >> 1;
   int i2f_outputType = (input.fuOpType >> 1) & 0X3;
@@ -56,8 +55,8 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
       half_number = half_number >> 1;
       for(int i = 0; i < number/2; i++) {
         ElementInput element = select_element(input, i);
-        float result = half_to_float((half)element.src1);
-        printf("%12.4f ", result);
+        // float result = half_to_float((half)element.src1);
+        // printf("%12.4f ", result);
         switch (sew) {
           case 0: output_part[i] = calculation_e16(element); mask = 0xFF; break;
           case 1: output_part[i] = calculation_e32(element); mask = 0xFFFF; break;
@@ -218,7 +217,7 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
     }
   }
   
-  for (int i = 0; i < GVLEN/XLEN; i++) {
+  for (int i = 0; i < VLEN/XLEN; i++) {
     output.result[i] = 0;
     output.fflags[i] = 0;
 
@@ -305,7 +304,7 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
 ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
   int sew = input.sew;
   // int number = (128 / 8) >> sew;
-  int number = (GVLEN / 8) >> sew;
+  int number = (VLEN / 8) >> sew;
   if (idx > number) { printf("Bad idx %d > %d at sew %d\n", idx, number, sew); exit(1); }
   int widen_idx = input.uop_idx % 2 == 0 ? idx : number + idx;
 

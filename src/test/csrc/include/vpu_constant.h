@@ -11,7 +11,7 @@ extern "C"{
 // TODO: may dynamic generate this file when compiling chisel
 
 // #define VLEN 128
-#define VLEN 256
+#define VLEN 2048
 #define XLEN 64
 
 // #define FU_NUM 8 // for random

@@ -73,7 +73,7 @@ ElementOutput VGMFloatCvt::calculation_e16(ElementInput input) {
       output.result = f16_to_ui8(i2f16((uint16_t)input.src1), softfloat_roundingMode, true);  break; 
     case VFNCVT_XFW: {// f16 ->i8
       output.result = f16_to_i8(i2f16((uint16_t)input.src1), softfloat_roundingMode, true); 
-      printf("\t%d\n", (int8_t)output.result); 
+      // printf("\t%d\n", (int8_t)output.result); 
       break; 
     }
     case VFNCVT_RTZ_XUFW: //f16 -> ui8 trun

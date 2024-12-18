@@ -7,7 +7,7 @@ import yunsuan.util._
 
 class VectorIdiv extends Module {
   // val Vectorwidth = 128
-  val Vectorwidth = 256
+  val Vectorwidth = 2048
   val XLEN =64
   val io = IO(new Bundle() {
     val sew = Input(UInt(2.W))

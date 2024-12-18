@@ -41,8 +41,10 @@ void fp16_print(uint64_t *src, uint64_t vlen, uint64_t xlen){
         for(int k = xlen/16 - 1; k >= 0; k--){
             printf("%12.4f ", half_to_float((src[j] >> 16*k) & 0xffff));
         }
+        if(j%4 == 0){
+            printf("\n");
+        }
     }
-    printf("\n");
 }
 
 void uint64_print(uint64_t *src, uint64_t vlen, uint64_t xlen){
@@ -65,6 +67,8 @@ void int8_print(uint64_t *src, uint64_t vlen, uint64_t xlen){
         for(int k = xlen/8 - 1; k >= 0; k--){
             printf("%6d", (int8_t)((src[j] >> 8*k) & 0xff));
         }
+        if(j%4 == 0){
+            printf("\n");
+        }
     }
-    printf("\n");
 }

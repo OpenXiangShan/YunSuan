@@ -9,7 +9,7 @@ import yunsuan.vector.alu.VAluOpcode._
 
 class Reduction extends Module {
   // val VLEN = 128
-  val VLEN = 256
+  val VLEN = 2048
   val xLen = 64
   val NLanes = VLEN / 64
   val vlenb = VLEN / 8

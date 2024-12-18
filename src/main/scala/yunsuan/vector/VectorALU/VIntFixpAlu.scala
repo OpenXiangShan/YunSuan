@@ -302,11 +302,12 @@ class VIntFixpAlu extends Module {
   val vdResult = Mux(narrowS1, vdOfNarrow, 
               Mux(cmpFlagS1, cmpOutResult, Cat(vIntFixpAlu64bs.map(_.io.vd).reverse)))
   io.out.vd := vdResult & bitsKeepFinal | bitsReplaceFinal
+  //TODO: error!
   when (!narrowS1) {
     io.out.vxsat := (Cat(vIntFixpAlu64bs.map(_.io.vxsat).reverse) &
                      Cat(updateType.map(_(1) === false.B).reverse)).orR
   }.otherwise {
-    io.out.vxsat := (Cat(vIntFixpAlu64bs.map(_.io.vxsat(VLENB/4 - 1, 0)).reverse) &
+    io.out.vxsat := (Cat(vIntFixpAlu64bs.map(_.io.vxsat(32/4 - 1, 0)).reverse) &
                      Mux(uopIdxS1(0), Cat(updateType.drop(VLENB/2).map(_(1) === false.B).reverse),
                                       Cat(updateType.take(VLENB/2).map(_(1) === false.B).reverse))
                      ).orR

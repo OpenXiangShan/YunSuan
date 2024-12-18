@@ -80,7 +80,7 @@ class slidednVs2VdTable() extends Module {
 
 class Permutation extends Module {
   // val VLEN = 128
-  val VLEN = 256
+  val VLEN = 2048
   val xLen = 64
   val LaneWidth = 64
   val NLanes = VLEN / 64
