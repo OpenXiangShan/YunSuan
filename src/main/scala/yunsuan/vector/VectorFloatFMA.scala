@@ -314,27 +314,59 @@ class VectorFloatFMA() extends Module{
   val Ec_is_medium_f16_2           = !Ec_is_too_big_f16_2 & !Ec_is_too_small_f16_2
   val Ec_is_medium_f16_3           = !Ec_is_too_big_f16_3 & !Ec_is_too_small_f16_3
 
-  val rshift_guard_f64             = RegEnable(Mux(Ec_is_medium_f64, rshift_result_with_grs_f64(2), 0.U), fire)
-  val rshift_guard_f32_0           = RegEnable(Mux(Ec_is_medium_f32_0, rshift_result_with_grs_f32_0(2), 0.U), fire)
-  val rshift_guard_f32_1           = RegEnable(Mux(Ec_is_medium_f32_1, rshift_result_with_grs_f32_1(2), 0.U), fire)
-  val rshift_guard_f16_0           = RegEnable(Mux(Ec_is_medium_f16_0, rshift_result_with_grs_f16_0(2), 0.U), fire)
-  val rshift_guard_f16_1           = RegEnable(Mux(Ec_is_medium_f16_1, rshift_result_with_grs_f16_1(2), 0.U), fire)
-  val rshift_guard_f16_2           = RegEnable(Mux(Ec_is_medium_f16_2, rshift_result_with_grs_f16_2(2), 0.U), fire)
-  val rshift_guard_f16_3           = RegEnable(Mux(Ec_is_medium_f16_3, rshift_result_with_grs_f16_3(2), 0.U), fire)
-  val rshift_round_f64             = RegEnable(Mux(Ec_is_medium_f64, rshift_result_with_grs_f64(1), 0.U), fire)
-  val rshift_round_f32_0           = RegEnable(Mux(Ec_is_medium_f32_0, rshift_result_with_grs_f32_0(1), 0.U), fire)
-  val rshift_round_f32_1           = RegEnable(Mux(Ec_is_medium_f32_1, rshift_result_with_grs_f32_1(1), 0.U), fire)
-  val rshift_round_f16_0           = RegEnable(Mux(Ec_is_medium_f16_0, rshift_result_with_grs_f16_0(1), 0.U), fire)
-  val rshift_round_f16_1           = RegEnable(Mux(Ec_is_medium_f16_1, rshift_result_with_grs_f16_1(1), 0.U), fire)
-  val rshift_round_f16_2           = RegEnable(Mux(Ec_is_medium_f16_2, rshift_result_with_grs_f16_2(1), 0.U), fire)
-  val rshift_round_f16_3           = RegEnable(Mux(Ec_is_medium_f16_3, rshift_result_with_grs_f16_3(1), 0.U), fire)
-  val rshift_sticky_f64            = RegEnable(Mux(Ec_is_medium_f64, rshift_result_with_grs_f64(0), Mux(Ec_is_too_big_f64, 0.U, fp_c_significand_f64.orR)), fire)
-  val rshift_sticky_f32_0          = RegEnable(Mux(Ec_is_medium_f32_0, rshift_result_with_grs_f32_0(0), Mux(Ec_is_too_big_f32_0, 0.U, fp_c_significand_f32_0.orR)), fire)
-  val rshift_sticky_f32_1          = RegEnable(Mux(Ec_is_medium_f32_1, rshift_result_with_grs_f32_1(0), Mux(Ec_is_too_big_f32_1, 0.U, fp_c_significand_f32_1.orR)), fire)
-  val rshift_sticky_f16_0          = RegEnable(Mux(Ec_is_medium_f16_0, rshift_result_with_grs_f16_0(0), Mux(Ec_is_too_big_f16_0, 0.U, fp_c_significand_f16_0.orR)), fire)
-  val rshift_sticky_f16_1          = RegEnable(Mux(Ec_is_medium_f16_1, rshift_result_with_grs_f16_1(0), Mux(Ec_is_too_big_f16_1, 0.U, fp_c_significand_f16_1.orR)), fire)
-  val rshift_sticky_f16_2          = RegEnable(Mux(Ec_is_medium_f16_2, rshift_result_with_grs_f16_2(0), Mux(Ec_is_too_big_f16_2, 0.U, fp_c_significand_f16_2.orR)), fire)
-  val rshift_sticky_f16_3          = RegEnable(Mux(Ec_is_medium_f16_3, rshift_result_with_grs_f16_3(0), Mux(Ec_is_too_big_f16_3, 0.U, fp_c_significand_f16_3.orR)), fire)
+  // save 9bit reg
+  val rshift_guard_reg_d           = Cat(
+    Mux(Ec_is_medium_f16_3, rshift_result_with_grs_f16_3(2), 0.U),
+    Mux(Ec_is_medium_f16_2, rshift_result_with_grs_f16_2(2), 0.U),
+    Mux(is_fp32, Mux(Ec_is_medium_f32_1, rshift_result_with_grs_f32_1(2), 0.U),
+      Mux(Ec_is_medium_f16_1, rshift_result_with_grs_f16_1(2), 0.U)),
+    Mux(is_fp64, Mux(Ec_is_medium_f64, rshift_result_with_grs_f64(2), 0.U),
+      Mux(is_fp32, Mux(Ec_is_medium_f32_0, rshift_result_with_grs_f32_0(2), 0.U),
+        Mux(Ec_is_medium_f16_0, rshift_result_with_grs_f16_0(2), 0.U)))
+  )
+  val rshift_round_reg_d          = Cat(
+    Mux(Ec_is_medium_f16_3, rshift_result_with_grs_f16_3(1), 0.U),
+    Mux(Ec_is_medium_f16_2, rshift_result_with_grs_f16_2(1), 0.U),
+    Mux(is_fp32, Mux(Ec_is_medium_f32_1, rshift_result_with_grs_f32_1(1), 0.U),
+      Mux(Ec_is_medium_f16_1, rshift_result_with_grs_f16_1(1), 0.U)),
+    Mux(is_fp64, Mux(Ec_is_medium_f64, rshift_result_with_grs_f64(1), 0.U),
+      Mux(is_fp32, Mux(Ec_is_medium_f32_0, rshift_result_with_grs_f32_0(1), 0.U),
+        Mux(Ec_is_medium_f16_0, rshift_result_with_grs_f16_0(1), 0.U)))
+  )
+  val rshift_sticky_reg_d         = Cat(
+    Mux(Ec_is_medium_f16_3, rshift_result_with_grs_f16_3(0), Mux(Ec_is_too_big_f16_3, 0.U, fp_c_significand_f16_3.orR)),
+    Mux(Ec_is_medium_f16_2, rshift_result_with_grs_f16_2(0), Mux(Ec_is_too_big_f16_2, 0.U, fp_c_significand_f16_2.orR)),
+    Mux(is_fp32, Mux(Ec_is_medium_f32_1, rshift_result_with_grs_f32_1(0), Mux(Ec_is_too_big_f32_1, 0.U, fp_c_significand_f32_1.orR)),
+      Mux(Ec_is_medium_f16_1, rshift_result_with_grs_f16_1(0), Mux(Ec_is_too_big_f16_1, 0.U, fp_c_significand_f16_1.orR))),
+    Mux(is_fp64, Mux(Ec_is_medium_f64, rshift_result_with_grs_f64(0), Mux(Ec_is_too_big_f64, 0.U, fp_c_significand_f64.orR)),
+      Mux(is_fp32, Mux(Ec_is_medium_f32_0, rshift_result_with_grs_f32_0(0), Mux(Ec_is_too_big_f32_0, 0.U, fp_c_significand_f32_0.orR)),
+        Mux(Ec_is_medium_f16_0, rshift_result_with_grs_f16_0(0), Mux(Ec_is_too_big_f16_0, 0.U, fp_c_significand_f16_0.orR))))
+  )
+  val rshift_guard_reg             = RegEnable(rshift_guard_reg_d, fire)
+  val rshift_round_reg             = RegEnable(rshift_round_reg_d, fire)
+  val rshift_sticky_reg            = RegEnable(rshift_sticky_reg_d, fire)
+
+  val rshift_guard_f64             = rshift_guard_reg(0)
+  val rshift_guard_f32_0           = rshift_guard_reg(0)
+  val rshift_guard_f32_1           = rshift_guard_reg(1)
+  val rshift_guard_f16_0           = rshift_guard_reg(0)
+  val rshift_guard_f16_1           = rshift_guard_reg(1)
+  val rshift_guard_f16_2           = rshift_guard_reg(2)
+  val rshift_guard_f16_3           = rshift_guard_reg(3)
+  val rshift_round_f64             = rshift_round_reg(0)
+  val rshift_round_f32_0           = rshift_round_reg(0)
+  val rshift_round_f32_1           = rshift_round_reg(1)
+  val rshift_round_f16_0           = rshift_round_reg(0)
+  val rshift_round_f16_1           = rshift_round_reg(1)
+  val rshift_round_f16_2           = rshift_round_reg(2)
+  val rshift_round_f16_3           = rshift_round_reg(3)
+  val rshift_sticky_f64            = rshift_sticky_reg(0)
+  val rshift_sticky_f32_0          = rshift_sticky_reg(0)
+  val rshift_sticky_f32_1          = rshift_sticky_reg(1)
+  val rshift_sticky_f16_0          = rshift_sticky_reg(0)
+  val rshift_sticky_f16_1          = rshift_sticky_reg(1)
+  val rshift_sticky_f16_2          = rshift_sticky_reg(2)
+  val rshift_sticky_f16_3          = rshift_sticky_reg(3)
 
   val rshift_result_temp_f64       = rshift_result_with_grs_f64.head(rshiftMaxF64-2) 
   val rshift_result_temp_f32_0     = rshift_result_with_grs_f32_0.head(rshiftMaxF32-2)
@@ -371,14 +403,27 @@ class VectorFloatFMA() extends Module{
     rshift_result_temp_f16_3,
     Mux(Ec_is_too_big_f16_3, fp_c_significand_cat0_f16_3.head(rshiftMaxF16-2), 0.U((rshiftMaxF16-2).W))
   )
+  // save 294 bit reg
+  val fp_c_rshiftValue_inv_reg_d  = Mux(is_fp64,
+    Mux(is_sub_f64.asBool, Cat(1.U,~rshift_result_f64), Cat(0.U,rshift_result_f64)),
+    Mux(is_fp32,
+      Cat(Mux(is_sub_f32_1.asBool ,Cat(1.U,~rshift_result_f32_1),Cat(0.U,rshift_result_f32_1)),
+        Mux(is_sub_f32_0.asBool ,Cat(1.U,~rshift_result_f32_0),Cat(0.U,rshift_result_f32_0))),
+      Cat(Mux(is_sub_f16_3.asBool ,Cat(1.U,~rshift_result_f16_3),Cat(0.U,rshift_result_f16_3)),
+        Mux(is_sub_f16_2.asBool ,Cat(1.U,~rshift_result_f16_2),Cat(0.U,rshift_result_f16_2)),
+        Mux(is_sub_f16_1.asBool ,Cat(1.U,~rshift_result_f16_1),Cat(0.U,rshift_result_f16_1)),
+        Mux(is_sub_f16_0.asBool ,Cat(1.U,~rshift_result_f16_0),Cat(0.U,rshift_result_f16_0)))
+    )
+  )
+  val fp_c_rshiftValue_inv_reg  = RegEnable(fp_c_rshiftValue_inv_reg_d, fire)
 
-  val fp_c_rshiftValue_inv_f64_reg0   = RegEnable(Mux(is_sub_f64.asBool   ,Cat(1.U,~rshift_result_f64),Cat(0.U,rshift_result_f64))    , fire)
-  val fp_c_rshiftValue_inv_f32_0_reg0 = RegEnable(Mux(is_sub_f32_0.asBool ,Cat(1.U,~rshift_result_f32_0),Cat(0.U,rshift_result_f32_0)), fire)
-  val fp_c_rshiftValue_inv_f32_1_reg0 = RegEnable(Mux(is_sub_f32_1.asBool ,Cat(1.U,~rshift_result_f32_1),Cat(0.U,rshift_result_f32_1)), fire)
-  val fp_c_rshiftValue_inv_f16_0_reg0 = RegEnable(Mux(is_sub_f16_0.asBool ,Cat(1.U,~rshift_result_f16_0),Cat(0.U,rshift_result_f16_0)), fire)
-  val fp_c_rshiftValue_inv_f16_1_reg0 = RegEnable(Mux(is_sub_f16_1.asBool ,Cat(1.U,~rshift_result_f16_1),Cat(0.U,rshift_result_f16_1)), fire)
-  val fp_c_rshiftValue_inv_f16_2_reg0 = RegEnable(Mux(is_sub_f16_2.asBool ,Cat(1.U,~rshift_result_f16_2),Cat(0.U,rshift_result_f16_2)), fire)
-  val fp_c_rshiftValue_inv_f16_3_reg0 = RegEnable(Mux(is_sub_f16_3.asBool ,Cat(1.U,~rshift_result_f16_3),Cat(0.U,rshift_result_f16_3)), fire)
+  val fp_c_rshiftValue_inv_f64_reg0   = fp_c_rshiftValue_inv_reg
+  val fp_c_rshiftValue_inv_f32_0_reg0 = fp_c_rshiftValue_inv_reg(74, 0)
+  val fp_c_rshiftValue_inv_f32_1_reg0 = fp_c_rshiftValue_inv_reg(149, 75)
+  val fp_c_rshiftValue_inv_f16_0_reg0 = fp_c_rshiftValue_inv_reg(35, 0)
+  val fp_c_rshiftValue_inv_f16_1_reg0 = fp_c_rshiftValue_inv_reg(71, 36)
+  val fp_c_rshiftValue_inv_f16_2_reg0 = fp_c_rshiftValue_inv_reg(107, 72)
+  val fp_c_rshiftValue_inv_f16_3_reg0 = fp_c_rshiftValue_inv_reg(143, 108)
 
   val booth_in_a = Mux(
     is_fp64,
@@ -512,13 +557,23 @@ class VectorFloatFMA() extends Module{
   val adder_is_negative_f16_1 = adder_f16_1.head(1).asBool
   val adder_is_negative_f16_2 = adder_f16_2.head(1).asBool
   val adder_is_negative_f16_3 = adder_f16_3.head(1).asBool
-  val adder_is_negative_f64_reg2   = RegEnable(RegEnable(adder_is_negative_f64  , fire_reg0), fire_reg1)
-  val adder_is_negative_f32_0_reg2 = RegEnable(RegEnable(adder_is_negative_f32_0, fire_reg0), fire_reg1)
-  val adder_is_negative_f32_1_reg2 = RegEnable(RegEnable(adder_is_negative_f32_1, fire_reg0), fire_reg1)
-  val adder_is_negative_f16_0_reg2 = RegEnable(RegEnable(adder_is_negative_f16_0, fire_reg0), fire_reg1)
-  val adder_is_negative_f16_1_reg2 = RegEnable(RegEnable(adder_is_negative_f16_1, fire_reg0), fire_reg1)
-  val adder_is_negative_f16_2_reg2 = RegEnable(RegEnable(adder_is_negative_f16_2, fire_reg0), fire_reg1)
-  val adder_is_negative_f16_3_reg2 = RegEnable(RegEnable(adder_is_negative_f16_3, fire_reg0), fire_reg1)
+
+  // save 3*2 = 6 bit reg
+  val adder_is_negative_reg_d = Cat(
+    adder_is_negative_f16_3,
+    adder_is_negative_f16_2,
+    Mux(is_fp32_reg0, adder_is_negative_f32_1, adder_is_negative_f16_1),
+    Mux(is_fp64_reg0, adder_is_negative_f64, Mux(is_fp32_reg0, adder_is_negative_f32_0, adder_is_negative_f16_0))
+  )
+  val adder_is_negative_reg1       = RegEnable(adder_is_negative_reg_d, fire_reg0)
+  val adder_is_negative_reg2       = RegEnable(adder_is_negative_reg1, fire_reg1)
+  val adder_is_negative_f64_reg2   = adder_is_negative_reg2(0)
+  val adder_is_negative_f32_0_reg2 = adder_is_negative_reg2(0)
+  val adder_is_negative_f32_1_reg2 = adder_is_negative_reg2(1)
+  val adder_is_negative_f16_0_reg2 = adder_is_negative_reg2(0)
+  val adder_is_negative_f16_1_reg2 = adder_is_negative_reg2(1)
+  val adder_is_negative_f16_2_reg2 = adder_is_negative_reg2(2)
+  val adder_is_negative_f16_3_reg2 = adder_is_negative_reg2(3)
 
   val adder_inv_f64         = Mux(adder_is_negative_f64  , (~adder_f64.tail(1)).asUInt, adder_f64.tail(1))
   val adder_inv_f32_0       = Mux(adder_is_negative_f32_0, (~adder_f32_0.tail(1)).asUInt, adder_f32_0.tail(1))
@@ -542,21 +597,43 @@ class VectorFloatFMA() extends Module{
   val Ec_is_greater_f16_2     = !Eab_is_greater_f16_2
   val Ec_is_greater_f16_3     = !Eab_is_greater_f16_3
 
-  val E_greater_f64_reg2   = RegEnable(RegEnable(RegEnable(Mux(Eab_is_greater_f64, Eab_f64(exponentWidth,0).asUInt, Cat(0.U(1.W),Ec_fix_f64)), fire), fire_reg0), fire_reg1)
-  val E_greater_f32_0_reg2 = RegEnable(RegEnable(RegEnable(Mux(Eab_is_greater_f32_0, Eab_f32_0(8,0).asUInt, Cat(0.U(1.W),Ec_fix_f32_0)), fire), fire_reg0), fire_reg1)
-  val E_greater_f32_1_reg2 = RegEnable(RegEnable(RegEnable(Mux(Eab_is_greater_f32_1, Eab_f32_1(8,0).asUInt, Cat(0.U(1.W),Ec_fix_f32_1)), fire), fire_reg0), fire_reg1)
-  val E_greater_f16_0_reg2 = RegEnable(RegEnable(RegEnable(Mux(Eab_is_greater_f16_0, Eab_f16_0(5,0).asUInt, Cat(0.U(1.W),Ec_fix_f16_0)), fire), fire_reg0), fire_reg1)
-  val E_greater_f16_1_reg2 = RegEnable(RegEnable(RegEnable(Mux(Eab_is_greater_f16_1, Eab_f16_1(5,0).asUInt, Cat(0.U(1.W),Ec_fix_f16_1)), fire), fire_reg0), fire_reg1)
-  val E_greater_f16_2_reg2 = RegEnable(RegEnable(RegEnable(Mux(Eab_is_greater_f16_2, Eab_f16_2(5,0).asUInt, Cat(0.U(1.W),Ec_fix_f16_2)), fire), fire_reg0), fire_reg1)
-  val E_greater_f16_3_reg2 = RegEnable(RegEnable(RegEnable(Mux(Eab_is_greater_f16_3, Eab_f16_3(5,0).asUInt, Cat(0.U(1.W),Ec_fix_f16_3)), fire), fire_reg0), fire_reg1)
+  // save 30*3 = 90 bit reg
+  val E_greater_f64_reg_d  = Mux(Eab_is_greater_f64, Eab_f64(exponentWidth,0).asUInt, Cat(0.U(1.W),Ec_fix_f64))
+  val E_greater_f32_reg_d  = Cat(Mux(Eab_is_greater_f32_1, Eab_f32_1(8,0).asUInt, Cat(0.U(1.W),Ec_fix_f32_1)),
+    Mux(Eab_is_greater_f32_0, Eab_f32_0(8,0).asUInt, Cat(0.U(1.W),Ec_fix_f32_0)))
+  val E_greater_f16_reg_d  = Cat(Mux(Eab_is_greater_f16_3, Eab_f16_3(5,0).asUInt, Cat(0.U(1.W),Ec_fix_f16_3)),
+    Mux(Eab_is_greater_f16_2, Eab_f16_2(5,0).asUInt, Cat(0.U(1.W),Ec_fix_f16_2)),
+    Mux(Eab_is_greater_f16_1, Eab_f16_1(5,0).asUInt, Cat(0.U(1.W),Ec_fix_f16_1)),
+    Mux(Eab_is_greater_f16_0, Eab_f16_0(5,0).asUInt, Cat(0.U(1.W),Ec_fix_f16_0)))
+  val E_greater_reg_d      = Mux(is_fp64, E_greater_f64_reg_d, Mux(is_fp32, E_greater_f32_reg_d, E_greater_f16_reg_d))
+  val E_greater_reg2       = RegEnable(RegEnable(RegEnable(E_greater_reg_d, fire), fire_reg0), fire_reg1)
 
-  val lshift_value_max_f64_reg0   = RegEnable(Mux(Eab_is_greater_f64, Eab_f64(exponentWidth,0).asUInt - 1.U, Cat(0.U,Ec_fix_f64 - 1.U)), fire)
-  val lshift_value_max_f32_0_reg0 = RegEnable(Mux(Eab_is_greater_f32_0, Eab_f32_0(8,0).asUInt - 1.U, Cat(0.U,Ec_fix_f32_0 - 1.U)), fire)
-  val lshift_value_max_f32_1_reg0 = RegEnable(Mux(Eab_is_greater_f32_1, Eab_f32_1(8,0).asUInt - 1.U, Cat(0.U,Ec_fix_f32_1 - 1.U)), fire)
-  val lshift_value_max_f16_0_reg0 = RegEnable(Mux(Eab_is_greater_f16_0, Eab_f16_0(5,0).asUInt - 1.U, Cat(0.U,Ec_fix_f16_0 - 1.U)), fire)
-  val lshift_value_max_f16_1_reg0 = RegEnable(Mux(Eab_is_greater_f16_1, Eab_f16_1(5,0).asUInt - 1.U, Cat(0.U,Ec_fix_f16_1 - 1.U)), fire)
-  val lshift_value_max_f16_2_reg0 = RegEnable(Mux(Eab_is_greater_f16_2, Eab_f16_2(5,0).asUInt - 1.U, Cat(0.U,Ec_fix_f16_2 - 1.U)), fire)
-  val lshift_value_max_f16_3_reg0 = RegEnable(Mux(Eab_is_greater_f16_3, Eab_f16_3(5,0).asUInt - 1.U, Cat(0.U,Ec_fix_f16_3 - 1.U)), fire)
+  val E_greater_f64_reg2   = E_greater_reg2(11,0)
+  val E_greater_f32_0_reg2 = E_greater_reg2(8,0)
+  val E_greater_f32_1_reg2 = E_greater_reg2(17,9)
+  val E_greater_f16_0_reg2 = E_greater_reg2(5,0)
+  val E_greater_f16_1_reg2 = E_greater_reg2(11,6)
+  val E_greater_f16_2_reg2 = E_greater_reg2(17,12)
+  val E_greater_f16_3_reg2 = E_greater_reg2(23,18)
+
+  // save 30 bit reg
+  val lshift_value_max_f64_reg_d  = Mux(Eab_is_greater_f64, Eab_f64(exponentWidth,0).asUInt - 1.U, Cat(0.U,Ec_fix_f64 - 1.U))
+  val lshift_value_max_f32_reg_d  = Cat(Mux(Eab_is_greater_f32_1, Eab_f32_1(8,0).asUInt - 1.U, Cat(0.U,Ec_fix_f32_1 - 1.U)),
+    Mux(Eab_is_greater_f32_0, Eab_f32_0(8,0).asUInt - 1.U, Cat(0.U,Ec_fix_f32_0 - 1.U)))
+  val lshift_value_max_f16_reg_d  = Cat(Mux(Eab_is_greater_f16_3, Eab_f16_3(5,0).asUInt - 1.U, Cat(0.U,Ec_fix_f16_3 - 1.U)),
+    Mux(Eab_is_greater_f16_2, Eab_f16_2(5,0).asUInt - 1.U, Cat(0.U,Ec_fix_f16_2 - 1.U)),
+    Mux(Eab_is_greater_f16_1, Eab_f16_1(5,0).asUInt - 1.U, Cat(0.U,Ec_fix_f16_1 - 1.U)),
+    Mux(Eab_is_greater_f16_0, Eab_f16_0(5,0).asUInt - 1.U, Cat(0.U,Ec_fix_f16_0 - 1.U)))
+  val lshift_value_max_reg_d      = Mux(is_fp64, lshift_value_max_f64_reg_d, Mux(is_fp32, lshift_value_max_f32_reg_d, lshift_value_max_f16_reg_d))
+  val lshift_value_max_reg0       = RegEnable(lshift_value_max_reg_d, fire)
+
+  val lshift_value_max_f64_reg0   = lshift_value_max_reg0(11,0)
+  val lshift_value_max_f32_0_reg0 = lshift_value_max_reg0(8,0)
+  val lshift_value_max_f32_1_reg0 = lshift_value_max_reg0(17,9)
+  val lshift_value_max_f16_0_reg0 = lshift_value_max_reg0(5,0)
+  val lshift_value_max_f16_1_reg0 = lshift_value_max_reg0(11,6)
+  val lshift_value_max_f16_2_reg0 = lshift_value_max_reg0(17,12)
+  val lshift_value_max_f16_3_reg0 = lshift_value_max_reg0(23,18)
 
   val LZDWidth_f64 = adder_inv_f64.getWidth.U.getWidth
   val LZDWidth_f32_0 = adder_inv_f32_0.getWidth.U.getWidth
@@ -594,42 +671,54 @@ class VectorFloatFMA() extends Module{
     Fill(adder_inv_f16_3.getWidth, 1.U) >> lshift_value_max_f16_3_reg0.tail(lshift_value_max_f16_3_reg0.getWidth-LZDWidth_f16_3)
   ).asUInt
 
-  val tzd_adder_f64_reg1       = LZD(RegEnable(Reverse(Mux(is_fp64_reg0,adder_f64.asUInt,Cat(1.U(87.W),adder_f32_1.asUInt))), fire_reg0).asTypeOf(adder_f64))
-  val tzd_adder_f32_0_reg1     = LZD(RegEnable(Reverse(adder_f32_0.asUInt), fire_reg0).asTypeOf(adder_f32_0))
-  val tzd_adder_f32_1_reg1     = tzd_adder_f64_reg1.asTypeOf(tzd_adder_f32_0_reg1)
-  val tzd_adder_f16_0_reg1     = LZD(RegEnable(Reverse(adder_f16_0.asUInt), fire_reg0).asTypeOf(adder_f16_0))
-  val tzd_adder_f16_1_reg1     = LZD(RegEnable(Reverse(adder_f16_1.asUInt), fire_reg0).asTypeOf(adder_f16_1))
-  val tzd_adder_f16_2_reg1     = LZD(RegEnable(Reverse(adder_f16_2.asUInt), fire_reg0).asTypeOf(adder_f16_2))
-  val tzd_adder_f16_3_reg1     = LZD(RegEnable(Reverse(adder_f16_3.asUInt), fire_reg0).asTypeOf(adder_f16_3))
-  val lzd_adder_inv_mask_f64    = LZD(RegEnable(Mux(is_fp64_reg0,adder_inv_f64 | lshift_value_mask_f64,Cat(adder_inv_f32_1 | lshift_value_mask_f32_1,1.U << 86)), fire_reg0).asTypeOf(adder_inv_f64))
-  val lzd_adder_inv_mask_f32_0  = LZD(RegEnable(adder_inv_f32_0 | lshift_value_mask_f32_0, fire_reg0).asTypeOf(adder_inv_f32_0))
-  val lzd_adder_inv_mask_f32_1  = lzd_adder_inv_mask_f64.asTypeOf(lzd_adder_inv_mask_f32_0)
-  val lzd_adder_inv_mask_f16_0  = LZD(RegEnable(adder_inv_f16_0 | lshift_value_mask_f16_0, fire_reg0).asTypeOf(adder_inv_f16_0))
-  val lzd_adder_inv_mask_f16_1  = LZD(RegEnable(adder_inv_f16_1 | lshift_value_mask_f16_1, fire_reg0).asTypeOf(adder_inv_f16_1))
-  val lzd_adder_inv_mask_f16_2  = LZD(RegEnable(adder_inv_f16_2 | lshift_value_mask_f16_2, fire_reg0).asTypeOf(adder_inv_f16_2))
-  val lzd_adder_inv_mask_f16_3  = LZD(RegEnable(adder_inv_f16_3 | lshift_value_mask_f16_3, fire_reg0).asTypeOf(adder_inv_f16_3))
-  val lzd_adder_inv_mask_f64_reg1    = Wire(UInt(lzd_adder_inv_mask_f64.getWidth.W))
-  val lzd_adder_inv_mask_f32_0_reg1  = Wire(UInt(lzd_adder_inv_mask_f32_0.getWidth.W))
-  val lzd_adder_inv_mask_f32_1_reg1  = Wire(UInt(lzd_adder_inv_mask_f32_1.getWidth.W))
-  val lzd_adder_inv_mask_f16_0_reg1  = Wire(UInt(lzd_adder_inv_mask_f16_0.getWidth.W))
-  val lzd_adder_inv_mask_f16_1_reg1  = Wire(UInt(lzd_adder_inv_mask_f16_1.getWidth.W))
-  val lzd_adder_inv_mask_f16_2_reg1  = Wire(UInt(lzd_adder_inv_mask_f16_2.getWidth.W))
-  val lzd_adder_inv_mask_f16_3_reg1  = Wire(UInt(lzd_adder_inv_mask_f16_3.getWidth.W))
-  lzd_adder_inv_mask_f64_reg1   := lzd_adder_inv_mask_f64
-  lzd_adder_inv_mask_f32_0_reg1 := lzd_adder_inv_mask_f32_0
-  lzd_adder_inv_mask_f32_1_reg1 := lzd_adder_inv_mask_f32_1
-  lzd_adder_inv_mask_f16_0_reg1 := lzd_adder_inv_mask_f16_0
-  lzd_adder_inv_mask_f16_1_reg1 := lzd_adder_inv_mask_f16_1
-  lzd_adder_inv_mask_f16_2_reg1 := lzd_adder_inv_mask_f16_2
-  lzd_adder_inv_mask_f16_3_reg1 := lzd_adder_inv_mask_f16_3
+  // save 306bit
+  val tzd_adder_f64_reg_d      = Reverse(adder_f64.asUInt)
+  val tzd_adder_f32_reg_d      = Cat(Reverse(adder_f32_1.asUInt), Reverse(adder_f32_0.asUInt))
+  val tzd_adder_f16_reg_d      = Cat(Reverse(adder_f16_3.asUInt), Reverse(adder_f16_2.asUInt),
+    Reverse(adder_f16_1.asUInt), Reverse(adder_f16_0.asUInt))
+  val tzd_adder_reg_d          = Mux(is_fp64_reg0, tzd_adder_f64_reg_d, Mux(is_fp32_reg0, tzd_adder_f32_reg_d, tzd_adder_f16_reg_d))
+  val tzd_adder_reg1           = RegEnable(tzd_adder_reg_d, fire_reg0)
 
-  val lshift_mask_valid_f64_reg1     = (RegEnable(adder_inv_f64  , fire_reg0) | RegEnable(lshift_value_mask_f64  , fire_reg0)) === RegEnable(lshift_value_mask_f64  , fire_reg0)
-  val lshift_mask_valid_f32_0_reg1   = (RegEnable(adder_inv_f32_0, fire_reg0) | RegEnable(lshift_value_mask_f32_0, fire_reg0)) === RegEnable(lshift_value_mask_f32_0, fire_reg0)
-  val lshift_mask_valid_f32_1_reg1   = (RegEnable(adder_inv_f32_1, fire_reg0) | RegEnable(lshift_value_mask_f32_1, fire_reg0)) === RegEnable(lshift_value_mask_f32_1, fire_reg0)
-  val lshift_mask_valid_f16_0_reg1   = (RegEnable(adder_inv_f16_0, fire_reg0) | RegEnable(lshift_value_mask_f16_0, fire_reg0)) === RegEnable(lshift_value_mask_f16_0, fire_reg0)
-  val lshift_mask_valid_f16_1_reg1   = (RegEnable(adder_inv_f16_1, fire_reg0) | RegEnable(lshift_value_mask_f16_1, fire_reg0)) === RegEnable(lshift_value_mask_f16_1, fire_reg0)
-  val lshift_mask_valid_f16_2_reg1   = (RegEnable(adder_inv_f16_2, fire_reg0) | RegEnable(lshift_value_mask_f16_2, fire_reg0)) === RegEnable(lshift_value_mask_f16_2, fire_reg0)
-  val lshift_mask_valid_f16_3_reg1   = (RegEnable(adder_inv_f16_3, fire_reg0) | RegEnable(lshift_value_mask_f16_3, fire_reg0)) === RegEnable(lshift_value_mask_f16_3, fire_reg0)
+  val tzd_adder_f64_reg1       = LZD(tzd_adder_reg1(163,0).asTypeOf(adder_f64))
+  val tzd_adder_f32_0_reg1     = LZD(tzd_adder_reg1(76,0).asTypeOf(adder_f32_0))
+  val tzd_adder_f32_1_reg1     = LZD(tzd_adder_reg1(153,77).asTypeOf(adder_f32_1))
+  val tzd_adder_f16_0_reg1     = LZD(tzd_adder_reg1(37,0).asTypeOf(adder_f16_0))
+  val tzd_adder_f16_1_reg1     = LZD(tzd_adder_reg1(75,38).asTypeOf(adder_f16_1))
+  val tzd_adder_f16_2_reg1     = LZD(tzd_adder_reg1(113,76).asTypeOf(adder_f16_2))
+  val tzd_adder_f16_3_reg1     = LZD(tzd_adder_reg1(151,114).asTypeOf(adder_f16_3))
+
+  // save 300bit
+  val lzd_adder_inv_mask_f64_reg_d   = adder_inv_f64 | lshift_value_mask_f64
+  val lzd_adder_inv_mask_f32_reg_d   = Cat(adder_inv_f32_1 | lshift_value_mask_f32_1, adder_inv_f32_0 | lshift_value_mask_f32_0)
+  val lzd_adder_inv_mask_f16_reg_d   = Cat(adder_inv_f16_3 | lshift_value_mask_f16_3, adder_inv_f16_2 | lshift_value_mask_f16_2,
+    adder_inv_f16_1 | lshift_value_mask_f16_1, adder_inv_f16_0 | lshift_value_mask_f16_0)
+  val lzd_adder_inv_mask_reg_d       = Mux(is_fp64_reg0, lzd_adder_inv_mask_f64_reg_d, Mux(is_fp32_reg0, lzd_adder_inv_mask_f32_reg_d, lzd_adder_inv_mask_f16_reg_d))
+  val lzd_adder_inv_mask_reg1        = RegEnable(lzd_adder_inv_mask_reg_d, fire_reg0)
+  val lzd_adder_inv_mask_f64_reg1    = LZD(lzd_adder_inv_mask_reg1(162,0).asTypeOf(adder_inv_f64))
+  val lzd_adder_inv_mask_f32_0_reg1  = LZD(lzd_adder_inv_mask_reg1(75,0).asTypeOf(adder_inv_f32_0))
+  val lzd_adder_inv_mask_f32_1_reg1  = LZD(lzd_adder_inv_mask_reg1(151,76).asTypeOf(adder_inv_f32_1))
+  val lzd_adder_inv_mask_f16_0_reg1  = LZD(lzd_adder_inv_mask_reg1(36,0).asTypeOf(adder_inv_f16_0))
+  val lzd_adder_inv_mask_f16_1_reg1  = LZD(lzd_adder_inv_mask_reg1(73,37).asTypeOf(adder_inv_f16_1))
+  val lzd_adder_inv_mask_f16_2_reg1  = LZD(lzd_adder_inv_mask_reg1(110,74).asTypeOf(adder_inv_f16_2))
+  val lzd_adder_inv_mask_f16_3_reg1  = LZD(lzd_adder_inv_mask_reg1(147,111).asTypeOf(adder_inv_f16_3))
+
+  // save 1389 bit reg
+  val lshift_mask_valid_f64_reg_d    = (adder_inv_f64 | lshift_value_mask_f64) === lshift_value_mask_f64
+  val lshift_mask_valid_f32_reg_d    = Cat((adder_inv_f32_1 | lshift_value_mask_f32_1) === lshift_value_mask_f32_1,
+    (adder_inv_f32_0 | lshift_value_mask_f32_0) === lshift_value_mask_f32_0)
+  val lshift_mask_valid_f16_reg_d    = Cat((adder_inv_f16_3 | lshift_value_mask_f16_3) === lshift_value_mask_f16_3,
+    (adder_inv_f16_2 | lshift_value_mask_f16_2) === lshift_value_mask_f16_2,
+    (adder_inv_f16_1 | lshift_value_mask_f16_1) === lshift_value_mask_f16_1,
+    (adder_inv_f16_0 | lshift_value_mask_f16_0) === lshift_value_mask_f16_0)
+  val lshift_mask_valid_reg_d        = Mux(is_fp64_reg0, lshift_mask_valid_f64_reg_d, Mux(is_fp32_reg0, lshift_mask_valid_f32_reg_d, lshift_mask_valid_f16_reg_d))
+  val lshift_mask_valid_reg          = RegEnable(lshift_mask_valid_reg_d, fire_reg0)
+  val lshift_mask_valid_f64_reg1     = lshift_mask_valid_reg(0)
+  val lshift_mask_valid_f32_0_reg1   = lshift_mask_valid_reg(0)
+  val lshift_mask_valid_f32_1_reg1   = lshift_mask_valid_reg(1)
+  val lshift_mask_valid_f16_0_reg1   = lshift_mask_valid_reg(0)
+  val lshift_mask_valid_f16_1_reg1   = lshift_mask_valid_reg(1)
+  val lshift_mask_valid_f16_2_reg1   = lshift_mask_valid_reg(2)
+  val lshift_mask_valid_f16_3_reg1   = lshift_mask_valid_reg(3)
   val lshift_value_f64_reg1          = lzd_adder_inv_mask_f64_reg1
   val lshift_value_f32_0_reg1        = lzd_adder_inv_mask_f32_0_reg1
   val lshift_value_f32_1_reg1        = lzd_adder_inv_mask_f32_1_reg1
@@ -638,13 +727,20 @@ class VectorFloatFMA() extends Module{
   val lshift_value_f16_2_reg1        = lzd_adder_inv_mask_f16_2_reg1
   val lshift_value_f16_3_reg1        = lzd_adder_inv_mask_f16_3_reg1
 
-  val adder_f64_reg1   = RegEnable(adder_f64  , fire_reg0)
-  val adder_f32_0_reg1 = RegEnable(adder_f32_0, fire_reg0)
-  val adder_f32_1_reg1 = RegEnable(adder_f32_1, fire_reg0)
-  val adder_f16_0_reg1 = RegEnable(adder_f16_0, fire_reg0)
-  val adder_f16_1_reg1 = RegEnable(adder_f16_1, fire_reg0)
-  val adder_f16_2_reg1 = RegEnable(adder_f16_2, fire_reg0)
-  val adder_f16_3_reg1 = RegEnable(adder_f16_3, fire_reg0)
+  //save 304 bits reg
+  val adder_f64_reg_d  = adder_f64
+  val adder_f32_reg_d  = Cat(adder_f32_1, adder_f32_0)
+  val adder_f16_reg_d  = Cat(adder_f16_3, adder_f16_2, adder_f16_1, adder_f16_0)
+  val adder_reg_d      = Mux(is_fp64_reg0, adder_f64_reg_d, Mux(is_fp32_reg0, adder_f32_reg_d, adder_f16_reg_d))
+  val adder_reg1       = RegEnable(adder_reg_d, fire_reg0)
+
+  val adder_f64_reg1   = adder_reg1(163,0)
+  val adder_f32_0_reg1 = adder_reg1(76,0)
+  val adder_f32_1_reg1 = adder_reg1(153,77)
+  val adder_f16_0_reg1 = adder_reg1(37,0)
+  val adder_f16_1_reg1 = adder_reg1(75,38)
+  val adder_f16_2_reg1 = adder_reg1(113,76)
+  val adder_f16_3_reg1 = adder_reg1(151,114)
 
   val lshift_adder_f64        = shiftLeftWithMux(
     Mux(is_fp64_reg1,adder_f64_reg1,adder_f32_1_reg1.asTypeOf(adder_f64_reg1)),
@@ -656,15 +752,14 @@ class VectorFloatFMA() extends Module{
   val lshift_adder_f16_1        = shiftLeftWithMux(adder_f16_1_reg1, lshift_value_f16_1_reg1)
   val lshift_adder_f16_2        = shiftLeftWithMux(adder_f16_2_reg1, lshift_value_f16_2_reg1)
   val lshift_adder_f16_3        = shiftLeftWithMux(adder_f16_3_reg1, lshift_value_f16_3_reg1)
-  
-  
-  val lshift_adder_inv_f64      = Cat(Mux(RegEnable(adder_is_negative_f64  , fire_reg0),~lshift_adder_f64.head(significandWidth+4),lshift_adder_f64.head(significandWidth+4)),lshift_adder_f64.tail(significandWidth+4))
-  val lshift_adder_inv_f32_0    = Cat(Mux(RegEnable(adder_is_negative_f32_0, fire_reg0),~lshift_adder_f32_0.head(24+4),lshift_adder_f32_0.head(24+4)),lshift_adder_f32_0.tail(24+4))
-  val lshift_adder_inv_f32_1    = Cat(Mux(RegEnable(adder_is_negative_f32_1, fire_reg0),~lshift_adder_f32_1.head(24+4),lshift_adder_f32_1.head(24+4)),lshift_adder_f32_1.tail(24+4))
-  val lshift_adder_inv_f16_0    = Cat(Mux(RegEnable(adder_is_negative_f16_0, fire_reg0),~lshift_adder_f16_0.head(11+4),lshift_adder_f16_0.head(11+4)),lshift_adder_f16_0.tail(11+4))
-  val lshift_adder_inv_f16_1    = Cat(Mux(RegEnable(adder_is_negative_f16_1, fire_reg0),~lshift_adder_f16_1.head(11+4),lshift_adder_f16_1.head(11+4)),lshift_adder_f16_1.tail(11+4))
-  val lshift_adder_inv_f16_2    = Cat(Mux(RegEnable(adder_is_negative_f16_2, fire_reg0),~lshift_adder_f16_2.head(11+4),lshift_adder_f16_2.head(11+4)),lshift_adder_f16_2.tail(11+4))
-  val lshift_adder_inv_f16_3    = Cat(Mux(RegEnable(adder_is_negative_f16_3, fire_reg0),~lshift_adder_f16_3.head(11+4),lshift_adder_f16_3.head(11+4)),lshift_adder_f16_3.tail(11+4))
+
+  val lshift_adder_inv_f64      = Cat(Mux(adder_is_negative_reg1(0), ~lshift_adder_f64.head(significandWidth+4),lshift_adder_f64.head(significandWidth+4)),lshift_adder_f64.tail(significandWidth+4))
+  val lshift_adder_inv_f32_0    = Cat(Mux(adder_is_negative_reg1(0), ~lshift_adder_f32_0.head(24+4),lshift_adder_f32_0.head(24+4)),lshift_adder_f32_0.tail(24+4))
+  val lshift_adder_inv_f32_1    = Cat(Mux(adder_is_negative_reg1(1), ~lshift_adder_f32_1.head(24+4),lshift_adder_f32_1.head(24+4)),lshift_adder_f32_1.tail(24+4))
+  val lshift_adder_inv_f16_0    = Cat(Mux(adder_is_negative_reg1(0), ~lshift_adder_f16_0.head(11+4),lshift_adder_f16_0.head(11+4)),lshift_adder_f16_0.tail(11+4))
+  val lshift_adder_inv_f16_1    = Cat(Mux(adder_is_negative_reg1(1), ~lshift_adder_f16_1.head(11+4),lshift_adder_f16_1.head(11+4)),lshift_adder_f16_1.tail(11+4))
+  val lshift_adder_inv_f16_2    = Cat(Mux(adder_is_negative_reg1(2), ~lshift_adder_f16_2.head(11+4),lshift_adder_f16_2.head(11+4)),lshift_adder_f16_2.tail(11+4))
+  val lshift_adder_inv_f16_3    = Cat(Mux(adder_is_negative_reg1(3), ~lshift_adder_f16_3.head(11+4),lshift_adder_f16_3.head(11+4)),lshift_adder_f16_3.tail(11+4))
   
   val is_fix_f64 = (tzd_adder_f64_reg1 + lzd_adder_inv_mask_f64_reg1) === adder_inv_f64.getWidth.U
   val is_fix_f32_0 = (tzd_adder_f32_0_reg1 + lzd_adder_inv_mask_f32_0_reg1) === adder_inv_f32_0.getWidth.U
@@ -680,14 +775,23 @@ class VectorFloatFMA() extends Module{
   val lshift_adder_inv_fix_f16_1 = Mux(is_fix_f16_1, lshift_adder_inv_f16_1.head(adder_inv_f16_1.getWidth), lshift_adder_inv_f16_1.tail(1))
   val lshift_adder_inv_fix_f16_2 = Mux(is_fix_f16_2, lshift_adder_inv_f16_2.head(adder_inv_f16_2.getWidth), lshift_adder_inv_f16_2.tail(1))
   val lshift_adder_inv_fix_f16_3 = Mux(is_fix_f16_3, lshift_adder_inv_f16_3.head(adder_inv_f16_3.getWidth), lshift_adder_inv_f16_3.tail(1))
+
+  // save 86bit
+  val fraction_result_no_round_f64_reg_d   = lshift_adder_inv_fix_f64.tail(1).head(significandWidth-1)
+  val fraction_result_no_round_f32_reg_d   = Cat(lshift_adder_inv_fix_f32_1.tail(1).head(24-1), lshift_adder_inv_fix_f32_0.tail(1).head(24-1))
+  val fraction_result_no_round_f16_reg_d   = Cat(lshift_adder_inv_fix_f16_3.tail(1).head(11-1), lshift_adder_inv_fix_f16_2.tail(1).head(11-1),
+    lshift_adder_inv_fix_f16_1.tail(1).head(11-1), lshift_adder_inv_fix_f16_0.tail(1).head(11-1))
+  val fraction_result_no_round_reg_d       = Mux(is_fp64_reg1, fraction_result_no_round_f64_reg_d,
+    Mux(is_fp32_reg1, fraction_result_no_round_f32_reg_d, fraction_result_no_round_f16_reg_d))
+  val fraction_result_no_round_reg         = RegEnable(fraction_result_no_round_reg_d, fire_reg1)
   
-  val fraction_result_no_round_f64_reg2    = RegEnable(lshift_adder_inv_fix_f64.tail(1).head(significandWidth-1), fire_reg1)
-  val fraction_result_no_round_f32_0_reg2  = RegEnable(lshift_adder_inv_fix_f32_0.tail(1).head(24-1), fire_reg1)
-  val fraction_result_no_round_f32_1_reg2  = RegEnable(lshift_adder_inv_fix_f32_1.tail(1).head(24-1), fire_reg1)
-  val fraction_result_no_round_f16_0_reg2  = RegEnable(lshift_adder_inv_fix_f16_0.tail(1).head(11-1), fire_reg1)
-  val fraction_result_no_round_f16_1_reg2  = RegEnable(lshift_adder_inv_fix_f16_1.tail(1).head(11-1), fire_reg1)
-  val fraction_result_no_round_f16_2_reg2  = RegEnable(lshift_adder_inv_fix_f16_2.tail(1).head(11-1), fire_reg1)
-  val fraction_result_no_round_f16_3_reg2  = RegEnable(lshift_adder_inv_fix_f16_3.tail(1).head(11-1), fire_reg1)
+  val fraction_result_no_round_f64_reg2    = fraction_result_no_round_reg(51,0)
+  val fraction_result_no_round_f32_0_reg2  = fraction_result_no_round_reg(22,0)
+  val fraction_result_no_round_f32_1_reg2  = fraction_result_no_round_reg(45,23)
+  val fraction_result_no_round_f16_0_reg2  = fraction_result_no_round_reg(9,0)
+  val fraction_result_no_round_f16_1_reg2  = fraction_result_no_round_reg(19,10)
+  val fraction_result_no_round_f16_2_reg2  = fraction_result_no_round_reg(29,20)
+  val fraction_result_no_round_f16_3_reg2  = fraction_result_no_round_reg(39,30)
   
   val fraction_result_round_f64   = fraction_result_no_round_f64_reg2 +& 1.U
   val fraction_result_round_f32_0 = fraction_result_no_round_f32_0_reg2 +& 1.U
@@ -696,7 +800,8 @@ class VectorFloatFMA() extends Module{
   val fraction_result_round_f16_1 = fraction_result_no_round_f16_1_reg2 +& 1.U
   val fraction_result_round_f16_2 = fraction_result_no_round_f16_2_reg2 +& 1.U
   val fraction_result_round_f16_3 = fraction_result_no_round_f16_3_reg2 +& 1.U
-  
+
+  // todo
   val sign_result_temp_f64_reg2   = RegEnable(RegEnable(Mux(adder_is_negative_f64  , RegEnable(sign_c_f64  , fire), RegEnable(sign_a_b_f64  , fire)), fire_reg0), fire_reg1)
   val sign_result_temp_f32_0_reg2 = RegEnable(RegEnable(Mux(adder_is_negative_f32_0, RegEnable(sign_c_f32_0, fire), RegEnable(sign_a_b_f32_0, fire)), fire_reg0), fire_reg1)
   val sign_result_temp_f32_1_reg2 = RegEnable(RegEnable(Mux(adder_is_negative_f32_1, RegEnable(sign_c_f32_1, fire), RegEnable(sign_a_b_f32_1, fire)), fire_reg0), fire_reg1)
@@ -715,7 +820,8 @@ class VectorFloatFMA() extends Module{
   val RDN_reg2 = RegEnable(RegEnable(RegEnable(RDN, fire), fire_reg0), fire_reg1)   
   val RUP_reg2 = RegEnable(RegEnable(RegEnable(RUP, fire), fire_reg0), fire_reg1)   
   val RMM_reg2 = RegEnable(RegEnable(RegEnable(RMM, fire), fire_reg0), fire_reg1)
-  
+
+  // todo
   val sticky_f64_reg2    = RegEnable(RegEnable(rshift_sticky_f64  , fire_reg0) | (lzd_adder_inv_mask_f64_reg1 + tzd_adder_f64_reg1 < (adder_inv_f64.getWidth-significandWidth-2).U), fire_reg1)
   val sticky_f32_0_reg2  = RegEnable(RegEnable(rshift_sticky_f32_0, fire_reg0) | (lzd_adder_inv_mask_f32_0_reg1 + tzd_adder_f32_0_reg1 < (adder_inv_f32_0.getWidth-24-2).U), fire_reg1)
   val sticky_f32_1_reg2  = RegEnable(RegEnable(rshift_sticky_f32_1, fire_reg0) | (lzd_adder_inv_mask_f32_1_reg1 + tzd_adder_f32_1_reg1 < (adder_inv_f32_1.getWidth-24-2).U), fire_reg1)
@@ -730,7 +836,8 @@ class VectorFloatFMA() extends Module{
   val sticky_uf_f16_1_reg2  = RegEnable(RegEnable(rshift_sticky_f16_1, fire_reg0) | (lzd_adder_inv_mask_f16_1_reg1 + tzd_adder_f16_1_reg1 < (adder_inv_f16_1.getWidth-11-3).U), fire_reg1)
   val sticky_uf_f16_2_reg2  = RegEnable(RegEnable(rshift_sticky_f16_2, fire_reg0) | (lzd_adder_inv_mask_f16_2_reg1 + tzd_adder_f16_2_reg1 < (adder_inv_f16_2.getWidth-11-3).U), fire_reg1)
   val sticky_uf_f16_3_reg2  = RegEnable(RegEnable(rshift_sticky_f16_3, fire_reg0) | (lzd_adder_inv_mask_f16_3_reg1 + tzd_adder_f16_3_reg1 < (adder_inv_f16_3.getWidth-11-3).U), fire_reg1)
-  
+
+  // todo
   val round_lshift_f64_reg2   = RegEnable(lshift_adder_inv_fix_f64.tail(significandWidth+1).head(1), fire_reg1)
   val round_lshift_f32_0_reg2 = RegEnable(lshift_adder_inv_fix_f32_0.tail(24+1).head(1), fire_reg1)
   val round_lshift_f32_1_Reg2 = RegEnable(lshift_adder_inv_fix_f32_1.tail(24+1).head(1), fire_reg1)
@@ -766,6 +873,7 @@ class VectorFloatFMA() extends Module{
   val guard_uf_f16_1   = round_f16_1
   val guard_uf_f16_2   = round_f16_2
   val guard_uf_f16_3   = round_f16_3
+  // todo
   val round_lshift_uf_f64_reg2   = RegEnable(lshift_adder_inv_fix_f64.tail(significandWidth+2).head(1), fire_reg1)
   val round_lshift_uf_f32_0_reg2 = RegEnable(lshift_adder_inv_fix_f32_0.tail(24+2).head(1), fire_reg1)
   val round_lshift_uf_f32_1_reg2 = RegEnable(lshift_adder_inv_fix_f32_1.tail(24+2).head(1), fire_reg1)
@@ -860,60 +968,47 @@ class VectorFloatFMA() extends Module{
   val exponent_add_1_f16_3 = fraction_result_no_round_f16_3_reg2.andR & round_add1_f16_3.asBool
   
   
+  // save 47bit regs
+  val is_fix_f64_reg_d              = is_fix_f64
+  val is_fix_f32_reg_d              = Cat(is_fix_f32_1, is_fix_f32_0)
+  val is_fix_f16_reg_d              = Cat(is_fix_f16_3, is_fix_f16_2, is_fix_f16_1, is_fix_f16_0)
+  val is_fix_reg_d                  = Mux(is_fp64_reg1, is_fix_f64_reg_d, Mux(is_fp32_reg1, is_fix_f32_reg_d, is_fix_f16_reg_d))
+  val is_fix_reg2                   = RegEnable(is_fix_reg_d, fire_reg1)
   
+  val lshift_value_f64_reg_d        = lshift_value_f64_reg1
+  val lshift_value_f32_reg_d        = Cat(lshift_value_f32_1_reg1, lshift_value_f32_0_reg1)
+  val lshift_value_f16_reg_d        = Cat(lshift_value_f16_3_reg1, lshift_value_f16_2_reg1, lshift_value_f16_1_reg1, lshift_value_f16_0_reg1)
+  val lshift_value_reg_d            = Mux(is_fp64_reg1, lshift_value_f64_reg_d, Mux(is_fp32_reg1, lshift_value_f32_reg_d, lshift_value_f16_reg_d))
+  val lshift_value_reg2             = RegEnable(lshift_value_reg_d, fire_reg1)
   
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  val exponent_result_add_value_f64 = Mux(exponent_add_1_f64 | RegEnable(is_fix_f64, fire_reg1),
-    E_greater_f64_reg2 - RegEnable(lshift_value_f64_reg1, fire_reg1) + 1.U,
-    E_greater_f64_reg2 - RegEnable(lshift_value_f64_reg1, fire_reg1)
+
+  val exponent_result_add_value_f64 = Mux(exponent_add_1_f64 | is_fix_reg2(0),
+    E_greater_f64_reg2 - lshift_value_reg2(7,0) + 1.U,
+    E_greater_f64_reg2 - lshift_value_reg2(7,0)
   )
-  val exponent_result_add_value_f32_0 = Mux(exponent_add_1_f32_0 | RegEnable(is_fix_f32_0, fire_reg1),
-    E_greater_f32_0_reg2 - RegEnable(lshift_value_f32_0_reg1, fire_reg1) + 1.U,
-    E_greater_f32_0_reg2 - RegEnable(lshift_value_f32_0_reg1, fire_reg1)
+  val exponent_result_add_value_f32_0 = Mux(exponent_add_1_f32_0 | is_fix_reg2(0),
+    E_greater_f32_0_reg2 - lshift_value_reg2(6,0) + 1.U,
+    E_greater_f32_0_reg2 - lshift_value_reg2(6,0)
   )
-  val exponent_result_add_value_f32_1 = Mux(exponent_add_1_f32_1 | RegEnable(is_fix_f32_1, fire_reg1),
-    E_greater_f32_1_reg2 - RegEnable(lshift_value_f32_1_reg1, fire_reg1) + 1.U,
-    E_greater_f32_1_reg2 - RegEnable(lshift_value_f32_1_reg1, fire_reg1)
+  val exponent_result_add_value_f32_1 = Mux(exponent_add_1_f32_1 | is_fix_reg2(1),
+    E_greater_f32_1_reg2 - lshift_value_reg2(13,7) + 1.U,
+    E_greater_f32_1_reg2 - lshift_value_reg2(13,7)
   )
-  val exponent_result_add_value_f16_0 = Mux(exponent_add_1_f16_0 | RegEnable(is_fix_f16_0, fire_reg1),
-    E_greater_f16_0_reg2 - RegEnable(lshift_value_f16_0_reg1, fire_reg1) + 1.U,
-    E_greater_f16_0_reg2 - RegEnable(lshift_value_f16_0_reg1, fire_reg1)
+  val exponent_result_add_value_f16_0 = Mux(exponent_add_1_f16_0 | is_fix_reg2(0),
+    E_greater_f16_0_reg2 - lshift_value_reg2(5,0) + 1.U,
+    E_greater_f16_0_reg2 - lshift_value_reg2(5,0)
   )
-  val exponent_result_add_value_f16_1 = Mux(exponent_add_1_f16_1 | RegEnable(is_fix_f16_1, fire_reg1),
-    E_greater_f16_1_reg2 - RegEnable(lshift_value_f16_1_reg1, fire_reg1) + 1.U,
-    E_greater_f16_1_reg2 - RegEnable(lshift_value_f16_1_reg1, fire_reg1)
+  val exponent_result_add_value_f16_1 = Mux(exponent_add_1_f16_1 | is_fix_reg2(1),
+    E_greater_f16_1_reg2 - lshift_value_reg2(11,6) + 1.U,
+    E_greater_f16_1_reg2 - lshift_value_reg2(11,6)
   )
-  val exponent_result_add_value_f16_2 = Mux(exponent_add_1_f16_2 | RegEnable(is_fix_f16_2, fire_reg1),
-    E_greater_f16_2_reg2 - RegEnable(lshift_value_f16_2_reg1, fire_reg1) + 1.U,
-    E_greater_f16_2_reg2 - RegEnable(lshift_value_f16_2_reg1, fire_reg1)
+  val exponent_result_add_value_f16_2 = Mux(exponent_add_1_f16_2 | is_fix_reg2(2),
+    E_greater_f16_2_reg2 - lshift_value_reg2(17,12) + 1.U,
+    E_greater_f16_2_reg2 - lshift_value_reg2(17,12)
   )
-  val exponent_result_add_value_f16_3 = Mux(exponent_add_1_f16_3 | RegEnable(is_fix_f16_3, fire_reg1),
-    E_greater_f16_3_reg2 - RegEnable(lshift_value_f16_3_reg1, fire_reg1) + 1.U,
-    E_greater_f16_3_reg2 - RegEnable(lshift_value_f16_3_reg1, fire_reg1)
+  val exponent_result_add_value_f16_3 = Mux(exponent_add_1_f16_3 | is_fix_reg2(3),
+    E_greater_f16_3_reg2 - lshift_value_reg2(23,18) + 1.U,
+    E_greater_f16_3_reg2 - lshift_value_reg2(23,18)
   )
   val exponent_overflow_f64           = exponent_result_add_value_f64.head(1).asBool | exponent_result_add_value_f64.tail(1).andR
   val exponent_overflow_f32_0         = exponent_result_add_value_f32_0.head(1).asBool | exponent_result_add_value_f32_0.tail(1).andR
@@ -922,6 +1017,7 @@ class VectorFloatFMA() extends Module{
   val exponent_overflow_f16_1         = exponent_result_add_value_f16_1.head(1).asBool | exponent_result_add_value_f16_1.tail(1).andR
   val exponent_overflow_f16_2         = exponent_result_add_value_f16_2.head(1).asBool | exponent_result_add_value_f16_2.tail(1).andR
   val exponent_overflow_f16_3         = exponent_result_add_value_f16_3.head(1).asBool | exponent_result_add_value_f16_3.tail(1).andR
+  // todo
   val exponent_is_min_f64             = RegEnable(!lshift_adder_inv_fix_f64.head(1).asBool & lshift_mask_valid_f64_reg1 & !is_fix_f64,       fire_reg1)
   val exponent_is_min_f32_0           = RegEnable(!lshift_adder_inv_fix_f32_0.head(1).asBool & lshift_mask_valid_f32_0_reg1 & !is_fix_f32_0, fire_reg1)
   val exponent_is_min_f32_1           = RegEnable(!lshift_adder_inv_fix_f32_1.head(1).asBool & lshift_mask_valid_f32_1_reg1 & !is_fix_f32_1, fire_reg1)
@@ -1015,7 +1111,8 @@ class VectorFloatFMA() extends Module{
   val fp_c_is_zero_f16_1 = !io.fp_cIsFpCanonicalNAN & !fp_c_significand_f16_1.orR
   val fp_c_is_zero_f16_2 = !io.fp_cIsFpCanonicalNAN & !fp_c_significand_f16_2.orR
   val fp_c_is_zero_f16_3 = !io.fp_cIsFpCanonicalNAN & !fp_c_significand_f16_3.orR
-  
+
+  // todo
   val normal_result_is_zero_f64_reg2   = RegEnable(RegEnable(!adder_f64.orR  , fire_reg0), fire_reg1)
   val normal_result_is_zero_f32_0_reg2 = RegEnable(RegEnable(!adder_f32_0.orR, fire_reg0), fire_reg1)
   val normal_result_is_zero_f32_1_reg2 = RegEnable(RegEnable(!adder_f32_1.orR, fire_reg0), fire_reg1)
@@ -1164,7 +1261,73 @@ class VectorFloatFMA() extends Module{
   val fp_result_f16_1 = Wire(UInt(16.W))
   val fp_result_f16_2 = Wire(UInt(16.W))
   val fp_result_f16_3 = Wire(UInt(16.W))
-  
+
+  // save 384 bit
+  val fp_result_f64_fp_a_or_b_is_zero = Cat(
+    Mux(
+      fp_c_is_zero_f64,
+      Mux(is_vfmul, sign_a_b_f64, (sign_a_b_f64 & sign_c_f64) | (RDN & (sign_a_b_f64 ^ sign_c_f64)) ),
+      fp_c_f64.head(1)
+    ),
+    fp_c_f64.tail(1)
+  )
+  val fp_result_f32_0_fp_a_or_b_is_zero = Cat(
+    Mux(
+      fp_c_is_zero_f32_0,
+      Mux(is_vfmul, sign_a_b_f32_0, (sign_a_b_f32_0 & sign_c_f32_0) | (RDN & (sign_a_b_f32_0 ^ sign_c_f32_0)) ),
+      fp_c_f32_0.head(1)
+    ),
+    fp_c_f32_0.tail(1)
+  )
+  val fp_result_f32_1_fp_a_or_b_is_zero = Cat(
+    Mux(
+      fp_c_is_zero_f32_1,
+      Mux(is_vfmul, sign_a_b_f32_1, (sign_a_b_f32_1 & sign_c_f32_1) | (RDN & (sign_a_b_f32_1 ^ sign_c_f32_1)) ),
+      fp_c_f32_1.head(1)
+    ),
+    fp_c_f32_1.tail(1)
+  )
+  val fp_result_f16_0_fp_a_or_b_is_zero = Cat(
+    Mux(
+      fp_c_is_zero_f16_0,
+      Mux(is_vfmul, sign_a_b_f16_0, (sign_a_b_f16_0 & sign_c_f16_0) | (RDN & (sign_a_b_f16_0 ^ sign_c_f16_0)) ),
+      fp_c_f16_0.head(1)
+    ),
+    fp_c_f16_0.tail(1)
+  )
+  val fp_result_f16_1_fp_a_or_b_is_zero = Cat(
+    Mux(
+      fp_c_is_zero_f16_1,
+      Mux(is_vfmul, sign_a_b_f16_1, (sign_a_b_f16_1 & sign_c_f16_1) | (RDN & (sign_a_b_f16_1 ^ sign_c_f16_1)) ),
+      fp_c_f16_1.head(1)
+    ),
+    fp_c_f16_1.tail(1)
+  )
+  val fp_result_f16_2_fp_a_or_b_is_zero = Cat(
+    Mux(
+      fp_c_is_zero_f16_2,
+      Mux(is_vfmul, sign_a_b_f16_2, (sign_a_b_f16_2 & sign_c_f16_2) | (RDN & (sign_a_b_f16_2 ^ sign_c_f16_2)) ),
+      fp_c_f16_2.head(1)
+    ),
+    fp_c_f16_2.tail(1)
+  )
+  val fp_result_f16_3_fp_a_or_b_is_zero = Cat(
+    Mux(
+      fp_c_is_zero_f16_3,
+      Mux(is_vfmul, sign_a_b_f16_3, (sign_a_b_f16_3 & sign_c_f16_3) | (RDN & (sign_a_b_f16_3 ^ sign_c_f16_3)) ),
+      fp_c_f16_3.head(1)
+    ),
+    fp_c_f16_3.tail(1)
+  )
+  val fp_result_f64_fp_a_or_b_is_zero_reg_d = fp_result_f64_fp_a_or_b_is_zero
+  val fp_result_f32_fp_a_or_b_is_zero_reg_d = Cat(fp_result_f32_1_fp_a_or_b_is_zero, fp_result_f32_0_fp_a_or_b_is_zero)
+  val fp_result_f16_fp_a_or_b_is_zero_reg_d = Cat(fp_result_f16_3_fp_a_or_b_is_zero, fp_result_f16_2_fp_a_or_b_is_zero,
+    fp_result_f16_1_fp_a_or_b_is_zero, fp_result_f16_0_fp_a_or_b_is_zero)
+  val fp_result_fp_a_or_b_is_zero_reg_d     = Mux(is_fp64, fp_result_f64_fp_a_or_b_is_zero_reg_d,
+    Mux(is_fp32, fp_result_f32_fp_a_or_b_is_zero_reg_d, fp_result_f16_fp_a_or_b_is_zero_reg_d))
+  val fp_result_fp_a_or_b_is_zero_reg       = RegEnable(RegEnable(RegEnable(fp_result_fp_a_or_b_is_zero_reg_d, fire), fire_reg0), fire_reg1)
+
+  // todo
   val has_nan_f64_reg2       = RegEnable(RegEnable(RegEnable(has_nan_f64, fire), fire_reg0), fire_reg1)
   val has_nan_f64_is_NV_reg2 = RegEnable(RegEnable(RegEnable(
     has_snan_f64.asBool | (fp_a_is_inf_f64 & fp_b_is_zero_f64) | (fp_a_is_zero_f64 & fp_b_is_inf_f64),
@@ -1178,17 +1341,7 @@ class VectorFloatFMA() extends Module{
     fire), fire_reg0), fire_reg1)
   val is_overflow_f64_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f64_reg2.asBool) | (RUP_reg2 & sign_result_temp_f64_reg2.asBool)
   val fp_a_or_b_is_zero_f64_reg2 = RegEnable(RegEnable(RegEnable(fp_a_is_zero_f64 | fp_b_is_zero_f64, fire), fire_reg0), fire_reg1)
-  val fp_result_f64_fp_a_or_b_is_zero_reg2 = RegEnable(RegEnable(RegEnable(
-    Cat(
-      Mux(
-        fp_c_is_zero_f64,
-        Mux(is_vfmul, sign_a_b_f64, (sign_a_b_f64 & sign_c_f64) | (RDN & (sign_a_b_f64 ^ sign_c_f64)) ),
-        fp_c_f64.head(1)
-      ),
-      fp_c_f64.tail(1)
-    ),
-    fire), fire_reg0), fire_reg1
-  )
+  val fp_result_f64_fp_a_or_b_is_zero_reg2 = fp_result_fp_a_or_b_is_zero_reg(63, 0)
   when(has_nan_f64_reg2){
     fp_result_f64 := result_nan_f64
     fflags_f64 := Mux(has_nan_f64_is_NV_reg2,"b10000".U,"b00000".U)
@@ -1223,17 +1376,7 @@ class VectorFloatFMA() extends Module{
     fire), fire_reg0), fire_reg1)
   val is_overflow_f32_0_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f32_0_reg2.asBool) | (RUP_reg2 & sign_result_temp_f32_0_reg2.asBool)
   val fp_a_or_b_is_zero_f32_0_reg2 = RegEnable(RegEnable(RegEnable(fp_a_is_zero_f32_0 | fp_b_is_zero_f32_0, fire), fire_reg0), fire_reg1)
-  val fp_result_f32_0_fp_a_or_b_is_zero_reg2 = RegEnable(RegEnable(RegEnable(
-    Cat(
-      Mux(
-        fp_c_is_zero_f32_0,
-        Mux(is_vfmul, sign_a_b_f32_0, (sign_a_b_f32_0 & sign_c_f32_0) | (RDN & (sign_a_b_f32_0 ^ sign_c_f32_0)) ),
-        fp_c_f32_0.head(1)
-      ),
-      fp_c_f32_0.tail(1)
-    ),
-    fire), fire_reg0), fire_reg1
-  )
+  val fp_result_f32_0_fp_a_or_b_is_zero_reg2 = fp_result_fp_a_or_b_is_zero_reg(31, 0)
   when(has_nan_f32_0_reg2){
     fp_result_f32_0 := result_nan_f32_0
     fflags_f32_0 := Mux(has_nan_f32_0_is_NV_reg2,"b10000".U,"b00000".U)
@@ -1265,17 +1408,7 @@ class VectorFloatFMA() extends Module{
     fire), fire_reg0), fire_reg1)
   val is_overflow_f32_1_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f32_1_reg2.asBool) | (RUP_reg2 & sign_result_temp_f32_1_reg2.asBool)
   val fp_a_or_b_is_zero_f32_1_reg2 = RegEnable(RegEnable(RegEnable(fp_a_is_zero_f32_1 | fp_b_is_zero_f32_1, fire), fire_reg0), fire_reg1)
-  val fp_result_f32_1_fp_a_or_b_is_zero_reg2 = RegEnable(RegEnable(RegEnable(
-    Cat(
-      Mux(
-        fp_c_is_zero_f32_1,
-        Mux(is_vfmul, sign_a_b_f32_1, (sign_a_b_f32_1 & sign_c_f32_1) | (RDN & (sign_a_b_f32_1 ^ sign_c_f32_1)) ),
-        fp_c_f32_1.head(1)
-      ),
-      fp_c_f32_1.tail(1)
-    ),
-    fire), fire_reg0), fire_reg1
-  )
+  val fp_result_f32_1_fp_a_or_b_is_zero_reg2 = fp_result_fp_a_or_b_is_zero_reg(63,32)
   when(has_nan_f32_1_reg2){
     fp_result_f32_1 := result_nan_f32_1
     fflags_f32_1 := Mux(has_nan_f32_1_is_NV_reg2,"b10000".U,"b00000".U)
@@ -1307,17 +1440,7 @@ class VectorFloatFMA() extends Module{
     fire), fire_reg0), fire_reg1)
   val is_overflow_f16_0_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f16_0_reg2.asBool) | (RUP_reg2 & sign_result_temp_f16_0_reg2.asBool)
   val fp_a_or_b_is_zero_f16_0_reg2 = RegEnable(RegEnable(RegEnable(fp_a_is_zero_f16_0 | fp_b_is_zero_f16_0, fire), fire_reg0), fire_reg1)
-  val fp_result_f16_0_fp_a_or_b_is_zero_reg2 = RegEnable(RegEnable(RegEnable(
-    Cat(
-      Mux(
-        fp_c_is_zero_f16_0,
-        Mux(is_vfmul, sign_a_b_f16_0, (sign_a_b_f16_0 & sign_c_f16_0) | (RDN & (sign_a_b_f16_0 ^ sign_c_f16_0)) ),
-        fp_c_f16_0.head(1)
-      ),
-      fp_c_f16_0.tail(1)
-    ),
-    fire), fire_reg0), fire_reg1
-  )
+  val fp_result_f16_0_fp_a_or_b_is_zero_reg2 = fp_result_fp_a_or_b_is_zero_reg(15,0)
   when(has_nan_f16_0_reg2){
     fp_result_f16_0 := result_nan_f16_0
     fflags_f16_0 := Mux(has_nan_f16_0_is_NV_reg2,"b10000".U,"b00000".U)
@@ -1349,17 +1472,7 @@ class VectorFloatFMA() extends Module{
     fire), fire_reg0), fire_reg1)
   val is_overflow_f16_1_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f16_1_reg2.asBool) | (RUP_reg2 & sign_result_temp_f16_1_reg2.asBool)
   val fp_a_or_b_is_zero_f16_1_reg2 = RegEnable(RegEnable(RegEnable(fp_a_is_zero_f16_1 | fp_b_is_zero_f16_1, fire), fire_reg0), fire_reg1)
-  val fp_result_f16_1_fp_a_or_b_is_zero_reg2 = RegEnable(RegEnable(RegEnable(
-    Cat(
-      Mux(
-        fp_c_is_zero_f16_1,
-        Mux(is_vfmul, sign_a_b_f16_1, (sign_a_b_f16_1 & sign_c_f16_1) | (RDN & (sign_a_b_f16_1 ^ sign_c_f16_1)) ),
-        fp_c_f16_1.head(1)
-      ),
-      fp_c_f16_1.tail(1)
-    ),
-    fire), fire_reg0), fire_reg1
-  )
+  val fp_result_f16_1_fp_a_or_b_is_zero_reg2 = fp_result_fp_a_or_b_is_zero_reg(31,16)
   when(has_nan_f16_1_reg2){
     fp_result_f16_1 := result_nan_f16_1
     fflags_f16_1 := Mux(has_nan_f16_1_is_NV_reg2,"b10000".U,"b00000".U)
@@ -1391,17 +1504,7 @@ class VectorFloatFMA() extends Module{
     fire), fire_reg0), fire_reg1)
   val is_overflow_f16_2_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f16_2_reg2.asBool) | (RUP_reg2 & sign_result_temp_f16_2_reg2.asBool)
   val fp_a_or_b_is_zero_f16_2_reg2 = RegEnable(RegEnable(RegEnable(fp_a_is_zero_f16_2 | fp_b_is_zero_f16_2, fire), fire_reg0), fire_reg1)
-  val fp_result_f16_2_fp_a_or_b_is_zero_reg2 = RegEnable(RegEnable(RegEnable(
-    Cat(
-      Mux(
-        fp_c_is_zero_f16_2,
-        Mux(is_vfmul, sign_a_b_f16_2, (sign_a_b_f16_2 & sign_c_f16_2) | (RDN & (sign_a_b_f16_2 ^ sign_c_f16_2)) ),
-        fp_c_f16_2.head(1)
-      ),
-      fp_c_f16_2.tail(1)
-    ),
-    fire), fire_reg0), fire_reg1
-  )
+  val fp_result_f16_2_fp_a_or_b_is_zero_reg2 = fp_result_fp_a_or_b_is_zero_reg(47,32)
   when(has_nan_f16_2_reg2){
     fp_result_f16_2 := result_nan_f16_2
     fflags_f16_2 := Mux(has_nan_f16_2_is_NV_reg2,"b10000".U,"b00000".U)
@@ -1433,17 +1536,7 @@ class VectorFloatFMA() extends Module{
     fire), fire_reg0), fire_reg1)
   val is_overflow_f16_3_down_reg2 = RTZ_reg2 | (RDN_reg2 & !sign_result_temp_f16_3_reg2.asBool) | (RUP_reg2 & sign_result_temp_f16_3_reg2.asBool)
   val fp_a_or_b_is_zero_f16_3_reg2 = RegEnable(RegEnable(RegEnable(fp_a_is_zero_f16_3 | fp_b_is_zero_f16_3, fire), fire_reg0), fire_reg1)
-  val fp_result_f16_3_fp_a_or_b_is_zero_reg2 = RegEnable(RegEnable(RegEnable(
-    Cat(
-      Mux(
-        fp_c_is_zero_f16_3,
-        Mux(is_vfmul, sign_a_b_f16_3, (sign_a_b_f16_3 & sign_c_f16_3) | (RDN & (sign_a_b_f16_3 ^ sign_c_f16_3)) ),
-        fp_c_f16_3.head(1)
-      ),
-      fp_c_f16_3.tail(1)
-    ),
-    fire), fire_reg0), fire_reg1
-  )
+  val fp_result_f16_3_fp_a_or_b_is_zero_reg2 = fp_result_fp_a_or_b_is_zero_reg(63,48)
   when(has_nan_f16_3_reg2){
     fp_result_f16_3 := result_nan_f16_3
     fflags_f16_3 := Mux(has_nan_f16_3_is_NV_reg2,"b10000".U,"b00000".U)
