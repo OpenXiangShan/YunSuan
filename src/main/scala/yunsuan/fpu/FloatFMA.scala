@@ -476,9 +476,9 @@ class FloatFMA() extends Module{
     Mux(is_fp32_reg1, fraction_result_no_round_f32_reg_d, fraction_result_no_round_f16_reg_d))
   val fraction_result_no_round_reg       = RegEnable(fraction_result_no_round_reg_d, fire_reg1)
 
-  val fraction_result_no_round_f64_reg2  = fraction_result_no_round_reg_d
-  val fraction_result_no_round_f32_reg2  = fraction_result_no_round_reg_d(22,0)
-  val fraction_result_no_round_f16_reg2  = fraction_result_no_round_reg_d(9,0)
+  val fraction_result_no_round_f64_reg2  = fraction_result_no_round_reg
+  val fraction_result_no_round_f32_reg2  = fraction_result_no_round_reg(22,0)
+  val fraction_result_no_round_f16_reg2  = fraction_result_no_round_reg(9,0)
 
   val fraction_result_round_f64 = fraction_result_no_round_f64_reg2 +& 1.U
   val fraction_result_round_f32 = fraction_result_no_round_f32_reg2 +& 1.U
