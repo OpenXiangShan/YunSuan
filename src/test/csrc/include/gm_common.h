@@ -150,5 +150,16 @@ class VGMIntegerDividier : public VPUGoldenModel{
   virtual ElementOutput calculation_e64(ElementInput input); 
 };
 
+class VGMNewVrgather : public VPUGoldenModel{
+  public:
+    VecOutput get_expected_output(VecInput input);    
+    virtual ElementOutput calculation_e8(ElementInput input);
+    virtual ElementOutput calculation_e16(ElementInput input);
+    virtual ElementOutput calculation_e32(ElementInput input);
+    virtual ElementOutput calculation_e64(ElementInput input);
+  private:
+    VecOutputE8 get_output_vrg_e8(VecInputE8 *input);
+    VecOutputE16 get_output_vrg_e16(VecInputE16 *input);
+};
 
 #endif

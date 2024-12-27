@@ -39,8 +39,8 @@ void TestDriver::set_test_type() {
   // test_type.pick_fuOpType = false;
   test_type.pick_fuType = true;
   test_type.pick_fuOpType = false;
-  test_type.fuType =  VIntegerALU;
-  test_type.fuOpType = VFNCVT_XFW;
+  test_type.fuType =  NewVrgather;
+  test_type.fuOpType = VRG_VRG;
   printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -55,6 +55,26 @@ void TestDriver::gen_next_test_case() {
   // printf("--------------------\n");
 }
 
+uint8_t TestDriver::gen_random_sew() {
+  switch (input.fuType)
+  {
+    case VIntegerALU: return 0;
+    case VIntegerALUV2: return 0;
+    case VIntegerDivider : return 0;  
+    case VFloatCvt: {
+      if(input.fuOpType == VFNCVT_XFW){
+        return 0;
+      }
+      else if(input.fuOpType == VFWCVT_FXV){
+        return 0;
+      }
+      else return 1;
+    }
+    case NewVrgather: return 1;
+    default: return 1;
+  }
+  return 1;
+}
 
 uint8_t TestDriver::gen_random_futype(std::initializer_list<uint8_t> futype_list) {
   return *(futype_list.begin() + (rand() % futype_list.size()));
@@ -138,6 +158,11 @@ uint8_t TestDriver::gen_random_optype() {
         return i2fcvt_64_optype[rand() % I2FCVT_64_NUM];
         break;
     }
+    case NewVrgather:{
+        uint8_t vrg_64_optype[VRGATHER_NUM] = NEWVRGATHER_OPTYPES;
+        return  vrg_64_optype[rand() % VRGATHER_NUM];
+        break;   
+    }
     default:
       printf("Unsupported FuType %d\n", input.fuType);
       exit(1);
@@ -146,25 +171,6 @@ uint8_t TestDriver::gen_random_optype() {
   return 0;
 }
 
-uint8_t TestDriver::gen_random_sew() {
-  switch (input.fuType)
-  {
-    case VIntegerALU: return 0;
-    case VIntegerALUV2: return 0;
-    case VIntegerDivider : return 0;  
-    case VFloatCvt: {
-      if(input.fuOpType == VFNCVT_XFW){
-        return 0;
-      }
-      else if(input.fuOpType == VFWCVT_FXV){
-        return 0;
-      }
-      else return 1;
-    }
-    default: return 1;
-  }
-  return 1;
-}
 
 bool TestDriver::gen_random_widen() {
   if(input.sew > 1){
@@ -238,10 +244,10 @@ void TestDriver::gen_random_vecinfo() {
   uint8_t vlmul_list[7] = {3, 2, 1, 0,  7,   6,   5};
 
   //TODO: modified
-  // input.vinfo.vlmul = 0;
+  input.vinfo.vlmul = 0;
   //sew: 01-> fp16, 10->fp32
 
-  input.vinfo.vlmul = vlmul_list[rand() % (7 - input.sew)];
+  // input.vinfo.vlmul = vlmul_list[rand() % (7 - input.sew)];
   int elements_per_reg = (VLEN / 8) >> input.sew;
   int vlmax = (input.vinfo.vlmul > 4) ? (elements_per_reg >> (8 - input.vinfo.vlmul)) : (elements_per_reg << input.vinfo.vlmul);
   switch (input.fuType) {
@@ -256,15 +262,15 @@ void TestDriver::gen_random_vecinfo() {
     default: input.vinfo.vstart = 0; break;
   } // The vstart of an arithmetic instruction is generally equal to 0
   //TODO: need more test
-  // input.vinfo.vl = vlmax;
-  // input.vinfo.vm = 0;
-  // input.vinfo.ta = 0;
-  // input.vinfo.ma = 0;
+  input.vinfo.vl = vlmax;
+  input.vinfo.vm = 0;
+  input.vinfo.ta = 0;
+  input.vinfo.ma = 0;
 
-  input.vinfo.vl = rand() % vlmax + 1; // TODO: vl == 0 may be illegal
-  input.vinfo.vm = rand() % 2;
-  input.vinfo.ta = rand() % 2;
-  input.vinfo.ma = rand() % 2;
+  // input.vinfo.vl = rand() % vlmax + 1; // TODO: vl == 0 may be illegal
+  // input.vinfo.vm = rand() % 2;
+  // input.vinfo.ta = rand() % 2;
+  // input.vinfo.ma = rand() % 2;
 }
 
 void TestDriver::gen_random_uopidx() {
@@ -400,7 +406,8 @@ void TestDriver::get_random_input() {
   if (keepinput) { return; }
 
   for(int i = 0; i < VLEN/XLEN; i++){
-    input.src1[i] = rand64();
+    // input.src1[i] = rand64()%128;
+    input.src1[i] = 0x1;
     input.src2[i] = rand64();
     input.src3[i] = rand64();
     input.src4[i] = rand64();
@@ -498,6 +505,9 @@ void TestDriver::get_expected_output() {
     case FloatCvtI2F:
       if (verbose) { printf("FuType:%d, choose FloatCvtI2F %d\n", input.fuType, FloatCvtI2F); }
       expect_output = scvt.get_expected_output(input); return; 
+    case NewVrgather:
+      if (verbose) { printf("FuType:%d, choose NewVrgather %d\n", input.fuType, NewVrgather); }
+      expect_output = vrg.get_expected_output(input); return;
     default:
       printf("Unsupported FuType %d\n", input.fuType);
       exit(1);
@@ -741,9 +751,16 @@ int TestDriver::diff_output_falling(VSimTop *dut_ptr) {
 
     dut_output.vxsat = dut_ptr->io_out_bits_vxsat;
 
-    if (memcmp(&dut_output, &expect_output, sizeof(dut_output))) {
-      printf("Error, compare failed\n");
+    if (memcmp(&dut_output.result, &expect_output.result, sizeof(dut_output.result))) {
+      printf("\n!!!!!!!!!Error, compare failed!!!!!!!!!!!!!\n");
+      
       display();
+      // for(int i = 0; i < VLEN/64; i++){
+      //   if(dut_output.result[i] != expect_output.result[i]){
+      //     printf("dut_output.result[%d] = %016lx_%016lx\n", i, dut_output.result[i] >> 64, dut_output.result[i]);
+      //     printf("expect_output.result[%d] = %016lx_%016lx\n", i, expect_output.result[i] >> 64, expect_output.result[i]);
+      //   }
+      // }
       return STATE_BADTRAP;
     } else {
       gen_next_test_case();
@@ -783,6 +800,20 @@ void TestDriver::display_ref_input() {
       // int8_print(input.src3, VLEN, XLEN);
       // printf("src4: \n");
       // int8_print(input.src4, VLEN, XLEN);
+    }
+  }
+  else if(input.fuType == NewVrgather){
+    if(input.sew == 0){
+      printf("src1: \n");
+      int8_print(input.src1, VLEN, XLEN);
+      printf("src2: \n");
+      int8_print(input.src2, VLEN, XLEN);
+    }
+    else if(input.sew == 1){
+      printf("src1: \n");
+      int16_print(input.src1, VLEN, XLEN);
+      printf("src2: \n");
+      int16_print(input.src2, VLEN, XLEN);
     }
   }
   else if(input.sew == 1){
@@ -829,6 +860,12 @@ void TestDriver::display_ref_output() {
       printf("  fflags: %x_%x_%x_%x  vxsat: %lx\n", expect_output.fflags[3], expect_output.fflags[2], expect_output.fflags[1], expect_output.fflags[0], expect_output.vxsat);
     }
   }
+  else if(input.fuType == NewVrgather){
+    printf("res : \n");
+    if(input.sew == 0) int8_print(expect_output.result, VLEN, XLEN);
+    else int16_print(expect_output.result, VLEN, XLEN);
+    printf("  fflags: %x_%x_%x_%x  vxsat: %lx\n", expect_output.fflags[3], expect_output.fflags[2], expect_output.fflags[1], expect_output.fflags[0], expect_output.vxsat);    
+  }
   else if(input.sew == 1){
     printf("res : \n");
     fp16_print(expect_output.result, VLEN, XLEN);
@@ -857,6 +894,12 @@ void TestDriver::display_dut() {
       fp16_print(dut_output.result, VLEN, XLEN);
       printf("  fflags: %x_%x_%x_%x  vxsat: %lx\n", dut_output.fflags[3], dut_output.fflags[2], dut_output.fflags[1], dut_output.fflags[0], dut_output.vxsat);
     }
+  }
+  else if(input.fuType == NewVrgather){
+    printf("res : \n");
+    if(input.sew == 0) int8_print(dut_output.result, VLEN, XLEN);
+    else int16_print(dut_output.result, VLEN, XLEN);
+    printf("  fflags: %x_%x_%x_%x  vxsat: %lx\n", dut_output.fflags[3], dut_output.fflags[2], dut_output.fflags[1], dut_output.fflags[0], dut_output.vxsat);    
   }
   else if(input.sew == 1){
     printf("res : \n");

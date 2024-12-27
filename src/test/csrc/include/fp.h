@@ -72,3 +72,18 @@ void int8_print(uint64_t *src, uint64_t vlen, uint64_t xlen){
         }
     }
 }
+
+void int16_print(uint64_t *src, uint64_t vlen, uint64_t xlen){
+    if (src == NULL) {
+        printf("Error: Null pointer passed to fp16_print\n");
+        return;
+    }
+    for (int j = vlen/xlen -1; j >= 0; j--){
+        for(int k = xlen/16 - 1; k >= 0; k--){
+            printf("%10d", (int16_t)((src[j] >> 16*k) & 0xffff));
+        }
+        if(j%4 == 0){
+            printf("\n");
+        }
+    }
+}

@@ -14,14 +14,11 @@ VPUGoldenModel::VPUGoldenModel():
 
 VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
   int sew = input.sew;
-  // int number = (128 / 8) >> sew;
   int number = (VLEN / 8) >> sew;
-  // int half_number = number >> 1;
   int half_number = (XLEN/8) >> sew;
   int result_shift_len = 8 << sew;
   int widenNorrow = (input.fuOpType >> 3) & 0X3;
   int i2f_inputType = (input.fuOpType >> 3) & 0X1;
-  // int i2f_number = (128 / 8) >> (i2f_inputType+2);
   int i2f_number = (VLEN / 8) >> (i2f_inputType+2);
 
   int i2f_half_number = i2f_number >> 1;
@@ -221,6 +218,10 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
     output.result[i] = 0;
     output.fflags[i] = 0;
 
+    if(input.fuType == NewVrgather) {
+      printf("should reach here\n");
+      break;
+    }
     for (int j = 0; j < half_number; j++) {
       if(input.fuType == VIntegerDivider) {
         output.result[i] += (uint64_t)(output_part[i*half_number+j].result&mask) << (j*result_shift_len);

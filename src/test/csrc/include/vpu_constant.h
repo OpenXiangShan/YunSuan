@@ -25,6 +25,7 @@ extern "C"{
 #define VFloatCvt (7)
 #define FloatCvtF2X (8) //f->i/ui/f
 #define FloatCvtI2F (9) //i/ui->f
+#define NewVrgather (10)
 // #define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt}
 
 //will be delated
@@ -371,6 +372,11 @@ extern "C"{
   #define I2FCVT_64_NUM  12
   #define I2FCVT_64_OPTYPES {FCVT_H_WU,FCVT_H_W,FCVT_H_LU,FCVT_H_L,FCVT_S_WU,FCVT_S_W,FCVT_S_LU,FCVT_S_L,FCVT_D_WU,FCVT_D_W,FCVT_D_LU,FCVT_D_L}
 
+  //vrgather
+  #define VRGATHER_NUM  1
+  #define VRG_VRG          (binstoi("0000"))
+  #define NEWVRGATHER_OPTYPES {VRG_VRG}
+  
 // pre-compile stoi
 constexpr uint8_t binstoi(const char str[]) {
   uint8_t num = 0;

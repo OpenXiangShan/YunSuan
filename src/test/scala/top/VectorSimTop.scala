@@ -22,6 +22,7 @@ trait VSPParameter {
   val VPERM_latency: Int = 1
   val VID_latency: Int = 99
   val VCVT_latency: Int = 2 // ??
+  val Vrgather_latency: Int = 1
 }
 
 object VPUTestFuType { // only use in test, difftest with xs
@@ -35,9 +36,9 @@ object VPUTestFuType { // only use in test, difftest with xs
   def vcvt= "b0000_0111".U(8.W)
   def fcvtf2x= "b0000_1000".U(8.W)
   def fcvti2f= "b0000_1001".U(8.W)
-
+  def vrgather = "b0000_1010".U(8.W)
   def unknown(typ: UInt) = {
-    (typ > 9.U)
+    (typ > 10.U)
   }
 }
 
@@ -114,7 +115,8 @@ class SimTop() extends VPUTestModule {
       VPUTestFuType.vid -> VID_latency.U,
       VPUTestFuType.vcvt -> VCVT_latency.U,
       VPUTestFuType.fcvtf2x -> VCVT_latency.U,
-      VPUTestFuType.fcvti2f -> VCVT_latency.U
+      VPUTestFuType.fcvti2f -> VCVT_latency.U,
+      VPUTestFuType.vrgather -> Vrgather_latency.U
     )) // fuType --> latency, spec case for div
     assert(!VPUTestFuType.unknown(io.in.bits.fuType))
   }
@@ -147,6 +149,8 @@ class SimTop() extends VPUTestModule {
   val vcvt_result = Wire(new VSTOutputIO)
   val i2f_result = Wire(new VSTOutputIO)
   val fpcvt_result = Wire(new VSTOutputIO)
+  val vrg_result = Wire(new VSTOutputIO)
+
   when (io.in.fire() || io.out.fire()) {
     vfd_result_valid.map(_ := false.B)
   }
@@ -334,6 +338,22 @@ class SimTop() extends VPUTestModule {
   vperm.io.old_vd := Cat((0 until VLEN/XLEN).map(i => in.src(2)(i)))
   vperm.io.mask := Cat((0 until VLEN/XLEN).map(i => in.src(3)(i)))
 
+  // vrgather
+  val vrg = Module(new Vrgather) 
+  vrg.io.vs1 := Cat((0 until VLEN/XLEN).map(i => in.src(0)(i)).reverse)
+  vrg.io.vs2 := Cat((0 until VLEN/XLEN).map(i => in.src(1)(i)).reverse)
+  vrg.io.sew    := sew
+  vrg.io.vstart := vstart
+  vrg.io.vl     := vl
+  vrg.io.vm     := vm
+  vrg.io.ta     := ta
+  vrg.io.ma     := ma
+  for(i <- 0 until VLEN/XLEN) {
+    vrg_result.result(i) := vrg.io.res_vd(XLEN*(i+1) - 1, XLEN*i)
+    vrg_result.fflags(i) := 0.U  //don't care
+  }
+  vrg_result.vxsat := 0.U
+
 
   vperm.io.vs1_type := ZeroExt(sew, 4)
   vperm.io.vs2_type := ZeroExt(sew, 4)
@@ -465,7 +485,8 @@ class SimTop() extends VPUTestModule {
     VPUTestFuType.vid -> vid_result,
     VPUTestFuType.vcvt -> vcvt_result,
     VPUTestFuType.fcvtf2x -> fpcvt_result,
-    VPUTestFuType.fcvti2f -> i2f_result
+    VPUTestFuType.fcvti2f -> i2f_result,
+    VPUTestFuType.vrgather -> vrg_result
   ))
 }
 

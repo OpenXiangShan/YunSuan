@@ -86,7 +86,7 @@ struct VecInputE32 {
 
 struct VecOutputE8 {
   uint8_t result[VLEN/8];
-  // uint8_t fflags[2]; // only 20bits for each op
+  uint8_t fflags[VLEN/8]; // only 20bits for each op
   uint8_t vxsat[VLEN/8];
 };
 
