@@ -78,6 +78,62 @@ class VRGather_with_sew(
       index(n) := 1.U << io.vs1((n + 1) * XLEN - 1, n * XLEN) 
       lut(n)   := io.vs2((n + 1) * XLEN - 1, n * XLEN)    
     }
+    // ASCII Chart for VRGather_with_sew result calculation:
+    //
+    // vs1: [element N-1][element N-2]...[element 0]
+    //      |<- XLEN  ->||<- XLEN  ->|...|<- XLEN->|
+    //
+    // vs2: [element N-1][element N-2]...[element 0]
+    //      |<- XLEN  ->||<- XLEN  ->|...|<- XLEN->|
+    //
+    // index(n): 1.U << vs1[n]  => One-hot vector of size VLMAX
+    // lut(n):   vs2[n]         => XLEN-bit value
+    //
+    // res(n) calculation:
+    //   for each element n:
+    //     for each possible index m:
+    //       Fill(XLEN, index(n)(m)) & lut(m)  => XLEN-bit mask from index
+    //     reduce with OR to get final value selected by mask
+    //
+    // Final result:
+    //   io.res_data = [res(N-1)][res(N-2)]...[res(0)]
+    //                  |<-XLEN->| |<-XLEN->| ... |<-XLEN->|
+
+    // Example
+    //
+    // Input vs1 (indices): [3, 0, 2, 1] = 0x03000201
+    // Input vs2 (data):    [A, B, C, D] = 0x0A0B0C0D
+    //
+    // vs2(lut): [A][B][C][D]
+    //    index: |0||1||2||3|
+    //    width: |8||8||8||8|
+    //
+    // index(0) = 1 << 3 = 00001000 (selects element 3)
+    // index(1) = 1 << 0 = 00000001 (selects element 0)
+    // index(2) = 1 << 2 = 00000100 (selects element 2)
+    // index(3) = 1 << 1 = 00000010 (selects element 1)
+    //
+    // res(0) = vs2[3] = D
+    // res(1) = vs2[0] = A
+    // res(2) = vs2[2] = C
+    // res(3) = vs2[1] = B
+    //
+    // Final result: [D][A][C][B] = 0x0D0A0C0B
+    //
+    // More detailed:
+    //
+    // Fill(XLEN, index(0)(0)) = 00000000 (mask for element 0)
+    // Fill(XLEN, index(0)(1)) = 00000000 (mask for element 1)
+    // Fill(XLEN, index(0)(2)) = 00000000 (mask for element 2)
+    // Fill(XLEN, index(0)(3)) = 11111111 (mask for element 3)
+    //
+    // Fill(XLEN, index(0)(0)) & lut(0) = 00000000 & 0A = 00
+    // Fill(XLEN, index(0)(1)) & lut(1) = 00000000 & 0B = 00
+    // Fill(XLEN, index(0)(2)) & lut(2) = 00000000 & 0C = 00
+    // Fill(XLEN, index(0)(3)) & lut(3) = 11111111 & 0D = 0D
+    //
+    // {00, 00, 00, 0D}.reduce(_ | _) = 0D
+    //
 
     val res = RegInit(VecInit(Seq.fill(VLEN / XLEN)(0.U(XLEN.W))))
 
