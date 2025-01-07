@@ -406,8 +406,7 @@ void TestDriver::get_random_input() {
   if (keepinput) { return; }
 
   for(int i = 0; i < VLEN/XLEN; i++){
-    // input.src1[i] = rand64()%128;
-    input.src1[i] = 0x1;
+    input.src1[i] = rand64();
     input.src2[i] = rand64();
     input.src3[i] = rand64();
     input.src4[i] = rand64();

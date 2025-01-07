@@ -348,6 +348,7 @@ class SimTop() extends VPUTestModule {
   vrg.io.vm     := vm
   vrg.io.ta     := ta
   vrg.io.ma     := ma
+  vrg.io.vlmul  := vlmul
   for(i <- 0 until VLEN/XLEN) {
     vrg_result.result(i) := vrg.io.res_vd(XLEN*(i+1) - 1, XLEN*i)
     vrg_result.fflags(i) := 0.U  //don't care
