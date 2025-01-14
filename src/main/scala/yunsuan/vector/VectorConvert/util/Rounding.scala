@@ -21,7 +21,7 @@ class RoundingUnit(val width: Int) extends Module {
   val r_up = MuxLookup(
     io.rm,
     false.B
-  , Seq(
+  )(Seq(
     RNE -> ((r && s) || (r && !s && g)),
     RTZ -> false.B,
     RUP -> (inexact & !io.signIn),

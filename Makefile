@@ -9,7 +9,7 @@ TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 
 $(TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
-	mill YunSuan.test.runMain yunsuan.top.$(TOP) -td $(@D) --full-stacktrace --output-file $(@F)
+	mill YunSuan.test.runMain yunsuan.top.$(TOP) -td $(@D) --full-stacktrace --target verilog
 
 .DEFUALT_GOAL = emu
 

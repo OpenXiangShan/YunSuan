@@ -10,12 +10,11 @@ import publish._
 import scalalib._
 
 object ivys{
-  val sv = "2.13.10"
-  val chisel3 = ivy"edu.berkeley.cs::chisel3:3.6.0"
-  val chisel3Plugin = ivy"edu.berkeley.cs:::chisel3-plugin:3.6.0"
-  val chiseltest = ivy"edu.berkeley.cs::chiseltest:0.6.2"
-  val chiselCirct = ivy"com.sifive::chisel-circt:0.6.0"
-  val scalatest = ivy"org.scalatest::scalatest:3.2.2"
+  val sv = "2.13.15"
+  val chisel3 = ivy"org.chipsalliance::chisel:6.6.0"
+  val chisel3Plugin = ivy"org.chipsalliance:::chisel-plugin:6.6.0"
+  val chiseltest = ivy"edu.berkeley.cs::chiseltest:6.0.0"
+  val scalatest = ivy"org.scalatest::scalatest:3.2.19"
 }
 
 trait YSModule extends ScalaModule with PublishModule {
@@ -26,9 +25,9 @@ trait YSModule extends ScalaModule with PublishModule {
 
   override def scalacPluginIvyDeps = Agg(ivys.chisel3Plugin)
 
-  override def scalacOptions = Seq("-Xsource:2.13")
+  override def scalacOptions = Seq("-language:reflectiveCalls", "-deprecation", "-feature")
 
-  override def ivyDeps = (if(chiselOpt.isEmpty) Agg(ivys.chisel3) else Agg.empty[Dep]) ++ Agg(ivys.chiselCirct)
+  override def ivyDeps = (if(chiselOpt.isEmpty) Agg(ivys.chisel3) else Agg.empty[Dep])
 
   override def moduleDeps = Seq() ++ chiselOpt
 

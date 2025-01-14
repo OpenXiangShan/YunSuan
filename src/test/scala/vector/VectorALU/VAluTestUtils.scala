@@ -142,9 +142,7 @@ object TestHarnessAlu {
   def test_init(dut: VIAluWrapper): Unit = {
     dut.clock.setTimeout(2000)
     dut.io.in.initSource()
-    dut.io.in.setSourceClock(dut.clock)
     dut.io.out.initSink()
-    dut.io.out.setSinkClock(dut.clock)
     dut.io.out.ready.poke(true.B)
   }
 }
@@ -152,17 +150,13 @@ object TestHarnessIMac {
   def test_init(dut: VIMacWrapper): Unit = {
     dut.clock.setTimeout(20000)
     dut.io.in.initSource()
-    dut.io.in.setSourceClock(dut.clock)
     dut.io.out.initSink()
-    dut.io.out.setSinkClock(dut.clock)
     dut.io.out.ready.poke(true.B)
   }
   def test_init_64b(dut: VIMac64bWrapper): Unit = {
     dut.clock.setTimeout(20000)
     dut.io.in.initSource()
-    dut.io.in.setSourceClock(dut.clock)
     dut.io.out.initSink()
-    dut.io.out.setSinkClock(dut.clock)
     dut.io.out.ready.poke(true.B)
   }
 }
@@ -171,11 +165,7 @@ object TestHarnessPerm {
   def test_init(dut: VPermWrapper): Unit = {
     dut.clock.setTimeout(20000)
     dut.io.in.initSource()
-    dut.io.in.setSourceClock(dut.clock)
     dut.io.out.initSink()
-    dut.io.out.setSinkClock(dut.clock)
     dut.io.out.ready.poke(true.B)
   }
 }
-
-

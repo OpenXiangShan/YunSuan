@@ -1,8 +1,8 @@
 package vector
 
 import chisel3._
-import utest._
-import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
+import chisel3.stage.ChiselGeneratorAnnotation
+import circt.stage._
 import yunsuan.vector.VectorConvert.{VectorCvt, VectorCvtIO}
 
 class VFCVTTop(xlen :Int) extends Module{
@@ -29,6 +29,8 @@ class VFCVTTop(xlen :Int) extends Module{
 
 object CVTTop extends App {
   val path = """./generated/VFCVT"""
-  (new ChiselStage).execute(Array("--emission-options=disableMemRandomization,disableRegisterRandomization",
-    "--target-dir", path), Seq(ChiselGeneratorAnnotation(() => new VFCVTTop(64))))
+  (new ChiselStage).execute(
+    Array("--target-dir", path),
+    Seq(ChiselGeneratorAnnotation(() => new VFCVTTop(64)), FirtoolOption("--disable-all-randomization"))
+  )
 }

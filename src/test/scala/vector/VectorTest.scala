@@ -2,7 +2,8 @@ package yunsuan.vector
 
 
 import chisel3._
-import chisel3.stage._
+import chisel3.stage.ChiselGeneratorAnnotation
+import circt.stage._
 import chiseltest._
 import chiseltest.ChiselScalatestTester
 import chiseltest.VerilatorBackendAnnotation
@@ -10,23 +11,22 @@ import chiseltest.simulator.{VerilatorFlags, VerilatorCFlags}
 // import freechips.rocketchip.util.{ElaborationArtefacts, HasRocketChipStageUtils}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers
-import firrtl.stage.RunFirrtlTransformAnnotation
-import firrtl.AnnotationSeq
-import firrtl.options.TargetDirAnnotation
 object GenTest extends App {
   val path = """./generated/VectorIdiv"""
-  (new ChiselStage).execute(Array("--emission-options=disableMemRandomization,disableRegisterRandomization",
-    "--target-dir", path), Seq(ChiselGeneratorAnnotation(() => new VectorIdiv)))
+  (new ChiselStage).execute(
+    Array("--target-dir", path),
+    Seq(ChiselGeneratorAnnotation(() => new VectorIdiv), FirtoolOption("--disable-all-randomization"))
+  )
 }
 
 trait HasTestAnnos {
-  var testAnnos: AnnotationSeq = Seq()
+  var testAnnos: firrtl.AnnotationSeq = Seq()
 }
 
-trait UseVerilatorBackend { this: HasTestAnnos =>
-  testAnnos = testAnnos ++ Seq(VerilatorBackendAnnotation)
-
-}
+// trait UseVerilatorBackend { this: HasTestAnnos =>
+//   testAnnos = testAnnos ++ Seq(VerilatorBackendAnnotation)
+// 
+// }
 
 class YunSuanTester  extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
   behavior of "YunSuan Test"
