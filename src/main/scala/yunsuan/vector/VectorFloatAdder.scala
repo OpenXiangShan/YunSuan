@@ -152,9 +152,9 @@ class VectorFloatAdder() extends Module {
    *                                        fold1_4 = 1                             f16_1_fp_a = io.vs2_fold(95,80)
    *                                        f32_0_fp_a = io.vs2_fold(63,32)         f32_1_fp_a = io.vs2_fold(111,96)
    *                                                                                f16_3_fp_a = io.vs2_fold(127,112)
-   *                                                                                when fold1_4 = 1, F32_0,F32_1 valid
+   *                                                                                when fold1_4 = 1, F32_0,F16_1 valid
    *                                                                                f32_0_fp_a = io.vs2_fold(63,32)
-   *                                                                                f32_1_fp_a = io.vs2_fold(96,64)
+   *                                                                                f16_1_fp_a = io.vs2_fold(63,48)
    *                                                                                when fold1_8 = 1, F32_0 valid
    *                                                                                f32_0_fp_a = io.vs2_fold(31,16)
    * other inst don't change
@@ -177,7 +177,6 @@ class VectorFloatAdder() extends Module {
   f32_1_fp_a := Mux1H(
     Seq(
       fold(0) -> io.vs2_fold(127, 96),
-      fold(1) -> io.vs2_fold(95, 64),
       !fold.orR -> io.fp_a(63, 32),
     )
   )
