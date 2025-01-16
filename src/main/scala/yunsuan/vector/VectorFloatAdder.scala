@@ -181,7 +181,7 @@ class VectorFloatAdder() extends Module {
       !fold.orR -> io.fp_a(63, 32),
     )
   )
-  f16_1_fp_a := Mux(fold(0), io.vs2_fold(95, 80), io.fp_a(31, 16))
+  f16_1_fp_a := Mux(fold(1), io.vs2_fold(63, 48), Mux(fold(0), io.vs2_fold(95, 80), io.fp_a(31, 16)))
   f16_3_fp_a := Mux(fold(0), io.vs2_fold(127, 112), io.fp_a(63, 48))
 
   val U_F32_Mixed_0 = Module(new FloatAdderF32WidenF16MixedPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
