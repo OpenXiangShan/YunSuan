@@ -43,11 +43,11 @@ class IntToFP_prenorm extends Module {
   val lzc = Mux(in_sign, neg_lzc, pos_lzc)
 
   // eg: 001010 => 001000
-  val one_mask = Cat((0 until 64).reverseMap {
+  val one_mask = Cat((0 until 64).reverseIterator.map {
     case i @ 63 => lza.io.f(i)
     case i @ 0  => !lza.io.f(63, i + 1).orR
     case i      => lza.io.f(i) && !lza.io.f(63, i + 1).orR
-  })
+  }.toSeq)
 
   val lzc_error = Mux(in_sign, !(in_abs & one_mask).orR, false.B)
 

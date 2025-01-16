@@ -1,7 +1,8 @@
 package yunsuan.top
 
 import chisel3._
-import chisel3.stage.{ChiselGeneratorAnnotation, ChiselStage}
+import chisel3.stage.ChiselGeneratorAnnotation
+import circt.stage._
 import chisel3.util._
 import yunsuan.util._
 import yunsuan.vector.VectorConvert.VectorCvt
@@ -96,7 +97,7 @@ class SimTop() extends VPUTestModule {
   io.out.bits := out
 
   has_issued := busy
-  when (io.in.fire()) {
+  when (io.in.fire) {
     counter := 0.U
     busy := true.B
     in := io.in.bits
@@ -114,7 +115,7 @@ class SimTop() extends VPUTestModule {
     )) // fuType --> latency, spec case for div
     assert(!VPUTestFuType.unknown(io.in.bits.fuType))
   }
-  when(io.out.fire()) {
+  when(io.out.fire) {
     busy := false.B
   }
   when (busy) { counter := counter + 1.U }
@@ -143,7 +144,7 @@ class SimTop() extends VPUTestModule {
   val vcvt_result = Wire(new VSTOutputIO)
   val i2f_result = Wire(new VSTOutputIO)
   val fpcvt_result = Wire(new VSTOutputIO)
-  when (io.in.fire() || io.out.fire()) {
+  when (io.in.fire || io.out.fire) {
     vfd_result_valid.map(_ := false.B)
   }
 
@@ -227,7 +228,7 @@ class SimTop() extends VPUTestModule {
     via.io.op_code := opcode
     via.io.uop_index := DontCare // TODO: add it
     via.io.rm_s := rm_s
-    //via.io.carry_or_borrow_in := MuxLookUp(sew, 0.U, Seq(0.U -> (in.src(3)(0) >> (8 * i))(7, 0), 1.U -> (in.src(3)(0) >> (4 * i))(7, 0), 2.U -> (in.src(3)(0) >> (2 * i))(7, 0), 3.U -> (in.src(3)(0) >> i)(7, 0)))
+    //via.io.carry_or_borrow_in := MuxLookUp(sew)(0.U, Seq(0.U -> (in.src(3)(0) >> (8 * i))(7, 0), 1.U -> (in.src(3)(0) >> (4 * i))(7, 0), 2.U -> (in.src(3)(0) >> (2 * i))(7, 0), 3.U -> (in.src(3)(0) >> i)(7, 0)))
     when(sew === 0.U) {
       via.io.carry_or_borrow_in := (in.src(3)(0) >> (8 * i))(7, 0)
     }.elsewhen(sew === 1.U) {
@@ -398,6 +399,6 @@ class SimTop() extends VPUTestModule {
 
 object SimTop extends App {
   (new ChiselStage).execute(args, Seq(
-    ChiselGeneratorAnnotation(() => new SimTop())
+    ChiselGeneratorAnnotation(() => new SimTop()), FirtoolOption("--lowering-options=explicitBitcast")
   ))
 }
