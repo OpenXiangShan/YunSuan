@@ -31,61 +31,71 @@ class Vrgather() extends Module with VParameter {
 
   // latency  = 1
   // width max = 64
-  // val width = Wire(UInt(6.W))
-  // width := (1.U << io.sew) << 3.U
 
-  val vrgather_e8  = Module(new VRGather_with_sew(SEW = 0))
-  val vrgather_e16 = Module(new VRGather_with_sew(SEW = 1))
+  val vrg  = Module(new New_VRGather)
 
-
-  vrgather_e8.io.vs1 := io.vs1
-  vrgather_e8.io.vs2 := io.vs2
-  // vrgather_e8.io.vstart := io.vstart
+  vrg.io.index_data := io.vs1
+  vrg.io.table_data := io.vs2
+  vrg.io.sew       := io.sew
   
-  vrgather_e16.io.vs1 := io.vs1
-  vrgather_e16.io.vs2 := io.vs2
-  // vrgather_e16.io.vstart := io.vstart
+  io.res_vd := vrg.io.res_data
 
-  io.res_vd := LookupTreeDefault(io.sew, 0.U(VLEN.W), List(
-      0.U -> vrgather_e8.io.res_data,
-      1.U -> vrgather_e16.io.res_data
-  ) )
 }
 
-// vlmul = 0
-class VRGather_with_sew(
-  val SEW: Int = 1
-  ) 
-  extends Module with VParameter{
-  val XLEN = 8 << SEW
-  val VLMAX = VLMUL * VLEN / XLEN
-  val io = IO(new Bundle {
-    val vs1 = Input(UInt(VLEN.W))
-    val vs2 = Input(UInt(VLEN.W))
-    val res_data = Output(UInt(VLEN.W))
+class vrg_index extends Bundle with VParameter {
+  val index_e8 = Vec(VLEN / 8,   UInt((VLEN/8 ).W))
+  val index_e16 = Vec(VLEN / 16, UInt((VLEN/16).W))
+}
 
+class vrg_lut extends Bundle with VParameter {
+  val lut_e8 = Vec(VLEN / 8, UInt(8.W))
+  val lut_e16 = Vec(VLEN / 16, UInt(16.W))
+}
+
+class vrg_res extends Bundle with VParameter {
+  val res_e8 = Vec(VLEN / 8, UInt(8.W))
+  val res_e16 = Vec(VLEN / 16, UInt(16.W))
+}
+
+class New_VRGather extends Module with VParameter{
+  val io = IO(new Bundle {
+    val index_data = Input(UInt(VLEN.W))
+    val table_data = Input(UInt(VLEN.W))
+    val res_data = Output(UInt(VLEN.W))
+    val sew       = Input(UInt(2.W))
     // val vstart    = Input(UInt(7.W))
     // val vl        = Input(UInt(8.W))
     // val vm        = Input(Bool())
     // val ta        = Input(Bool())
     // val ma        = Input(Bool())
   })
+    val XLEN = 8.U << io.sew
+    val index = Wire(new vrg_index)
+    val lut   = Wire(new vrg_lut)
+    val res   = Wire(new vrg_res)
 
-    val index = Wire(Vec(VLEN / XLEN, UInt(VLMAX.W)))
-    val lut   = Wire(Vec(VLEN / XLEN, UInt(XLEN.W)))
-
-    for (n <- 0 until (VLEN / XLEN)) {
-      index(n) := 1.U << io.vs1((n + 1) * XLEN - 1, n * XLEN) 
-      lut(n)   := io.vs2((n + 1) * XLEN - 1, n * XLEN)    
+    for (n <- 0 until (VLEN / 8)) {
+      lut.lut_e8(n)       := io.table_data((n + 1) * 8 - 1, n * 8)
+      index.index_e8(n)   := 1.U << io.index_data((n + 1) * 8 - 1, n * 8) 
     }
 
-    val res = RegInit(VecInit(Seq.fill(VLEN / XLEN)(0.U(XLEN.W))))
-
-    for (n <- 0 until (VLEN / XLEN)) {
-      res(n) := Cat((0 until VLEN / XLEN).map { m =>  Fill(XLEN, index(n)(m)) & lut(m)}.reduce(_ | _))
+    for (n <- 0 until (VLEN / 16)) {
+      lut.lut_e16(n)      := io.table_data((n + 1) * 16 - 1, n * 16)
+      index.index_e16(n)  := 1.U << io.index_data((n + 1) * 16 - 1, n * 16) 
     }
 
-    io.res_data := Cat((0 until VLEN/XLEN).map(i => res(i)).reverse)
+    for (n <- 0 until (VLEN / 8)) {
+      res.res_e8(n)  := Mux1H(index.index_e8(n), lut.lut_e8)
+    }
+    for (n <- 0 until (VLEN / 16)) {
+      res.res_e16(n) := Mux1H(index.index_e16(n), lut.lut_e16)
+    }
 
+    val res_reg = RegInit((0.U(VLEN.W)))
+    
+    res_reg :=  (Fill(VLEN, io.sew === 0.U) & Cat(res.res_e8.reverse)) |
+                (Fill(VLEN, io.sew === 1.U) & Cat(res.res_e16.reverse))
+
+    io.res_data := res_reg
 
 }
