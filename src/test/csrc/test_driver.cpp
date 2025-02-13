@@ -39,8 +39,8 @@ void TestDriver::set_test_type() {
   // test_type.pick_fuOpType = false;
   test_type.pick_fuType = true;
   test_type.pick_fuOpType = false;
-  test_type.fuType =  NewVrgather;
-  test_type.fuOpType = VRG_VRG;
+  test_type.fuType =  VFloatAdder;
+  test_type.fuOpType = VFADD;
   printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
