@@ -89,7 +89,7 @@ class VUop extends VCtrlCsr {
   val uopEnd = Bool()
 }
 
-class VEXUInput extends Bundle {
+class VExuInput extends Bundle {
   val vuop = new VUop
   val vSrc = Vec(4, UInt(VLEN.W)) //vs1, vs2, old_vd, mask
   val rs1 = UInt(xLen.W)
