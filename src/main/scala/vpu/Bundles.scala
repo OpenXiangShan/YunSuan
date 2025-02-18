@@ -67,6 +67,12 @@ class VCtrl extends Bundle {
   def opi = funct3(0) === funct3(1) // OPIVV/X/I
   def opm = funct3(1, 0) === 2.U //OPMVV/X
   def opf = funct3(1, 0) === 1.U // OPFVV/F
+
+  // FIXME: these are fake
+  def vfadd = fp
+  def vfma = fp
+  def vfdiv = fp
+  def vfcvt = fp
 }
 
 class VCtrlCsr extends Bundle {
