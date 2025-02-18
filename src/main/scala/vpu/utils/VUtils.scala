@@ -1,0 +1,17 @@
+package race.vpu
+
+import chisel3._
+import chisel3.util._
+import VParams._
+
+object Vlmul_to_lmul {
+// vlmul --> LMUL --> max(LMUL, 1)
+// Note: set result to 1 if LMUL < 1
+  def apply(vlmul: UInt): UInt = {
+    val y0 = !vlmul(1) && !vlmul(0) || vlmul(2)
+    val y1 = !vlmul(2) && !vlmul(1) && vlmul(0)
+    val y2 = !vlmul(2) && vlmul(1) && !vlmul(0)
+    val y3 = !vlmul(2) && vlmul(1) && vlmul(0)
+    Cat(y3, y2, y1, y0)
+  }
+}

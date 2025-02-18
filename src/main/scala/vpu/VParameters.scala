@@ -10,4 +10,6 @@ object VParams {
   val VLEN = 2048  // Must be power of 2
   val bVL = log2Up(VLEN) + 1
   val bVstart = bVL - 1
+
+  val VIQSize = 32
 }
