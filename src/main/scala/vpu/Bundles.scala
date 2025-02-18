@@ -95,6 +95,7 @@ class VUop extends VCtrlCsr {
   val uopEnd = Bool()
 }
 
+
 class VExuInput extends Bundle {
   val vuop = new VUop
   val vSrc = Vec(4, UInt(VLEN.W)) //vs1, vs2, old_vd, mask
@@ -128,4 +129,48 @@ object LdstDecoder {
     ctrl.wholeReg := lumop === "b01000".U && ctrl.unitStride
     ctrl
   }
+}
+
+
+class LdstCtrl extends Bundle {
+  val unitStride = Bool()
+  val mask = Bool()
+  val strided = Bool()
+  val indexed = Bool()
+  val fof = Bool()
+  val segment = Bool()
+  val wholeReg = Bool()
+  def idx_noSeg = indexed && !segment
+}
+
+object LdstDecoder {
+  def apply(funct6: UInt, vs2: UInt): LdstCtrl = {
+    val nf = funct6(5, 3)
+    val mop = funct6(1, 0)
+    val lumop = vs2
+    val ctrl = Wire(new LdstCtrl)
+    ctrl.unitStride := mop === 0.U
+    ctrl.mask := lumop === "b01011".U && ctrl.unitStride
+    ctrl.strided := mop === 2.U
+    ctrl.indexed := mop(0)
+    ctrl.fof := lumop === "b10000".U && ctrl.unitStride
+    ctrl.segment := nf =/= 0.U && !ctrl.wholeReg
+    ctrl.wholeReg := lumop === "b01000".U && ctrl.unitStride
+    ctrl
+  }
+}
+
+class VExuOutput extends Bundle {
+  val vDest = UInt(VLEN.W)
+  // val robIdx = new RobPtr
+  // val vcsr = new VCsr
+  // val vstart = UInt(bVstart.W)
+  // val vl = UInt(bVL.W)
+  // val vxrm = UInt(2.W)
+  // val frm = UInt(3.W)
+  // val vlmul = UInt(3.W)
+  // val vsew = UInt(3.W)
+  // val vill = Bool()
+  // val ma = Bool()
+  // val ta = Bool()
 }
