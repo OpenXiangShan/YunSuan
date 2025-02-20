@@ -11,8 +11,8 @@ class Dispatch_S2V extends Bundle {
   val robIdx = new RobPtr
   val inst = UInt(32.W)
   val vcsr = new VCsr
-  val rs1 = UInt(xLen.W)
-  val rs2 = UInt(xLen.W)
+  val rs1 = UInt(XLEN.W)
+  val rs2 = UInt(XLEN.W)
 }
 
 class VCsr extends Bundle {
@@ -85,79 +85,69 @@ class VMacroOp extends VCtrlCsr {
   val veewVd = UInt(3.W) // Destination EEW
   val emulVd = UInt(4.W) // EMUL of vd
   val emulVs2 = UInt(4.W)
-  // val rs1 = UInt(xLen.W)  // scalar operand
-  // val rs2 = UInt(xLen.W)  // scalar operand
+  // val rs1 = UInt(XLEN.W)  // scalar operand
+  // val rs2 = UInt(XLEN.W)  // scalar operand
 }
 
 class VUop extends VCtrlCsr {
   val robIdx = new RobPtr
   val uopIdx = UInt(3.W)
   val uopEnd = Bool()
+  val veewVd = UInt(3.W) // Destination EEW
+  val lsrcUop = Vec(2, UInt(5.W)) //0: vs1   1: vs2
+  val ldestUop = UInt(5.W)
+  val lsrcValUop = Vec(3, Bool())
+  val lmaskValUop = Bool()
+  val ldestValUop = Bool()
 }
 
+class LdstCtrl extends Bundle {
+  val unitStride = Bool()
+  val mask = Bool()
+  val strided = Bool()
+  val indexed = Bool()
+  val fof = Bool()
+  val segment = Bool()
+  val wholeReg = Bool()
+  def idx_noSeg = indexed && !segment
+}
+
+object LdstDecoder {
+  def apply(funct6: UInt, vs2: UInt): LdstCtrl = {
+    val nf = funct6(5, 3)
+    val mop = funct6(1, 0)
+    val lumop = vs2
+    val ctrl = Wire(new LdstCtrl)
+    ctrl.unitStride := mop === 0.U
+    ctrl.mask := lumop === "b01011".U && ctrl.unitStride
+    ctrl.strided := mop === 2.U
+    ctrl.indexed := mop(0)
+    ctrl.fof := lumop === "b10000".U && ctrl.unitStride
+    ctrl.segment := nf =/= 0.U && !ctrl.wholeReg
+    ctrl.wholeReg := lumop === "b01000".U && ctrl.unitStride
+    ctrl
+  }  
+}
+
+class SewOH extends Bundle {  // 0   1   2   3
+  val oneHot = UInt(4.W) // b0-b3: 8, 16, 32, 64
+  def is8 = oneHot(0)
+  def is16 = oneHot(1)
+  def is32 = oneHot(2)
+  def is64 = oneHot(3)
+}
+object SewOH {
+  def apply(vsew: UInt): SewOH = {
+    val sew = Wire(new SewOH)
+    sew.oneHot := VecInit(Seq.tabulate(4)(i => vsew === i.U)).asUInt
+    sew
+  }
+}
 
 class VExuInput extends Bundle {
   val vuop = new VUop
   val vSrc = Vec(4, UInt(VLEN.W)) //vs1, vs2, old_vd, mask
-  val rs1 = UInt(xLen.W)
-}
-
-
-class LdstCtrl extends Bundle {
-  val unitStride = Bool()
-  val mask = Bool()
-  val strided = Bool()
-  val indexed = Bool()
-  val fof = Bool()
-  val segment = Bool()
-  val wholeReg = Bool()
-  def idx_noSeg = indexed && !segment
-}
-
-object LdstDecoder {
-  def apply(funct6: UInt, vs2: UInt): LdstCtrl = {
-    val nf = funct6(5, 3)
-    val mop = funct6(1, 0)
-    val lumop = vs2
-    val ctrl = Wire(new LdstCtrl)
-    ctrl.unitStride := mop === 0.U
-    ctrl.mask := lumop === "b01011".U && ctrl.unitStride
-    ctrl.strided := mop === 2.U
-    ctrl.indexed := mop(0)
-    ctrl.fof := lumop === "b10000".U && ctrl.unitStride
-    ctrl.segment := nf =/= 0.U && !ctrl.wholeReg
-    ctrl.wholeReg := lumop === "b01000".U && ctrl.unitStride
-    ctrl
-  }
-}
-
-
-class LdstCtrl extends Bundle {
-  val unitStride = Bool()
-  val mask = Bool()
-  val strided = Bool()
-  val indexed = Bool()
-  val fof = Bool()
-  val segment = Bool()
-  val wholeReg = Bool()
-  def idx_noSeg = indexed && !segment
-}
-
-object LdstDecoder {
-  def apply(funct6: UInt, vs2: UInt): LdstCtrl = {
-    val nf = funct6(5, 3)
-    val mop = funct6(1, 0)
-    val lumop = vs2
-    val ctrl = Wire(new LdstCtrl)
-    ctrl.unitStride := mop === 0.U
-    ctrl.mask := lumop === "b01011".U && ctrl.unitStride
-    ctrl.strided := mop === 2.U
-    ctrl.indexed := mop(0)
-    ctrl.fof := lumop === "b10000".U && ctrl.unitStride
-    ctrl.segment := nf =/= 0.U && !ctrl.wholeReg
-    ctrl.wholeReg := lumop === "b01000".U && ctrl.unitStride
-    ctrl
-  }
+  val rs1 = UInt(XLEN.W)
 }
 
 class VExuOutput extends Bundle {

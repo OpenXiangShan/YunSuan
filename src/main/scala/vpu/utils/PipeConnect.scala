@@ -20,14 +20,17 @@ object PipeConnect {
     flush: Bool,
   ): T = {
     val valid = RegInit(false.B)
-    in.ready := !out.valid || out.ready
+    val data = Reg(out.bits.cloneType)
+    in.ready := !valid || out.ready
     val regEnable = in.fire && !flush
     when (regEnable) {
-      out.valid := true.B
+      valid := true.B
     }.elsewhen (out.ready || flush) {
-      out.valid := false.B
+      valid := false.B
     }
-    when (regEnable) { out.bits := in.bits }
+    when (regEnable) { data := in.bits }
+    out.valid := valid
+    out.bits := data
     out.bits
   }
 

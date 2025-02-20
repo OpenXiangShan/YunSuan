@@ -33,7 +33,10 @@ class VTop extends Module {
 
   val viq = Module(new VIQ)
   PipeConnect(viqInput, viq.io.in, false.B, moduleName = Some("decodePipeIqModule"))
-
+  
+  val expdInfo = Module(new ExpdLen)
+  expdInfo.io.in := viq.io.in.bits.mop
+  viq.io.in_expdInfo := expdInfo.io.out
 
 
   io.out := decoder.io.out
