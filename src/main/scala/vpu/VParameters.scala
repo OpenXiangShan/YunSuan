@@ -12,6 +12,9 @@ object VParams {
   val bVstart = bVL - 1
 
   val VIQSize = 32
+  
+
+  val nVRFWritePorts = 2
 }
 
 object VfaddOpCode {

@@ -9,7 +9,7 @@ import _root_.vpu.utils.PipeConnect
 class VTop extends Module {
   val io = IO(new Bundle {
     val dispatch_s2v = Flipped(DecoupledIO(new Dispatch_S2V))
-    val out = Output(new VCtrl)
+    val out = Decoupled(new ExpdOutput)
   })
 
   val decoder = Module(new VDecode)
@@ -38,8 +38,17 @@ class VTop extends Module {
   expdInfo.io.in := viq.io.in.bits.mop
   viq.io.in_expdInfo := expdInfo.io.out
 
+  val expander = Module(new Expander)
+  expander.io.in <> viq.io.out
 
-  io.out := decoder.io.out
+  val busyTable = Module(new VBusyTable)
+  busyTable.io.readReq := expander.io.readBusyTable.req
+  expander.io.readBusyTable.resp := busyTable.io.readResp
+  busyTable.io.setReq.valid := expander.io.out.fire
+  busyTable.io.setReq.bits.addr := expander.io.out.bits.uop.ldestUop
+  busyTable.io.setReq.bits.robIdx := expander.io.out.bits.uop.robIdx
+
+  io.out <> expander.io.out
 }
 
 

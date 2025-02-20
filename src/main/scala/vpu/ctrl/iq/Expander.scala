@@ -14,10 +14,16 @@ class Expander extends Module {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new VIQOutput))
     val out = Decoupled(new ExpdOutput)
+    // with Busy Table
+    val readBusyTable = new Bundle {
+      val req = Output(new ReadReqBusyTable)
+      val resp = Input(Bool()) // Stall the expander if true
+    }
   })
 
   val fire = io.in.fire
-  val canOut = io.out.ready
+  val raw_waw_stall = io.readBusyTable.resp
+  val canOut = io.out.ready && !raw_waw_stall
 
   val IDLE = 0.U(1.W)
   val BUSY = 1.U(1.W)
@@ -34,18 +40,11 @@ class Expander extends Module {
     * Calculate expanded length
     *   Pls refer to ExpdLen.scala
     */
-  // TODO: remove unused codes below
   val expdInfo_in = io.in.bits.expdInfo
   val expdLen = expdInfo_in.expdLen
-//   val expdLen = io.in.bits.expdInfo.expdLen
-//   val ldstCtrl = io.in.bits.expdInfo.ldstCtrl
-//   val veew_minus_vsew = io.in.bits.expdInfo.veew_minus_vsew
-//   val mask_onlyOneReg = io.in.bits.expdInfo.mask_onlyOneReg
-//   val gather16 = io.in.bits.expdInfo.gather16
-//   val expdLen_indexVd = io.in.bits.expdInfo.expdLen_indexVd
   
   /**
-   * Expanded length remain
+   * Expanded length remain and uop index update
    */
   val expdLenRemainReg = Reg(UInt(4.W))
   val expdLenRemain = Mux(fire, expdLen, expdLenRemainReg)
@@ -70,17 +69,12 @@ class Expander extends Module {
     out_valid := false.B
   }
   
-  val idle_or_busyEnd = state === IDLE || busy_end_logic
-  
   //---- Some ctrl signals should be hold during this instruction expanding process ----
   val v_ext = ctrl.alu && ctrl.funct3 === "b010".U && ctrl.funct6 === "b010010".U
   val v_ext_hold = Mux(fire, v_ext, RegEnable(v_ext, fire))
-  // TODO: remove unused codes below
   val expdInfo_hold = Mux(fire, expdInfo_in, RegEnable(expdInfo_in, fire))
   val mop_hold = Mux(fire, io.in.bits.mop, RegEnable(io.in.bits.mop, fire))
   val rs_hold = Mux(fire, io.in.bits.rs, RegEnable(io.in.bits.rs, fire))
-//   val expdLen_indexVd_hold = Mux(fire, expdLen_indexVd, RegEnable(expdLen_indexVd, fire))
-//   val expdLen_hold = Mux(fire, expdLen, RegEnable(expdLen, fire))
 
   /**
    * RF addresses update
@@ -168,4 +162,14 @@ class Expander extends Module {
     out_bits.uop.uopIdx := uopIdx
     out_bits.uop.uopEnd := uopEnd
   }
+
+  // Busy Table Read
+  io.readBusyTable.req.addr(0).valid := uopOut.lsrcValUop(0)
+  io.readBusyTable.req.addr(1).valid := uopOut.lsrcValUop(1)
+  io.readBusyTable.req.addr(2).valid := uopOut.ldestValUop || uopOut.lsrcValUop(2) // dest or 3rd operand
+  io.readBusyTable.req.addr(3).valid := uopOut.lmaskValUop // mask
+  io.readBusyTable.req.addr(0).bits := uopOut.lsrcUop(0)
+  io.readBusyTable.req.addr(1).bits := uopOut.lsrcUop(1)
+  io.readBusyTable.req.addr(2).bits := uopOut.ldestUop // dest or 3rd operand
+  io.readBusyTable.req.addr(3).bits := 0.U // mask
 }
