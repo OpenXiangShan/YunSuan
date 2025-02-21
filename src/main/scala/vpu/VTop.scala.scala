@@ -44,7 +44,7 @@ class VTop extends Module {
   val busyTable = Module(new VBusyTable)
   busyTable.io.readReq := expander.io.readBusyTable.req
   expander.io.readBusyTable.resp := busyTable.io.readResp
-  busyTable.io.setReq.valid := expander.io.out.fire
+  busyTable.io.setReq.valid := expander.io.out.fire && expander.io.out.bits.uop.ldestValUop
   busyTable.io.setReq.bits.addr := expander.io.out.bits.uop.ldestUop
   busyTable.io.setReq.bits.robIdx := expander.io.out.bits.uop.robIdx
 

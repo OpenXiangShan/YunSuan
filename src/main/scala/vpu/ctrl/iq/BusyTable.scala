@@ -45,11 +45,11 @@ class VBusyTable extends Module {
     Mux1H(addrOH, table.asBools)
   }
 
-  // set(Seq(io.setReq.valid), Seq(io.setReq.bits.addr))
+  set(Seq(io.setReq.valid), Seq(io.setReq.bits.addr))
   // -- Rewrite set for raw_waw_bypass resue
-  val setMask = reqVecToMask(Seq(io.setReq.valid), Seq(io.setReq.bits.addr))
-  val updated = table | setMask
-  table := { if (!zero) updated else { updated & "hFFFF_FFFE".U } }
+//   val setMask = reqVecToMask(Seq(io.setReq.valid), Seq(io.setReq.bits.addr))
+//   val updated = table | setMask
+//   table := { if (!zero) updated else { updated & "hFFFF_FFFE".U } }
 
   // RF writeback ports
   clear(io.wb.map(_.valid), io.wb.map(_.bits))
@@ -57,21 +57,20 @@ class VBusyTable extends Module {
   /**
     * RAW and WAW hazards (io.readReq are from expander internal)
     */
-  // val raw_waw = io.readReq.map(x => read(x.bits.addr) && x.valid).reduce(_ || _)
+  val raw_waw = io.readReq.addr.map(x => read(x.bits) && x.valid).reduce(_ || _)
   // -- Rewrite raw_waw for raw_waw_bypass resue
-  val readMasks = Wire(Vec(4, UInt(32.W)))
-  readMasks := io.readReq.addr.map(x => UIntToOH(x.bits))
-  val readValids = io.readReq.addr.map(_.valid)
-  val raw_waw = (readMasks zip readValids).map(
-      { case (mask, v) => Mux1H(mask, table.asBools) && v }
-    ).reduce(_ || _)
+//   val readMasks = Wire(Vec(4, UInt(32.W)))
+//   readMasks := io.readReq.addr.map(x => UIntToOH(x.bits))
+//   val readValids = io.readReq.addr.map(_.valid)
+//   val raw_waw = (readMasks zip readValids).map(
+//       { case (mask, v) => Mux1H(mask, table.asBools) && v }
+//     ).reduce(_ || _)
 
   // RAW and WAW hazards generated from bypass network:
   //  1) Table read and set ports (bypass)
   //  2) Two uops from different instructions
-  val read_set_hazard = readMasks.map(_ & setMask).map(_.orR)
-  val read_set_hazard_final = (VecInit(read_set_hazard).asUInt & VecInit(readValids).asUInt).orR
+  val read_set_hazard = io.readReq.addr.map(x => x.valid && x.bits === io.setReq.bits.addr).reduce(_||_) && io.setReq.valid
   val different_instrns = io.readReq.robIdx =/= io.setReq.bits.robIdx
-  val raw_waw_bypass = read_set_hazard_final && different_instrns
+  val raw_waw_bypass = read_set_hazard && different_instrns
   io.readResp := raw_waw || raw_waw_bypass
 }
