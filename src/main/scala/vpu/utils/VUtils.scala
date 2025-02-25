@@ -15,3 +15,10 @@ object Vlmul_to_lmul {
     Cat(y3, y2, y1, y0)
   }
 }
+
+object UIntSplit {
+  // Split a UInt(VLEN.W) into lanes
+  def vlen_splitTo_lanes(data: UInt): Seq[UInt] = {
+    Seq.tabulate(NLanes)(i => data(LaneWidth*i+LaneWidth-1, LaneWidth*i))
+  }
+}

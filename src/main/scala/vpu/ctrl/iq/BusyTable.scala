@@ -71,6 +71,6 @@ class VBusyTable extends Module {
   //  2) Two uops from different instructions
   val read_set_hazard = io.readReq.addr.map(x => x.valid && x.bits === io.setReq.bits.addr).reduce(_||_) && io.setReq.valid
   val different_instrns = io.readReq.robIdx =/= io.setReq.bits.robIdx
-  val raw_waw_bypass = read_set_hazard && different_instrns
-  io.readResp := raw_waw || raw_waw_bypass
+  val read_set_hazard_final = read_set_hazard && different_instrns
+  io.readResp := raw_waw || read_set_hazard_final
 }

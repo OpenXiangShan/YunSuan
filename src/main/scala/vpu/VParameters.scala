@@ -13,8 +13,10 @@ object VParams {
 
   val VIQSize = 32
   
-
   val nVRFWritePorts = 2
+
+  val LaneWidth = 64  // constant
+  val NLanes = VLEN / LaneWidth
 }
 
 object Vfaddfunc6 {
