@@ -59,7 +59,7 @@ class VCtrlBlock extends Module {
   expander.io.out.ready := true.B
   val exuInputReg = Reg(new VExuInput)
   when (expander.io.out.fire) {
-    exuInputReg.vuop := expander.io.out.bits.uop
+    exuInputReg.uop := expander.io.out.bits.uop
     exuInputReg.rs1 := expander.io.out.bits.rs1
     exuInputReg.vSrc := vrf.io.rdata
   }

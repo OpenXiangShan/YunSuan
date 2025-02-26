@@ -12,11 +12,15 @@ object VParams {
   val bVstart = bVL - 1
 
   val VIQSize = 32
+  val VSbSize = 32 // Scoreboard (Only 32 logical regs, suppose there is no WAR hazard)
   
   val nVRFWritePorts = 2
+  val bNVRFWritePorts = log2Up(nVRFWritePorts) 
 
   val LaneWidth = 64  // constant
   val NLanes = VLEN / LaneWidth
+
+  val bMaxFuDelay = 3 // Exclude long-latency (div) operations
 }
 
 object Vfaddfunc6 {

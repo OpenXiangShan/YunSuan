@@ -146,7 +146,7 @@ object SewOH {
 }
 
 class VExuInput extends Bundle {
-  val vuop = new VUop
+  val uop = new VUop
   val vSrc = Vec(4, UInt(VLEN.W)) //vs1, vs2, old_vd, mask
   val rs1 = UInt(XLEN.W)
 }
@@ -201,7 +201,8 @@ class Vfa_setuop extends Bundle {
 
 
 class VExuOutput extends Bundle {
-  val vRes  = UInt(VLEN.W)
-  val vfflags = UInt((5*VLEN/XLEN).W)
+  val uop = new VUop
+  val vd  = UInt(VLEN.W)
+  val fflags = UInt(5.W)
 }
 
