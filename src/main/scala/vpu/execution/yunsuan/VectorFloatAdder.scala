@@ -2,8 +2,10 @@ package race.vpu.yunsuan
 
 import chisel3._
 import chisel3.util._
+import race.vpu.yunsuan.util._
+
 import race.vpu.VParams._
-import race.vpu.{VfaddOpCode, VectorElementFormat}
+import race.vpu.Vexecution.Params._
 
 /**
   * f16/f32/f64, support widen
@@ -25,9 +27,7 @@ import race.vpu.{VfaddOpCode, VectorElementFormat}
   *14: Compare, greater than or equal
   *15: Classify
   **/
-class VectorEXUFloatAdder() extends Module {
-  val VLEN = 2048
-  val XLEN = 64
+class VectorExuFloatAdder() extends Module {
   val io = IO(new Bundle() {
   val fire          = Input (Bool())
   val vs1, vs2      = Input (UInt(VLEN.W)) // fp_a -> vs2, fp_b -> vs1
@@ -56,7 +56,7 @@ class VectorEXUFloatAdder() extends Module {
   })
 
   val result = Wire(Vec(VLEN/XLEN, UInt(XLEN.W)))
-  val fflags = Wire(Vec(VLEN/XLEN, UInt((5*XLEN/16).W)))
+  val fflags = Wire(Vec(VLEN/XLEN, Vec(XLEN/16, UInt(5.W))))
     
   for (i <- 0 until (VLEN/XLEN)) {
       val fp_a = io.vs1(XLEN-1+i*XLEN, 0+i*XLEN) //TODO: vs1 fp_b ? 
@@ -89,11 +89,13 @@ class VectorEXUFloatAdder() extends Module {
       vfa.io.res_widening := io.res_widening
 
       result(i) := vfa.io.fp_result
-      fflags(i) := vfa.io.fflags
+      for (j <- 0 until XLEN / 16) {
+        fflags(i)(j) := vfa.io.fflags(5 * (j + 1) - 1, 5 * j)  
+      }
   }
 
   io.result := Cat(result.reverse)
-  io.fflags := Cat(fflags.reverse)
+  io.fflags := fflags.flatMap(_.toSeq).reduce(_ | _)
   
 }
 
@@ -1087,10 +1089,6 @@ class ClosePathAdderF16Pipeline(val adderWidth:Int, val adderType:String) extend
   if (adderType == "CS2" | adderType == "CS3") {
     io.result  :=  Cat(io.adder_op0,0.U) - Cat(0.U,io.adder_op1)
   }
-}
-
-object LZD {
-  def apply(in: UInt): UInt = PriorityEncoder(Reverse(Cat(in, 1.U)))
 }
 
 class CloseShiftLeftWithMux(val srcW:Int,shiftValueW:Int) extends Module {
