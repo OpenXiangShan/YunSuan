@@ -14,8 +14,9 @@ object VParams {
   val VIQSize = 32
   val VSbSize = 32 // Scoreboard (Only 32 logical regs, suppose there is no WAR hazard)
   
-  val nVRFWritePorts = 2
-  val bNVRFWritePorts = log2Up(nVRFWritePorts) 
+  val nVRFWritePortsExu = 1  // Number of write-back ports of EXU
+  val nVRFWritePorts = nVRFWritePortsExu + 1 // Load uses one port
+  val bNVRFWritePortsExu = log2Up(nVRFWritePortsExu) 
 
   val LaneWidth = 64  // constant
   val NLanes = VLEN / LaneWidth

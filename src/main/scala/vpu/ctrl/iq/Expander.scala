@@ -14,16 +14,16 @@ class Expander extends Module {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new VIQOutput))
     val out = Decoupled(new ExpdOutput)
-    // with Busy Table
-    val readBusyTable = new Bundle {
-      val req = Output(new ReadReqBusyTable)
+    // with Scoreboard
+    val readScoreboard = new Bundle {
+      val req = Output(new VUop)
       val resp = Input(Bool()) // Stall the expander if true
     }
   })
 
   val fire = io.in.fire
-  val raw_waw_stall = io.readBusyTable.resp
-  val canOut = io.out.ready && !raw_waw_stall
+  val stall_scoreboard = io.readScoreboard.resp
+  val canOut = io.out.ready && !stall_scoreboard
 
   val IDLE = 0.U(1.W)
   val BUSY = 1.U(1.W)
@@ -163,13 +163,6 @@ class Expander extends Module {
     out_bits.uop.uopEnd := uopEnd
   }
 
-  // Busy Table Read
-  io.readBusyTable.req.addr(0).valid := uopOut.lsrcValUop(0)
-  io.readBusyTable.req.addr(1).valid := uopOut.lsrcValUop(1)
-  io.readBusyTable.req.addr(2).valid := uopOut.ldestValUop || uopOut.lsrcValUop(2) // dest or 3rd operand
-  io.readBusyTable.req.addr(3).valid := uopOut.lmaskValUop // mask
-  io.readBusyTable.req.addr(0).bits := uopOut.lsrcUop(0)
-  io.readBusyTable.req.addr(1).bits := uopOut.lsrcUop(1)
-  io.readBusyTable.req.addr(2).bits := uopOut.ldestUop // dest or 3rd operand
-  io.readBusyTable.req.addr(3).bits := 0.U // mask
+  // Scoreboard Read
+  io.readScoreboard.req := uopOut
 }

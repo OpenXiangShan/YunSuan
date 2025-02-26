@@ -10,8 +10,11 @@ class VCtrlBlock extends Module {
   val io = IO(new Bundle {
     val dispatch_s2v = Flipped(DecoupledIO(new Dispatch_S2V))
     val toExu = ValidIO(new VExuInput)
-    // val fromExu = 
-    val out = Decoupled(new ExpdOutput)
+    val fromExu = Input(Vec(nVRFWritePortsExu, ValidIO(new VExuOutput)))
+    val fromLSU = Input(ValidIO(new Bundle { //TODO: correct the io.fromLSU
+      val uop = new VUop
+      val vd = UInt(VLEN.W)
+    }))
   })
 
   val decoder = Module(new VDecode)
@@ -43,18 +46,29 @@ class VCtrlBlock extends Module {
   val expander = Module(new Expander)
   expander.io.in <> viq.io.out
 
-  val busyTable = Module(new VBusyTable)
-  busyTable.io.readReq := expander.io.readBusyTable.req
-  expander.io.readBusyTable.resp := busyTable.io.readResp
-  busyTable.io.setReq.valid := expander.io.out.fire && expander.io.out.bits.uop.ldestValUop
-  busyTable.io.setReq.bits.addr := expander.io.out.bits.uop.ldestUop
-  busyTable.io.setReq.bits.robIdx := expander.io.out.bits.uop.robIdx
+  val scoreboard = Module(new VScoreboard)
+  scoreboard.io.readReq := expander.io.readScoreboard.req
+  expander.io.readScoreboard.resp := scoreboard.io.readResp
+  scoreboard.io.setReq.valid := expander.io.out.fire
+  scoreboard.io.setReq.bits := expander.io.out.bits.uop
+  scoreboard.io.wb zip io.fromExu foreach { case (a, b) =>
+    a.valid := b.valid
+    a.bits := b.bits.uop
+  }
 
   val vrf = Module(new VRF(4, nVRFWritePorts))
   vrf.io.raddr(0) := expander.io.out.bits.uop.lsrcUop(0)
   vrf.io.raddr(1) := expander.io.out.bits.uop.lsrcUop(1)
   vrf.io.raddr(2) := expander.io.out.bits.uop.ldestUop
   vrf.io.raddr(3) := 0.U //mask
+  for (i <- 0 until nVRFWritePortsExu) {
+    vrf.io.wen(i) := io.fromExu(i).valid && io.fromExu(i).bits.uop.ldestValUop
+    vrf.io.waddr(i) := io.fromExu(i).bits.uop.ldestUop
+    vrf.io.wdata(i) := io.fromExu(i).bits.vd
+  }
+  vrf.io.wen(nVRFWritePorts - 1) := io.fromLSU.valid && io.fromLSU.bits.uop.ldestValUop
+  vrf.io.waddr(nVRFWritePorts - 1) := io.fromLSU.bits.uop.ldestUop
+  vrf.io.wdata(nVRFWritePorts - 1) := io.fromLSU.bits.vd
   
   expander.io.out.ready := true.B
   val exuInputReg = Reg(new VExuInput)
@@ -64,8 +78,6 @@ class VCtrlBlock extends Module {
     exuInputReg.vSrc := vrf.io.rdata
   }
   io.toExu.valid := expander.io.out.fire
-
-  io.out <> expander.io.out
 }
 
 
