@@ -24,19 +24,6 @@ object Vfauop_format {
 }
 
 
-object VfmaOpCode {
-  def dummy   = "b1111".U(4.W)
-  def vfmul   = "b0000".U(4.W)
-  def vfmacc  = "b0001".U(4.W)
-  def vfnmacc = "b0010".U(4.W)
-  def vfmsac  = "b0011".U(4.W)
-  def vfnmsac = "b0100".U(4.W)
-  def vfmadd  = "b0101".U(4.W)
-  def vfnmadd = "b0110".U(4.W)
-  def vfmsub  = "b0111".U(4.W)
-  def vfnmsub = "b1000".U(4.W)
-}
-
 object Vfaddfunc6 {
   def width = 6
   def dummy    = "b111111".U(width.W)
@@ -69,22 +56,6 @@ object Vfaddfunc6 {
   def fltq      = "b011011".U(width.W) // zfa extension
 }
 
-// fma
-object Vfffunc6 {
-  def width = 6
-  def dummy     = "b111111".U(width.W)
-  def fmul      = "b000000".U(width.W)
-  def fmacc     = "b000000".U(width.W)
-  def fnmacc    = "b000000".U(width.W)
-  def fmsac     = "b000000".U(width.W)
-  def fnmsac    = "b000000".U(width.W)
-  def fmadd     = "b000000".U(width.W)
-  def fnmadd    = "b000000".U(width.W)
-  def fmsub     = "b000000".U(width.W)
-  def fnmsub    = "b000000".U(width.W)
-
-}
-
 object VfaddOpCode {
   def dummy    = "b11111".U(5.W)
   def fadd     = "b00000".U(5.W)
@@ -115,4 +86,61 @@ object VfaddOpCode {
   def fltq     = "b11011".U(5.W)
 }
 
+// fma
+object Vfffunc6 {
+  def width = 6
+  def dummy     = "b111111".U(width.W)
+  def fmul      = "b100100".U(width.W)
+  def fmacc     = "b101100".U(width.W)
+  def fnmacc    = "b101101".U(width.W)
+  def fmsac     = "b000000".U(width.W)
+  def fnmsac    = "b101110".U(width.W)
+  def fmadd     = "b101000".U(width.W)
+  def fnmadd    = "b101001".U(width.W)
+  def fmsub     = "b101010".U(width.W)
+  def fnmsub    = "b101011".U(width.W)
 
+}
+
+object VfmaOpCode {
+  def dummy   = "b1111".U(4.W)
+  def vfmul   = "b0000".U(4.W)
+  def vfmacc  = "b0001".U(4.W)
+  def vfnmacc = "b0010".U(4.W)
+  def vfmsac  = "b0011".U(4.W)
+  def vfnmsac = "b0100".U(4.W)
+  def vfmadd  = "b0101".U(4.W)
+  def vfnmadd = "b0110".U(4.W)
+  def vfmsub  = "b0111".U(4.W)
+  def vfnmsub = "b1000".U(4.W)
+}
+
+
+// fdiv
+object Vfdfunc6 {
+  def width = 6
+  def dummy     = "b111111".U(width.W)
+  def fdiv      = "b100000".U(width.W)
+  def frdiv     = "b100001".U(width.W)
+  def fsqrt     = "b010011".U(width.W)
+}
+
+object VfdOpCode {
+  def vfdiv   = "b0".U(1.W)
+  def vfsqrt  = "b1".U(1.W)
+}
+
+
+// fcvt
+object Vfcvtfunc6 {
+  def width = 6
+  def dummy       = "b111111".U(width.W)
+  def vfncvt_xfw  = "b010010".U(width.W)
+  def vfwcvt_fxv  = "b010010".U(width.W)
+}
+
+object VfcvtOpCode {
+  def dummy         = "b11111111".U(8.W)
+  def vfncvt_xfw     = "b10000000".U(8.W)
+  def vfwcvt_fxv    = "b01001011".U(8.W)
+}
