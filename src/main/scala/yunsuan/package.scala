@@ -529,48 +529,49 @@ package object yunsuan {
     def vfsqrt  = "b1".U(1.W)
   }
 
-object VfcvtType {
-  def width = 9
-  //  f/i(input) ## f/i(output) ## intr's func1
-  def vfcvt_xufv        = "b10_000000".U(8.W)
-  def vfcvt_xfv         = "b10_000001".U(8.W)
-  def vfcvt_fxuv        = "b01_000010".U(8.W)
-  def vfcvt_fxv         = "b01_000011".U(8.W)
-  def vfcvt_rtz_xufv    = "b10_000110".U(8.W)
-  def vfcvt_rtz_xfv     = "b10_000111".U(8.W)
-  def vfrsqrt7          = "b11_100000".U(8.W)
-  def vfrec7            = "b11_100001".U(8.W)
-  def vfwcvt_xufv       = "b10_001000".U(8.W)
-  def vfwcvt_xfv        = "b10_001001".U(8.W)
-  def vfwcvt_fxuv       = "b01_001010".U(8.W)
-  def vfwcvt_fxv        = "b01_001011".U(8.W)
-  def vfwcvt_ffv        = "b11_001100".U(8.W)
-  def vfwcvt_rtz_xufv   = "b10_001110".U(8.W)
-  def vfwcvt_rtz_xfv    = "b10_001111".U(8.W)
-  def vfncvt_xufw       = "b10_010000".U(8.W)
-  def vfncvt_xfw        = "b10_010001".U(8.W)
-  def vfncvt_fxuw       = "b01_010010".U(8.W)
-  def vfncvt_fxw        = "b01_010011".U(8.W)
-  def vfncvt_ffw        = "b11_010100".U(8.W)
-  def vfncvt_rod_ffw    = "b11_010101".U(8.W)
-  def vfncvt_rtz_xufw   = "b10_010110".U(8.W)
-  def vfncvt_rtz_xfw    = "b10_010111".U(8.W)
-  def fcvt_h_s          = "b11_010000".U(8.W)
-  def fcvt_s_h          = "b11_001000".U(8.W)
-  def fcvt_h_d          = "b11_011000".U(8.W)
-  def fcvt_d_h          = "b11_011000".U(8.W)
-  def fcvt_w_h          = "b10_001001".U(8.W)
-  def fcvt_wu_h         = "b10_001000".U(8.W)
-  def fcvt_l_h          = "b10_011001".U(8.W)
-  def fcvt_lu_h         = "b10_011000".U(8.W)
-  def fround            = "b11_000000".U(8.W)
-  def froundnx          = "b11_000100".U(8.W)
-  def fcvtmod_w_d     = "b1_10_010001".U(9.W)
-}
+  object VfcvtType {
+    def width = 9
 
+    //  f/i(input) ## f/i(output) ## intr's func1
+    def vfcvt_xufv        = "b10_000000".U(8.W)
+    def vfcvt_xfv         = "b10_000001".U(8.W)
+    def vfcvt_fxuv        = "b01_000010".U(8.W)
+    def vfcvt_fxv         = "b01_000011".U(8.W)
+    def vfcvt_rtz_xufv    = "b10_000110".U(8.W)
+    def vfcvt_rtz_xfv     = "b10_000111".U(8.W)
+    def vfrsqrt7          = "b11_100000".U(8.W)
+    def vfrec7            = "b11_100001".U(8.W)
+    def vfwcvt_xufv       = "b10_001000".U(8.W)
+    def vfwcvt_xfv        = "b10_001001".U(8.W)
+    def vfwcvt_fxuv       = "b01_001010".U(8.W)
+    def vfwcvt_fxv        = "b01_001011".U(8.W)
+    def vfwcvt_ffv        = "b11_001100".U(8.W)
+    def vfwcvt_rtz_xufv   = "b10_001110".U(8.W)
+    def vfwcvt_rtz_xfv    = "b10_001111".U(8.W)
+    def vfncvt_xufw       = "b10_010000".U(8.W)
+    def vfncvt_xfw        = "b10_010001".U(8.W)
+    def vfncvt_fxuw       = "b01_010010".U(8.W)
+    def vfncvt_fxw        = "b01_010011".U(8.W)
+    def vfncvt_ffw        = "b11_010100".U(8.W)
+    def vfncvt_rod_ffw    = "b11_010101".U(8.W)
+    def vfncvt_rtz_xufw   = "b10_010110".U(8.W)
+    def vfncvt_rtz_xfw    = "b10_010111".U(8.W)
+    def fcvt_h_s          = "b11_010000".U(8.W)
+    def fcvt_s_h          = "b11_001000".U(8.W)
+    def fcvt_h_d          = "b11_011000".U(8.W)
+    def fcvt_d_h          = "b11_011000".U(8.W)
+    def fcvt_w_h          = "b10_001001".U(8.W)
+    def fcvt_wu_h         = "b10_001000".U(8.W)
+    def fcvt_l_h          = "b10_011001".U(8.W)
+    def fcvt_lu_h         = "b10_011000".U(8.W)
+    def fround            = "b11_000000".U(8.W)
+    def froundnx          = "b11_000100".U(8.W)
+    def fcvtmod_w_d     = "b1_10_010001".U(9.W)
+  }
 
   object VectorElementFormat {
     def width = 2
+
     def b = "b00".U(width.W)
     def h = "b01".U(width.W)  // f16
     def w = "b10".U(width.W)  // f32
@@ -578,6 +579,7 @@ object VfcvtType {
 
     def apply() = UInt(width.W)
   }
+
   object FaddOpCode {
     def width = 5
 
@@ -598,6 +600,7 @@ object VfcvtType {
     def fleq     = "b11100".U(width.W)
     def fltq     = "b11011".U(width.W)
   }
+
   object FmaOpCode {
     def width = 4
 
