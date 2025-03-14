@@ -290,6 +290,28 @@ package object yunsuan {
     def isDiv(fuOpType: UInt)    : Bool = fuOpType(1)
   }
 
+  /** Vector cryption pipelined 2-cycle operations */
+  object VcryppType {
+    def dummy   = "b11111111".U(OpTypeWidth.W) // exu not implemented
+
+    // Zvkned
+    def vaesdf_vv = "b10000001".U(OpTypeWidth.W) // Vector AES final-round decryption vector-vector
+    def vaesdf_vs = "b10001001".U(OpTypeWidth.W) // Vector AES final-round decryption vector-scalar
+    def vaesdm_vv = "b10000000".U(OpTypeWidth.W) // Vector AES middle-round decryption vector-vector
+    def vaesdm_vs = "b10001000".U(OpTypeWidth.W) // Vector AES middle-round decryption vector-scalar
+    def vaesef_vv = "b10000011".U(OpTypeWidth.W) // Vector AES final-round encryption vector-vector
+    def vaesef_vs = "b10001011".U(OpTypeWidth.W) // Vector AES final-round encryption vector-scalar
+    def vaesem_vv = "b10000010".U(OpTypeWidth.W) // Vector AES middle-round encryption vector-vector
+    def vaesem_vs = "b10001010".U(OpTypeWidth.W) // Vector AES middle-round encryption vector-scalar
+    def vaeskf1   = "b00100000".U(OpTypeWidth.W) // Vector AES-128 Forward KeySchedule generation
+    def vaeskf2   = "b10100000".U(OpTypeWidth.W) // Vector AES-256 Forward KeySchedule generation
+    def vaesz_vs  = "b10001111".U(OpTypeWidth.W) // Vector AES round zero encryption/decryption
+
+    def needOldVd(fuOpType: UInt): Bool = VecInit(
+      vaesdf_vv, vaesdf_vs, vaesdm_vv, vaesdm_vs, vaesef_vv, vaesef_vs, vaesem_vv, vaesem_vs, vaeskf2, vaesz_vs
+    ).contains(fuOpType)
+  }
+
   object VfpuType {
     def dummy         = "b11111111".U(OpTypeWidth.W) // exu not implemented
     def isVfalu  = BitPat("b000?????")
