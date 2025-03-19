@@ -295,20 +295,26 @@ package object yunsuan {
     def dummy   = "b11111111".U(OpTypeWidth.W) // exu not implemented
 
     // Zvkned
-    def vaesdf_vv = "b10000001".U(OpTypeWidth.W) // Vector AES final-round decryption vector-vector
-    def vaesdf_vs = "b10001001".U(OpTypeWidth.W) // Vector AES final-round decryption vector-scalar
-    def vaesdm_vv = "b10000000".U(OpTypeWidth.W) // Vector AES middle-round decryption vector-vector
-    def vaesdm_vs = "b10001000".U(OpTypeWidth.W) // Vector AES middle-round decryption vector-scalar
-    def vaesef_vv = "b10000011".U(OpTypeWidth.W) // Vector AES final-round encryption vector-vector
-    def vaesef_vs = "b10001011".U(OpTypeWidth.W) // Vector AES final-round encryption vector-scalar
-    def vaesem_vv = "b10000010".U(OpTypeWidth.W) // Vector AES middle-round encryption vector-vector
-    def vaesem_vs = "b10001010".U(OpTypeWidth.W) // Vector AES middle-round encryption vector-scalar
-    def vaeskf1   = "b00100000".U(OpTypeWidth.W) // Vector AES-128 Forward KeySchedule generation
-    def vaeskf2   = "b10100000".U(OpTypeWidth.W) // Vector AES-256 Forward KeySchedule generation
-    def vaesz_vs  = "b10001111".U(OpTypeWidth.W) // Vector AES round zero encryption/decryption
+    def vaesdf_vv = "b00000001".U(OpTypeWidth.W) // Vector AES final-round decryption vector-vector
+    def vaesdf_vs = "b00001001".U(OpTypeWidth.W) // Vector AES final-round decryption vector-scalar
+    def vaesdm_vv = "b00000000".U(OpTypeWidth.W) // Vector AES middle-round decryption vector-vector
+    def vaesdm_vs = "b00001000".U(OpTypeWidth.W) // Vector AES middle-round decryption vector-scalar
+    def vaesef_vv = "b00000011".U(OpTypeWidth.W) // Vector AES final-round encryption vector-vector
+    def vaesef_vs = "b00001011".U(OpTypeWidth.W) // Vector AES final-round encryption vector-scalar
+    def vaesem_vv = "b00000010".U(OpTypeWidth.W) // Vector AES middle-round encryption vector-vector
+    def vaesem_vs = "b00001010".U(OpTypeWidth.W) // Vector AES middle-round encryption vector-scalar
+    def vaeskf1   = "b00000100".U(OpTypeWidth.W) // Vector AES-128 Forward KeySchedule generation
+    def vaeskf2   = "b00000101".U(OpTypeWidth.W) // Vector AES-256 Forward KeySchedule generation
+    def vaesz_vs  = "b00001110".U(OpTypeWidth.W) // Vector AES round zero encryption/decryption
+
+    // Zvksed
+    def vsm4k_vi  = "b00010000".U(OpTypeWidth.W) // Vector SM4 KeyExpansion
+    def vsm4r_vv  = "b00010010".U(OpTypeWidth.W) // Vector SM4 Rounds vector-vector
+    def vsm4r_vs  = "b00010011".U(OpTypeWidth.W) // Vector SM4 Rounds vector-scalar
 
     def needOldVd(fuOpType: UInt): Bool = VecInit(
-      vaesdf_vv, vaesdf_vs, vaesdm_vv, vaesdm_vs, vaesef_vv, vaesef_vs, vaesem_vv, vaesem_vs, vaeskf2, vaesz_vs
+      vaesdf_vv, vaesdf_vs, vaesdm_vv, vaesdm_vs, vaesef_vv, vaesef_vs, vaesem_vv, vaesem_vs, vaeskf2, vaesz_vs,
+      vsm4r_vv, vsm4r_vs
     ).contains(fuOpType)
   }
 
