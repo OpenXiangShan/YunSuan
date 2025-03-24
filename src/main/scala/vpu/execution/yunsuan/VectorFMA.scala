@@ -3,7 +3,7 @@ package race.vpu.yunsuan
 import chisel3._
 import chisel3.util._
 import race.vpu.yunsuan.util._
-import race.vpu.Vexecution.Params._
+import race.vpu.yunsuan.Params._
 import race.vpu.VParams._
 
 import scala.collection.mutable.ListBuffer

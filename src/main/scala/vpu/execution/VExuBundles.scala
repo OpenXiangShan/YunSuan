@@ -1,8 +1,9 @@
-package race.vpu.Vexecution
+package race.vpu.yunsuan
 
 import chisel3._
 import chisel3.util._
-import race.vpu.Vexecution.Params._
+import race.vpu.yunsuan.Params._
+import race.vpu.VParams._
 
 class Vfa_setuop extends Bundle {
   val funct = UInt(9.W)
@@ -132,3 +133,82 @@ class Vcvt_setuop extends Bundle {
   ))
   
 }
+
+class Vrg_setuop extends Bundle {
+  val funct = UInt(9.W)
+  val vm  = UInt(1.W)
+  val vs1 = UInt(5.W)
+  val vs2 = UInt(5.W)
+
+  val funct6 = funct(8, 3)
+  val funct3 = funct(2, 0)
+  val ivv = (funct3 === "b000".U)
+  val ivx = (funct3 === "b100".U)
+  val ivi = (funct3 === "b011".U)
+  val mvv = (funct3 === "b010".U)
+  val mvx = (funct3 === "b110".U)
+  val fvv = (funct3 === "b001".U)
+  val fvf = (funct3 === "b101".U)
+  
+
+  val op = Mux1H(Seq(
+  (funct6 === Vrgfunc6.vrgather   & (ivv | ivx | ivi))   -> VrgOpCode.vrgather,
+  ))
+
+}
+
+// for vfred
+class Vfred_setuop extends Bundle {
+  val funct = UInt(9.W)
+  val vm  = UInt(1.W)
+  val vs1 = UInt(5.W)
+  val vs2 = UInt(5.W)
+
+  val funct6 = funct(8, 3)
+  val funct3 = funct(2, 0)
+  val ivv = (funct3 === "b000".U)
+  val ivx = (funct3 === "b100".U)
+  val ivi = (funct3 === "b011".U)
+  val mvv = (funct3 === "b010".U)
+  val mvx = (funct3 === "b110".U)
+  val fvv = (funct3 === "b001".U)
+  val fvf = (funct3 === "b101".U)
+  
+
+  val op = Mux1H(Seq(
+  (funct6 === Vfredfunc6.vfredmax   & (ivv))   -> VfredOpCode.fmax,
+  (funct6 === Vfredfunc6.vfredusum  & (ivv))   -> VfredOpCode.fadd,
+  // TODO:
+  ))
+
+}
+
+class VfredInput extends Bundle {
+  val vlmul         = UInt(3.W)
+  val vm            = Bool()
+  val mask          = UInt(VLEN.W)
+  val round_mode    = UInt(3.W)
+  val fp_format     = UInt(2.W)
+  val op_code       = UInt(5.W)
+  val is_vec        = Bool()
+  val vs1           = UInt(VLEN.W)
+  val vs2           = UInt(XLEN.W)
+  val index         = UInt(3.W)
+}
+
+class VfredOutput extends Bundle{
+  val result  = UInt(XLEN.W)
+  val fflags  = UInt(5.W)
+}
+
+class Vfredctrl extends Bundle{
+  val fire          = Bool()
+  val vlmul         = UInt(3.W)
+  val mask          = UInt(VLEN.W)
+  val round_mode    = UInt(3.W)
+  val fp_format     = UInt(2.W)
+  val op_code       = UInt(5.W)
+  val is_vec        = Bool()
+  val index         = UInt(3.W)
+  val vs2           = UInt(32.W)
+} 

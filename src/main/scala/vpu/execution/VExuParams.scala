@@ -1,4 +1,4 @@
-package race.vpu.Vexecution.Params
+package race.vpu.yunsuan.Params
 
 import chisel3._
 import chisel3.util._
@@ -141,6 +141,37 @@ object Vfcvtfunc6 {
 
 object VfcvtOpCode {
   def dummy         = "b11111111".U(8.W)
-  def vfncvt_xfw     = "b10000000".U(8.W)
+  def vfncvt_xfw    = "b10000000".U(8.W)
   def vfwcvt_fxv    = "b01001011".U(8.W)
+}
+
+// vrg
+object Vrgfunc6 {
+  def width = 6
+  def dummy       = "b111111".U(width.W)
+  def vrgather    = "b001100".U(width.W)
+}
+
+object VrgOpCode {
+  def dummy      = "b0".U(1.W)
+  def vrgather   = "b1".U(1.W)
+}
+
+
+// vfreduction
+object Vfredfunc6 {
+  def width = 6
+  def dummy         = "b111111".U(width.W)
+  def vfredusum     = "b000001".U(width.W)
+  def vfredosum     = "b000011".U(width.W)
+  def vfredmax      = "b000111".U(width.W)
+}
+
+// same as vfa
+object VfredOpCode {
+  def dummy    = "b11111".U(5.W)
+  def fadd     = "b00000".U(5.W)
+  def fsub     = "b00001".U(5.W)
+  def fmin     = "b00010".U(5.W)
+  def fmax     = "b00011".U(5.W)
 }

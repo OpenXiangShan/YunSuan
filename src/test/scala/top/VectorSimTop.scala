@@ -90,6 +90,31 @@ class SimTop() extends VPUTestModule {
 
   val vector_core = Module(new NewVectorCore())
   io <> vector_core.io
+
+  // val vperm = Module(new VPermTop)
+  // vperm.io.vs1 := Cat(in.src(0)(1), in.src(0)(0))
+  // vperm.io.vs2 := Cat(in.src(1)(1), in.src(1)(0))
+  // vperm.io.old_vd := Cat(in.src(2)(1), in.src(2)(0))
+  // vperm.io.mask := Cat(in.src(3)(1), in.src(3)(0))
+  // vperm.io.vs1_type := ZeroExt(sew, 4)
+  // vperm.io.vs2_type := ZeroExt(sew, 4)
+  // vperm.io.vd_type := ZeroExt(sew, 4)
+
+  // vperm.io.opcode := opcode
+  // vperm.io.uop_idx := uop_idx
+  // vperm.io.vstart := vstart
+  // vperm.io.vl := vl
+  // vperm.io.vlmul := vlmul
+  // vperm.io.vm := vm
+  // vperm.io.ta := ta
+  // vperm.io.ma := ma
+  // vperm_result.result(0) := vperm.io.res_vd(XLEN-1, 0)
+  // vperm_result.result(1) := vperm.io.res_vd(VLEN-1, XLEN)
+  // vperm_result.fflags(0) := 0.U
+  // vperm_result.fflags(1) := 0.U
+  // vperm_result.vxsat := 0.U
+
+
 }
 
 

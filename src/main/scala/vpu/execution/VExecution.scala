@@ -5,6 +5,7 @@ import chisel3.util._
 import race.vpu.yunsuan._
 import race.vpu._
 import VParams._
+import _root_.yunsuan.VimacType.INT.X
 
 class VExecution extends Module {
   val io = IO(new Bundle {
@@ -18,6 +19,8 @@ class VExecution extends Module {
   val vfd_out = Wire(new VExuOutput)
   val vff_out = Wire(new VExuOutput)
   val vcvt_out = Wire(new VExuOutput)
+  val vrg_out = Wire(new VExuOutput)
+  val vfred_out = Wire(new VExuOutput)
 
   // vector float adder
   val vfa = Module(new VectorExuFloatAdder)
@@ -126,14 +129,59 @@ class VExecution extends Module {
   vcvt_out.vd := vcvt.io.result
   vcvt_out.fflags := vcvt.io.fflags
 
-  val futype = Cat(in.uop.ctrl.vfadd, in.uop.ctrl.vfma, in.uop.ctrl.vfdiv, in.uop.ctrl.vfcvt)
+  val vrg = Module(new VectorExuReggather)
+  val vrg_setuop = Wire(new Vrg_setuop)
+
+  vrg_setuop.funct := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
+  vrg_setuop.vm := in.uop.ctrl.vm
+  vrg_setuop.vs1 := in.uop.ctrl.lsrc(0)
+  vrg_setuop.vs2 := in.uop.ctrl.lsrc(1)
+
+  vrg.io.fire := 0.U // need to change
+  vrg.io.vs1  := in.vSrc(0)
+  vrg.io.vs2  := in.vSrc(1)
+  vrg.io.old_vd := in.vSrc(2)
+
+  vrg.io.op_code  := vrg_setuop.op
+  vrg.io.sew      := in.uop.csr.vsew(1, 0)
+  vrg.io.mask     := in.vSrc(3)
+  vrg.io.vm       := in.uop.ctrl.vm
+  vrg_out.vd      := vrg.io.res_vd
+
+  vrg_out.fflags := 0.U
+  
+  val vfred = Module(new Vfreduction)
+  val vfred_setuop = Wire(new Vfred_setuop)
+
+  vfred_setuop.funct := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
+  vfred_setuop.vm := in.uop.ctrl.vm
+  vfred_setuop.vs1 := in.uop.ctrl.lsrc(0)
+  vfred_setuop.vs2 := in.uop.ctrl.lsrc(1)
+
+  vfred.io.fire := 0.U // need to change
+  vfred.io.in.vs1  := in.vSrc(0)
+  vfred.io.in.vs2  := in.vSrc(1)(XLEN-1, 0)
+
+  vfred.io.in.vlmul         := in.uop.csr.vlmul
+  vfred.io.in.vm            := in.uop.ctrl.vm
+  vfred.io.in.op_code       := vfred_setuop.op
+  vfred.io.in.fp_format     := in.uop.csr.vsew(1, 0)
+  vfred.io.in.round_mode    := in.uop.csr.frm
+  vfred.io.in.is_vec        := in.uop.ctrl.vv
+  vfred.io.in.index         := in.uop.uopIdx
+  vfred.io.in.mask          := in.vSrc(3)
+  vfred_out.vd              := Cat(Fill((VLEN-XLEN), 0.U), vfred.io.out.result)
+
+  vfred_out.fflags := vfred.io.out.fflags
 
   io.out := Mux1H(
     Seq(
-      in.uop.ctrl.vfadd  -> vfa_out,
-      in.uop.ctrl.vfma   -> vff_out,
-      in.uop.ctrl.vfdiv  -> vfd_out,
-      in.uop.ctrl.vfcvt  -> vcvt_out
+      in.uop.ctrl.vfadd   -> vfa_out,
+      in.uop.ctrl.vfma    -> vff_out,
+      in.uop.ctrl.vfdiv   -> vfd_out,
+      in.uop.ctrl.vfcvt   -> vcvt_out,
+      in.uop.ctrl.vrg     -> vrg_out,
+      in.uop.ctrl.vfred   -> vfred_out
     )
   )
 

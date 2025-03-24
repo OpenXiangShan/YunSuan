@@ -1,32 +1,27 @@
-package yunsuan.vector
+package race.vpu.yunsuan
 
 import chisel3._
 import chisel3.util._
-import yunsuan.util._
-import yunsuan.vector._
+import race.vpu.yunsuan.util._
+import race.vpu.yunsuan.Params._
+import race.vpu.VParams._
 
-trait VrgatherParameter {
-    val VLEN : Int = 2048
-}
-
-// valid only for VLEN = 2048
-class Vrgather() extends Module with VrgatherParameter {
+class VectorExuReggather() extends Module{
   val io = IO(new Bundle {
-    val vs1 = Input(UInt(VLEN.W))   //index data
-    val vs2 = Input(UInt(VLEN.W))   //table data
-    val is_vec = Input(Bool())
+    val fire        = Input(Bool())
+    val vs1         = Input(UInt(VLEN.W))   //index data
+    val vs2         = Input(UInt(VLEN.W))   //table data
+    val old_vd      = Input(UInt(VLEN.W))
+    val op_code     = Input(UInt(1.W))
+    val sew         = Input(UInt(2.W))
+    val mask        = Input(UInt(VLEN.W))
+    val vm          = Input(Bool())         // 0: masked, 1: unmasked
+    val ta          = Input(Bool())         // 0: undisturbed, 1: agnostic
+    val ma          = Input(Bool())         // 0: undisturbed, 1: agnostic
 
-    val old_vd = Input(UInt(VLEN.W))
-    val res_vd = Output(UInt(VLEN.W))
-
-    val sew       = Input(UInt(2.W))
-    val mask      = Input(UInt(VLEN.W))
-    val vm        = Input(Bool())         // 0: masked, 1: unmasked
-    val ta        = Input(Bool())         // 0: undisturbed, 1: agnostic
-    val ma        = Input(Bool())         // 0: undisturbed, 1: agnostic
-
-    val vl      = Input(UInt(log2Ceil(VLEN / 8).W))
-    val vstart  = Input(UInt(log2Ceil(VLEN / 8).W))
+    val vl          = Input(UInt(bVL.W))
+    val vstart      = Input(UInt(bVstart.W))
+    val res_vd      = Output(UInt(VLEN.W))
   })
 
   // latency  = 1
@@ -49,30 +44,30 @@ class Vrgather() extends Module with VrgatherParameter {
 
 }
 
-class vrg_index extends Bundle with VrgatherParameter {
+class vrg_index extends Bundle{
   val index_e8 = Vec(VLEN / 8,   UInt((VLEN/8 ).W))
   val index_e16 = Vec(VLEN / 16, UInt((VLEN/16).W))
 }
 
-class vrg_lut extends Bundle with VrgatherParameter {
+class vrg_lut extends Bundle{
   val lut_e8 = Vec(VLEN / 8, UInt(8.W))
   val lut_e16 = Vec(VLEN / 16, UInt(16.W))
 }
 
-class vrg_res extends Bundle with VrgatherParameter {
+class vrg_res extends Bundle{
   val res_e8 = Vec(VLEN / 8, UInt(8.W))
   val res_e16 = Vec(VLEN / 16, UInt(16.W))
 }
 
-class New_VRGather extends Module with VrgatherParameter{
+class New_VRGather extends Module{
   val io = IO(new Bundle {
     val index_data  = Input(UInt(VLEN.W))
     val table_data  = Input(UInt(VLEN.W))
     val old_vd      = Input(UInt(VLEN.W))
     val res_vd      = Output(UInt(VLEN.W))
     val sew         = Input(UInt(2.W))
-    val vl          = Input(UInt(log2Ceil(VLEN / 8).W))
-    val vstart      = Input(UInt(log2Ceil(VLEN / 8).W))
+    val vl          = Input(UInt(bVL.W))
+    val vstart      = Input(UInt(bVstart.W))
     val vm          = Input(Bool())
     val mask        = Input(UInt(VLEN.W))
     val ta          = Input(Bool())
@@ -125,7 +120,7 @@ class New_VRGather extends Module with VrgatherParameter{
 
       res.res_e16(n) :=  Mux(in_vstart && in_vl, 
                         mask_result, 
-                        Mux(n.U >= io.vl, Mux(io.ta, Fill(16, 1.U(1.W)), old_vd_e16), old_vd_e16))
+                        Mux(n.U >= io.vl, Mux(io.ta, Fill(8, 1.U(1.W)), old_vd_e16), old_vd_e16))
 
     }
 

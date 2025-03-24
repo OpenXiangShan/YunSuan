@@ -2,11 +2,10 @@ package race.vpu.yunsuan
 
 import chisel3._
 import chisel3.util._
+
 import race.vpu.yunsuan.util._
-
 import race.vpu.VParams._
-import race.vpu.Vexecution.Params._
-
+import race.vpu.yunsuan.Params._
 /**
   * f16/f32/f64, support widen
   * op_code(Width=5):
@@ -232,7 +231,7 @@ class VectorFloatAdder_W64() extends Module {
   val U_F16_2_result = U_F32_Mixed_1.io.fp_c(15,0)
   val U_F16_2_fflags = U_F32_Mixed_1.io.fflags
 
-  val U_F16_1 = Module(new FloatAdderF16Pipeline_new(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
+  val U_F16_1 = Module(new FloatAdderF16Pipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F16_1.io.fire := fire
   U_F16_1.io.fp_a := f16_1_fp_a
   U_F16_1.io.fp_b := Mux(io.is_frs1,io.frs1(15,0),io.fp_b(31,16))
@@ -246,7 +245,7 @@ class VectorFloatAdder_W64() extends Module {
   val U_F16_1_result = U_F16_1.io.fp_c
   val U_F16_1_fflags = U_F16_1.io.fflags
 
-  val U_F16_3 = Module(new FloatAdderF16Pipeline_new(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
+  val U_F16_3 = Module(new FloatAdderF16Pipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F16_3.io.fire := fire
   U_F16_3.io.fp_a := f16_3_fp_a
   U_F16_3.io.fp_b := Mux(io.is_frs1,io.frs1(15,0),io.fp_b(63,48))
@@ -1673,7 +1672,7 @@ class FarPathF16Pipeline(
   else io.isEfp_bGreater := 0.U
 }
 
-class FloatAdderF16Pipeline_new(val is_print:Boolean = false,val hasMinMaxCompare:Boolean = false) extends Module {
+class FloatAdderF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:Boolean = false) extends Module {
   val exponentWidth = 5
   val significandWidth = 11
   val floatWidth = exponentWidth + significandWidth

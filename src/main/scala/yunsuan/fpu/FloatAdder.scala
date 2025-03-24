@@ -3,6 +3,7 @@ import chisel3._
 import chisel3.util._
 import yunsuan.vector._
 import yunsuan.{FaddOpCode, VectorElementFormat}
+
 class FloatAdder() extends Module  {
   val exponentWidth = 11
   val significandWidth = 53

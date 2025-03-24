@@ -53,6 +53,7 @@ class VCtrl extends Bundle {
   val redu = Bool()
   val mask = Bool()
   val perm = Bool()
+
   val widen = Bool()  // 2*sew = sew op sew  //Reduction not included
   val widen2 = Bool() // 2*sew = 2*sew op sew
   val narrow = Bool() // sew = 2*sew op sew
@@ -60,7 +61,7 @@ class VCtrl extends Bundle {
   def vv = !funct3(2) && !(funct3(1) && funct3(0))
   def vx = funct3(2) 
   def vi = !funct3(2) && funct3(1) && funct3(0) 
-  def fuSel = Seq(alu, mul, fp, redu, mask, perm, div)
+  def fuSel = Seq(alu, mul, fp, redu, mask, perm, div, vrg, vfred)
   def laneExu = arith && !crossLane
   def isLdst = load || store
   def vs1_imm = lsrc(0)
@@ -73,6 +74,8 @@ class VCtrl extends Bundle {
   def vfma = fp
   def vfdiv = fp
   def vfcvt = fp
+  def vrg = fp
+  def vfred = fp
 }
 
 class VCtrlCsr extends Bundle {
@@ -136,6 +139,7 @@ class SewOH extends Bundle {  // 0   1   2   3
   def is32 = oneHot(2)
   def is64 = oneHot(3)
 }
+
 object SewOH {
   def apply(vsew: UInt): SewOH = {
     val sew = Wire(new SewOH)
