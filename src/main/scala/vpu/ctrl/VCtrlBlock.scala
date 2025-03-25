@@ -72,14 +72,94 @@ class VCtrlBlock extends Module {
   vrf.io.waddr(nVRFWritePorts - 1) := io.lsu.loadWb.bits.uop.ldestUop
   vrf.io.wdata(nVRFWritePorts - 1) := io.lsu.loadWb.bits.vd
   
-  expander.io.out.ready := true.B
+  /**
+    * Expander output goes to EXU, LSU_load, or LSU_store
+    *   Note: the EXU and LSU_store input are registered, but the LSU_load input is not.
+    *         The reason is that EXU and STORE input need RF read data.
+    *                              +-------------+
+    *                              |  Expander   |
+    *                              +-------------+
+    *                                    |
+    *                       +-----------++-----------+
+    *                       |                       |
+    *                     RF read                   |
+    *                       |                       |
+    *                       v                       v
+    *                +------------+         +-----------+
+    *                | exuInputReg |        |   Load    |
+    *                +------------+         +-----------+
+    *                       |              
+    *                +------+------+        
+    *                |             |        
+    *                v             v        
+    *         +-----------+  +-----------+  
+    *         |    EXU    |  |   Store   |  
+    *         +-----------+  +-----------+  
+    * 
+    *  Valid/ready should be carefully handled here.
+    *    (1) We first generate the ready signal "readyExuStore" that is from EXU/STORE to "exuInputReg"
+    *        and "exuInputRegOutValid" which is the out-valid of exuInputReg
+    *    (2) Then we generate the ready signal "expander.io.out.ready" that is from exuInputReg/Load to expander
+    * */
+
+  /**
+    *  (1) We first generate the ready signal "readyExuStore" that is from EXU/STORE to "exuInputReg"
+    *      and "exuInputRegOutValid" which is the out-valid of exuInputReg
+    */
+  val expdrOutValid = expander.io.out.valid
+  val expdrOutIsExu = expander.io.out.bits.uop.ctrl.arith
+  val expdrOutIsStore = expander.io.out.bits.uop.ctrl.store
+  val expdrOutIsLoad = expander.io.out.bits.uop.ctrl.load
+  // Register the input for the EXU. 
+  // STORE also uses vs3 and uop
   val exuInputReg = Reg(new VExuInput)
-  when (expander.io.out.fire) {
+  val paddrBaseStoreReg = Reg(UInt(XLEN.W))
+  val ldstCtrlStoreReg = Reg(new LdstCtrl)
+  val exuInputRegOutValid = RegInit(false.B)
+  val readyExuStore = Wire(Bool())
+  val fire_exuInputReg = expdrOutValid && readyExuStore
+  when (fire_exuInputReg && (expdrOutIsExu || expdrOutIsStore)) {
     exuInputReg.uop := expander.io.out.bits.uop
-    exuInputReg.rs1 := expander.io.out.bits.rs1
-    exuInputReg.vSrc := vrf.io.rdata
+    exuInputReg.vSrc(2) := vrf.io.rdata(2)  // vs3 for store
   }
-  io.toExu.valid := expander.io.out.fire
+  when (fire_exuInputReg && expdrOutIsExu) {
+    exuInputReg.rs1 := expander.io.out.bits.rs1
+    exuInputReg.vSrc(0) := vrf.io.rdata(0)
+    exuInputReg.vSrc(1) := vrf.io.rdata(1)
+    exuInputReg.vSrc(3) := vrf.io.rdata(3)
+  }
+  when (fire_exuInputReg && expdrOutIsStore) {
+    paddrBaseStoreReg := expander.io.out.bits.rs1 // FIXME: use the real paddr_base from expander
+    ldstCtrlStoreReg := 0.U // FIXME: use the real ldstCtrl from expander
+  }
+  // Combine the ready from EXU and LSU_store
+  val readyExu = true.B // Exu has no ready signal for expander
+  readyExuStore := !exuInputRegOutValid || (exuInputReg.uop.ctrl.arith || io.lsu.storeReq.fire)
+  // exuInputRegOutValid
+  when (fire_exuInputReg) {
+    exuInputRegOutValid := true.B
+  }.elsewhen (readyExuStore) {
+    exuInputRegOutValid := false.B
+  }
+  // Exu and LSU_store input valid
+  io.toExu.valid := exuInputRegOutValid && exuInputReg.uop.ctrl.arith
+  io.lsu.storeReq.valid := exuInputRegOutValid && exuInputReg.uop.ctrl.store
+  // Exu and LSU_store input data
+  io.toExu.bits.uop := exuInputReg.uop
+  io.toExu.bits.vSrc := exuInputReg.vSrc
+  io.toExu.bits.rs1 := exuInputReg.rs1
+  io.lsu.storeReq.bits.uop := exuInputReg.uop
+  io.lsu.storeReq.bits.vs3 := exuInputReg.vSrc(3)
+  io.lsu.storeReq.bits.paddrBase := paddrBaseStoreReg
+  io.lsu.storeReq.bits.ldstCtrl := ldstCtrlStoreReg
+
+  /**
+    *  (2) Then we generate the ready signal "expander.io.out.ready" that is from exuInputReg/Load to expander
+    */
+  expander.io.out.ready := !expdrOutValid ||
+          (io.lsu.loadReq.fire || readyExuStore && (expdrOutIsExu || expdrOutIsStore))
+  io.lsu.loadReq.valid := expdrOutValid && expdrOutIsLoad
+  io.lsu.loadReq.bits.uop := expander.io.out.bits.uop
+  io.lsu.loadReq.bits.ldstCtrl := 0.U // FIXME: use the real ldstCtrl from expander
+  io.lsu.loadReq.bits.paddrBase := expander.io.out.bits.rs1 // FIXME: use the real paddr_base from expander
 }
-
-

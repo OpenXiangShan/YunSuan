@@ -165,6 +165,7 @@ class VExuOutput extends Bundle {
 class VLsuLoadReq extends Bundle {
   val uop = new VUop
   val ldstCtrl = new LdstCtrl
+  val paddrBase = UInt(XLEN.W)
 }
 
 class VLsuLoadWb extends Bundle {
@@ -176,6 +177,7 @@ class VLsuStoreReq extends Bundle {
   val uop = new VUop
   val ldstCtrl = new LdstCtrl
   val vs3 = UInt(VLEN.W) // Store data
+  val paddrBase = UInt(XLEN.W)
 }
 
 class VLsuStoreAck extends Bundle {
