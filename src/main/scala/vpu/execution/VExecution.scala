@@ -9,11 +9,11 @@ import _root_.yunsuan.VimacType.INT.X
 
 class VExecution extends Module {
   val io = IO(new Bundle {
-    val in = Input(new VExuInput)
-    val out = Output(new VExuOutput)
+    val in = Input(ValidIO(new VExuInput))
+    val out = ValidIO(new VExuOutput)
   })
 
-  val in = io.in
+  val in = io.in.bits
   // output types
   val vfa_out = Wire(new VExuOutput)
   val vfd_out = Wire(new VExuOutput)
@@ -30,7 +30,7 @@ class VExecution extends Module {
   vfa_op.vs1 := in.uop.ctrl.lsrc(0)
   vfa_op.vs2 := in.uop.ctrl.lsrc(1)
 
-  vfa.io.fire := 0.U // need to change
+  vfa.io.fire := io.in.valid && in.uop.ctrl.vfa // need to change
   vfa.io.vs1  := in.vSrc(0)
   vfa.io.vs2  := in.vSrc(1)
   vfa.io.frs1 := in.rs1
@@ -176,7 +176,7 @@ class VExecution extends Module {
 
   io.out := Mux1H(
     Seq(
-      in.uop.ctrl.vfadd   -> vfa_out,
+      in.uop.ctrl.vfa   -> vfa_out,
       in.uop.ctrl.vfma    -> vff_out,
       in.uop.ctrl.vfdiv   -> vfd_out,
       in.uop.ctrl.vfcvt   -> vcvt_out,

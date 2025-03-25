@@ -70,7 +70,7 @@ class VCtrl extends Bundle {
   def opf = funct3(1, 0) === 1.U // OPFVV/F
 
   // FIXME: these are fake
-  def vfadd = fp
+  def vfa = fp
   def vfma = fp
   def vfdiv = fp
   def vfcvt = fp
