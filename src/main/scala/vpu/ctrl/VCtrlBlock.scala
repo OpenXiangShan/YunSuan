@@ -11,10 +11,12 @@ class VCtrlBlock extends Module {
     val dispatch_s2v = Flipped(DecoupledIO(new Dispatch_S2V))
     val toExu = ValidIO(new VExuInput)
     val fromExu = Input(Vec(nVRFWritePortsExu, ValidIO(new VExuOutput)))
-    val fromLSU = Input(ValidIO(new Bundle { //TODO: correct the io.fromLSU
-      val uop = new VUop
-      val vd = UInt(VLEN.W)
-    }))
+    val lsu = new Bundle {
+      val loadReq = DecoupledIO(new VLsuLoadReq)
+      val loadWb = Input(ValidIO(new VLsuLoadWb))
+      val storeReq = DecoupledIO(new VLsuStoreReq)
+      val storeAck = Input(ValidIO(new VLsuStoreAck))
+    }
   })
 
   val decoder = Module(new VDecode)
@@ -66,9 +68,9 @@ class VCtrlBlock extends Module {
     vrf.io.waddr(i) := io.fromExu(i).bits.uop.ldestUop
     vrf.io.wdata(i) := io.fromExu(i).bits.vd
   }
-  vrf.io.wen(nVRFWritePorts - 1) := io.fromLSU.valid && io.fromLSU.bits.uop.ldestValUop
-  vrf.io.waddr(nVRFWritePorts - 1) := io.fromLSU.bits.uop.ldestUop
-  vrf.io.wdata(nVRFWritePorts - 1) := io.fromLSU.bits.vd
+  vrf.io.wen(nVRFWritePorts - 1) := io.lsu.loadWb.valid && io.lsu.loadWb.bits.uop.ldestValUop
+  vrf.io.waddr(nVRFWritePorts - 1) := io.lsu.loadWb.bits.uop.ldestUop
+  vrf.io.wdata(nVRFWritePorts - 1) := io.lsu.loadWb.bits.vd
   
   expander.io.out.ready := true.B
   val exuInputReg = Reg(new VExuInput)

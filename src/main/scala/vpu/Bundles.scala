@@ -161,3 +161,23 @@ class VExuOutput extends Bundle {
   val fflags = UInt(5.W)
 }
 
+// TODO: so far only unit-stride load/store is supported
+class VLsuLoadReq extends Bundle {
+  val uop = new VUop
+  val ldstCtrl = new LdstCtrl
+}
+
+class VLsuLoadWb extends Bundle {
+  val uop = new VUop
+  val vd = UInt(VLEN.W) // Load data
+}
+
+class VLsuStoreReq extends Bundle {
+  val uop = new VUop
+  val ldstCtrl = new LdstCtrl
+  val vs3 = UInt(VLEN.W) // Store data
+}
+
+class VLsuStoreAck extends Bundle {
+  val uop = new VUop
+}
