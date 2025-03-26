@@ -68,6 +68,7 @@ class Expander extends Module {
   }.elsewhen (busy_end) {
     out_valid := false.B
   }
+  io.out.valid := out_valid
   
   //---- Some ctrl signals should be hold during this instruction expanding process ----
   val v_ext = ctrl.alu && ctrl.funct3 === "b010".U && ctrl.funct6 === "b010010".U

@@ -156,8 +156,7 @@ class VCtrlBlock extends Module {
   /**
     *  (2) Then we generate the ready signal "expander.io.out.ready" that is from exuInputReg/Load to expander
     */
-  expander.io.out.ready := !expdrOutValid ||
-          (io.lsu.loadReq.fire || readyExuStore && (expdrOutIsExu || expdrOutIsStore))
+  expander.io.out.ready := io.lsu.loadReq.ready && expdrOutIsLoad || readyExuStore && (expdrOutIsExu || expdrOutIsStore)
   io.lsu.loadReq.valid := expdrOutValid && expdrOutIsLoad
   io.lsu.loadReq.bits.uop := expander.io.out.bits.uop
   io.lsu.loadReq.bits.ldstCtrl := 0.U // FIXME: use the real ldstCtrl from expander

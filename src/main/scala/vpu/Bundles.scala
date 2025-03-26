@@ -72,10 +72,10 @@ class VCtrl extends Bundle {
   // FIXME: these are fake
   def vfa = fp
   def vfma = fp
-  def vfdiv = fp
+  def vfdiv = fp && div
   def vfcvt = fp
-  def vrg = fp
-  def vfred = fp
+  def vrg = perm
+  def vfred = fp && redu
 }
 
 class VCtrlCsr extends Bundle {
