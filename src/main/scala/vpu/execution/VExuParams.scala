@@ -1,4 +1,4 @@
-package race.vpu.yunsuan.Params
+package race.vpu.yunsuan
 
 import chisel3._
 import chisel3.util._
@@ -22,7 +22,6 @@ object Vfauop_format {
 
   def apply() = UInt(width.W)
 }
-
 
 object Vfaddfunc6 {
   def width = 6
@@ -174,4 +173,12 @@ object VfredOpCode {
   def fsub     = "b00001".U(5.W)
   def fmin     = "b00010".U(5.W)
   def fmax     = "b00011".U(5.W)
+}
+
+
+//latency
+object Yunsuan_latency {
+  val VFD_latency: Int = 99 // unknown
+  val VFA_latency: Int = 1
+  val VCVT_latency: Int = 2 // ??
 }

@@ -2,8 +2,8 @@ package race.vpu.yunsuan
 
 import chisel3._
 import chisel3.util._
+import race.vpu._
 import race.vpu.yunsuan.util._
-import race.vpu.yunsuan.Params._
 import race.vpu.VParams._
 
 import scala.collection.mutable.ListBuffer
@@ -22,8 +22,10 @@ class VectorExuFloatFMA() extends Module{
     val is_vec       = Input (Bool())
     val is_frs1      = Input (Bool())
     val res_widening = Input (Bool())
+    val in_uop       = Input(new VUop)
     val result       = Output(UInt(VLEN.W))
     val fflags       = Output(UInt((5*VLEN/16).W))
+    val out_uop      = ValidIO(new VUop)
     val fp_aIsFpCanonicalNAN = Input(Bool())
     val fp_bIsFpCanonicalNAN = Input(Bool())
     val fp_cIsFpCanonicalNAN = Input(Bool())
@@ -62,6 +64,16 @@ class VectorExuFloatFMA() extends Module{
 
   io.result := Cat(result.reverse)
   io.fflags := fflags.flatMap(_.toSeq).reduce(_ | _)
+
+  // latency = 3
+  val reg_valid_0   = RegNext(io.out_uop.valid)
+  val reg_valid_1   = RegNext(reg_valid_0)
+  val reg_valid_2   = RegNext(reg_valid_1)
+  val reg_uop_0     = RegEnable(io.in_uop, io.fire)
+  val reg_uop_1     = RegEnable(reg_uop_0, reg_valid_0)
+  val reg_uop_2     = RegEnable(reg_uop_1, reg_valid_1)
+  io.out_uop.valid := reg_valid_2
+  io.out_uop.bits := Fill(io.out_uop.bits.getWidth, reg_valid_2) & reg_uop_2.asUInt
 
 }
 

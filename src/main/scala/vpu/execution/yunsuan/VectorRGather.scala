@@ -3,7 +3,7 @@ package race.vpu.yunsuan
 import chisel3._
 import chisel3.util._
 import race.vpu.yunsuan.util._
-import race.vpu.yunsuan.Params._
+import race.vpu.yunsuan._
 import race.vpu.VParams._
 
 class VectorExuReggather() extends Module{

@@ -3,9 +3,11 @@ package race.vpu.yunsuan
 import chisel3._
 import chisel3.util._
 
+import race.vpu._
 import race.vpu.yunsuan.util._
 import race.vpu.VParams._
-import race.vpu.yunsuan.Params._
+import race.vpu.yunsuan._
+
 /**
   * f16/f32/f64, support widen
   * op_code(Width=5):
@@ -49,9 +51,11 @@ class VectorExuFloatAdder() extends Module {
   val is_vfwredosum = Input (Bool()) // true -> vfwredosum inst
   val is_fold       = Input (UInt(3.W))
   val vs2_fold      = Input (UInt(VLEN.W))
+  val in_uop        = Input(new VUop)
 
-  val result     = Output(UInt(VLEN.W))
-  val fflags     = Output(UInt((5*VLEN/16).W))
+  val result      = Output(UInt(VLEN.W))
+  val fflags      = Output(UInt((5*VLEN/16).W))
+  val out_uop     = ValidIO(new VUop)
   })
 
   val result = Wire(Vec(VLEN/XLEN, UInt(XLEN.W)))
@@ -95,7 +99,13 @@ class VectorExuFloatAdder() extends Module {
 
   io.result := Cat(result.reverse)
   io.fflags := fflags.flatMap(_.toSeq).reduce(_ | _)
-  
+
+  // latency = 1
+  val reg_valid_0 = RegNext(io.out_uop.valid)
+  val reg_uop     = RegEnable(io.in_uop, io.fire)
+
+  io.out_uop.valid := reg_valid_0
+  io.out_uop.bits := Fill(io.out_uop.bits.getWidth, reg_valid_0) & reg_uop.asUInt
 }
 
 class VectorFloatAdder_W64() extends Module {

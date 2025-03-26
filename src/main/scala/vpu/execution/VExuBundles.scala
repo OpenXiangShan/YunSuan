@@ -2,7 +2,7 @@ package race.vpu.yunsuan
 
 import chisel3._
 import chisel3.util._
-import race.vpu.yunsuan.Params._
+import race.vpu._
 import race.vpu.VParams._
 
 class Vfa_setuop extends Bundle {
@@ -184,31 +184,29 @@ class Vfred_setuop extends Bundle {
 }
 
 class VfredInput extends Bundle {
-  val vlmul         = UInt(3.W)
-  val vm            = Bool()
-  val mask          = UInt(VLEN.W)
-  val round_mode    = UInt(3.W)
-  val fp_format     = UInt(2.W)
-  val op_code       = UInt(5.W)
-  val is_vec        = Bool()
+  val uop           = new VUop
+  // val vlmul         = UInt(3.W)
+  // val vm            = Bool()
+  // val mask          = UInt(VLEN.W)
+  // val round_mode    = UInt(3.W)
+  // val fp_format     = UInt(2.W)
+  // val op_code       = UInt(5.W)
+  // val is_vec        = Bool()
   val vs1           = UInt(VLEN.W)
   val vs2           = UInt(XLEN.W)
-  val index         = UInt(3.W)
+  val mask          = UInt(VLEN.W)
+  val op_code       = UInt(5.W)
+  // val index         = UInt(3.W)
 }
 
 class VfredOutput extends Bundle{
+  val uop           = new VUop
   val result  = UInt(XLEN.W)
   val fflags  = UInt(5.W)
 }
 
 class Vfredctrl extends Bundle{
   val fire          = Bool()
-  val vlmul         = UInt(3.W)
-  val mask          = UInt(VLEN.W)
-  val round_mode    = UInt(3.W)
-  val fp_format     = UInt(2.W)
-  val op_code       = UInt(5.W)
-  val is_vec        = Bool()
-  val index         = UInt(3.W)
-  val vs2           = UInt(32.W)
+  val ctrl          = new VfredInput
 } 
+

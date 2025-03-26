@@ -3,6 +3,8 @@ package race.vpu.yunsuan
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.decode._
+import race.vpu._
+import race.vpu.yunsuan._
 import race.vpu.yunsuan.VectorConvert._
 import race.vpu.yunsuan.util._
 
@@ -15,7 +17,6 @@ class VectorCvtIO(width: Int) extends Bundle {
   val isFpToVecInst = Input(Bool())
   val isFround = Input(UInt(2.W))
   val isFcvtmod = Input(Bool())
-
   val result = Output(UInt(width.W))
   val fflags = Output(UInt(20.W))
 }
@@ -32,9 +33,11 @@ class VectorExuCvt extends  Module {
       val isFpToVecInst     = Input(Bool())
       val isFround          = Input(UInt(2.W))
       val isFcvtmod         = Input(Bool())
+      val in_uop            = Input(new VUop)
 
       val result            = Output(UInt(VLEN.W))
       val fflags            = Output(UInt(5.W))
+      val out_uop           = ValidIO(new VUop)
   })
   
   val result = Wire(Vec(VLEN/XLEN, UInt(XLEN.W)))
@@ -60,7 +63,16 @@ class VectorExuCvt extends  Module {
 
   io.result := Cat(result.reverse)  
   io.fflags := fflags.flatMap(_.toSeq).reduce(_ | _)
+  
+    
+  // latency = 2
+  val reg_valid_0 = RegNext(io.out_uop.valid)
+  val reg_valid_1 = RegNext(reg_valid_0)
+  val reg_uop_0     = RegEnable(io.in_uop, io.fire)
+  val reg_uop_1     = RegEnable(reg_uop_0, reg_valid_0)
 
+  io.out_uop.valid := reg_valid_1
+  io.out_uop.bits := Fill(io.out_uop.bits.getWidth, reg_valid_1) & reg_uop_1.asUInt
 }
 
 
