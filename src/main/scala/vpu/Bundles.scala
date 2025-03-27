@@ -53,6 +53,9 @@ class VCtrl extends Bundle {
   val redu = Bool()
   val mask = Bool()
   val perm = Bool()
+  val vfa = Bool()
+  val vfma = Bool()
+  val vfcvt = Bool()
 
   val widen = Bool()  // 2*sew = sew op sew  //Reduction not included
   val widen2 = Bool() // 2*sew = 2*sew op sew
@@ -69,11 +72,7 @@ class VCtrl extends Bundle {
   def opm = funct3(1, 0) === 2.U //OPMVV/X
   def opf = funct3(1, 0) === 1.U // OPFVV/F
 
-  // FIXME: these are fake
-  def vfa = fp
-  def vfma = fp
   def vfdiv = fp && div
-  def vfcvt = fp
   def vrg = perm
   def vfred = fp && redu
 }

@@ -51,7 +51,8 @@ class VDecode extends Module {
                   vCtrl.arith, vCtrl.crossLane,
                   vCtrl.alu, vCtrl.mul, vCtrl.fp, vCtrl.div, 
                   vCtrl.fixP, vCtrl.redu, vCtrl.mask, vCtrl.perm,
-                  vCtrl.widen, vCtrl.widen2, vCtrl.narrow, vCtrl.narrow_to_1
+                  vCtrl.widen, vCtrl.widen2, vCtrl.narrow, vCtrl.narrow_to_1,
+                  vCtrl.vfa, vCtrl.vfma, vCtrl.vfcvt
                  )
   ctrls zip vCtrlSigs.asBools.reverse.tail map {case (c, d) => c := d}
 
