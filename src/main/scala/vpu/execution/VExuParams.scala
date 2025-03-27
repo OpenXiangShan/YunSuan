@@ -180,5 +180,6 @@ object VfredOpCode {
 object Yunsuan_latency {
   val VFD_latency: Int = 99 // unknown
   val VFA_latency: Int = 1
+  val VFr_latency: Int  = 8 // ?? need to be confirmed
   val VCVT_latency: Int = 2 // ??
 }

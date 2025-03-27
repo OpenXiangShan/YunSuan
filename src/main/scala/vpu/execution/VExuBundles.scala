@@ -185,6 +185,7 @@ class Vfred_setuop extends Bundle {
 
 class VfredInput extends Bundle {
   val uop           = new VUop
+  val fire          = Bool()
   // val vlmul         = UInt(3.W)
   // val vm            = Bool()
   // val mask          = UInt(VLEN.W)
@@ -205,8 +206,4 @@ class VfredOutput extends Bundle{
   val fflags  = UInt(5.W)
 }
 
-class Vfredctrl extends Bundle{
-  val fire          = Bool()
-  val ctrl          = new VfredInput
-} 
 

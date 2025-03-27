@@ -163,7 +163,7 @@ class VExecution extends Module {
   vfred_setuop.vs1 := in.uop.ctrl.lsrc(0)
   vfred_setuop.vs2 := in.uop.ctrl.lsrc(1)
 
-  vfred.io.fire := io.in.valid & in.uop.ctrl.vfred
+  vfred.io.in.fire := io.in.valid & in.uop.ctrl.vfred
   vfred.io.in.vs1  := in.vSrc(0)
   vfred.io.in.vs2  := in.vSrc(1)(XLEN-1, 0)
 
