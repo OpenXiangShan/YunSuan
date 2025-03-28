@@ -1,4 +1,4 @@
-package race.vpu.Vexecution
+package race.vpu
 
 import chisel3._
 import chisel3.util._
@@ -6,7 +6,7 @@ import race.vpu.yunsuan._
 import race.vpu._
 import VParams._
 
-class VExecution extends Module {
+class VExuBlock extends Module {
   val io = IO(new Bundle {
     val in = Input(ValidIO(new VExuInput))
     val out = ValidIO(new VExuOutput)

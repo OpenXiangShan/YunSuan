@@ -4,7 +4,6 @@ import chisel3._
 import chisel3.util._
 import VParams._
 import race.vpu.ctrl._
-import _root_.vpu.utils.PipeConnect
 
 class VCtrlBlock extends Module {
   val io = IO(new Bundle {
