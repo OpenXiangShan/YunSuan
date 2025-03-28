@@ -149,7 +149,7 @@ class VCtrlBlock extends Module {
   io.toExu.bits.rs1 := exuInputReg.rs1
   io.lsu.storeReq.bits.uop := exuInputReg.uop
   io.lsu.storeReq.bits.vs3 := exuInputReg.vSrc(3)
-  io.lsu.storeReq.bits.paddrBase := paddrBaseStoreReg
+  io.lsu.storeReq.bits.paddr := paddrBaseStoreReg
   io.lsu.storeReq.bits.ldstCtrl := ldstCtrlStoreReg
 
   /**
@@ -159,5 +159,5 @@ class VCtrlBlock extends Module {
   io.lsu.loadReq.valid := expdrOutValid && expdrOutIsLoad
   io.lsu.loadReq.bits.uop := expander.io.out.bits.uop
   io.lsu.loadReq.bits.ldstCtrl := 0.U // FIXME: use the real ldstCtrl from expander
-  io.lsu.loadReq.bits.paddrBase := expander.io.out.bits.rs1 // FIXME: use the real paddr_base from expander
+  io.lsu.loadReq.bits.paddr := expander.io.out.bits.rs1 // FIXME: use the real paddr_base from expander
 }

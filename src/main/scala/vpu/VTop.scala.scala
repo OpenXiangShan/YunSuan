@@ -7,9 +7,12 @@ import VParams._
 class VTop extends Module {
   val io = IO(new Bundle {
     val dispatch_s2v = Flipped(DecoupledIO(new Dispatch_S2V))
-    val temp_complt = ValidIO(new Bundle {
-      val robIdx = new RobPtr
-    })
+    val l2 = new Bundle {
+      val loadReq = DecoupledIO(new VL2LoadReq)
+      val loadRsp = Input(ValidIO(new VL2LoadRsp))
+      val storeReq = DecoupledIO(new VL2StoreReq)
+      val storeAck = Input(ValidIO(new VL2StoreAck))
+    }
   })
 
   val vCtrlBlock = Module(new VCtrlBlock)
@@ -20,7 +23,8 @@ class VTop extends Module {
 
   vExuBlock.io.in := vCtrlBlock.io.toExu
   vCtrlBlock.io.fromExu(0) := vExuBlock.io.out
+
+  vCtrlBlock.io.lsu <> vLsuBlock.io.ctrl
   
-  io.temp_complt.valid := vExuBlock.io.out.valid
-  io.temp_complt.bits.robIdx := vExuBlock.io.out.bits.uop.robIdx
+  vLsuBlock.io.l2 <> io.l2
 }

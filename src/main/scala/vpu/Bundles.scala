@@ -164,7 +164,7 @@ class VExuOutput extends Bundle {
 class VLsuLoadReq extends Bundle {
   val uop = new VUop
   val ldstCtrl = new LdstCtrl
-  val paddrBase = UInt(XLEN.W)
+  val paddr = UInt(PAddrBits.W)
 }
 
 class VLsuLoadWb extends Bundle {
@@ -176,9 +176,26 @@ class VLsuStoreReq extends Bundle {
   val uop = new VUop
   val ldstCtrl = new LdstCtrl
   val vs3 = UInt(VLEN.W) // Store data
-  val paddrBase = UInt(XLEN.W)
+  val paddr = UInt(PAddrBits.W)
 }
 
 class VLsuStoreAck extends Bundle {
   val uop = new VUop
+}
+
+class VL2LoadReq extends Bundle {
+  val addr = Vec(4, UInt(PAddrBits.W))
+}
+
+class VL2LoadRsp extends Bundle {
+  val data = Vec(4, UInt(CachelineBits.W))
+}
+
+class VL2StoreReq extends Bundle {
+  val addr = Vec(4, UInt(PAddrBits.W))
+  val data = Vec(4, UInt(CachelineBits.W))
+}
+
+class VL2StoreAck extends Bundle {
+  val dummy = Bool()
 }

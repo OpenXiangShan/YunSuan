@@ -21,4 +21,8 @@ object UIntSplit {
   def vlen_splitTo_lanes(data: UInt): Seq[UInt] = {
     Seq.tabulate(NLanes)(i => data(LaneWidth*i+LaneWidth-1, LaneWidth*i))
   }
+
+  def apply(data: UInt, width: Int): Seq[UInt] = {
+    Seq.tabulate(data.getWidth / width)(i => data(width*i+width-1, width*i))
+  }
 }

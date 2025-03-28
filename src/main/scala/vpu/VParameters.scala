@@ -8,6 +8,7 @@ object VParams {
   val VRobSize = 192
 
   val VLEN = 2048  // Must be power of 2
+  val vlenb = VLEN/8
   val bVL = log2Up(VLEN) + 1
   val bVstart = bVL - 1
 
@@ -22,5 +23,11 @@ object VParams {
   val NLanes = VLEN / LaneWidth
 
   val bMaxFuDelay = 3 // Exclude long-latency (div) operations
+
+  // Load/Store
+  val PAddrBits = XLEN
+  // L2 Cache
+  val nPortsL2 = 4
+  val CachelineBits = 512
 }
 
