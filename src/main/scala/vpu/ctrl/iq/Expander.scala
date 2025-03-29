@@ -25,70 +25,72 @@ class Expander extends Module {
   val stall_scoreboard = io.readScoreboard.resp
   val canOut = io.out.ready && !stall_scoreboard
 
-  val IDLE = 0.U(1.W)
-  val BUSY = 1.U(1.W)
-  val state = RegInit(UInt(1.W), IDLE)
-  val busy_end = Wire(Bool())
-
-  when (state === IDLE) {
-    state := Mux(fire, BUSY, IDLE)
-  }.otherwise {
-    state := Mux(!fire && busy_end, IDLE, BUSY)
-  }
-
   /**
     * Calculate expanded length
     *   Pls refer to ExpdLen.scala
     */
   val expdInfo_in = io.in.bits.expdInfo
   val expdLen = expdInfo_in.expdLen
+
+  val IDLE = 0.U(1.W)
+  val BUSY = 1.U(1.W)
+  val state = RegInit(UInt(1.W), IDLE)
+  val busy_end = Wire(Bool())
+
+  when (state === IDLE) {
+    state := Mux(fire && expdLen =/= 1.U, BUSY, IDLE)
+  }.otherwise {
+    state := Mux(busy_end, IDLE, BUSY)
+  }
   
   /**
    * Expanded length remain and uop index update
    */
   val expdLenRemainReg = Reg(UInt(4.W))
-  val expdLenRemain = Mux(fire, expdLen, expdLenRemainReg)
+  val expdLenRemain = Mux(state === IDLE, expdLen, expdLenRemainReg)
   val expdLenRemainRegIsZero = expdLenRemainReg === 0.U
   val uopIdxReg = Reg(UInt(3.W))
-  val uopIdx = Mux(fire, 0.U, uopIdxReg)
-  when (fire || canOut && state === BUSY && !expdLenRemainRegIsZero) {
+  val uopIdx = Mux(state === IDLE, 0.U, uopIdxReg)
+  when (state === IDLE || canOut && state === BUSY && !expdLenRemainRegIsZero) {
     expdLenRemainReg := expdLenRemain - 1.U
     uopIdxReg := uopIdx + 1.U
   }
-  val uopEnd = Mux(expdLen === 1.U, fire, uopIdx === expdLen - 1.U)
+  val uopEnd = uopIdx === expdLen - 1.U
 
-  val busy_end_logic = state === BUSY && expdLenRemainRegIsZero
+  val busy_end_logic = state === BUSY && expdLenRemainReg === 1.U
   busy_end := busy_end_logic && canOut
-
-  io.in.ready := busy_end || state === IDLE
-
+  
   val out_valid = RegInit(false.B)
-  when (fire) {
+  when (fire || canOut && state === BUSY) {
     out_valid := true.B
-  }.elsewhen (busy_end) {
+  }.elsewhen (io.out.ready) {
     out_valid := false.B
   }
   io.out.valid := out_valid
+
+  io.in.ready := state === IDLE && canOut
   
   //---- Some ctrl signals should be hold during this instruction expanding process ----
   val v_ext = io.in.bits.mop.ctrl.alu && io.in.bits.mop.ctrl.funct3 === "b010".U && io.in.bits.mop.ctrl.funct6 === "b010010".U
-  val v_ext_hold = Mux(fire, v_ext, RegEnable(v_ext, fire))
-  val expdInfo_hold = Mux(fire, expdInfo_in, RegEnable(expdInfo_in, fire))
-  val mop_hold = Mux(fire, io.in.bits.mop, RegEnable(io.in.bits.mop, fire))
-  val rs_hold = Mux(fire, io.in.bits.rs, RegEnable(io.in.bits.rs, fire))
+  val v_ext_reg = RegEnable(v_ext, fire)
+  val expdInfo_reg = RegEnable(expdInfo_in, fire)
+  val mop_reg = RegEnable(io.in.bits.mop, fire)
+  val rs_reg = RegEnable(io.in.bits.rs, fire)
+
+  val v_ext_hold = Mux(state === IDLE, v_ext, v_ext_reg)
+  val expdInfo_hold = Mux(state === IDLE, expdInfo_in, expdInfo_reg)
+  val mop_hold = Mux(state === IDLE, io.in.bits.mop, mop_reg)
 
   /**
    * RF addresses update
    */
   val uopOut = Wire(new VUop)
-  val rs1Out = Wire(UInt(XLEN.W))
   uopOut.ctrl := mop_hold.ctrl
   uopOut.csr := mop_hold.csr
   uopOut.robIdx := mop_hold.robIdx
   uopOut.veewVd := mop_hold.veewVd
   uopOut.uopIdx := uopIdx
   uopOut.uopEnd := uopEnd
-  rs1Out := rs_hold.rs1
 
   val sew = SewOH(mop_hold.csr.vsew)
   val ctrl = mop_hold.ctrl
@@ -161,11 +163,24 @@ class Expander extends Module {
   val out_bits = Reg(new ExpdOutput)
   when (fire || canOut && state === BUSY) {
     out_bits.uop := uopOut
-    out_bits.rs1 := rs1Out
     out_bits.uop.uopIdx := uopIdx
     out_bits.uop.uopEnd := uopEnd
   }
-  io.out.bits := out_bits
+  
+  io.out.bits.rs1 := rs_reg.rs1
+  io.out.bits.uop.ctrl := mop_reg.ctrl
+  io.out.bits.uop.csr := mop_reg.csr
+  io.out.bits.uop.robIdx := mop_reg.robIdx
+  io.out.bits.uop.veewVd := mop_reg.veewVd
+  
+  // For uop members that updates in each uop-idx
+  io.out.bits.uop.uopIdx := out_bits.uop.uopIdx
+  io.out.bits.uop.uopEnd := out_bits.uop.uopEnd
+  io.out.bits.uop.lsrcUop := out_bits.uop.lsrcUop
+  io.out.bits.uop.ldestUop := out_bits.uop.ldestUop
+  io.out.bits.uop.lsrcValUop := out_bits.uop.lsrcValUop
+  io.out.bits.uop.ldestValUop := out_bits.uop.ldestValUop
+  io.out.bits.uop.lmaskValUop := out_bits.uop.lmaskValUop
 
   // Scoreboard Read
   io.readScoreboard.req := uopOut

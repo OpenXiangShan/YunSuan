@@ -93,9 +93,9 @@ class VMacroOp extends VCtrlCsr {
 
 class VUop extends VCtrlCsr {
   val robIdx = new RobPtr
+  val veewVd = UInt(3.W) // Destination EEW
   val uopIdx = UInt(3.W)
   val uopEnd = Bool()
-  val veewVd = UInt(3.W) // Destination EEW
   val lsrcUop = Vec(2, UInt(5.W)) //0: vs1   1: vs2
   val ldestUop = UInt(5.W)
   val lsrcValUop = Vec(3, Bool())
