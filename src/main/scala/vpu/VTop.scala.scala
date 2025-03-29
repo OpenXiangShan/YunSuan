@@ -16,15 +16,23 @@ class VTop extends Module {
   })
 
   val vCtrlBlock = Module(new VCtrlBlock)
-  val vExuBlock = Module(new VExuBlock)
+  // val vExuBlock = Module(new VExuBlock)
   val vLsuBlock = Module(new VLsuBlock)
 
   vCtrlBlock.io.dispatch_s2v <> io.dispatch_s2v
 
-  vExuBlock.io.in := vCtrlBlock.io.toExu
-  vCtrlBlock.io.fromExu(0) := vExuBlock.io.out
-
+  // vExuBlock.io.in := vCtrlBlock.io.toExu
+  // vCtrlBlock.io.fromExu(0) := vExuBlock.io.out
+  vCtrlBlock.io.fromExu(0).valid := true.B
+  vCtrlBlock.io.fromExu(0).bits := 0.U.asTypeOf(new VExuOutput)
+  
   vCtrlBlock.io.lsu <> vLsuBlock.io.ctrl
   
   vLsuBlock.io.l2 <> io.l2
 }
+
+object VerilogVTop extends App {
+  println("Generating the VPU Top hardware")
+  emitVerilog(new VTop(), Array("--target-dir", "build/verilog_vpu"))
+}
+

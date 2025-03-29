@@ -29,6 +29,7 @@ class VExuBlock extends Module {
   vfa_op.vm := in.uop.ctrl.vm
   vfa_op.vs1 := in.uop.ctrl.lsrc(0)
   vfa_op.vs2 := in.uop.ctrl.lsrc(1)
+  vfa_op.op := vfa_op.op_gen
 
   vfa.io.fire := io.in.valid & in.uop.ctrl.vfa
   vfa.io.in_uop := in.uop
@@ -62,6 +63,7 @@ class VExuBlock extends Module {
   vff_op.vm     := in.uop.ctrl.vm
   vff_op.vs1    := in.uop.ctrl.lsrc(0)
   vff_op.vs2    := in.uop.ctrl.lsrc(1)
+  vff_op.op     := vff_op.op_gen
 
   vff.io.fire := io.in.valid & in.uop.ctrl.vfma 
   vff.io.in_uop := in.uop
@@ -93,7 +95,8 @@ class VExuBlock extends Module {
   // vfd_setuop.vm := in.uop.ctrl.vm
   // vfd_setuop.vs1 := in.uop.ctrl.lsrc(0)
   // vfd_setuop.vs2 := in.uop.ctrl.lsrc(1)
-
+  // vfd_setuop.op := vfd_setuop.op_gen
+  
   // vfd.io.fire := io.in.valid & in.uop.ctrl.vfdiv
   // vfd.io.vs1  := in.vSrc(0)
   // vfd.io.vs2  := in.vSrc(1)
@@ -119,6 +122,7 @@ class VExuBlock extends Module {
   vcvt_setuop.vm := in.uop.ctrl.vm
   vcvt_setuop.vs1 := in.uop.ctrl.lsrc(0)
   vcvt_setuop.vs2 := in.uop.ctrl.lsrc(1)
+  vcvt_setuop.op := vcvt_setuop.op_gen
 
   vcvt.io.fire := io.in.valid & in.uop.ctrl.vfcvt // need to change
   vcvt.io.in_uop := in.uop
@@ -141,6 +145,7 @@ class VExuBlock extends Module {
   // vrg_setuop.vm := in.uop.ctrl.vm
   // vrg_setuop.vs1 := in.uop.ctrl.lsrc(0)
   // vrg_setuop.vs2 := in.uop.ctrl.lsrc(1)
+  // vrg_setuop.op := vrg_setuop.op_gen
 
   // vrg.io.fire := 0.U // need to change
   // vrg.io.vs1  := in.vSrc(0)
@@ -162,6 +167,7 @@ class VExuBlock extends Module {
   vfred_setuop.vm := in.uop.ctrl.vm
   vfred_setuop.vs1 := in.uop.ctrl.lsrc(0)
   vfred_setuop.vs2 := in.uop.ctrl.lsrc(1)
+  vfred_setuop.op := vfred_setuop.op_gen
 
   vfred.io.in.fire := io.in.valid & in.uop.ctrl.vfred
   vfred.io.in.vs1  := in.vSrc(0)

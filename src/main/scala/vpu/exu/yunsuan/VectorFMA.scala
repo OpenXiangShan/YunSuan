@@ -73,7 +73,7 @@ class VectorExuFloatFMA() extends Module{
   val reg_uop_1     = RegEnable(reg_uop_0, reg_valid_0)
   val reg_uop_2     = RegEnable(reg_uop_1, reg_valid_1)
   io.out_uop.valid := reg_valid_2
-  io.out_uop.bits := Fill(io.out_uop.bits.getWidth, reg_valid_2) & reg_uop_2.asUInt
+  io.out_uop.bits := reg_uop_2
 
 }
 

@@ -71,7 +71,7 @@ class Expander extends Module {
   io.out.valid := out_valid
   
   //---- Some ctrl signals should be hold during this instruction expanding process ----
-  val v_ext = ctrl.alu && ctrl.funct3 === "b010".U && ctrl.funct6 === "b010010".U
+  val v_ext = io.in.bits.mop.ctrl.alu && io.in.bits.mop.ctrl.funct3 === "b010".U && io.in.bits.mop.ctrl.funct6 === "b010010".U
   val v_ext_hold = Mux(fire, v_ext, RegEnable(v_ext, fire))
   val expdInfo_hold = Mux(fire, expdInfo_in, RegEnable(expdInfo_in, fire))
   val mop_hold = Mux(fire, io.in.bits.mop, RegEnable(io.in.bits.mop, fire))
@@ -86,6 +86,8 @@ class Expander extends Module {
   uopOut.csr := mop_hold.csr
   uopOut.robIdx := mop_hold.robIdx
   uopOut.veewVd := mop_hold.veewVd
+  uopOut.uopIdx := uopIdx
+  uopOut.uopEnd := uopEnd
   rs1Out := rs_hold.rs1
 
   val sew = SewOH(mop_hold.csr.vsew)
@@ -163,6 +165,7 @@ class Expander extends Module {
     out_bits.uop.uopIdx := uopIdx
     out_bits.uop.uopEnd := uopEnd
   }
+  io.out.bits := out_bits
 
   // Scoreboard Read
   io.readScoreboard.req := uopOut

@@ -105,7 +105,7 @@ class VectorExuFloatAdder() extends Module {
   val reg_uop     = RegEnable(io.in_uop, io.fire)
 
   io.out_uop.valid := reg_valid_0
-  io.out_uop.bits := Fill(io.out_uop.bits.getWidth, reg_valid_0) & reg_uop.asUInt
+  io.out_uop.bits := reg_uop
 }
 
 class VectorFloatAdder_W64() extends Module {

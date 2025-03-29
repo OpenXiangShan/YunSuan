@@ -25,7 +25,7 @@ class VCtrlBlock extends Module {
   infoClac.io.ctrl := decoder.io.out
   infoClac.io.csr := io.dispatch_s2v.bits.vcsr
   
-  val viqInput = DecoupledIO(new VIQInput)
+  val viqInput = Wire(DecoupledIO(new VIQInput))
   io.dispatch_s2v.ready := viqInput.ready
   viqInput.valid := io.dispatch_s2v.valid
   viqInput.bits.mop.ctrl := decoder.io.out
@@ -38,6 +38,7 @@ class VCtrlBlock extends Module {
   viqInput.bits.rs.rs2 := io.dispatch_s2v.bits.rs2
 
   val viq = Module(new VIQ)
+  viq.io.flush := false.B
   PipeConnect(viqInput, viq.io.in, false.B, moduleName = Some("decodePipeIqModule"))
   
   val expdInfo = Module(new ExpdLen)
@@ -52,10 +53,12 @@ class VCtrlBlock extends Module {
   expander.io.readScoreboard.resp := scoreboard.io.readResp
   scoreboard.io.setReq.valid := expander.io.out.fire
   scoreboard.io.setReq.bits := expander.io.out.bits.uop
-  scoreboard.io.wb zip io.fromExu foreach { case (a, b) =>
+  scoreboard.io.wb.dropRight(1) zip io.fromExu foreach { case (a, b) =>
     a.valid := b.valid
     a.bits := b.bits.uop
   }
+  scoreboard.io.wb.last.valid := io.lsu.loadWb.valid
+  scoreboard.io.wb.last.bits := io.lsu.loadWb.bits.uop
 
   val vrf = Module(new VRF(4, nVRFWritePorts))
   vrf.io.raddr(0) := expander.io.out.bits.uop.lsrcUop(0)
@@ -129,7 +132,7 @@ class VCtrlBlock extends Module {
   }
   when (fire_exuInputReg && expdrOutIsStore) {
     paddrBaseStoreReg := expander.io.out.bits.rs1 // FIXME: use the real paddr_base from expander
-    ldstCtrlStoreReg := 0.U // FIXME: use the real ldstCtrl from expander
+    ldstCtrlStoreReg := 0.U.asTypeOf(new LdstCtrl) // FIXME: use the real ldstCtrl from expander
   }
   // Combine the ready from EXU and LSU_store
   val readyExu = true.B // Exu has no ready signal for expander
@@ -158,6 +161,6 @@ class VCtrlBlock extends Module {
   expander.io.out.ready := io.lsu.loadReq.ready && expdrOutIsLoad || readyExuStore && (expdrOutIsExu || expdrOutIsStore)
   io.lsu.loadReq.valid := expdrOutValid && expdrOutIsLoad
   io.lsu.loadReq.bits.uop := expander.io.out.bits.uop
-  io.lsu.loadReq.bits.ldstCtrl := 0.U // FIXME: use the real ldstCtrl from expander
+  io.lsu.loadReq.bits.ldstCtrl := 0.U.asTypeOf(new LdstCtrl) // FIXME: use the real ldstCtrl from expander
   io.lsu.loadReq.bits.paddr := expander.io.out.bits.rs1 // FIXME: use the real paddr_base from expander
 }

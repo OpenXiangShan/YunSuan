@@ -279,7 +279,7 @@ class Vfreduction extends Module{
   io.out.valid := (is_fp32 & fp32_finish) | (is_fp16 & fp16_finish)
 
   io.out.bits.uop :=  Mux(is_fp32 & fp32_finish, fp32_uop, 
-  Mux(is_fp16 & fp16_finish, fp16_uop, 0.U))
+  Mux(is_fp16 & fp16_finish, fp16_uop, 0.U.asTypeOf(new VUop)))
 
 }
 

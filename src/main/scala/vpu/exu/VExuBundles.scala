@@ -10,19 +10,20 @@ class Vfa_setuop extends Bundle {
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)
   val vs2 = UInt(5.W)
+  val op = UInt(5.W)
 
-  val funct6 = funct(8, 3)
-  val funct3 = funct(2, 0)
-  val ivv = (funct3 === "b000".U)
-  val ivx = (funct3 === "b100".U)
-  val ivi = (funct3 === "b011".U)
-  val mvv = (funct3 === "b010".U)
-  val mvx = (funct3 === "b110".U)
-  val fvv = (funct3 === "b001".U)
-  val fvf = (funct3 === "b101".U)
+  def funct6 = funct(8, 3)
+  def funct3 = funct(2, 0)
+  def ivv = (funct3 === "b000".U)
+  def ivx = (funct3 === "b100".U)
+  def ivi = (funct3 === "b011".U)
+  def mvv = (funct3 === "b010".U)
+  def mvx = (funct3 === "b110".U)
+  def fvv = (funct3 === "b001".U)
+  def fvf = (funct3 === "b101".U)
 
     // without default
-  val op = Mux1H(Seq(
+  def op_gen = Mux1H(Seq(
     (funct6 === Vfaddfunc6.fadd      & (fvv | fvf))                                -> VfaddOpCode.fadd,
     (funct6 === Vfaddfunc6.fsub      & (fvv | fvf))                                -> VfaddOpCode.fsub,
     (funct6 === Vfaddfunc6.fmin      & (fvv | fvf))                                -> VfaddOpCode.fmin,
@@ -59,13 +60,14 @@ class Vff_setuop extends Bundle {
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)
   val vs2 = UInt(5.W)
+  val op = UInt(4.W)
 
-  val funct6 = funct(8, 3)
-  val funct3 = funct(2, 0)
-  val fvv = (funct3 === "b001".U)
-  val fvf = (funct3 === "b101".U)
+  def funct6 = funct(8, 3)
+  def funct3 = funct(2, 0)
+  def fvv = (funct3 === "b001".U)
+  def fvf = (funct3 === "b101".U)
   
-  val op = Mux1H(Seq(
+  def op_gen = Mux1H(Seq(
     (funct6 === Vfffunc6.fmul    & (fvv  | fvf))       -> VfmaOpCode.vfmul,
     (funct6 === Vfffunc6.fmacc   & (fvv  | fvf))       -> VfmaOpCode.vfmacc ,
     (funct6 === Vfffunc6.fnmacc  & (fvv  | fvf))       -> VfmaOpCode.vfnmacc,
@@ -85,25 +87,26 @@ class Vfd_setuop extends Bundle {
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)
   val vs2 = UInt(5.W)
+  val op = UInt(1.W)
 
-  val funct6 = funct(8, 3)
-  val funct3 = funct(2, 0)
-  val ivv = (funct3 === "b000".U)
-  val ivx = (funct3 === "b100".U)
-  val ivi = (funct3 === "b011".U)
-  val mvv = (funct3 === "b010".U)
-  val mvx = (funct3 === "b110".U)
-  val fvv = (funct3 === "b001".U)
-  val fvf = (funct3 === "b101".U)
+  def funct6 = funct(8, 3)
+  def funct3 = funct(2, 0)
+  def ivv = (funct3 === "b000".U)
+  def ivx = (funct3 === "b100".U)
+  def ivi = (funct3 === "b011".U)
+  def mvv = (funct3 === "b010".U)
+  def mvx = (funct3 === "b110".U)
+  def fvv = (funct3 === "b001".U)
+  def fvf = (funct3 === "b101".U)
 
   // TODO:  
-  val is_frs1 = Bool()
-  val is_frs2 = Bool()
+  // val is_frs1 = Bool()
+  // val is_frs2 = Bool()
 
-  val op = Mux(funct6 === Vfdfunc6.fsqrt, VfdOpCode.vfsqrt, VfdOpCode.vfdiv)
+  def op_gen = Mux(funct6 === Vfdfunc6.fsqrt, VfdOpCode.vfsqrt, VfdOpCode.vfdiv)
   
-  is_frs1 := op === funct6 === Vfdfunc6.fdiv  & fvf
-  is_frs2 := op === funct6 === Vfdfunc6.frdiv & fvf
+  def is_frs1 = op === funct6 === Vfdfunc6.fdiv  && fvf
+  def is_frs2 = op === funct6 === Vfdfunc6.frdiv && fvf
 
 }
 
@@ -112,22 +115,23 @@ class Vcvt_setuop extends Bundle {
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)
   val vs2 = UInt(5.W)
+  val op = UInt(8.W)
 
-  val funct6 = funct(8, 3)
-  val funct3 = funct(2, 0)
-  val ivv = (funct3 === "b000".U)
-  val ivx = (funct3 === "b100".U)
-  val ivi = (funct3 === "b011".U)
-  val mvv = (funct3 === "b010".U)
-  val mvx = (funct3 === "b110".U)
-  val fvv = (funct3 === "b001".U)
-  val fvf = (funct3 === "b101".U)
+  def funct6 = funct(8, 3)
+  def funct3 = funct(2, 0)
+  def ivv = (funct3 === "b000".U)
+  def ivx = (funct3 === "b100".U)
+  def ivi = (funct3 === "b011".U)
+  def mvv = (funct3 === "b010".U)
+  def mvx = (funct3 === "b110".U)
+  def fvv = (funct3 === "b001".U)
+  def fvf = (funct3 === "b101".U)
   
   //
   // val is_frs1 = Bool()
   // val is_frs2 = Bool()
   
-  val op = Mux1H(Seq(
+  def op_gen = Mux1H(Seq(
   (funct6 === Vfcvtfunc6.vfncvt_xfw    & fvv & (vs1 === "b10001".U))   -> VfcvtOpCode.vfncvt_xfw,
   (funct6 === Vfcvtfunc6.vfwcvt_fxv    & fvv & (vs1 === "b01011".U))   -> VfcvtOpCode.vfwcvt_fxv
   ))
@@ -139,19 +143,19 @@ class Vrg_setuop extends Bundle {
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)
   val vs2 = UInt(5.W)
+  val op = UInt(1.W)
 
-  val funct6 = funct(8, 3)
-  val funct3 = funct(2, 0)
-  val ivv = (funct3 === "b000".U)
-  val ivx = (funct3 === "b100".U)
-  val ivi = (funct3 === "b011".U)
-  val mvv = (funct3 === "b010".U)
-  val mvx = (funct3 === "b110".U)
-  val fvv = (funct3 === "b001".U)
-  val fvf = (funct3 === "b101".U)
+  def funct6 = funct(8, 3)
+  def funct3 = funct(2, 0)
+  def ivv = (funct3 === "b000".U)
+  def ivx = (funct3 === "b100".U)
+  def ivi = (funct3 === "b011".U)
+  def mvv = (funct3 === "b010".U)
+  def mvx = (funct3 === "b110".U)
+  def fvv = (funct3 === "b001".U)
+  def fvf = (funct3 === "b101".U)
   
-
-  val op = Mux1H(Seq(
+  def op_gen = Mux1H(Seq(
   (funct6 === Vrgfunc6.vrgather   & (ivv | ivx | ivi))   -> VrgOpCode.vrgather,
   ))
 
@@ -163,19 +167,20 @@ class Vfred_setuop extends Bundle {
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)
   val vs2 = UInt(5.W)
+  val op = UInt(5.W)
 
-  val funct6 = funct(8, 3)
-  val funct3 = funct(2, 0)
-  val ivv = (funct3 === "b000".U)
-  val ivx = (funct3 === "b100".U)
-  val ivi = (funct3 === "b011".U)
-  val mvv = (funct3 === "b010".U)
-  val mvx = (funct3 === "b110".U)
-  val fvv = (funct3 === "b001".U)
-  val fvf = (funct3 === "b101".U)
+  def funct6 = funct(8, 3)
+  def funct3 = funct(2, 0)
+  def ivv = (funct3 === "b000".U)
+  def ivx = (funct3 === "b100".U)
+  def ivi = (funct3 === "b011".U)
+  def mvv = (funct3 === "b010".U)
+  def mvx = (funct3 === "b110".U)
+  def fvv = (funct3 === "b001".U)
+  def fvf = (funct3 === "b101".U)
   
 
-  val op = Mux1H(Seq(
+  def op_gen = Mux1H(Seq(
   (funct6 === Vfredfunc6.vfredmax   & (ivv))   -> VfredOpCode.fmax,
   (funct6 === Vfredfunc6.vfredusum  & (ivv))   -> VfredOpCode.fadd,
   // TODO:
