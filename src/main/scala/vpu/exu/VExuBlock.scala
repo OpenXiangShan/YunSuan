@@ -192,3 +192,8 @@ class VExuBlock extends Module {
   )
 
 }
+
+object VerilogVExu extends App {
+  println("Generating the Vector Exu Top hardware")
+  emitVerilog(new VExuBlock(), Array("--target-dir", "build/verilog_vexu"))
+}
