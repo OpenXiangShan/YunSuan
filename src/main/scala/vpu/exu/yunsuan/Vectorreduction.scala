@@ -256,6 +256,7 @@ class Vfreduction extends Module{
   vfred_pipe7_fp16.io.op_code    := vctrl_pipe6.op_code
   vfred_pipe7_fp16.io.fp_aIsFpCanonicalNAN := 0.U
   vfred_pipe7_fp16.io.fp_bIsFpCanonicalNAN := 0.U
+  vfred_pipe7_fp16.io.maskForReduction := 0.U
 
   val vctrl_pipe7_fp16_cvt = MuxLookup(vctrl_pipe7_fp16.uop.csr.vlmul, "b000".U, Seq(
     "b000".U -> "b000".U,   // LMUL = 1 → 000
@@ -323,9 +324,12 @@ class VfredFP32WidenMixedFP16_SingleUnit() extends Module {
   U_F16.io.fire := fire
   U_F16.io.fp_a := io.fp_a(31,16)
   U_F16.io.fp_b := io.fp_b(31,16)
+  U_F16.io.mask    := false.B
+  U_F16.io.maskForReduction := 0.U
+
   U_F16.io.is_sub := fast_is_sub
   U_F16.io.round_mode := io.round_mode
-  U_F16.io.mask := 0.U
+  U_F16.io.mask := false.B
   U_F16.io.op_code    := io.op_code
   U_F16.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
   U_F16.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
@@ -338,10 +342,16 @@ class VfredFP32WidenMixedFP16_SingleUnit() extends Module {
   U_F32_Mixed.io.fire := fire
   U_F32_Mixed.io.fp_a := io.fp_a
   U_F32_Mixed.io.fp_b := io.fp_b
-
+  U_F32_Mixed.io.widen_a := 0.U
+  U_F32_Mixed.io.widen_b := 0.U
+  U_F32_Mixed.io.mask    := false.B
+  U_F32_Mixed.io.res_widening := false.B
+  U_F32_Mixed.io.opb_widening := false.B
+  U_F32_Mixed.io.maskForReduction := 0.U
   U_F32_Mixed.io.is_sub       := 0.U
   U_F32_Mixed.io.round_mode   := io.round_mode
-  // U_F32_Mixed.io.mask         := io.mask(0)
+  U_F32_Mixed.io.is_vfwredosum := false.B
+
   // TODO:
   U_F32_Mixed.io.fp_format    := fp_format
   U_F32_Mixed.io.op_code      := io.op_code

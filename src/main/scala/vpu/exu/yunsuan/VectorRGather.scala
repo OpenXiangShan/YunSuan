@@ -25,6 +25,7 @@ class VectorExuReggather() extends Module{
   })
 
   // latency  = 1
+  // mul = 1
   // only support sew = 0, 1
 
   val vrg  = Module(new New_VRGather)

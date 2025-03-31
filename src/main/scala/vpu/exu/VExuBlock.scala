@@ -15,11 +15,11 @@ class VExuBlock extends Module {
   val in = io.in.bits
   // output types
   val vfa_out = Wire(new VExuOutput)
-  val vfd_out = Wire(new VExuOutput)
   val vff_out = Wire(new VExuOutput)
   val vcvt_out = Wire(new VExuOutput)
-  val vrg_out = Wire(new VExuOutput)
   val vfred_out = Wire(new VExuOutput)
+  // val vrg_out = Wire(new VExuOutput)
+  // val vfd_out = Wire(new VExuOutput)
 
   // vector float adder
   val vfa = Module(new VectorExuFloatAdder)
@@ -31,15 +31,18 @@ class VExuBlock extends Module {
   vfa_op.vs2 := in.uop.ctrl.lsrc(1)
   vfa_op.op := vfa_op.op_gen
 
-  vfa.io.fire := io.in.valid & in.uop.ctrl.vfa
+  vfa.io.fire := io.in.valid && in.uop.ctrl.vfa
   vfa.io.in_uop := in.uop
-  vfa.io.vs1  := in.vSrc(0)
-  vfa.io.vs2  := in.vSrc(1)
+  vfa.io.fp_b  := in.vSrc(0)
+  vfa.io.fp_a  := in.vSrc(1)
+  vfa.io.widen_a := in.vSrc(0)  // TODO: check it
+  vfa.io.widen_b := in.vSrc(1)  // TODO: check it
+
   vfa.io.frs1 := in.rs1
   vfa.io.is_frs1 := in.uop.ctrl.vx
   vfa.io.mask := in.vSrc(3)
-  vfa.io.uop_idx := in.uop.uopIdx // TODO: check it
-  vfa.io.round_mode := in.uop.csr.frm //TODO: check it
+  vfa.io.uop_idx := in.uop.uopIdx 
+  vfa.io.round_mode := in.uop.csr.frm 
   vfa.io.fp_format := in.uop.csr.vsew(1, 0)
   vfa.io.opb_widening := in.uop.ctrl.widen //
   vfa.io.res_widening := in.uop.ctrl.widen2 //
@@ -51,7 +54,7 @@ class VExuBlock extends Module {
   vfa.io.is_vfwredosum := false.B
   vfa.io.is_fold := 0.U
   vfa.io.vs2_fold := 0.U
-
+  vfa.io.is_vm := in.uop.ctrl.vm
   vfa_out.vd := vfa.io.result
   vfa_out.fflags := vfa.io.fflags
   vfa_out.uop := vfa.io.out_uop.bits
@@ -65,7 +68,7 @@ class VExuBlock extends Module {
   vff_op.vs2    := in.uop.ctrl.lsrc(1)
   vff_op.op     := vff_op.op_gen
 
-  vff.io.fire := io.in.valid & in.uop.ctrl.vfma 
+  vff.io.fire := io.in.valid && in.uop.ctrl.vfma 
   vff.io.in_uop := in.uop
   vff.io.vs1  := in.vSrc(0)
   vff.io.vs2  := in.vSrc(1)
@@ -124,7 +127,7 @@ class VExuBlock extends Module {
   vcvt_setuop.vs2 := in.uop.ctrl.lsrc(1)
   vcvt_setuop.op := vcvt_setuop.op_gen
 
-  vcvt.io.fire := io.in.valid & in.uop.ctrl.vfcvt // need to change
+  vcvt.io.fire := io.in.valid && in.uop.ctrl.vfcvt 
   vcvt.io.in_uop := in.uop
   vcvt.io.vs1  := in.vSrc(0)
   vcvt.io.op_code := vcvt_setuop.op
@@ -169,7 +172,7 @@ class VExuBlock extends Module {
   vfred_setuop.vs2 := in.uop.ctrl.lsrc(1)
   vfred_setuop.op := vfred_setuop.op_gen
 
-  vfred.io.in.fire := io.in.valid & in.uop.ctrl.vfred
+  vfred.io.in.fire := io.in.valid && in.uop.ctrl.vfred
   vfred.io.in.vs1  := in.vSrc(0)
   vfred.io.in.vs2  := in.vSrc(1)(XLEN-1, 0)
 

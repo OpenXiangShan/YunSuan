@@ -31,13 +31,13 @@ import race.vpu.yunsuan._
 class VectorExuFloatAdder() extends Module {
   val io = IO(new Bundle() {
   val fire          = Input (Bool())
-  val vs1, vs2      = Input (UInt(VLEN.W)) // fp_a -> vs2, fp_b -> vs1
-  // val widen_a       = Input (UInt(VLEN.W)) // widen_a -> Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
-  // val widen_b       = Input (UInt(VLEN.W)) // widen_b -> Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
+  val fp_a, fp_b      = Input (UInt(VLEN.W)) // fp_a -> vs2, fp_b -> vs1
+  val widen_a       = Input (UInt(VLEN.W)) // widen_a -> Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
+  val widen_b       = Input (UInt(VLEN.W)) // widen_b -> Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
   val frs1          = Input (UInt(XLEN.W)) // VS1(63,0)
   val is_frs1       = Input (Bool()) // VS1()
   val is_vm         = Input (Bool()) // vector mask
-  val mask          = Input (UInt((VLEN/16).W))
+  val mask          = Input (UInt(VLEN.W))
   val uop_idx       = Input (Bool())
   val is_vec        = Input (Bool())
   val round_mode    = Input (UInt(3.W))
@@ -60,19 +60,24 @@ class VectorExuFloatAdder() extends Module {
 
   val result = Wire(Vec(VLEN/XLEN, UInt(XLEN.W)))
   val fflags = Wire(Vec(VLEN/XLEN, Vec(XLEN/16, UInt(5.W))))
-    
+  
+  val is_fp16 = io.fp_format === 1.U
+  val is_fp32 = io.fp_format === 2.U  
+
   for (i <- 0 until (VLEN/XLEN)) {
-      val fp_a = io.vs1(XLEN-1+i*XLEN, 0+i*XLEN) //TODO: vs1 fp_b ? 
-      val fp_b = io.vs2(XLEN-1+i*XLEN, 0+i*XLEN)
+      val mask_fp16 = io.mask(4-1+i*4, 0+i*4)
+      val mask_fp32 = Cat(0.U(2.W), io.mask(2-1+i*2, 0+i*2))
+      val fp_a = io.fp_a(XLEN-1+i*XLEN, 0+i*XLEN)
+      val fp_b = io.fp_b(XLEN-1+i*XLEN, 0+i*XLEN)
       val vfa = Module(new VectorFloatAdder_W64)
       vfa.io.fire := io.fire
-      vfa.io.fp_a := fp_a
-      vfa.io.fp_b := fp_b
-      vfa.io.widen_a := 0.U //TODO:
-      vfa.io.widen_b := 0.U
+      vfa.io.fp_a := io.fp_a
+      vfa.io.fp_b := io.fp_b
+      vfa.io.widen_a := io.widen_a
+      vfa.io.widen_b := io.widen_b
       vfa.io.frs1 := io.frs1
       vfa.io.is_frs1 := io.is_frs1  
-      vfa.io.mask := io.mask(4-1+i*4, 0+i*4)
+      vfa.io.mask := Mux(is_fp32, mask_fp32, Mux(is_fp16, mask_fp16, 0.U))
       vfa.io.uop_idx := io.uop_idx
       vfa.io.is_vec := io.is_vec
       vfa.io.round_mode := io.round_mode
@@ -218,7 +223,7 @@ class VectorFloatAdder_W64() extends Module {
   val U_F32_Mixed_1 = Module(new FloatAdderF32WidenF16MixedPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F32_Mixed_1.io.fire := fire
   U_F32_Mixed_1.io.fp_a := f32_1_fp_a
-  U_F32_Mixed_1.io.fp_b := Mux(io.is_frs1,io.frs1(31,0),io.fp_b(63,32))
+  U_F32_Mixed_1.io.fp_b := Mux(io.is_frs1, io.frs1(31,0),io.fp_b(63,32))
   U_F32_Mixed_1.io.widen_a := U_Widen_Fotmat.io.widen_a_f32_1
   U_F32_Mixed_1.io.widen_b := U_Widen_Fotmat.io.widen_b_f32_1
   U_F32_Mixed_1.io.mask := Mux(fp_format === 1.U, io.mask(1), io.mask(2))

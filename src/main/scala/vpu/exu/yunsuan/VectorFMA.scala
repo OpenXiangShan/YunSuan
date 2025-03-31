@@ -45,6 +45,7 @@ class VectorExuFloatFMA() extends Module{
       vff.io.fp_c := fp_c 
       vff.io.widen_a := 0.U //TODO:
       vff.io.widen_b := 0.U
+      vff.io.res_widening := false.B
       vff.io.frs1   := io.frs1
       vff.io.is_frs1 := io.is_frs1  
       vff.io.uop_idx := io.uop_idx
