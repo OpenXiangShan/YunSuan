@@ -26,3 +26,18 @@ object UIntSplit {
     Seq.tabulate(data.getWidth / width)(i => data(width*i+width-1, width*i))
   }
 }
+
+object BitsExtend {
+  def apply(data: UInt, extLen: Int, signed: Bool): UInt = {
+    val width = data.getWidth
+    require(width < extLen)
+    Cat(Fill(extLen - width, data(width - 1) && signed), data)
+  }
+
+  def vector(data: UInt, extLen: Int, signed: Bool, sew: Int): UInt = { // For extension instrn
+    require(data.getWidth % sew == 0)
+    val nVec = data.getWidth / sew
+    require(extLen % nVec == 0)
+    Cat(UIntSplit(data, sew).map(dataSplit => apply(dataSplit, extLen / nVec, signed)).reverse)
+  }
+}

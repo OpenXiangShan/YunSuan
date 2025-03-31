@@ -5,6 +5,7 @@ import chisel3.util._
 object VParams {
   val xLen = 64
   val XLEN = xLen
+  val FLEN = 64
   val VRobSize = 192
 
   val VLEN = 2048  // Must be power of 2
