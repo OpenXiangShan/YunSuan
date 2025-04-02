@@ -21,6 +21,7 @@ object VParams {
   val bNVRFWritePortsExu = log2Up(nVRFWritePortsExu) 
 
   val LaneWidth = 64  // constant
+  val NByteLane = LaneWidth / 8
   val NLanes = VLEN / LaneWidth
 
   val bMaxFuDelay = 3 // Exclude long-latency (div) operations

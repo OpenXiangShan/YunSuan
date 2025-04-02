@@ -21,9 +21,9 @@ class VCtrlBlock extends Module {
   val decoder = Module(new VDecode)
   decoder.io.in := io.dispatch_s2v.bits.inst
 
-  val infoClac = Module(new VInfoCalc)
-  infoClac.io.ctrl := decoder.io.out
-  infoClac.io.csr := io.dispatch_s2v.bits.vcsr
+  val infoCalc = Module(new VInfoCalc)
+  infoCalc.io.ctrl := decoder.io.out
+  infoCalc.io.csr := io.dispatch_s2v.bits.vcsr
   
   val viqInput = Wire(DecoupledIO(new VIQInput))
   io.dispatch_s2v.ready := viqInput.ready
@@ -31,9 +31,9 @@ class VCtrlBlock extends Module {
   viqInput.bits.mop.ctrl := decoder.io.out
   viqInput.bits.mop.csr := io.dispatch_s2v.bits.vcsr
   viqInput.bits.mop.robIdx := io.dispatch_s2v.bits.robIdx
-  viqInput.bits.mop.veewVd := infoClac.io.infoAll.veewVd
-  viqInput.bits.mop.emulVd := infoClac.io.infoAll.emulVd
-  viqInput.bits.mop.emulVs2 := infoClac.io.infoAll.emulVs2
+  viqInput.bits.mop.veewVd := infoCalc.io.infoAll.veewVd
+  viqInput.bits.mop.emulVd := infoCalc.io.infoAll.emulVd
+  viqInput.bits.mop.emulVs2 := infoCalc.io.infoAll.emulVs2
   viqInput.bits.rs.rs1 := io.dispatch_s2v.bits.rs1
   viqInput.bits.rs.rs2 := io.dispatch_s2v.bits.rs2
 

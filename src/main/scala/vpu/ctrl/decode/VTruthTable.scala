@@ -452,8 +452,8 @@ class VecDecode5 extends VecDecode {
     // Vector permutation instructions
     VMV_X_S           -> BitPat("b1 010 01   00    10   1 0 0 0 0 0 0 0  0000    000"),
     VMV_S_X           -> BitPat("b1 000 10   00    10   1 0 0 0 0 0 0 0  0000    000"),
-    VFMV_F_S          -> BitPat("b1 010 01   00    10   1 0 0 0 0 0 0 0  0000    000"),
-    VFMV_S_F          -> BitPat("b1 000 10   00    10   1 0 0 0 0 0 0 0  0000    000"),
+    VFMV_F_S          -> BitPat("b1 010 01   00    10   0 0 0 0 0 0 0 0  0000    100"),
+    VFMV_S_F          -> BitPat("b1 000 10   00    10   0 0 0 0 0 0 0 0  0000    100"),
     VSLIDEUP_VX       -> BitPat("b1 010 10   00    11   0 0 0 0 0 0 0 1  0000    000"),
     VSLIDEUP_VI       -> BitPat("b1 010 10   00    11   0 0 0 0 0 0 0 1  0000    000"),
     VSLIDEDOWN_VX     -> BitPat("b1 010 10   00    11   0 0 0 0 0 0 0 1  0000    000"),
