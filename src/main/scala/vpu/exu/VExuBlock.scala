@@ -5,6 +5,7 @@ import chisel3.util._
 import race.vpu.yunsuan._
 import race.vpu._
 import VParams._
+import race.vpu.exu.laneexu.LaneExu
 
 class VExuBlock extends Module {
   val io = IO(new Bundle {
@@ -183,14 +184,20 @@ class VExuBlock extends Module {
   vfred_out.fflags          := vfred.io.out.bits.fflags
   vfred_out.uop             := vfred.io.out.bits.uop
 
-  io.out.valid := vfa.io.out_uop.valid | vff.io.out_uop.valid | vcvt.io.out_uop.valid | vfred.io.out.valid
+  
+  val laneexu = Module(new LaneExu)
+  laneexu.io.in := io.in
+  
+  io.out.valid := vfa.io.out_uop.valid | vff.io.out_uop.valid | vcvt.io.out_uop.valid | vfred.io.out.valid |
+                  laneexu.io.out.valid
   
   io.out.bits := Mux1H(
     Seq(
       vfa.io.out_uop.valid      -> vfa_out,
       vff.io.out_uop.valid      -> vff_out,
       vcvt.io.out_uop.valid     -> vcvt_out,
-      vfred.io.out.valid        -> vfred_out
+      vfred.io.out.valid        -> vfred_out,
+      laneexu.io.out.valid      -> laneexu.io.out.bits
     )
   )
 

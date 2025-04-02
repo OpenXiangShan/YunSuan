@@ -2,8 +2,9 @@
   * Note: 
   *   1) so far, the narrow-to-1 (e.g., compare) and narrow 
   *      instructions are not supported
-  *   2) mask and old_vd are not supported
+  *   2) mask and old_vd are not supported 
   */
+//TODO: (old_vd is used for compare, fma, ...)
 package race.vpu.exu.laneexu.alu
 
 import chisel3._
@@ -32,7 +33,7 @@ class LaneALU extends Module {
   // broadcast rs1 or imm to all elements, assume xLen = 64
   val imm = uop.ctrl.lsrc(0)
   //                            |sign-extend imm to 64 bits|
-  val rs1_imm = Mux(uop.ctrl.vi, imm.asSInt.pad(XLEN), io.in.bits.rs1)
+  val rs1_imm = Mux(uop.ctrl.vi, imm.asSInt.pad(XLEN).asUInt, io.in.bits.rs1)
   val rs1_imm_repeat = Mux1H(sew.oneHot, Seq(8, 16, 32, 64).map(n => Fill(XLEN/n, rs1_imm(n-1, 0))))
 
   val vs1_rs1_imm = Mux(uop.ctrl.vv, io.in.bits.vs1, rs1_imm_repeat)
