@@ -5,9 +5,19 @@ module load_l2_dpic #(
   input  logic         rst_n,
   input  logic         enable,
   input  logic [63:0]  paddr,
-  output logic [31:0]  load_data[VLEN/32-1:0],
+  output logic [VLEN-1:0]  load_data,
   output logic         load_valid
 );
+
+  logic [31:0]  load_data_wire[VLEN/32-1:0];
+  // 将load_data_wire数组连接到load_data输出
+  genvar i;
+  generate
+    for (i = 0; i < VLEN/32; i = i + 1) begin : gen_load_data
+      assign load_data[i*32+:32] = load_data_wire[i];
+    end
+  endgenerate
+  
 
   // DPI-C导入声明
   import "DPI-C" function void pmem_read(input longint paddr, output int output_bits[]);
@@ -30,7 +40,7 @@ module load_l2_dpic #(
     if (enable) begin
       pmem_read(paddr, temp_output_bits);
       for (int i = 0; i < VLEN/32; i++) begin
-        load_data[i] <= temp_output_bits[i];
+        load_data_wire[i] <= temp_output_bits[i];
       end
     end
   end
