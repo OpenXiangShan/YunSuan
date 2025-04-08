@@ -51,6 +51,8 @@ VERILATOR_FLAGS = --top-module $(TOP) \
 	-I$(abspath $(BUILD_DIR)) \
 	$(VEXTRA_FLAGS)
 
+$(info VERILATOR_FLAGS=$(VEXTRA_FLAGS))
+
 
 EMU_MK := $(BUILD_DIR)/emu-compile/V$(TOP).mk
 EMU = $(BUILD_DIR)/emu

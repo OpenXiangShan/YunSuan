@@ -48,7 +48,7 @@ trait YSModule extends ScalaModule with PublishModule {
 trait CommonYunSuan extends YSModule with SbtModule { m =>
     override def millSourcePath = os.pwd
 
-  override def forkArgs = Seq("-Xmx128G", "-Xss256m")
+  override def forkArgs = Seq("-Xmx4G", "-Xss256m")
 
   val resourcesPATH = os.pwd.toString() + "/src/main/resources"
   val envPATH = sys.env("PATH") + ":" + resourcesPATH
