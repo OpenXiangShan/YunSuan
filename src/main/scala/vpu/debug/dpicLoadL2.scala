@@ -6,7 +6,7 @@ import race.vpu.VParams._
 import race.vpu._
 
 // BlackBox for the Verilog load_l2_dpic module
-class LoadL2DpicBlackBox extends BlackBox(Map(
+class load_l2_dpic extends BlackBox(Map(
   "VLEN" -> VLEN
 )) with HasBlackBoxResource {
   val io = IO(new Bundle {
@@ -14,7 +14,7 @@ class LoadL2DpicBlackBox extends BlackBox(Map(
     val rst_n = Input(Bool())
     val enable = Input(Bool())
     val paddr = Input(UInt(64.W))
-    val load_data = Output(Vec(VParams.VLEN/32, UInt(32.W)))
+    val load_data = Output(UInt(VLEN.W))
     val load_valid = Output(Bool())
   })
   
@@ -32,7 +32,7 @@ class DpicLoadL2 extends Module {
   })
   
   // Instantiate the BlackBox
-  val loadL2Dpic = Module(new LoadL2DpicBlackBox())
+  val loadL2Dpic = Module(new load_l2_dpic())
   
   // Connect the BlackBox IO with the module IO
   loadL2Dpic.io.clk := clock
@@ -40,8 +40,7 @@ class DpicLoadL2 extends Module {
   loadL2Dpic.io.enable := io.enable
   loadL2Dpic.io.paddr := io.paddr
 //   io.load_data := loadL2Dpic.io.load_data
-  val load_data_32b = loadL2Dpic.io.load_data
 //   io.load_valid := loadL2Dpic.io.load_valid
   io.load_data.valid := loadL2Dpic.io.load_valid
-  io.load_data.bits.data := VecInit(UIntSplit(load_data_32b.asUInt, CachelineBits))
+  io.load_data.bits.data := VecInit(UIntSplit(loadL2Dpic.io.load_data, CachelineBits))
 }
