@@ -184,16 +184,16 @@ class VLsuStoreAck extends Bundle {
 }
 
 class VL2LoadReq extends Bundle {
-  val addr = Vec(4, UInt(PAddrBits.W))
+  val addr = Vec(nPortsL2, UInt(PAddrBits.W))
 }
 
 class VL2LoadRsp extends Bundle {
-  val data = Vec(4, UInt(CachelineBits.W))
+  val data = Vec(nPortsL2, UInt(CachelineBits.W))
 }
 
 class VL2StoreReq extends Bundle {
-  val addr = Vec(4, UInt(PAddrBits.W))
-  val data = Vec(4, UInt(CachelineBits.W))
+  val addr = Vec(nPortsL2, UInt(PAddrBits.W))
+  val data = Vec(nPortsL2, UInt(CachelineBits.W))
 }
 
 class VL2StoreAck extends Bundle {
