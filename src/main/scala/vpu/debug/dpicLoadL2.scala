@@ -19,7 +19,7 @@ class load_l2_dpic extends BlackBox(Map(
   })
   
   // Add Verilog resource
-  addResource("/vsrc/load_l2_dpic.v")
+  addResource("/vsrc/load_l2_dpic.sv")
 }
 
 class DpicLoadL2 extends Module {
