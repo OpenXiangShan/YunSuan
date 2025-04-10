@@ -188,21 +188,17 @@ class Vfred_setuop extends Bundle {
 
 }
 
-class VfredInput extends Bundle {
-  val uop           = new VUop
-  val fire          = Bool()
-  // val vlmul         = UInt(3.W)
-  // val vm            = Bool()
-  // val mask          = UInt(VLEN.W)
-  // val round_mode    = UInt(3.W)
-  // val fp_format     = UInt(2.W)
-  // val op_code       = UInt(5.W)
-  // val is_vec        = Bool()
-  val vs1           = UInt(VLEN.W)
-  val vs2           = UInt(XLEN.W)
+class Vfredctrl extends Bundle{
   val mask          = UInt(VLEN.W)
   val op_code       = UInt(5.W)
-  // val index         = UInt(3.W)
+  val vs2           = UInt(XLEN.W)
+  val uop           = new VUop
+  val fire          = Bool()
+} 
+
+
+class VfredInput extends Vfredctrl{
+  val vs1           = UInt(VLEN.W)
 }
 
 class VfredOutput extends Bundle{
@@ -210,5 +206,4 @@ class VfredOutput extends Bundle{
   val result  = UInt(XLEN.W)
   val fflags  = UInt(5.W)
 }
-
 
