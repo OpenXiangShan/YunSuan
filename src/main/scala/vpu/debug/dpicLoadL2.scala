@@ -36,7 +36,6 @@ class DpicLoadL2 extends Module {
   
   // Connect the BlackBox IO with the module IO
   loadL2Dpic.io.clk := clock
-  loadL2Dpic.io.rst_n := !reset.asBool
   loadL2Dpic.io.enable := io.enable
   loadL2Dpic.io.paddr := io.paddr
 //   io.load_data := loadL2Dpic.io.load_data

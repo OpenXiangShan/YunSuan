@@ -2,7 +2,7 @@
 // This module receives register address and data segments as inputs
 // and calls the C function when enabled.
 module get_vreg_dpic #(
-    parameter VLEN = 2048 // Vector length, should match C code and hardware config
+    parameter VLEN = 1024 // Vector length, should match C code and hardware config
 ) (
     input clk,          // Clock input
     input enable,       // Enable signal to trigger the DPI call
