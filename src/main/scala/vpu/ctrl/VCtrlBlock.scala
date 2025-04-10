@@ -164,3 +164,8 @@ class VCtrlBlock extends Module {
   io.lsu.loadReq.bits.ldstCtrl := 0.U.asTypeOf(new LdstCtrl) // FIXME: use the real ldstCtrl from expander
   io.lsu.loadReq.bits.paddr := expander.io.out.bits.rs1 // FIXME: use the real paddr_base from expander
 }
+
+object VerilogVCtrl extends App {
+  println("Generating the Vector Ctrl hardware")
+  emitVerilog(new VCtrlBlock(), Array("--target-dir", "build/verilog_vctrl"))
+}

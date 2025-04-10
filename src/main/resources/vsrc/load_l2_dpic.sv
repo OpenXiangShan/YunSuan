@@ -1,8 +1,7 @@
 module load_l2_dpic #(
-  parameter VLEN = 2048  // 定义VLEN
+  parameter VLEN = 1024  // 定义VLEN
 )(
   input  logic         clk,
-  input  logic         rst_n,
   input  logic         enable,
   input  logic [63:0]  paddr,
   output logic [VLEN-1:0]  load_data,
@@ -20,7 +19,7 @@ module load_l2_dpic #(
   
 
   // DPI-C导入声明
-  import "DPI-C" function void pmem_read(input longint paddr, output int output_bits[]);
+  import "DPI-C" function void pmem_read(input longint unsigned paddr, output int unsigned output_bits[VLEN/32]);
 
   // 存储输出位的临时数组
   int temp_output_bits[VLEN/32];

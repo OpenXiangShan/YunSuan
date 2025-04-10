@@ -8,7 +8,7 @@ object VParams {
   val FLEN = 64
   val VRobSize = 192
 
-  val VLEN = 2048  // Must be power of 2
+  val VLEN = 1024  // Must be power of 2
   val vlenb = VLEN/8
   val bVL = log2Up(VLEN) + 1
   val bVstart = bVL - 1
@@ -29,7 +29,7 @@ object VParams {
   // Load/Store
   val PAddrBits = XLEN
   // L2 Cache
-  val nPortsL2 = 4
   val CachelineBits = 512
+  val nPortsL2 = VLEN / CachelineBits
 }
 
