@@ -24,14 +24,14 @@ module get_vreg_dpic #(
     // Add outputs like 'done' if needed based on external logic requirements.
 );
 
-    logic [31:0] data_0_in_vec [VLEN/32-1:0];
-    logic [31:0] data_1_in_vec [VLEN/32-1:0];
-    logic [31:0] data_2_in_vec [VLEN/32-1:0];
-    logic [31:0] data_3_in_vec [VLEN/32-1:0];
-    logic [31:0] data_4_in_vec [VLEN/32-1:0];
-    logic [31:0] data_5_in_vec [VLEN/32-1:0];
-    logic [31:0] data_6_in_vec [VLEN/32-1:0];
-    logic [31:0] data_7_in_vec [VLEN/32-1:0];
+    int unsigned data_0_in_vec [VLEN/32-1:0];
+    int unsigned data_1_in_vec [VLEN/32-1:0];
+    int unsigned data_2_in_vec [VLEN/32-1:0];
+    int unsigned data_3_in_vec [VLEN/32-1:0];
+    int unsigned data_4_in_vec [VLEN/32-1:0];
+    int unsigned data_5_in_vec [VLEN/32-1:0];
+    int unsigned data_6_in_vec [VLEN/32-1:0];
+    int unsigned data_7_in_vec [VLEN/32-1:0];
 
     // Convert input data to 32-bit wide array format for passing to the DPI-C function
     genvar i;
