@@ -8,7 +8,10 @@ module get_vreg_dpic #(
     input enable,       // Enable signal to trigger the DPI call
 
     // Inputs corresponding to the get_vreg DPI function arguments
-    input [7:0]          rf_addr_in,          // 8-bit signed register address
+    input is_store,
+    input wr_rf,
+    input [7:0] rf_addr,          // 8-bit signed register address
+    input [7:0] rf_group_size,          // 8-bit signed register group size
     input [VLEN-1:0]     data_0_in,
     input [VLEN-1:0]     data_1_in,
     input [VLEN-1:0]     data_2_in,
@@ -49,7 +52,10 @@ module get_vreg_dpic #(
     // DPI-C function import declaration
     // Note: VLEN/32 determines the size of each data_N array based on VLEN.
     import "DPI-C" function void get_vreg(
+        input bit is_store,
+        input bit wr_rf,
         input byte rf_addr,                 // 8-bit signed register address
+        input byte rf_group_size,          // 8-bit signed register group size
         input int unsigned data_0[VLEN/32], // 32-bit unsigned integer arrays
         input int unsigned data_1[VLEN/32],
         input int unsigned data_2[VLEN/32],
@@ -70,7 +76,10 @@ module get_vreg_dpic #(
             if (enable) begin
                 // Call the imported DPI-C function with the module inputs
                 get_vreg(
-                    rf_addr_in,
+                    is_store,
+                    wr_rf,
+                    rf_addr,
+                    rf_group_size,
                     data_0_in_vec,
                     data_1_in_vec,
                     data_2_in_vec,

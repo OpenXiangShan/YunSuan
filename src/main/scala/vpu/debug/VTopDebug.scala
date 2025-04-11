@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import race.vpu.VParams._
 import race.vpu._
+import race.vpu.debug.DebugRobParmas._
 
 class VTopDebug extends Module {
   val io = IO(new Bundle {
@@ -23,6 +24,29 @@ class VTopDebug extends Module {
   vTop.io.l2.storeReq.ready := true.B
   vTop.io.l2.storeAck.valid := false.B
   vTop.io.l2.storeAck.bits.dummy := false.B
+
+  val debugRob = Module(new DebugRob)
+  if (debugMode) {
+    debugRob.io.fromCtrl := vTop.io.debugRob.get
+  }
+  val dpicGetVReg = Module(new DpicGetVReg)
+  dpicGetVReg.io.enable := debugRob.io.commit.valid
+  dpicGetVReg.io.isStore := debugRob.io.commit.bits.isStore
+  dpicGetVReg.io.wrRf := debugRob.io.commit.bits.wrRf
+  dpicGetVReg.io.rfAddr := debugRob.io.commit.bits.rfAddr
+  dpicGetVReg.io.emulVd := debugRob.io.commit.bits.emulVd
+  for (i <- 0 until 8) {
+    if (i < robEntry_dataDepth) {
+      when (debugRob.io.commit.valid && debugRob.io.commit.bits.wrRf) {
+        dpicGetVReg.io.data8Regs(i) := debugRob.io.commit.bits.data(i)
+      }.otherwise {
+        dpicGetVReg.io.data8Regs(i) := 0.U
+      }
+    } else {
+      dpicGetVReg.io.data8Regs(i) := 0.U
+    }
+  }
+
 }
 
 object VerilogVTopDebug extends App {

@@ -5,6 +5,22 @@ import chisel3.util._
 import VParams._
 import race.vpu.ctrl._
 
+class FromCtrlToDebugRob extends Bundle {
+  val issuedUopRobIdx = ValidIO(new RobPtr)
+  val wbExu = ValidIO(new Bundle {
+    val uop = new VUop
+    val vd = UInt(VLEN.W)
+  })
+  val wbLoad = ValidIO(new Bundle {
+    val uop = new VUop
+    val vd = UInt(VLEN.W)
+  })
+  val wbStore = ValidIO(new Bundle {
+    val uop = new VUop
+  })
+}
+
+
 class VCtrlBlock extends Module {
   val io = IO(new Bundle {
     val dispatch_s2v = Flipped(DecoupledIO(new Dispatch_S2V))
@@ -16,6 +32,7 @@ class VCtrlBlock extends Module {
       val storeReq = DecoupledIO(new VLsuStoreReq)
       val storeAck = Input(ValidIO(new VLsuStoreAck))
     }
+    val debugRob = Option.when(debugMode)(Output(new FromCtrlToDebugRob))
   })
 
   val decoder = Module(new VDecode)
@@ -163,6 +180,22 @@ class VCtrlBlock extends Module {
   io.lsu.loadReq.bits.uop := expander.io.out.bits.uop
   io.lsu.loadReq.bits.ldstCtrl := 0.U.asTypeOf(new LdstCtrl) // FIXME: use the real ldstCtrl from expander
   io.lsu.loadReq.bits.paddr := expander.io.out.bits.rs1 // FIXME: use the real paddr_base from expander
+
+  /**
+    * Debug
+    */
+  if (debugMode) {
+    io.debugRob.get.issuedUopRobIdx.valid := expander.io.out.fire && expander.io.out.bits.uop.uopEnd
+    io.debugRob.get.issuedUopRobIdx.bits := expander.io.out.bits.uop.robIdx
+    io.debugRob.get.wbLoad.valid := io.lsu.loadWb.valid
+    io.debugRob.get.wbLoad.bits.uop := io.lsu.loadWb.bits.uop
+    io.debugRob.get.wbLoad.bits.vd := io.lsu.loadWb.bits.vd
+    io.debugRob.get.wbExu.valid := io.fromExu(0).valid
+    io.debugRob.get.wbExu.bits.uop := io.fromExu(0).bits.uop
+    io.debugRob.get.wbExu.bits.vd := io.fromExu(0).bits.vd
+    io.debugRob.get.wbStore.valid := io.lsu.storeReq.fire
+    io.debugRob.get.wbStore.bits.uop := io.lsu.storeReq.bits.uop
+  }
 }
 
 object VerilogVCtrl extends App {

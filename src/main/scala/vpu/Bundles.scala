@@ -94,6 +94,7 @@ class VMacroOp extends VCtrlCsr {
 class VUop extends VCtrlCsr {
   val robIdx = new RobPtr
   val veewVd = UInt(3.W) // Destination EEW
+  val emulVd = Option.when(debugMode)(UInt(4.W))
   val uopIdx = UInt(3.W)
   val uopEnd = Bool()
   val lsrcUop = Vec(2, UInt(5.W)) //0: vs1   1: vs2
