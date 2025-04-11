@@ -77,7 +77,7 @@ void vle32(int vreg_index, void *source_reg, int vl){
     //4字节搬运
     for(int i=0;i<vl;i++){
         memcpy(&cpu.vreg[vreg_index][i].u,ptr,4);
-        ptr=ptr+4;
+        ptr=(char *)ptr+4;
     }
 }
 void vfsub_vf(int vreg_dst_index, float value, int vreg_src_index,int vl){

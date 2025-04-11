@@ -18,11 +18,12 @@ extern VVTopDebug *top;
 extern VerilatedContext *contextp;
 extern VerilatedVcdC *wave ;
 extern FloatUintUnion  pmem[CONFIG_MSIZE];
+extern bool commit_global;
 
 #define CLK_PERIOD 10    // 时钟周期（单位：ns）
 vluint64_t main_time = 0;
 
-bool check_vreg(int i);
+bool check_vreg(uint8_t rf_addr);
 void single_cycle(VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
 void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
 
@@ -175,13 +176,13 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
 
     top->io_dispatch_s2v_valid=1; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_robIdx_flag=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_robIdx_value=0;, // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
+    top->io_dispatch_s2v_bits_robIdx_value=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_inst=0x0206e107; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_vcsr_vstart=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_vcsr_vl=vcsr.vl; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_vcsr_vxrm=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_vcsr_=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_vcsr_vlmul=vcsr.lmul, // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
+    top->io_dispatch_s2v_bits_vcsr_frm=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
+    top->io_dispatch_s2v_bits_vcsr_vlmul=vcsr.lmul; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_vcsr_vsew=vcsr.sew; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_vcsr_vill=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_vcsr_ma=vcsr.vma; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
@@ -189,8 +190,11 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     top->io_dispatch_s2v_bits_rs1=cpu.gpr[isa_reg_index("a3")]; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_rs2=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     // top->vdst=2;
-    while(top->io_dispatch_s2v_ready==0){
+    int cycle_count=0;
+    // while(top->io_dispatch_s2v_ready==0){
+    while(cycle_count!=300){
         single_cycle(top, contextp, wave);
+        cycle_count++;
     }
     bool check=check_vreg(0);
     printf("The result of difftest is :%s\n",check?"True":"False");
@@ -262,14 +266,25 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
 }
 
 
-bool check_vreg(int i){
-    for(int idx=0;idx<VLEN/32;idx++){
-        if(cpu.vreg[i][idx].f!=diff_vreg[i][idx]) {
-            printf("the different id is %d",idx);
-            printf("d vreg=%f,\tv vreg=%f\n\n",diff_vreg[2][idx],cpu.vreg[2][idx].f);
-            return false;
+bool check_vreg(uint8_t rf_addr){
+    for(int i=rf_addr; i<rf_addr+8;i++){
+        for(int element=0;element<VLEN/32;element++){
+            if(cpu.vreg[i][element].f!=diff_vreg[i][element]) {
+                printf("The different register id is %d\n",i);
+                printf("The element index is : %d\n",element);
+                printf("DUT vreg=%f,\tSIM vreg=%f\n",diff_vreg[i][element],cpu.vreg[i][element].f);
+                return false;
+            }
         }
     }
+    // for(int idx=0;idx<VLEN/32;idx++){
+    //     if(cpu.vreg[i][idx].f!=diff_vreg[i][idx]) {
+    //         printf("the different id is %d",idx);
+    //         printf("d vreg=%f,\tv vreg=%f\n\n",diff_vreg[2][idx],cpu.vreg[2][idx].f);
+    //         return false;
+    //     }
+    // }
+    commit_global=false;
     return true;
 }
 

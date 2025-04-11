@@ -2,7 +2,7 @@
 #define __REG_H__
 #include <stdint.h>
 
-#define VLEN 2048
+#define VLEN 1024
 #define TA 1
 #define MA 1
 #define TU 0

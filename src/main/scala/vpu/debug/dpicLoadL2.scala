@@ -11,7 +11,6 @@ class load_l2_dpic extends BlackBox(Map(
 )) with HasBlackBoxResource {
   val io = IO(new Bundle {
     val clk = Input(Clock())
-    val rst_n = Input(Bool())
     val enable = Input(Bool())
     val paddr = Input(UInt(64.W))
     val load_data = Output(UInt(VLEN.W))

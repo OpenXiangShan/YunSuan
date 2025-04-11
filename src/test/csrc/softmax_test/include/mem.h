@@ -13,6 +13,6 @@
 
 extern "C" void pmem_read(unsigned long long paddr,uint32_t output_bits[VLEN/32] );
 
-extern "C"  void get_vreg(const svLogicVecVal* data);
+// extern "C"  void get_vreg(const svLogicVecVal* data);
 
 #endif

@@ -3,7 +3,7 @@ CXX = g++
 #INCLUDE
 INCLUDE_DIR = $(abspath ./include)
 # 编译选项
-CXXFLAGS = -g -O0 -std=c++14 -fext-numeric-literals 
+CXXFLAGS = -g -O0 -std=c++14 #-fext-numeric-literals 
 # 目标可执行文件
 TARGET = golden_model
 # 源文件
@@ -16,7 +16,7 @@ OBJS = $(SRCS:.cpp=.o)
 TOPNAME ?= VTopDebug
 
 WORK_DIR=$(shell pwd)
-V_FILES=/home/lorca/YunSuan/build/verilog_vpu_debug/load_l2_dpic.v /home/lorca/YunSuan/build/verilog_vpu_debug/VTopDebug.v
+V_FILES=../../../../build/verilog_vpu_debug/load_l2_dpic.sv ../../../../build/verilog_vpu_debug/VTopDebug.v
 
 BUILD_DIR = $(abspath $(WORK_DIR)/build/load_test)
 BIN = $(BUILD_DIR)/$(TOPNAME)
