@@ -11,7 +11,10 @@ class get_vreg_dpic extends BlackBox(Map(
   val io = IO(new Bundle {
     val clk = Input(Clock())
     val enable = Input(Bool())
-    val rf_addr_in = Input(UInt(8.W))
+    val is_store = Input(Bool())
+    val wr_rf = Input(Bool())
+    val rf_addr = Input(UInt(8.W))
+    val rf_group_size = Input(UInt(8.W))
     val data_0_in = Input(UInt(VLEN.W))
     val data_1_in = Input(UInt(VLEN.W))
     val data_2_in = Input(UInt(VLEN.W))
@@ -29,15 +32,21 @@ class get_vreg_dpic extends BlackBox(Map(
 class DpicGetVReg extends Module {
   val io = IO(new Bundle {
     val enable = Input(Bool())
-    val rfAddr = Input(UInt(8.W))
+    val wrRf = Input(Bool())
+    val rfAddr = Input(UInt(5.W))
+    val emulVd = Input(UInt(4.W))
     val data8Regs = Input(Vec(8, UInt(VLEN.W)))
+    val isStore = Input(Bool())
   })
 
   val getVRegDpic = Module(new get_vreg_dpic())
 
   getVRegDpic.io.clk := clock
   getVRegDpic.io.enable := io.enable
-  getVRegDpic.io.rf_addr_in := io.rfAddr
+  getVRegDpic.io.is_store := io.isStore
+  getVRegDpic.io.wr_rf := io.wrRf
+  getVRegDpic.io.rf_addr := io.rfAddr.pad(8)
+  getVRegDpic.io.rf_group_size := io.emulVd.pad(8)
   getVRegDpic.io.data_0_in := io.data8Regs(0)
   getVRegDpic.io.data_1_in := io.data8Regs(1)
   getVRegDpic.io.data_2_in := io.data8Regs(2)

@@ -31,5 +31,10 @@ object VParams {
   // L2 Cache
   val CachelineBits = 512
   val nPortsL2 = VLEN / CachelineBits
+
+  /**
+    * Debug (or difftest)
+    */
+  val debugMode = true
 }
 

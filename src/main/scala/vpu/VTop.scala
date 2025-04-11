@@ -13,6 +13,7 @@ class VTop extends Module {
       val storeReq = DecoupledIO(new VL2StoreReq)
       val storeAck = Input(ValidIO(new VL2StoreAck))
     }
+    val debugRob = Option.when(debugMode)(Output(new FromCtrlToDebugRob))
   })
 
   val vCtrlBlock = Module(new VCtrlBlock)
@@ -23,12 +24,14 @@ class VTop extends Module {
 
   vExuBlock.io.in := vCtrlBlock.io.toExu
   vCtrlBlock.io.fromExu(0) := vExuBlock.io.out
-  // vCtrlBlock.io.fromExu(0).valid := true.B
-  // vCtrlBlock.io.fromExu(0).bits := 0.U.asTypeOf(new VExuOutput)
 
   vCtrlBlock.io.lsu <> vLsuBlock.io.ctrl
   
   vLsuBlock.io.l2 <> io.l2
+
+  if (debugMode) {
+    io.debugRob.get := vCtrlBlock.io.debugRob.get
+  }
 }
 
 object VerilogVTop extends App {

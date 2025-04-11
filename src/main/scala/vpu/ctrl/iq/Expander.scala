@@ -91,6 +91,7 @@ class Expander extends Module {
   uopOut.veewVd := mop_hold.veewVd
   uopOut.uopIdx := uopIdx
   uopOut.uopEnd := uopEnd
+  if (debugMode) { uopOut.emulVd.get := mop_hold.emulVd }
 
   val sew = SewOH(mop_hold.csr.vsew)
   val ctrl = mop_hold.ctrl
@@ -172,6 +173,7 @@ class Expander extends Module {
   io.out.bits.uop.csr := mop_reg.csr
   io.out.bits.uop.robIdx := mop_reg.robIdx
   io.out.bits.uop.veewVd := mop_reg.veewVd
+  if (debugMode) { io.out.bits.uop.emulVd.get := mop_reg.emulVd }
   
   // For uop members that updates in each uop-idx
   io.out.bits.uop.uopIdx := out_bits.uop.uopIdx
