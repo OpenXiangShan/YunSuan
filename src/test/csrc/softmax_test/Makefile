@@ -16,7 +16,7 @@ OBJS = $(SRCS:.cpp=.o)
 TOPNAME ?= VTopDebug
 
 WORK_DIR=$(shell pwd)
-V_FILES=../../../../build/verilog_vpu_debug/load_l2_dpic.sv ../../../../build/verilog_vpu_debug/VTopDebug.v
+V_FILES=../../../../build/verilog_vpu_debug/load_l2_dpic.sv ../../../../build/verilog_vpu_debug/VTopDebug.v ../../../../build/verilog_vpu_debug/get_vreg_dpic.sv
 
 BUILD_DIR = $(abspath $(WORK_DIR)/build/load_test)
 BIN = $(BUILD_DIR)/$(TOPNAME)

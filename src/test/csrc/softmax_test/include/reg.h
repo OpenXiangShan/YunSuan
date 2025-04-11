@@ -29,7 +29,9 @@ typedef struct {
 
 typedef union {
     float as_float;
+    uint32_t as_uint32;
 }FloatUintUnion;
+
 
 extern const char *regs[];
 extern CPU_STATE cpu;

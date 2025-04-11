@@ -19,15 +19,13 @@ extern VerilatedContext *contextp;
 extern VerilatedVcdC *wave ;
 extern FloatUintUnion  pmem[CONFIG_MSIZE];
 extern bool commit_global;
-
 #define CLK_PERIOD 10    // 时钟周期（单位：ns）
 vluint64_t main_time = 0;
 
 bool check_vreg(uint8_t rf_addr);
 void single_cycle(VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
 void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
-
-float diff_vreg[32][VLEN/32]={};
+FloatUintUnion diff_vreg[32][VLEN/32]={0};
 const float poly_coeffs[] = {
 
     1.0f,                     // 0x1p0f
@@ -189,6 +187,8 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     top->io_dispatch_s2v_bits_vcsr_ta=vcsr.vta; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_rs1=cpu.gpr[isa_reg_index("a3")]; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_rs2=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
+    single_cycle(top, contextp, wave);
+    top->io_dispatch_s2v_valid=0;
     // top->vdst=2;
     int cycle_count=0;
     // while(top->io_dispatch_s2v_ready==0){
