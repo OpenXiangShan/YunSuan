@@ -88,3 +88,14 @@ test:
 unit-test:
 	make emu
 	./build/emu -O 10
+
+VECTOR_BUILD_PATH =$(abspath ./src/test/csrc/softmax_test/)
+
+vector-verilog:
+	mill YunSuan.runMain race.vpu.debug.VerilogVTopDebug
+	
+vector-test:
+	$(MAKE) -s -C $(VECTOR_BUILD_PATH) sim
+	
+	
+.PHONY: vector-test

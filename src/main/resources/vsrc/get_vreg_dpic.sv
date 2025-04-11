@@ -54,8 +54,8 @@ module get_vreg_dpic #(
     import "DPI-C" function void get_vreg(
         input bit is_store,
         input bit wr_rf,
-        input byte rf_addr,                 // 8-bit signed register address
-        input byte rf_group_size,          // 8-bit signed register group size
+        input byte unsigned rf_addr,                 // 8-bit signed register address
+        input byte unsigned rf_group_size,          // 8-bit signed register group size
         input int unsigned data_0[VLEN/32], // 32-bit unsigned integer arrays
         input int unsigned data_1[VLEN/32],
         input int unsigned data_2[VLEN/32],

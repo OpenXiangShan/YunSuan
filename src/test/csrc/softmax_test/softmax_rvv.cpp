@@ -170,7 +170,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
         std::memcpy(&pmem[0+i].as_float,&src[i],sizeof(float));
     }
 
-    vle32(0, &pmem->as_float, vcsr.vl);//0206e107          	vle32.v	v2,(a3)  ---src stored in v2
+    vle32(2, &pmem->as_float, vcsr.vl);//0206e107          	vle32.v	v2,(a3)  ---src stored in v2
 
     top->io_dispatch_s2v_valid=1; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_robIdx_flag=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
@@ -180,7 +180,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     top->io_dispatch_s2v_bits_vcsr_vl=vcsr.vl; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_vcsr_vxrm=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_vcsr_frm=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_vcsr_vlmul=vcsr.lmul; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
+    top->io_dispatch_s2v_bits_vcsr_vlmul=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_vcsr_vsew=vcsr.sew; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_vcsr_vill=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
     top->io_dispatch_s2v_bits_vcsr_ma=vcsr.vma; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
@@ -196,7 +196,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
         single_cycle(top, contextp, wave);
         cycle_count++;
     }
-    bool check=check_vreg(0);
+    bool check=check_vreg(2);
     printf("The result of difftest is :%s\n",check?"True":"False");
 
     vfmax_vv(1,2,1,vcsr.vl);//1a2090d7          	vfmax.vv	v1,v2,v1
@@ -269,13 +269,16 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
 bool check_vreg(uint8_t rf_addr){
     for(int i=rf_addr; i<rf_addr+8;i++){
         for(int element=0;element<VLEN/32;element++){
-            if(cpu.vreg[i][element].f!=diff_vreg[i][element]) {
+            if(cpu.vreg[i][element].f!=diff_vreg[i][element].as_float) {
                 printf("The different register id is %d\n",i);
                 printf("The element index is : %d\n",element);
-                printf("DUT vreg=%f,\tSIM vreg=%f\n",diff_vreg[i][element],cpu.vreg[i][element].f);
+                printf("DUT vreg=%f,\tSIM vreg=%f\n",diff_vreg[i][element].as_float,cpu.vreg[i][element].f);
                 return false;
             }
         }
+    }
+    for(int element=0;element<VLEN/32;element++){
+        printf("cpu.vreg[%d][%d]=%f\t  diff.vreg[%d][%d]=%f\n",rf_addr, element, cpu.vreg[rf_addr][element].f, rf_addr, element,diff_vreg[rf_addr][element].as_float); 
     }
     // for(int idx=0;idx<VLEN/32;idx++){
     //     if(cpu.vreg[i][idx].f!=diff_vreg[i][idx]) {

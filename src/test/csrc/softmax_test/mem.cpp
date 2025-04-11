@@ -62,15 +62,16 @@ extern "C" void get_vreg(
       // std::memcpy(&diff_vreg[rf_addr+7][chunk].as_uint32, &data_7[chunk],  sizeof(uint32_t));
      }
   }
+  
  
 
 //  for(int i=0;i<VLEN/32;i++){
 //   printf("vreg[%u][%d]=%u\t diff_vreg[%u][%d]=%f\n",rf_addr,i,data_0[i],rf_addr,i,diff_vreg[rf_addr][i].as_float);
 // }
-FloatUintUnion reg[VLEN/32];   
-for(int i=0;i<VLEN/32;i++){
-  std::memcpy(&reg[i].as_uint32, &data_0[i], sizeof(uint32_t));
-}   
+// FloatUintUnion reg[VLEN/32];   
+// for(int i=0;i<VLEN/32;i++){
+//   std::memcpy(&reg[i].as_uint32, &data_0[i], sizeof(uint32_t));
+// }   
 commit_global=true;
 }
 
