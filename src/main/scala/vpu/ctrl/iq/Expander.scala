@@ -55,7 +55,7 @@ class Expander extends Module {
     expdLenRemainReg := expdLenRemain - 1.U
     uopIdxReg := uopIdx + 1.U
   }
-  val uopEnd = uopIdx === expdLen - 1.U
+  // val uopEnd = uopIdx === expdLen - 1.U
 
   val busy_end_logic = state === BUSY && expdLenRemainReg === 1.U
   busy_end := busy_end_logic && canOut
@@ -68,7 +68,7 @@ class Expander extends Module {
   }
   io.out.valid := out_valid
 
-  io.in.ready := state === IDLE && canOut
+  io.in.ready := state === IDLE && canOut || state === IDLE && !io.out.valid
   
   //---- Some ctrl signals should be hold during this instruction expanding process ----
   val v_ext = io.in.bits.mop.ctrl.alu && io.in.bits.mop.ctrl.funct3 === "b010".U && io.in.bits.mop.ctrl.funct6 === "b010010".U
@@ -90,7 +90,7 @@ class Expander extends Module {
   uopOut.robIdx := mop_hold.robIdx
   uopOut.veewVd := mop_hold.veewVd
   uopOut.uopIdx := uopIdx
-  uopOut.uopEnd := uopEnd
+  uopOut.uopEnd := uopIdx === expdInfo_hold.expdLen - 1.U
   if (debugMode) { uopOut.emulVd.get := mop_hold.emulVd }
 
   val sew = SewOH(mop_hold.csr.vsew)
@@ -164,8 +164,8 @@ class Expander extends Module {
   val out_bits = Reg(new ExpdOutput)
   when (fire || canOut && state === BUSY) {
     out_bits.uop := uopOut
-    out_bits.uop.uopIdx := uopIdx
-    out_bits.uop.uopEnd := uopEnd
+    // out_bits.uop.uopIdx := uopIdx
+    // out_bits.uop.uopEnd := uopEnd
   }
   
   io.out.bits.rs1 := rs_reg.rs1
