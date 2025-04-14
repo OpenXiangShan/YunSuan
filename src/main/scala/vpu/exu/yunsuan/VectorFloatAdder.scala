@@ -62,7 +62,8 @@ class VectorExuFloatAdder() extends Module {
   val fflags = Wire(Vec(VLEN/XLEN, Vec(XLEN/16, UInt(5.W))))
   
   val is_fp16 = io.fp_format === 1.U
-  val is_fp32 = io.fp_format === 2.U  
+  val is_fp32 = io.fp_format === 2.U
+  val is_bf16 = io.fp_format === 0.U
 
   for (i <- 0 until (VLEN/XLEN)) {
       val mask_fp16 = io.mask(4-1+i*4, 0+i*4)
@@ -71,13 +72,13 @@ class VectorExuFloatAdder() extends Module {
       val fp_b = io.fp_b(XLEN-1+i*XLEN, 0+i*XLEN)
       val vfa = Module(new VectorFloatAdder_Width64)
       vfa.io.fire := io.fire
-      vfa.io.fp_a := io.fp_a
-      vfa.io.fp_b := io.fp_b
+      vfa.io.fp_a := fp_a
+      vfa.io.fp_b := fp_b
       vfa.io.widen_a := io.widen_a
       vfa.io.widen_b := io.widen_b
       vfa.io.frs1 := io.frs1
       vfa.io.is_frs1 := io.is_frs1  
-      vfa.io.mask := Mux(is_fp32, mask_fp32, Mux(is_fp16, mask_fp16, 0.U))
+      vfa.io.mask := Mux(is_fp32, mask_fp32, Mux(is_fp16 || is_bf16, mask_fp16, 0.U))
       vfa.io.uop_idx := io.uop_idx
       vfa.io.is_vec := io.is_vec
       vfa.io.round_mode := io.round_mode
