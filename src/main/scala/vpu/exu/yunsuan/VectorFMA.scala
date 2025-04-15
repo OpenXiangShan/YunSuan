@@ -67,7 +67,7 @@ class VectorExuFloatFMA() extends Module{
   io.fflags := fflags.flatMap(_.toSeq).reduce(_ | _)
 
   // latency = 3
-  val reg_valid_0   = RegNext(io.out_uop.valid)
+  val reg_valid_0   = RegNext(io.fire)
   val reg_valid_1   = RegNext(reg_valid_0)
   val reg_valid_2   = RegNext(reg_valid_1)
   val reg_uop_0     = RegEnable(io.in_uop, io.fire)
