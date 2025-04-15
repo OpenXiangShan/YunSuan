@@ -25,6 +25,8 @@ vluint64_t main_time = 0;
 bool check_vreg(uint8_t rf_addr);
 void single_cycle(VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
 void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
+void dut_input(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t rs2, bool robIdx_flag, uint8_t robIdx);
+
 FloatUintUnion diff_vreg[32][VLEN/32]={0};
 const float poly_coeffs[] = {
 
@@ -148,55 +150,45 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
 
 
 softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, double* golden, size_t n) {
+    int cycle_count=0;
+    bool check=false;
 
     //PART I: calulating the MAX value in the input array 
     vsetvlmax_e32m1("a7",TA,MA);//0d0078d7          	vsetvli	a7,zero,e32,m1,ta,ma
 
-    //TODO: issue instruction and wait result
+    //Instr1:vfmv.v.f	v1,fa5
     cpu.fpr[isa_freg_index("fa5")]=-INFINITY;//fa5=-INFINITY
     vfmv_v_f(1,"fa5", vcsr.vl);//5e07d0d7          	vfmv.v.f	v1,fa5
 
-    //TODO: issue instruction and wait result
-    //TODO: compare dut and golden model: v1 
+    //TEST
+    FloatUintUnion a={.as_float=-INFINITY};
+    printf("fa=%x\n",a.as_uint32);
+    dut_input(0x5e07d0d7, vcsr.sew, vcsr.lmul, a.as_uint32, a.as_uint32, false,0);
+    while(cycle_count!=300){
+        single_cycle(top, contextp, wave);
+        cycle_count++;
+    }
+    check=check_vreg(1);
+    printf("The result of difftest is :%s\n",check?"True":"False");
 
-    vsetvlmax_e32m1("a5",TU,MA);//vsetvli	a5,ZERO,e32,m1,tu,ma
+    vsetvlmax_e32m1("a5",TU,MA);//vsetvli	a5,ZERO,e32,m1,tu,m
 
-    //TODO: issue instruction and wait result
-
+    //Instr2:vfmv.v.f	v1,fa5
     gpr_write(isa_reg_index("a3"),0);
-    
     // top->instr=0x0206e107;
     for(int i=0;i<VLEN/32;i++){
         std::memcpy(&pmem[0+i].as_float,&src[i],sizeof(float));
     }
-
     vle32(2, &pmem->as_float, vcsr.vl);//0206e107          	vle32.v	v2,(a3)  ---src stored in v2
 
-    top->io_dispatch_s2v_valid=1; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_robIdx_flag=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_robIdx_value=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_inst=0x0206e107; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_vcsr_vstart=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_vcsr_vl=vcsr.vl; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_vcsr_vxrm=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_vcsr_frm=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_vcsr_vlmul=0b000; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_vcsr_vsew=0b010; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_vcsr_vill=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_vcsr_ma=vcsr.vma; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_vcsr_ta=vcsr.vta; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_rs1=cpu.gpr[isa_reg_index("a3")]; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    top->io_dispatch_s2v_bits_rs2=0; // @[src/main/scala/vpu/debug/VTopDebug.scala 9:14]
-    single_cycle(top, contextp, wave);
-    top->io_dispatch_s2v_valid=0;
-    // top->vdst=2;
-    int cycle_count=0;
+    dut_input(0x0206e107, vcsr.sew, vcsr.lmul, cpu.gpr[isa_reg_index("a3")], 0, false,1);
+    cycle_count=0;
     // while(top->io_dispatch_s2v_ready==0){
     while(cycle_count!=300){
         single_cycle(top, contextp, wave);
         cycle_count++;
     }
-    bool check=check_vreg(2);
+    check=check_vreg(2);
     printf("The result of difftest is :%s\n",check?"True":"False");
 
     vfmax_vv(1,2,1,vcsr.vl);//1a2090d7          	vfmax.vv	v1,v2,v1
@@ -329,3 +321,26 @@ void single_cycle(VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wa
   main_time += CLK_PERIOD / 2;
 }
 
+void dut_input(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t rs2, bool robIdx_flag, uint8_t robIdx){
+    top->io_dispatch_s2v_valid=1; 
+    top->io_dispatch_s2v_bits_robIdx_flag=robIdx_flag; 
+    top->io_dispatch_s2v_bits_robIdx_value=robIdx; 
+    top->io_dispatch_s2v_bits_inst=instr; 
+    top->io_dispatch_s2v_bits_vcsr_vstart=0; 
+    top->io_dispatch_s2v_bits_vcsr_vl=vcsr.vl; 
+    top->io_dispatch_s2v_bits_vcsr_vxrm=0; 
+    top->io_dispatch_s2v_bits_vcsr_frm=0; 
+    if(lmul==1){
+        top->io_dispatch_s2v_bits_vcsr_vlmul=0b000; 
+    }
+    if(sew==32){
+        top->io_dispatch_s2v_bits_vcsr_vsew=0b010; 
+    }
+    top->io_dispatch_s2v_bits_vcsr_vill=0; 
+    top->io_dispatch_s2v_bits_vcsr_ma=vcsr.vma; 
+    top->io_dispatch_s2v_bits_vcsr_ta=vcsr.vta; 
+    top->io_dispatch_s2v_bits_rs1=rs1; 
+    top->io_dispatch_s2v_bits_rs2=rs2; 
+    single_cycle(top, contextp, wave);
+    top->io_dispatch_s2v_valid=0;
+}

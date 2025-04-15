@@ -92,7 +92,7 @@ int main(int argc, char **argv){
             // softmax benchmarks. iterating over all existing implementation for this given input set
             for (unsigned benchId=0; benchId < sizeof(benchmarks) / sizeof(softmax_bench_t); benchId++)
             {
-                memset(dst, 0, sizeof(dst)); // resetting array in-between experiments
+                memset(dst, 0, sizeof(float) * n); // resetting array in-between experiments
 
                 softmax_bench_result_t local_result = benchmarks[benchId].bench(dst, src, golden, n);
 

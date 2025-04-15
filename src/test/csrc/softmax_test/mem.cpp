@@ -47,19 +47,21 @@ extern "C" void get_vreg(
   const uint32_t data_7[VLEN / 32])
 {
   uint32_t data[8][VLEN/32];
+  for(int i=0;i<VLEN/32;i++){
+    std::memcpy(&data[0][i], &data_0[i], sizeof(uint32_t));
+    std::memcpy(&data[1][i], &data_1[i], sizeof(uint32_t));
+    std::memcpy(&data[2][i], &data_2[i], sizeof(uint32_t));
+    std::memcpy(&data[3][i], &data_3[i], sizeof(uint32_t));
+    std::memcpy(&data[4][i], &data_4[i], sizeof(uint32_t));
+    std::memcpy(&data[5][i], &data_5[i], sizeof(uint32_t));
+    std::memcpy(&data[6][i], &data_6[i], sizeof(uint32_t));
+    std::memcpy(&data[7][i], &data_7[i], sizeof(uint32_t));
+  }
   if(wr_rf==1){
     for(int chunk = 0; chunk < VLEN / 32; chunk++) {
       for(int i = 0; i < rf_group_size; i++) {
         std::memcpy(&diff_vreg[rf_addr+i][chunk].as_uint32, &data[i][chunk], sizeof(uint32_t));
       }
-      // std::memcpy(&diff_vreg[rf_addr  ][chunk].as_uint32, &data_0[chunk],   sizeof(uint32_t));
-      // std::memcpy(&diff_vreg[rf_addr+1][chunk].as_uint32, &data_1[chunk], sizeof(uint32_t));
-      // std::memcpy(&diff_vreg[rf_addr+2][chunk].as_uint32, &data_2[chunk],  sizeof(uint32_t));
-      // std::memcpy(&diff_vreg[rf_addr+3][chunk].as_uint32, &data_3[chunk],  sizeof(uint32_t));
-      // std::memcpy(&diff_vreg[rf_addr+4][chunk].as_uint32, &data_4[chunk],  sizeof(uint32_t));
-      // std::memcpy(&diff_vreg[rf_addr+5][chunk].as_uint32, &data_5[chunk],  sizeof(uint32_t));
-      // std::memcpy(&diff_vreg[rf_addr+6][chunk].as_uint32, &data_6[chunk],  sizeof(uint32_t));
-      // std::memcpy(&diff_vreg[rf_addr+7][chunk].as_uint32, &data_7[chunk],  sizeof(uint32_t));
      }
   }
   
