@@ -48,7 +48,7 @@ class VExuBlock extends Module {
   vfa.io.opb_widening := in.uop.ctrl.widen //
   vfa.io.res_widening := in.uop.ctrl.widen2 //
   vfa.io.op_code := vfa_op.op
-  vfa.io.is_vec := in.uop.ctrl.vv
+  vfa.io.is_vec := true.B
   vfa.io.fp_aIsFpCanonicalNAN := false.B
   vfa.io.fp_bIsFpCanonicalNAN := false.B
   vfa.io.maskForReduction := 0.U
@@ -80,7 +80,7 @@ class VExuBlock extends Module {
   vff.io.op_code := vff_op.op
 
   vff.io.frs1 := in.rs1
-  vff.io.is_vec := in.uop.ctrl.vv
+  vff.io.is_vec := true.B
   vff.io.is_frs1 := in.uop.ctrl.vx
   vff.io.res_widening := in.uop.ctrl.widen2  // TODO: check it
   
@@ -110,7 +110,7 @@ class VExuBlock extends Module {
   // vfd.io.is_sqrt := false.B
   // vfd.io.round_mode := in.uop.csr.frm //TODO: check it
   // vfd.io.op_code := vfd_setuop.op
-  // vfd.io.is_vec := in.uop.ctrl.vv
+  // vfd.io.is_vec := true.B
   // vfd.io.fp_aIsFpCanonicalNAN := false.B
   // vfd.io.fp_bIsFpCanonicalNAN := false.B
 
