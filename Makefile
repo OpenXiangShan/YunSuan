@@ -95,7 +95,7 @@ vector-verilog:
 	mill YunSuan.runMain race.vpu.debug.VerilogVTopDebug
 	
 vector-test:
-	$(MAKE) -s -C $(VECTOR_BUILD_PATH) sim
+	$(MAKE) -j$(nproc) -s -C $(VECTOR_BUILD_PATH) sim
 	
 	
 .PHONY: vector-test

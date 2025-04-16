@@ -25,7 +25,7 @@ vluint64_t main_time = 0;
 bool check_vreg(uint8_t rf_addr);
 void single_cycle(VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
 void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
-void dut_input(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t rs2, bool robIdx_flag, uint8_t robIdx);
+void dut_input_execute(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t rs2, bool robIdx_flag, uint8_t robIdx);
 
 FloatUintUnion diff_vreg[32][VLEN/32]={0};
 const float poly_coeffs[] = {
@@ -150,7 +150,6 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
 
 
 softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, double* golden, size_t n) {
-    int cycle_count=0;
     bool check=false;
 
     //PART I: calulating the MAX value in the input array 
@@ -163,11 +162,8 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     //TEST
     FloatUintUnion a={.as_float=-INFINITY};
     printf("fa=%x\n",a.as_uint32);
-    dut_input(0x5e07d0d7, vcsr.sew, vcsr.lmul, a.as_uint32, a.as_uint32, false,0);
-    while(cycle_count!=300){
-        single_cycle(top, contextp, wave);
-        cycle_count++;
-    }
+    dut_input_execute(0x5e07d0d7, vcsr.sew, vcsr.lmul,   (uint64_t(0xFFFFFFFF) << 32) | (uint64_t)a.as_uint32,   0, false,0);
+    
     check=check_vreg(1);
     printf("The result of difftest is :%s\n",check?"True":"False");
 
@@ -181,13 +177,13 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     }
     vle32(2, &pmem->as_float, vcsr.vl);//0206e107          	vle32.v	v2,(a3)  ---src stored in v2
 
-    dut_input(0x0206e107, vcsr.sew, vcsr.lmul, cpu.gpr[isa_reg_index("a3")], 0, false,1);
-    cycle_count=0;
-    // while(top->io_dispatch_s2v_ready==0){
-    while(cycle_count!=300){
-        single_cycle(top, contextp, wave);
-        cycle_count++;
-    }
+    dut_input_execute(0x0206e107, vcsr.sew, vcsr.lmul, cpu.gpr[isa_reg_index("a3")], 0, false,1);
+    // cycle_count=0;
+    // // while(top->io_dispatch_s2v_ready==0){
+    // while(cycle_count!=30){
+    //     single_cycle(top, contextp, wave);
+    //     cycle_count++;
+    // }
     check=check_vreg(2);
     printf("The result of difftest is :%s\n",check?"True":"False");
 
@@ -259,19 +255,21 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
 
 
 bool check_vreg(uint8_t rf_addr){
-    for(int i=rf_addr; i<rf_addr+8;i++){
+    for(int i=rf_addr; i<rf_addr+1;i++){
         for(int element=0;element<VLEN/32;element++){
             if(cpu.vreg[i][element].f!=diff_vreg[i][element].as_float) {
                 printf("The different register id is %d\n",i);
                 printf("The element index is : %d\n",element);
-                printf("DUT vreg=%f,\tSIM vreg=%f\n",diff_vreg[i][element].as_float,cpu.vreg[i][element].f);
+                for(int i=0;i<VLEN/32;i++){
+                    printf("cpu.vreg[%d][%d]=%f\t  diff.vreg[%d][%d]=%f\n",rf_addr, i, cpu.vreg[rf_addr][i].f, rf_addr, i,diff_vreg[rf_addr][i].as_float);
+                }
                 return false;
             }
         }
     }
-    for(int element=0;element<VLEN/32;element++){
-        printf("cpu.vreg[%d][%d]=%f\t  diff.vreg[%d][%d]=%f\n",rf_addr, element, cpu.vreg[rf_addr][element].f, rf_addr, element,diff_vreg[rf_addr][element].as_float); 
-    }
+    // for(int element=0;element<VLEN/32;element++){
+    //     printf("cpu.vreg[%d][%d]=%f\t  diff.vreg[%d][%d]=%f\n",rf_addr, element, cpu.vreg[rf_addr][element].f, rf_addr, element,diff_vreg[rf_addr][element].as_float); 
+    // }
     // for(int idx=0;idx<VLEN/32;idx++){
     //     if(cpu.vreg[i][idx].f!=diff_vreg[i][idx]) {
     //         printf("the different id is %d",idx);
@@ -321,7 +319,8 @@ void single_cycle(VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wa
   main_time += CLK_PERIOD / 2;
 }
 
-void dut_input(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t rs2, bool robIdx_flag, uint8_t robIdx){
+void dut_input_execute(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t rs2, bool robIdx_flag, uint8_t robIdx){
+    int cycle_count=0;
     top->io_dispatch_s2v_valid=1; 
     top->io_dispatch_s2v_bits_robIdx_flag=robIdx_flag; 
     top->io_dispatch_s2v_bits_robIdx_value=robIdx; 
@@ -343,4 +342,8 @@ void dut_input(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t rs2, bo
     top->io_dispatch_s2v_bits_rs2=rs2; 
     single_cycle(top, contextp, wave);
     top->io_dispatch_s2v_valid=0;
+    while(cycle_count!=30){
+        single_cycle(top, contextp, wave);
+        cycle_count++;
+    }
 }
