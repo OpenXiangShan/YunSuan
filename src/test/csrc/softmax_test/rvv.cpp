@@ -68,7 +68,7 @@ void vsetvlmax_e32m1(const char *s,int ta,int ma){
 }
 void vfmv_v_f(int vreg_index, const char *s, int vl){
     for(int i=0;i<vl;i++){
-        cpu.vreg[vreg_index][i].f=cpu.fpr[isa_freg_index(s)];
+        cpu.vreg[vreg_index][i].f=cpu.fpr[isa_freg_index(s)].as_fp32;
     }
 }
 
@@ -102,7 +102,7 @@ void vfcvt_f_x_v_f32m1(int vreg_dst_index, int vreg_src_index,int vl){
 }
 void vfnmsac_vf(int vreg_dst_index,int vreg_fsrc1_index, int vreg_src2_index,int vl){
     for(int i=0;i<vl;i++){
-        cpu.vreg[vreg_dst_index][i].f=cpu.vreg[vreg_dst_index][i].f-cpu.fpr[vreg_fsrc1_index]*cpu.vreg[vreg_src2_index][i].f;
+        cpu.vreg[vreg_dst_index][i].f=cpu.vreg[vreg_dst_index][i].f-cpu.fpr[vreg_fsrc1_index].as_fp32*cpu.vreg[vreg_src2_index][i].f;
     }
 }
 void vfmadd_vv(int vreg_dst_index, int vreg_src1_index, int vreg_src2_index,int vl){
