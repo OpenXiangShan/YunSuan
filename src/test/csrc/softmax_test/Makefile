@@ -32,6 +32,7 @@ DEPS=$(V_FILES) $(SIM_CSRCS)
 
 VERILATOR_CFLAGS += -MMD --build -cc \
 										-O3 --x-assign fast --x-initial fast --noassert --trace
+VERILATOR_CFLAGS += -j 33
 
 # Include path
 INCFLAGS = $(addprefix -I, $(INCLUDE_DIR))
