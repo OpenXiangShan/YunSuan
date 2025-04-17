@@ -80,7 +80,8 @@ class VCtrlBlock extends Module {
   val tailGenExu = Module(new TailGen)
   tailGenExu.io.in.uop := io.fromExu(0).bits.uop
 
-  val vrf = Module(new VRF(4, nVRFWritePorts))
+  val vrf = if (!debugMode) Module(new VRF(4, nVRFWritePorts)) else
+                            Module(new VRF(4 + 2, nVRFWritePorts))
   vrf.io.raddr(0) := expander.io.out.bits.uop.lsrcUop(0)
   vrf.io.raddr(1) := expander.io.out.bits.uop.lsrcUop(1)
   vrf.io.raddr(2) := expander.io.out.bits.uop.ldestUop
@@ -192,14 +193,16 @@ class VCtrlBlock extends Module {
   if (debugMode) {
     io.debugRob.get.issuedUopRobIdx.valid := expander.io.out.fire && expander.io.out.bits.uop.uopEnd
     io.debugRob.get.issuedUopRobIdx.bits := expander.io.out.bits.uop.robIdx
-    io.debugRob.get.wbLoad.valid := io.lsu.loadWb.valid
-    io.debugRob.get.wbLoad.bits.uop := io.lsu.loadWb.bits.uop
-    io.debugRob.get.wbLoad.bits.vd := io.lsu.loadWb.bits.vd
-    io.debugRob.get.wbExu.valid := io.fromExu(0).valid
-    io.debugRob.get.wbExu.bits.uop := io.fromExu(0).bits.uop
-    io.debugRob.get.wbExu.bits.vd := io.fromExu(0).bits.vd
-    io.debugRob.get.wbStore.valid := io.lsu.storeReq.fire
-    io.debugRob.get.wbStore.bits.uop := io.lsu.storeReq.bits.uop
+    io.debugRob.get.wbLoad.valid := RegNext(io.lsu.loadWb.valid)
+    io.debugRob.get.wbLoad.bits.uop := RegNext(io.lsu.loadWb.bits.uop)
+    vrf.io.raddr(5) := RegNext(io.lsu.loadWb.bits.uop.ldestUop)
+    io.debugRob.get.wbLoad.bits.vd := vrf.io.rdata(5)
+    io.debugRob.get.wbExu.valid := RegNext(io.fromExu(0).valid)
+    io.debugRob.get.wbExu.bits.uop := RegNext(io.fromExu(0).bits.uop)
+    vrf.io.raddr(4) := RegNext(io.fromExu(0).bits.uop.ldestUop)
+    io.debugRob.get.wbExu.bits.vd := vrf.io.rdata(4)
+    io.debugRob.get.wbStore.valid := RegNext(io.lsu.storeReq.fire)
+    io.debugRob.get.wbStore.bits.uop := RegNext(io.lsu.storeReq.bits.uop)
   }
 }
 
