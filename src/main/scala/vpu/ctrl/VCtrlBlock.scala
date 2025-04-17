@@ -136,8 +136,8 @@ class VCtrlBlock extends Module {
   val ldstCtrlStoreReg = Reg(new LdstCtrl)
   val exuInputRegOutValid = RegInit(false.B)
   val readyExuStore = Wire(Bool())
-  val fire_exuInputReg = expdrOutValid && readyExuStore
-  when (fire_exuInputReg && (expdrOutIsExu || expdrOutIsStore)) {
+  val fire_exuInputReg = expdrOutValid && (expdrOutIsExu || expdrOutIsStore) && readyExuStore
+  when (fire_exuInputReg) {
     exuInputReg.uop := expander.io.out.bits.uop
     exuInputReg.vSrc(2) := vrf.io.rdata(2)  // vs3 for store
   }
