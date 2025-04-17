@@ -77,6 +77,9 @@ class VCtrlBlock extends Module {
   scoreboard.io.wb.last.valid := io.lsu.loadWb.valid
   scoreboard.io.wb.last.bits := io.lsu.loadWb.bits.uop
 
+  val tailGenExu = Module(new TailGen)
+  tailGenExu.io.in.uop := io.fromExu(0).bits.uop
+
   val vrf = Module(new VRF(4, nVRFWritePorts))
   vrf.io.raddr(0) := expander.io.out.bits.uop.lsrcUop(0)
   vrf.io.raddr(1) := expander.io.out.bits.uop.lsrcUop(1)
@@ -86,10 +89,12 @@ class VCtrlBlock extends Module {
     vrf.io.wen(i) := io.fromExu(i).valid && io.fromExu(i).bits.uop.ldestValUop
     vrf.io.waddr(i) := io.fromExu(i).bits.uop.ldestUop
     vrf.io.wdata(i) := io.fromExu(i).bits.vd
+    vrf.io.wmask(i) := tailGenExu.io.maskWb
   }
   vrf.io.wen(nVRFWritePorts - 1) := io.lsu.loadWb.valid && io.lsu.loadWb.bits.uop.ldestValUop
   vrf.io.waddr(nVRFWritePorts - 1) := io.lsu.loadWb.bits.uop.ldestUop
   vrf.io.wdata(nVRFWritePorts - 1) := io.lsu.loadWb.bits.vd
+  vrf.io.wmask(nVRFWritePorts - 1) := ~0.U(VLEN.W) // Temp
   
   /**
     * Expander output goes to EXU, LSU_load, or LSU_store
