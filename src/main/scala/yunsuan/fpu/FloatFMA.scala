@@ -244,7 +244,7 @@ class FloatFMA() extends Module{
     Mux(
       is_fp32,
       Cat(0.U(29.W),fp_a_significand_f32),
-      Cat(0.U(43.W),fp_a_significand_f16)
+      Cat(0.U(42.W),fp_a_significand_f16)
     )
   )
   val booth_in_b = Mux(
@@ -253,7 +253,7 @@ class FloatFMA() extends Module{
     Mux(
       is_fp32,
       Cat(0.U(29.W),fp_b_significand_f32),
-      Cat(0.U(43.W),fp_b_significand_f16)
+      Cat(0.U(42.W),fp_b_significand_f16)
     )
   )
   val U_BoothEncoder = Module(new BoothEncoderF64F32F16(width = significandWidth, is_addend_expand_1bit = true))
