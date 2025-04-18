@@ -179,11 +179,9 @@ class Vfred_setuop extends Bundle {
   def fvv = (funct3 === "b001".U)
   def fvf = (funct3 === "b101".U)
   
-
   def op_gen = Mux1H(Seq(
-  (funct6 === Vfredfunc6.vfredmax   & (ivv))   -> VfredOpCode.fmax,
-  (funct6 === Vfredfunc6.vfredusum  & (ivv))   -> VfredOpCode.fadd,
-  // TODO:
+  ((funct6 === Vfredfunc6.vfredmax )  && (fvv))   -> VfredOpCode.fmax,
+  ((funct6 === Vfredfunc6.vfredusum)  && (fvv))   -> VfredOpCode.fadd
   ))
 
 }
@@ -191,14 +189,14 @@ class Vfred_setuop extends Bundle {
 class Vfredctrl extends Bundle{
   val mask          = UInt(VLEN.W)
   val op_code       = UInt(5.W)
-  val vs2           = UInt(XLEN.W)
+  val vs1           = UInt(XLEN.W)
   val uop           = new VUop
   val fire          = Bool()
 } 
 
 
 class VfredInput extends Vfredctrl{
-  val vs1           = UInt(VLEN.W)
+  val vs2           = UInt(VLEN.W)
 }
 
 class VfredOutput extends Bundle{

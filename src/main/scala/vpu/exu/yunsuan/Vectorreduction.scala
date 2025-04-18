@@ -8,17 +8,16 @@ import race.vpu.VParams._
 import race.vpu._
 
 class Vfreduction extends Module{
-  val XLEN = 32 // fp32 and fp16
   val io = IO(new Bundle {
     val in      = Input(new VfredInput)
     val out     = ValidIO(new VfredOutput)
   })
 
   // result format b01->fp16,b10->fp32,b11->fp64
-  val stages = log2Ceil(VLEN / XLEN)
+  val stages = log2Ceil(VLEN / 32)
 
   val vredu_pipes = Seq.tabulate(stages) { i =>
-    val num = (VLEN / XLEN) / scala.math.pow(2, i + 1).toInt
+    val num = (VLEN / 32) / scala.math.pow(2, i + 1).toInt
     Module(new VfredFP32WidenMixedFP16_Pipeline_Wrapped(num = num))
   }
 
@@ -26,11 +25,10 @@ class Vfreduction extends Module{
   if (i == 0) {
     vredu_pipes(i).io.vctrl_pipe_in.mask      := io.in.mask   
     vredu_pipes(i).io.vctrl_pipe_in.op_code   := io.in.op_code
-    vredu_pipes(i).io.vctrl_pipe_in.vs2       := io.in.vs2    
     vredu_pipes(i).io.vctrl_pipe_in.uop       := io.in.uop    
     vredu_pipes(i).io.vctrl_pipe_in.fire      := io.in.fire   
-    vredu_pipes(i).io.vctrl_pipe_in.vs2       := io.in.vs2
-    vredu_pipes(i).io.vd_pipe_in              := io.in.vs1
+    vredu_pipes(i).io.vctrl_pipe_in.vs1       := io.in.vs1
+    vredu_pipes(i).io.vd_pipe_in              := io.in.vs2
   } else {
     vredu_pipes(i).io.vctrl_pipe_in := vredu_pipes(i - 1).io.vctrl_pipe_out
     vredu_pipes(i).io.vd_pipe_in    := vredu_pipes(i - 1).io.vd_pipe_out
@@ -44,7 +42,7 @@ class Vfreduction extends Module{
   val vctrl_pipe_fp32       = RegNext(vctrl_pipe_stage_last)
 
   val vfred_pipe_fp32 = Module(new VfredFP32WidenMixedFP16_SingleUnit)
-  val vfred_pipe6_vs2 = Mux(vctrl_pipe_stage_last.uop.csr.vsew(1, 0) === "b01".U, Cat(Fill(16, 0.U), vctrl_pipe_stage_last.vs2(15, 0)), Mux(vctrl_pipe_stage_last.uop.csr.vsew(1, 0) === "b10".U, vctrl_pipe_stage_last.vs2(31, 0), 0.U))
+  val vfred_pipe6_vs2 = Mux(vctrl_pipe_stage_last.uop.csr.vsew(1, 0) === "b01".U, Cat(Fill(16, 0.U), vctrl_pipe_stage_last.vs1(15, 0)), Mux(vctrl_pipe_stage_last.uop.csr.vsew(1, 0) === "b10".U, vctrl_pipe_stage_last.vs1(31, 0), 0.U))
   val fp32_result = vfred_pipe_fp32.io.fp_result
   val fp32_fflags = vfred_pipe_fp32.io.fflags
   val fp32_uop    = vctrl_pipe_fp32.uop
@@ -125,7 +123,7 @@ class VfredFP32WidenMixedFP16_Pipeline_Wrapped(val num: Int = 0) extends Module 
     val vd_pipe_out = Output(UInt((num*32).W))
   })
 
-  val result_pipe_out  = Wire(Vec(num, UInt(XLEN.W)))
+  val result_pipe_out  = Wire(Vec(num, UInt(32.W)))
   val fflags_pipe_out  = Wire(Vec(num, UInt(5.W)))
   val vd_pipe_out      = Wire(UInt((num*32).W))
   vd_pipe_out := Cat(result_pipe_out.reverse)
@@ -163,14 +161,14 @@ class VfredFP32WidenMixedFP16_SingleUnit() extends Module {
     val floatWidth = exponentWidth + significandWidth
     val io = IO(new Bundle() {
     val fire          = Input (Bool())
-    val fp_a, fp_b    = Input (UInt(floatWidth.W)) // fp_a -> vs2, fp_b -> vs1
+    val fp_a, fp_b    = Input (UInt(floatWidth.W)) 
 
     val mask          = Input (UInt(4.W))
     val is_vec        = Input (Bool())
     val round_mode    = Input (UInt(3.W))
-    val fp_format     = Input (UInt(2.W)) // result format b01->fp16,b10->fp32,b11->fp64
+    val fp_format     = Input (UInt(2.W)) 
 
-    val op_code       = Input (UInt(5.W)) // TODO: op_code width
+    val op_code       = Input (UInt(5.W)) 
     val fp_aIsFpCanonicalNAN = Input (Bool())
     val fp_bIsFpCanonicalNAN = Input (Bool())
 

@@ -85,6 +85,9 @@ idea:
 test:
 	mill YunSuan.test.test
 
+vpu-debug:
+	mill YunSuan.runMain race.vpu.debug.VerilogVTopDebug
+
 unit-test:
 	make emu
 	./build/emu -O 10
@@ -97,5 +100,5 @@ vector-verilog:
 vector-test:
 	$(MAKE) -j$(nproc) -s -C $(VECTOR_BUILD_PATH) sim
 	
-	
+
 .PHONY: vector-test

@@ -63,6 +63,7 @@ clean:
 
 sim: $(BIN)
 	$(BIN)
+
 gdb: $(BIN)
 	gdb --args $(BIN)
 

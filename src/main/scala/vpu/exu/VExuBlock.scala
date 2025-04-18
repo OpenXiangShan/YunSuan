@@ -164,6 +164,7 @@ class VExuBlock extends Module {
 
   // vrg_out.fflags := 0.U
   
+  // only support xlen = 32
   val vfred = Module(new Vfreduction)
   val vfred_setuop = Wire(new Vfred_setuop)
 
@@ -174,8 +175,8 @@ class VExuBlock extends Module {
   vfred_setuop.op := vfred_setuop.op_gen
 
   vfred.io.in.fire := io.in.valid && in.uop.ctrl.vfred
-  vfred.io.in.vs1  := in.vSrc(0)
-  vfred.io.in.vs2  := in.vSrc(1)(XLEN-1, 0)
+  vfred.io.in.vs1  := in.vSrc(0)(XLEN-1, 0)
+  vfred.io.in.vs2  := in.vSrc(1)
 
   vfred.io.in.op_code       := vfred_setuop.op
   vfred.io.in.mask          := in.vSrc(3)
