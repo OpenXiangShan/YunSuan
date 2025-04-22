@@ -95,7 +95,7 @@ unit-test:
 VECTOR_BUILD_PATH =$(abspath ./src/test/csrc/softmax_test/)
 	
 vector-test:
-	$(MAKE) -j$(nproc) -s -C $(VECTOR_BUILD_PATH) sim
+	$(MAKE) -j 33 -s -C $(VECTOR_BUILD_PATH) sim
 	
 
 .PHONY: vector-test
