@@ -22,11 +22,18 @@ class subVRegFile(numRead: Int, numWrite: Int, regLen: Int) extends Module {
   val io = IO(new Bundle {
     val read = Vec(numRead, new subVRFReadPort(regLen))
     val write = Vec(numWrite, new subVRFWritePort(regLen))
+    val bypassHits = Input(Vec(numRead, Vec(numWrite, Bool())))
   })
 
   val rf = Reg(Vec(32, UInt(regLen.W)))
-  for (rd <- io.read) {
-    rd.data := ParallelMux(rd.addrOH zip rf)
+  for (i <- 0 until numRead) {
+    // rd.data := ParallelMux(rd.addrOH zip rf)
+    val rd_rf_data = ParallelMux(io.read(i).addrOH zip rf)
+    // Write-read bypass
+    io.read(i).data := Mux(!io.bypassHits(i).reduce(_ || _), 
+                   rd_rf_data,
+                   Mux1H(io.bypassHits(i), io.write.map(x => (x.data & x.wmask) | (rd_rf_data & ~x.wmask)))
+    )
   }
   for (i <- 0 until 32) {
     val wrHit = io.write.map(x => x.wen && x.addrOH(i))
@@ -71,6 +78,13 @@ class VRegFile(numRead: Int, numWrite: Int) extends Module {
       subRFs(laneIdx).io.write(i).wmask := io.write(i).wmask(laneIdx)
     }
   }
+  val bypassHits = Wire(Vec(numRead, Vec(numWrite, Bool())))
+  for (i <- 0 until numRead) {
+    for (j <- 0 until numWrite) {
+      bypassHits(i)(j) := io.read(i).addr === io.write(j).addr && io.write(j).wen
+    }
+  }
+  subRFs.foreach(_.io.bypassHits := bypassHits) 
 }
 
 class VRF(numRead: Int, numWrite: Int) extends Module {
