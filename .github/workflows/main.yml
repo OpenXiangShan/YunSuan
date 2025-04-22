@@ -8,7 +8,7 @@ on:
 
 jobs:
   builtin-test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -21,7 +21,7 @@ jobs:
 
       - name: Cache
         id: cache
-        uses: coursier/cache-action@v5
+        uses: coursier/cache-action@v6
 
       - name: Verilator
         run: sudo apt install verilator
