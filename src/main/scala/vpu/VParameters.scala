@@ -24,7 +24,18 @@ object VParams {
   val NByteLane = LaneWidth / 8
   val NLanes = VLEN / LaneWidth
 
-  val bMaxFuDelay = 3 // Exclude long-latency (div) operations
+  // Execution delays
+  val bMaxFuDelay = 4 // Exclude long-latency (div) operations
+  val issueDelay = 1  // Read RF
+  val wbDelay = 1  // Write back to RF
+  val delayBias = issueDelay + wbDelay
+  // Concrete execution delays
+  val aluDelay = 1 + delayBias
+  val faddDelay = 1 + delayBias
+  val fmaDelay = 3 + delayBias
+  val fcvtDelay = 2 + delayBias
+  val fredFp16Delay = log2Up(VLEN/32) + 2 + delayBias
+  val fredFp32Delay = log2Up(VLEN/32) + 1 + delayBias
 
   // Load/Store
   val PAddrBits = XLEN

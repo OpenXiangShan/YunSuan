@@ -27,8 +27,12 @@ class VScoreboard extends Module {
     val updated = table | reqVecToMask(enVec, addrVec)
     table := { if (!zero) updated else { updated & "hFFFF_FFFE".U } }
   }
-  def clear(enVec: Seq[Bool], addrVec: Seq[UInt]): Unit = {
-    table := table & (~reqVecToMask(enVec, addrVec))
+  // def clear(enVec: Seq[Bool], addrVec: Seq[UInt]): Unit = {
+  //   table := table & (~reqVecToMask(enVec, addrVec))
+  // }
+  // Update "clear" func: Support RF write-read-bypass clear
+  def clear(enVec: Seq[Bool], addrVec: Seq[UInt], rfBypass: UInt): Unit = {
+    table := table & (~reqVecToMask(enVec, addrVec)) & (~rfBypass)
   }
   def read(addr: UInt): Bool = {
     val addrOH = Seq.tabulate(32)(addr === _.U)
@@ -47,8 +51,6 @@ class VScoreboard extends Module {
     a.valid := b.valid && b.bits.ldestValUop
     a.bits := b.bits.ldestUop
   }
-  // RF writeback ports
-  clear(wbAddrs.map(_.valid), wbAddrs.map(_.bits))
   
   val readReqAddrs = Wire(Vec(4, ValidIO(UInt(5.W))))
   readReqAddrs(0).valid := io.readReq.lsrcValUop(0)
@@ -82,17 +84,35 @@ class VScoreboard extends Module {
     */
   // FU delay table for each RF write address
   val delay = Reg(Vec(32, UInt(bMaxFuDelay.W)))
-  // TODO: resolve from uop. Note: don't forget - 1.U
-  val setFuDelay = 2.U - 1.U
+  // Resolve the execution delay of this uop if the delay is fixed
+  def getDelay(uop: VUop): (Bool, UInt) = {
+    val alu = uop.ctrl.alu
+    val fadd = uop.ctrl.vfa
+    val fma = uop.ctrl.vfma
+    val fcvt = uop.ctrl.vfcvt
+    val fredFp16 = uop.ctrl.vfred && uop.csr.vsew === 1.U
+    val fredFp32 = uop.ctrl.vfred && uop.csr.vsew === 2.U
+    val fixedDelay      = Seq(alu, fadd, fma, fcvt, fredFp16, fredFp32)
+    val fixedDelayValue = Seq(aluDelay, faddDelay, fmaDelay, fcvtDelay, fredFp16Delay, fredFp32Delay).map(_.U)
+    val isFixed = fixedDelay.reduce(_||_)
+    val delayValue = MuxLookup(!isFixed, 0.U, fixedDelay.zip(fixedDelayValue))
+    (isFixed, delayValue)
+  }
+
+  val setFuDelay = getDelay(io.setReq.bits)
+  val delayIsFixed = Reg(Vec(32, Bool()))
   // Set delay table
   val setReqAddrOH = UIntToOH(setReqAddr.bits)
   for (i <- 0 until 32) {
-    when (setReqAddrOH(i) && setReqAddr.valid) {
-      delay(i) := setFuDelay
+    val setHit = setReqAddrOH(i) && setReqAddr.valid
+    when (setHit && setFuDelay._1) {
+      delay(i) := setFuDelay._2 - 1.U
     }.elsewhen (delay(i) =/= 0.U) {
       delay(i) := delay(i) - 1.U
     }
+    when (setHit) { delayIsFixed(i) := setFuDelay._1 }
   }
+
   // Write port for each RF write address
   val wrPort = Reg(Vec(32, UInt(bNVRFWritePortsExu.W)))
   val setWrPort = Wire(UInt(bNVRFWritePortsExu.W))
@@ -102,11 +122,11 @@ class VScoreboard extends Module {
     wrPort(setReqAddr.bits) := setWrPort
   }
   
-  // TODO: resolve from io.readReq uop. This is the delay from read req (inside expander)
-  val readFuDelay = 2.U
-  val strucHazd_wrPort_normal = delay(readReqAddrs(2).bits) === readFuDelay && readReqBusy(2)
-  val strucHazd_wrPort_read_set = setFuDelay === readFuDelay && different_instrns &&
-                                  readReqAddrs(2).valid && setReqAddr.valid
+  val readFuDelay = getDelay(io.readReq)
+  val strucHazd_wrPort_normal = delay.map(_ === readFuDelay._2).reduce(_ || _) &&
+                                readFuDelay._1 && io.readReq.ldestValUop
+  val strucHazd_wrPort_read_set = setFuDelay._2 === readFuDelay._2 && setFuDelay._1 && readFuDelay._1 &&
+                                  different_instrns && io.readReq.ldestValUop && setReqAddr.valid
   val strucHazd_wrPort_final = strucHazd_wrPort_normal || strucHazd_wrPort_read_set                                  
 
   /**
@@ -125,6 +145,15 @@ class VScoreboard extends Module {
   val strucHazd_ll_normal = llReg && io.readReq.ctrl.div
   val strucHazd_ll_read_set = io.setReq.valid && io.setReq.bits.ctrl.div && io.readReq.ctrl.div
   val strucHazd_ll_final = strucHazd_ll_normal || strucHazd_ll_read_set
+
+  /**
+    * Clear the busy table
+    */
+  // RF-write-read-bypass
+  val rfWriteReadBypass = delay zip table.asBools map { case (x, y) => x === 1.U && y }
+  val rfBypass = VecInit(rfWriteReadBypass).asUInt & delayIsFixed.asUInt
+  // (1) RF writeback ports, or (2) RF-write-read-bypass clear
+  clear(wbAddrs.map(_.valid), wbAddrs.map(_.bits), rfBypass)
 
   io.readResp := raw_waw || read_set_hazard_final || strucHazd_wrPort_final || strucHazd_ll_final
 }
