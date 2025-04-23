@@ -11,7 +11,7 @@ import scala.collection.mutable.ListBuffer
 class VectorExuFloatFMA() extends Module{
   val io = IO(new Bundle() {
     val fire            = Input (Bool())
-    val vs1, vs2, vs3   = Input (UInt(VLEN.W)) // fp_a -> vs2, fp_b -> vs1, fp_c -> vd
+    val vs1, vs2, vs3   = Input (UInt(VLEN.W)) // fp_a->VS2,fp_b->VS1,fp_c->VD
     val uop_idx         = Input (Bool())
     // val widen_a      = Input (UInt(floatWidth.W)) 
     // val widen_b      = Input (UInt(floatWidth.W)) 
@@ -35,8 +35,8 @@ class VectorExuFloatFMA() extends Module{
   val fflags = Wire(Vec(VLEN/XLEN, Vec(XLEN/16, UInt(5.W))))
 
   for (i <- 0 until (VLEN/XLEN)) {
-      val fp_a = io.vs1(XLEN-1+i*XLEN, 0+i*XLEN) //TODO: vs1 fp_b ? 
-      val fp_b = io.vs2(XLEN-1+i*XLEN, 0+i*XLEN)
+      val fp_a = io.vs2(XLEN-1+i*XLEN, 0+i*XLEN) //TODO: vs1 fp_b ? 
+      val fp_b = io.vs1(XLEN-1+i*XLEN, 0+i*XLEN)
       val fp_c = io.vs3(XLEN-1+i*XLEN, 0+i*XLEN)
       val vff = Module(new VectorFloatFMA_W64)
       vff.io.fire := io.fire

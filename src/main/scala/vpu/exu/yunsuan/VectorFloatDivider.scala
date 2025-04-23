@@ -30,8 +30,8 @@ class VectorExuFloatDivider() extends Module {
   val fflags = Wire(Vec(VLEN/XLEN, Vec(XLEN/16, UInt(5.W))))
     
   for (i <- 0 until (VLEN/XLEN)) {
-      val fp_a = io.vs1(XLEN-1+i*XLEN, 0+i*XLEN) //TODO: vs1 fp_b ? 
-      val fp_b = io.vs2(XLEN-1+i*XLEN, 0+i*XLEN)
+      val fp_b = io.vs1(XLEN-1+i*XLEN, 0+i*XLEN)
+      val fp_a = io.vs2(XLEN-1+i*XLEN, 0+i*XLEN)
       val vfd = Module(new VectorFloatDivider_W64)
       vfd.io.start_valid_i := io.fire 
       vfd.io.fp_format_i := io.fp_format  

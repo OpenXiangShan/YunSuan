@@ -31,7 +31,7 @@ import race.vpu.yunsuan._
 class VectorExuFloatAdder() extends Module {
   val io = IO(new Bundle() {
   val fire                  = Input (Bool())
-  val fp_a, fp_b            = Input (UInt(VLEN.W)) // fp_a -> vs2, fp_b -> vs1
+  val vs1, vs2            = Input (UInt(VLEN.W)) // fp_a -> vs2, fp_b -> vs1
   val widen_a               = Input (UInt(VLEN.W)) // widen_a -> Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
   val widen_b               = Input (UInt(VLEN.W)) // widen_b -> Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
   val frs1                  = Input (UInt(XLEN.W)) // VS1(63,0)
@@ -68,8 +68,8 @@ class VectorExuFloatAdder() extends Module {
   for (i <- 0 until (VLEN/XLEN)) {
       val mask_fp16 = io.mask(4-1+i*4, 0+i*4)
       val mask_fp32 = Cat(0.U(2.W), io.mask(2-1+i*2, 0+i*2))
-      val fp_a = io.fp_a(XLEN-1+i*XLEN, 0+i*XLEN)
-      val fp_b = io.fp_b(XLEN-1+i*XLEN, 0+i*XLEN)
+      val fp_b = io.vs1(XLEN-1+i*XLEN, 0+i*XLEN)
+      val fp_a = io.vs2(XLEN-1+i*XLEN, 0+i*XLEN)
       val vfa = Module(new VectorFloatAdder_Width64)
       vfa.io.fire := io.fire
       vfa.io.fp_a := fp_a

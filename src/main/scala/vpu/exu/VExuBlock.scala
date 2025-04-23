@@ -34,8 +34,8 @@ class VExuBlock extends Module {
 
   vfa.io.fire := io.in.valid && in.uop.ctrl.vfa
   vfa.io.in_uop := in.uop
-  vfa.io.fp_b  := in.vSrc(0)
-  vfa.io.fp_a  := in.vSrc(1)
+  vfa.io.vs1  := in.vSrc(0)
+  vfa.io.vs2  := in.vSrc(1)
   vfa.io.widen_a := in.vSrc(0)  // TODO: check it
   vfa.io.widen_b := in.vSrc(1)  // TODO: check it
 
