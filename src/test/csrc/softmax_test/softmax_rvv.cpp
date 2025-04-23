@@ -186,7 +186,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     vfsub_vf(3,cpu.fpr[isa_freg_index("fs0")].as_fp32,2,vcsr.vl);//x-max_x          	vfsub.vf	v3,v2,fs0
     //dut execution
     dut_input_execute(0x0a2451d7, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fs0")].as_uint64, 0, false, robIdx++);
-    check=check_vreg(2);
+    check=check_vreg(3);
     printf("The result of \"Instr 15: vfsub.vf	v3,v2,fs0\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
 
@@ -204,7 +204,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     vfcvt_x_f_v_i32m1(12,1,vcsr.vl);//vfcvt.x.f.v	v12,v1
     //dut execution
     dut_input_execute(0x4a109657, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
-    check=check_vreg(1);
+    check=check_vreg_i(12);
     printf("The result of \"Instr 17: vfcvt.x.f.v	v12,v1\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
 
@@ -213,7 +213,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     vfcvt_f_x_v_f32m1(14,12,vcsr.vl);//vfcvt.f.x.v	v14,v12
     //dut execution
     dut_input_execute(0x4ac19757, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
-    check=check_vreg(3);
+    check=check_vreg(14);
     printf("The result of \"Instr 18: vfcvt.f.x.v	v14,v12\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
 
@@ -231,7 +231,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     vfnmsac_vf(3,isa_freg_index("fa5"),14,vcsr.vl);//bee7d1d7          	vfnmsac.vf	v3,fa5,v14 r = x - k * log(2)
     //dut execution
     dut_input_execute(0xbee7d1d7, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa5")].as_uint64, 0, false, robIdx++);
-    check=check_vreg(2);
+    check=check_vreg(3);
     printf("The result of \"Instr 19: vfnmsac.vf	v3,fa5,v14\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
     
@@ -408,7 +408,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     vfmv_v_f(1, "fa5", vcsr.vl);//vfmv.v.f	v1,fa5
     //dut execution
     dut_input_execute(0x5e07d0d7 , vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa5")].as_uint64, 0, false, robIdx++);
-    check=check_vreg(2);
+    check=check_vreg(1);
     printf("The result of \"Instr 4: vfmv.v.f	v1,fa5\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
 
@@ -491,7 +491,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
 bool check_vreg(uint8_t rf_addr){
     for(int i=rf_addr; i<rf_addr+1;i++){
         for(int element=0;element<VLEN/32;element++){
-            if(cpu.vreg[i][element].f!=diff_vreg[i][element].as_float) {
+            if(cpu.vreg[i][element].u!=diff_vreg[i][element].as_uint32) {
                 printf("The different register id is %d\n",i);
                 printf("The element index is : %d\n",element);
                 for(int i=0;i<VLEN/32;i++){
@@ -515,6 +515,32 @@ bool check_vreg(uint8_t rf_addr){
     return true;
 }
 
+bool check_vreg_i(uint8_t rf_addr){
+    for(int i=rf_addr; i<rf_addr+1;i++){
+        for(int element=0;element<VLEN/32;element++){
+            if(cpu.vreg[i][element].u!=diff_vreg[i][element].as_uint32) {
+                printf("The different register id is %d\n",i);
+                printf("The element index is : %d\n",element);
+                for(int i=0;i<VLEN/32;i++){
+                    printf("cpu.vreg[%d][%d]=%d\t  diff.vreg[%d][%d]=%d\n",rf_addr, i, cpu.vreg[rf_addr][i].f, rf_addr, i,diff_vreg[rf_addr][i].as_int32);
+                }
+                return false;
+            }
+        }
+    }
+    // for(int element=0;element<VLEN/32;element++){
+    //     printf("cpu.vreg[%d][%d]=%f\t  diff.vreg[%d][%d]=%f\n",rf_addr, element, cpu.vreg[rf_addr][element].f, rf_addr, element,diff_vreg[rf_addr][element].as_float); 
+    // }
+    // for(int idx=0;idx<VLEN/32;idx++){
+    //     if(cpu.vreg[i][idx].f!=diff_vreg[i][idx]) {
+    //         printf("the different id is %d",idx);
+    //         printf("d vreg=%f,\tv vreg=%f\n\n",diff_vreg[2][idx],cpu.vreg[2][idx].f);
+    //         return false;
+    //     }
+    // }
+    commit_global=false;
+    return true;
+}
 
 void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave)
 {
