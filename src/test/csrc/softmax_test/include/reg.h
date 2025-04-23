@@ -10,7 +10,7 @@
 typedef union {
     float as_float;
     uint32_t as_uint32;
-    int32_t as_uint32;
+    int32_t as_int32;
 }FloatUintUnion;
 
 typedef struct {

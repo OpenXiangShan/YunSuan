@@ -24,6 +24,7 @@ vluint64_t main_time = 0;
 static uint8_t robIdx=0;
 
 bool check_vreg(uint8_t rf_addr);
+bool check_vreg_i(uint8_t rf_addr);
 void single_cycle(VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
 void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
 void dut_input_execute(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t rs2, bool robIdx_flag, uint8_t robIdx);
@@ -196,6 +197,9 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     // dut execution
     dut_input_execute(0x9235d0d7, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa1")].as_uint64, 0, false, robIdx++);
     check = check_vreg(1);
+    // for(int k=0;k<VLEN/32;k++){
+    //     printf("v1[%d]=%f\n",k,cpu.vreg[1][k].f);
+    // }
     printf("The result of \"Instr 16: vfmul.vf	v1,v3,fa1 \" difftest is :%s\n", check ? "True" : "False");
     kill_sim(check);
 
@@ -522,7 +526,7 @@ bool check_vreg_i(uint8_t rf_addr){
                 printf("The different register id is %d\n",i);
                 printf("The element index is : %d\n",element);
                 for(int i=0;i<VLEN/32;i++){
-                    printf("cpu.vreg[%d][%d]=%d\t  diff.vreg[%d][%d]=%d\n",rf_addr, i, cpu.vreg[rf_addr][i].f, rf_addr, i,diff_vreg[rf_addr][i].as_int32);
+                    printf("cpu.vreg[%d][%d]=%d\t  diff.vreg[%d][%d]=%d\n",rf_addr, i, cpu.vreg[rf_addr][i].i, rf_addr, i,diff_vreg[rf_addr][i].as_int32);
                 }
                 return false;
             }
