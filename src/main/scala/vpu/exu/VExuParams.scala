@@ -136,12 +136,14 @@ object Vfcvtfunc6 {
   def dummy       = "b111111".U(width.W)
   def vfncvt_xfw  = "b010010".U(width.W)
   def vfwcvt_fxv  = "b010010".U(width.W)
+  def vfcvt_xfv   = "b010010".U(width.W)
 }
 
 object VfcvtOpCode {
   def dummy         = "b11111111".U(8.W)
   def vfncvt_xfw    = "b10000000".U(8.W)
   def vfwcvt_fxv    = "b01001011".U(8.W)
+  def vfcvt_xfv     = "b10000001".U(8.W)
 }
 
 // vrg

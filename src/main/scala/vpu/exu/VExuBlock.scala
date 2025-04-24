@@ -130,7 +130,7 @@ class VExuBlock extends Module {
 
   vcvt.io.fire := io.in.valid && in.uop.ctrl.vfcvt 
   vcvt.io.in_uop := in.uop
-  vcvt.io.vs1  := in.vSrc(0)
+  vcvt.io.vs2  := in.vSrc(1)
   vcvt.io.op_code := vcvt_setuop.op
   vcvt.io.sew := in.uop.csr.vsew(1, 0)
   vcvt.io.rm := in.uop.csr.frm
@@ -138,9 +138,9 @@ class VExuBlock extends Module {
   vcvt.io.isFround := 0.U
   vcvt.io.isFcvtmod := false.B
   
-  vcvt_out.vd := vcvt.io.result
+  vcvt_out.vd     := vcvt.io.result
   vcvt_out.fflags := vcvt.io.fflags
-  vcvt_out.uop := vcvt.io.out_uop.bits
+  vcvt_out.uop    := vcvt.io.out_uop.bits
 
   // val vrg = Module(new VectorExuReggather)
   // val vrg_setuop = Wire(new Vrg_setuop)

@@ -3,10 +3,12 @@ package race.vpu.yunsuan
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.decode._
+
 import race.vpu._
 import race.vpu.yunsuan._
 import race.vpu.yunsuan.VectorConvert._
 import race.vpu.yunsuan.util._
+import race.vpu.VParams._
 
 class VectorCvtIO(width: Int) extends Bundle {
   val fire = Input(Bool())
@@ -22,11 +24,10 @@ class VectorCvtIO(width: Int) extends Bundle {
 }
 
 class VectorExuCvt extends  Module {
-  val VLEN = 2048
-  val XLEN = 64
+  val XLEN = 32
   val io = IO(new Bundle() {
       val fire              = Input(Bool())
-      val vs1               = Input(UInt(VLEN.W))
+      val vs2               = Input(UInt(VLEN.W))
       val op_code           = Input(UInt(8.W))
       val sew               = Input(UInt(2.W))
       val rm                = Input(UInt(3.W))
@@ -44,18 +45,18 @@ class VectorExuCvt extends  Module {
   val fflags = Wire(Vec(VLEN/XLEN, Vec(XLEN/16, UInt(5.W))))
 
   for (i <- 0 until (VLEN/XLEN)) {
-    val vcvt = Module(new VectorCvt(XLEN))
+    val vcvt = Module(new VectorCvt(64))
     // connect vcvt's io
-    val src1 = io.vs1(XLEN-1+i*XLEN, 0+i*XLEN) 
+    val src =  io.vs2(XLEN-1+i*XLEN, 0+i*XLEN) ## 0.U(32.W) 
     vcvt.io.fire          := io.fire
     vcvt.io.sew           := io.sew
     vcvt.io.opType        := io.op_code
     vcvt.io.rm            := io.rm
-    vcvt.io.src           := src1 // 128 bit->vcvt
+    vcvt.io.src           := src // 128 bit->vcvt
     vcvt.io.isFpToVecInst := false.B
     vcvt.io.isFround      := 0.U
     vcvt.io.isFcvtmod     := false.B
-    result(i) := vcvt.io.result
+    result(i) := vcvt.io.result(63, 32)
     for (j <- 0 until XLEN / 16) {
       fflags(i)(j) := vcvt.io.fflags(5 * (j + 1) - 1, 5 * j)  
     }
@@ -66,7 +67,7 @@ class VectorExuCvt extends  Module {
   
     
   // latency = 2
-  val reg_valid_0 = RegNext(io.out_uop.valid)
+  val reg_valid_0 = RegNext(io.fire)
   val reg_valid_1 = RegNext(reg_valid_0)
   val reg_uop_0     = RegEnable(io.in_uop, io.fire)
   val reg_uop_1     = RegEnable(reg_uop_0, reg_valid_0)
