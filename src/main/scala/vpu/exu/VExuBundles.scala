@@ -135,6 +135,7 @@ class Vcvt_setuop extends Bundle {
   (funct6 === Vfcvtfunc6.vfncvt_xfw    & fvv & (vs1 === "b10001".U))   -> VfcvtOpCode.vfncvt_xfw,
   (funct6 === Vfcvtfunc6.vfcvt_xfv     & fvv & (vs1 === "b00001".U))   -> VfcvtOpCode.vfcvt_xfv,
   (funct6 === Vfcvtfunc6.vfwcvt_fxv    & fvv & (vs1 === "b01011".U))   -> VfcvtOpCode.vfwcvt_fxv,
+  (funct6 === Vfcvtfunc6.vfcvt_fxv     & fvv & (vs1 === "b00011".U))   -> VfcvtOpCode.vfcvt_fxv,
   ))
   
 }
