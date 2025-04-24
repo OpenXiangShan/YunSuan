@@ -47,7 +47,7 @@ class VectorExuCvt extends  Module {
   for (i <- 0 until (VLEN/XLEN)) {
     val vcvt = Module(new VectorCvt(64))
     // connect vcvt's io
-    val src =  io.vs2(XLEN-1+i*XLEN, 0+i*XLEN) ## 0.U(32.W) 
+    val src =  io.vs2(XLEN-1+i*XLEN, 0+i*XLEN) ## io.vs2(XLEN-1+i*XLEN, 0+i*XLEN)
     vcvt.io.fire          := io.fire
     vcvt.io.sew           := io.sew
     vcvt.io.opType        := io.op_code
@@ -56,7 +56,7 @@ class VectorExuCvt extends  Module {
     vcvt.io.isFpToVecInst := false.B
     vcvt.io.isFround      := 0.U
     vcvt.io.isFcvtmod     := false.B
-    result(i) := vcvt.io.result(63, 32)
+    result(i) := vcvt.io.result(31, 0)
     for (j <- 0 until XLEN / 16) {
       fflags(i)(j) := vcvt.io.fflags(5 * (j + 1) - 1, 5 * j)  
     }
