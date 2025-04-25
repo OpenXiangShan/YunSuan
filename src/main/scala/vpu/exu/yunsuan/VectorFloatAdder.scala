@@ -54,12 +54,12 @@ class VectorExuFloatAdder() extends Module {
   val in_uop                = Input(new VUop)
 
   val result                = Output(UInt(VLEN.W))
-  val fflags                = Output(UInt((5*VLEN/16).W))
+  val fflags                = Output(Vec(VLEN/16, UInt(5.W)))
   val out_uop               = ValidIO(new VUop)
   })
 
   val result = Wire(Vec(VLEN/XLEN, UInt(XLEN.W)))
-  val fflags = Wire(Vec(VLEN/XLEN, Vec(XLEN/16, UInt(5.W))))
+  val fflags = Wire(Vec(VLEN/XLEN, UInt(20.W)))
   
   val is_fp16 = io.fp_format === 1.U
   val is_fp32 = io.fp_format === 2.U
@@ -98,13 +98,11 @@ class VectorExuFloatAdder() extends Module {
       vfa.io.res_widening := io.res_widening
 
       result(i) := vfa.io.fp_result
-      for (j <- 0 until XLEN / 16) {
-        fflags(i)(j) := vfa.io.fflags(5 * (j + 1) - 1, 5 * j)  
-      }
+      fflags(i) := vfa.io.fflags
   }
 
-  io.result := Cat(result.reverse)
-  io.fflags := fflags.flatMap(_.toSeq).reduce(_ | _)
+  io.result := result.asTypeOf(io.result)
+  io.fflags := fflags.asTypeOf(io.fflags)
 
   // latency = 1
   val reg_valid_0 = RegNext(io.fire)

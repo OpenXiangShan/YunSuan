@@ -37,12 +37,12 @@ class VectorExuCvt extends  Module {
       val in_uop            = Input(new VUop)
 
       val result            = Output(UInt(VLEN.W))
-      val fflags            = Output(UInt(5.W))
+      val fflags            = Output(Vec(VLEN/16, UInt(5.W)))
       val out_uop           = ValidIO(new VUop)
   })
   
   val result = Wire(Vec(VLEN/XLEN, UInt(XLEN.W)))
-  val fflags = Wire(Vec(VLEN/XLEN, Vec(XLEN/16, UInt(5.W))))
+  val fflags = Wire(Vec(VLEN/XLEN, UInt(20.W)))
 
   for (i <- 0 until (VLEN/XLEN)) {
     val vcvt = Module(new VectorCvt(64))
@@ -57,15 +57,12 @@ class VectorExuCvt extends  Module {
     vcvt.io.isFround      := 0.U
     vcvt.io.isFcvtmod     := false.B
     result(i) := vcvt.io.result(31, 0)
-    for (j <- 0 until XLEN / 16) {
-      fflags(i)(j) := vcvt.io.fflags(5 * (j + 1) - 1, 5 * j)  
-    }
+    fflags(i) := vcvt.io.fflags
   }
 
-  io.result := Cat(result.reverse)  
-  io.fflags := fflags.flatMap(_.toSeq).reduce(_ | _)
+  io.result := result.asTypeOf(io.result)  
+  io.fflags := fflags.asTypeOf(io.fflags)
   
-    
   // latency = 2
   val reg_valid_0 = RegNext(io.fire)
   val reg_valid_1 = RegNext(reg_valid_0)

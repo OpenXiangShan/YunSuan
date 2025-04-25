@@ -21,13 +21,13 @@ class VectorExuFloatDivider() extends Module {
     val fp_bIsFpCanonicalNAN = Input(Bool())
 
     val result       = Output(UInt(VLEN.W))
-    val fflags       = Output(UInt((5*VLEN/16).W))
+    val fflags       = Output(Vec(VLEN/16, UInt(5.W)))
     val finish_valid_o = Output(Bool())
     val finish_ready_i = Input(Bool())
   })
 
   val result = Wire(Vec(VLEN/XLEN, UInt(XLEN.W)))
-  val fflags = Wire(Vec(VLEN/XLEN, Vec(XLEN/16, UInt(5.W))))
+  val fflags = Wire(Vec(VLEN/XLEN, UInt(20.W)))
     
   for (i <- 0 until (VLEN/XLEN)) {
       val fp_b = io.vs1(XLEN-1+i*XLEN, 0+i*XLEN)
@@ -53,15 +53,13 @@ class VectorExuFloatDivider() extends Module {
       // when (vfd.io.finish_valid_o && vfd.io.finish_ready_i) {
       //   vfd_result_valid(i) := true.B
       result(i) := vfd.io.fpdiv_res_o
-      for (j <- 0 until XLEN / 16) {
-        fflags(i)(j) := vfd.io.fflags_o(5 * (j + 1) - 1, 5 * j)  
-      }      
+      fflags(i) := vfd.io.fflags_o
     //   vfd_result.vxsat := 0.U // DontCare
       // }
   }
 
-  io.result := Cat(result.reverse)
-  io.fflags := fflags.flatMap(_.toSeq).reduce(_ | _)
+  io.result := result.asTypeOf(io.result)
+  io.fflags := fflags.asTypeOf(io.fflags)
 
 }
 

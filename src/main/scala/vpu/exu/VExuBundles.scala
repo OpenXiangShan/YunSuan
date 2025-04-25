@@ -203,7 +203,7 @@ class VfredInput extends Vfredctrl{
 
 class VfredOutput extends Bundle{
   val uop           = new VUop
-  val result  = UInt(XLEN.W)
-  val fflags  = UInt(5.W)
+  val result        = UInt(XLEN.W)
+  val fflags        = UInt(5.W)
 }
 

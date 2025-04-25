@@ -24,7 +24,7 @@ class VectorExuFloatFMA() extends Module{
     val res_widening = Input (Bool())
     val in_uop       = Input(new VUop)
     val result       = Output(UInt(VLEN.W))
-    val fflags       = Output(UInt((5*VLEN/16).W))
+    val fflags       = Output(Vec(VLEN/16, UInt(5.W)))
     val out_uop      = ValidIO(new VUop)
     val fp_aIsFpCanonicalNAN = Input(Bool())
     val fp_bIsFpCanonicalNAN = Input(Bool())
@@ -32,7 +32,7 @@ class VectorExuFloatFMA() extends Module{
   })
 
   val result = Wire(Vec(VLEN/XLEN, UInt(XLEN.W)))
-  val fflags = Wire(Vec(VLEN/XLEN, Vec(XLEN/16, UInt(5.W))))
+  val fflags = Wire(Vec(VLEN/XLEN, UInt(20.W)))
 
   for (i <- 0 until (VLEN/XLEN)) {
       val fp_a = io.vs2(XLEN-1+i*XLEN, 0+i*XLEN) //TODO: vs1 fp_b ? 
@@ -58,13 +58,11 @@ class VectorExuFloatFMA() extends Module{
       vff.io.fp_cIsFpCanonicalNAN := io.fp_cIsFpCanonicalNAN
 
       result(i) := vff.io.fp_result
-      for (j <- 0 until XLEN / 16) {
-        fflags(i)(j) := vff.io.fflags(5 * (j + 1) - 1, 5 * j)  
-      }  
+      fflags(i) := vff.io.fflags
   }
 
-  io.result := Cat(result.reverse)
-  io.fflags := fflags.flatMap(_.toSeq).reduce(_ | _)
+  io.result := result.asTypeOf(io.result)
+  io.fflags := fflags.asTypeOf(io.fflags)
 
   // latency = 3
   val reg_valid_0   = RegNext(io.fire)
