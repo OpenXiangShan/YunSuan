@@ -182,6 +182,7 @@ class VExuBlock extends Module {
   vfred.io.in.mask          := in.vSrc(3)
   vfred.io.in.uop           := in.uop
   vfred_out.vd              := Cat(Fill((VLEN-XLEN), 0.U), vfred.io.out.bits.result)
+  vfred_out.fflags          := 0.U.asTypeOf(vfred_out.fflags)
   vfred_out.fflags(0)       := vfred.io.out.bits.fflags
   vfred_out.uop             := vfred.io.out.bits.uop
 
