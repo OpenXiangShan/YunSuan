@@ -19,7 +19,7 @@ class LaneInput extends Bundle {
 class LaneOutput extends Bundle {
   val uop = new VUop
   val vd = UInt(LaneWidth.W)
-  val fflags = UInt(5.W) // Floating-point accrued exception flag
+  val fflags = Vec(LaneWidth/16, UInt(5.W)) // For eew=32, fflags valid pattern is 0101
 //   val vxsat = Bool() // Fixed-point accrued saturation flag
 }
 

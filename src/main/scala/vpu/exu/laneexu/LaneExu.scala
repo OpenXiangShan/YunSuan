@@ -25,9 +25,9 @@ class LaneExu extends Module {
   }
 
   val vd = Cat(lanes.map(_.io.out.bits.vd).reverse)
-  val fflags = lanes.map(_.io.out.bits.fflags).reduce(_ | _)
+  val lanefflags = lanes.map(_.io.out.bits.fflags.asUInt)
   io.out.bits.vd := vd
-  io.out.bits.fflags := fflags
+  io.out.bits.fflags := VecInit(UIntSplit(VecInit(lanefflags).asUInt, 5))
   io.out.bits.uop := lanes(0).io.out.bits.uop
   io.out.valid := lanes(0).io.out.valid
 

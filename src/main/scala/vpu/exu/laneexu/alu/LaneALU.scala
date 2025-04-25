@@ -85,7 +85,7 @@ class LaneALU extends Module {
 
   io.out.bits.vd := RegEnable(aluOut, fire)
   io.out.bits.uop := RegEnable(uop, fire)
-  io.out.bits.fflags := 0.U
+  io.out.bits.fflags := DontCare
   io.out.valid := RegNext(fire)
 
 
