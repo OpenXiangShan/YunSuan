@@ -158,7 +158,7 @@ class VExuInput extends Bundle {
 class VExuOutput extends Bundle {
   val uop = new VUop
   val vd  = UInt(VLEN.W)
-  val fflags = UInt(5.W)
+  val fflags = Vec(VLEN/16, UInt(5.W))
 }
 
 // TODO: so far only unit-stride load/store is supported
