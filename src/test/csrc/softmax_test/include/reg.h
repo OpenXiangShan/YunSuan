@@ -3,6 +3,11 @@
 #include <stdint.h>
 
 #define VLEN 1024
+
+
+#define LMUL 1
+
+
 #define TA 1
 #define MA 1
 #define TU 0

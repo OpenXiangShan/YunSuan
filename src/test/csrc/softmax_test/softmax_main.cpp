@@ -44,7 +44,7 @@ int main(int argc, char **argv){
     softmax_bench_t benchmarks[] = {
         (softmax_bench_t){.bench = softmax_stable_rvv_fp32_bench,              .label="rvv-based n-element stable softmax"},
     };
-    size_t testSizes[] = {VLEN/32};//{4, 16, 17, 32, 33, 128, 129, 511, 512, 1024, 2048};
+    size_t testSizes[] = {VLEN*LMUL/32};//{4, 16, 17, 32, 33, 128, 129, 511, 512, 1024, 2048};
     for (size_t testId = 0; testId < sizeof(testSizes) / sizeof(size_t); testId++)
     {
         size_t n = testSizes[testId];

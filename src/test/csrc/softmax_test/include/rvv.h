@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <math.h>
 
-void vsetvlmax_e32m1(const char *s,int ta,int ma);
+void vsetvlmax_e32(const char *s,int ta,int ma);
 void vfmv_v_f(int vreg_index, const char *s, int vl);
 void vle32(int vreg_index, void *source_reg, int vl);
 void gpr_write(int idx, uint64_t val);
