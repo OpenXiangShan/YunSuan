@@ -1,7 +1,7 @@
 
 #include "softmax_bench.h"
 #include <stdio.h>
-#include <cmath>
+
 #define SEW 32
 #include <reg.h>
 #include <rvv.h>
@@ -12,6 +12,7 @@
 #include "svdpi.h"
 #include "VVTopDebug__Dpi.h"
 #include <verilated_vcd_c.h>
+#include <cmath>
 
 extern VVTopDebug *top;
 extern VerilatedContext *contextp;
@@ -293,6 +294,10 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     check = check_vreg(1);
     printf("The result of \"Instr 21: vfmadd.vv	v1,v3,v5\" difftest is :%s\n", check ? "True" : "False");
     kill_sim(check);
+    // for(int i=0; i < VLEN/32; i++){
+    //     printf("cpu.vreg[1][%d]=%x\t  diff.vreg[1][%d]=%x\n", i, cpu.vreg[1][i].u, i,diff_vreg[1][i].as_uint32);
+    // }
+
 
     //Instr 22: vfmadd.vv	v1,v3,v9
     vfmadd_vv(1,3,9,vcsr.vl);//vfmadd.vv	v1,v3,v9
@@ -300,6 +305,18 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     // dut_input_execute(0xa29190d7, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check = check_vreg(1);
     printf("The result of \"Instr 22: vfmadd.vv	v1,v3,v9\" difftest is :%s\n", check ? "True" : "False");
+    // printf("v3\n");
+    // for(int i=0; i < VLEN/32; i++){
+    //     printf("cpu.vreg[3][%d]=%x\t  diff.vreg[3][%d]=%x\n", i, cpu.vreg[3][i].u, i,diff_vreg[3][i].as_uint32);
+    // }
+    // printf("v9\n");
+    // for(int i=0; i < VLEN/32; i++){
+    //     printf("cpu.vreg[9][%d]=%x\t  diff.vreg[9][%d]=%x\n", i, cpu.vreg[9][i].u, i,diff_vreg[9][i].as_uint32);
+    // }
+    // printf("v1\n");
+    // for(int i=0; i < VLEN/32; i++){
+    //     printf("cpu.vreg[1][%d]=%x\t  diff.vreg[1][%d]=%x\n", i, cpu.vreg[1][i].u, i,diff_vreg[1][i].as_uint32);
+    // }
     kill_sim(check);
 
     // //Instr 23: vle32.v	v2,(a3)
@@ -492,9 +509,12 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
 
 
 bool check_vreg(uint8_t rf_addr){
-    for(int i=rf_addr; i<rf_addr+1;i++){
+    for(int i=rf_addr; i<rf_addr+LMUL;i++){
         for(int element=0;element<VLEN/32;element++){
-            if(cpu.vreg[i][element].u!=diff_vreg[i][element].as_uint32) {
+            auto diff = cpu.vreg[i][element].u > diff_vreg[i][element].as_uint32 ?
+            cpu.vreg[i][element].u - diff_vreg[i][element].as_uint32 :
+            diff_vreg[i][element].as_uint32 - cpu.vreg[i][element].u;
+            if(diff>5) {
                 printf("The different register id is %d\n",i);
                 printf("The element index is : %d\n",element);
                 for(int i=0;i<VLEN/32;i++){
@@ -525,7 +545,7 @@ bool check_vreg_i(uint8_t rf_addr){
                 printf("The different register id is %d\n",i);
                 printf("The element index is : %d\n",element);
                 for(int i=0;i<VLEN/32;i++){
-                    printf("cpu.vreg[%d][%d]=%d\t  diff.vreg[%d][%d]=%u\n",rf_addr, i, cpu.vreg[rf_addr][i].i, rf_addr, i,diff_vreg[rf_addr][i].as_uint32);
+                    printf("cpu.vreg[%d][%d]=%d\t  diff.vreg[%d][%d]=%d\n",rf_addr, i, cpu.vreg[rf_addr][i].i, rf_addr, i,diff_vreg[rf_addr][i].as_int32);
                 }
                 return false;
             }

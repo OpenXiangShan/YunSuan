@@ -36,7 +36,7 @@ VERILATOR_CFLAGS += -j 33
 
 # Include path
 INCFLAGS = $(addprefix -I, $(INCLUDE_DIR))
-CXXFLAGS += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\"" -DLMUL=2
+CXXFLAGS += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\"" 
 
 $(BIN): $(DEPS)
 	@verilator $(VERILATOR_CFLAGS) \
