@@ -2,7 +2,6 @@
 #include "softmax_bench.h"
 #include <stdio.h>
 #include <cmath>
-#define LMUL 1
 #define SEW 32
 #include <reg.h>
 #include <rvv.h>
@@ -499,7 +498,7 @@ bool check_vreg(uint8_t rf_addr){
                 printf("The different register id is %d\n",i);
                 printf("The element index is : %d\n",element);
                 for(int i=0;i<VLEN/32;i++){
-                    printf("cpu.vreg[%d][%d]=%f\t  diff.vreg[%d][%d]=%f\n",rf_addr, i, cpu.vreg[rf_addr][i].f, rf_addr, i,diff_vreg[rf_addr][i].as_float);
+                    printf("cpu.vreg[%d][%d]=%x\t  diff.vreg[%d][%d]=%x\n",rf_addr, i, cpu.vreg[rf_addr][i].u, rf_addr, i,diff_vreg[rf_addr][i].as_uint32);
                 }
                 return false;
             }
@@ -615,10 +614,10 @@ void dut_input_execute(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t
 }
 
 void kill_sim(bool abort_flag){
-    // if(abort_flag==false){
-    //     wave->close();
-    //     delete top;
-    //     delete contextp;
-    //     assert(0);
-    // }
+    if(abort_flag==false){
+        wave->close();
+        delete top;
+        delete contextp;
+        assert(0);
+    }
 }

@@ -25,7 +25,7 @@ extern "C" void pmem_read(unsigned long long paddr, uint32_t output_bits[VLEN / 
   out_of_bound(paddr);//memory bound check
   int start_addr = paddr - CONFIG_PMEM;
   FloatUintUnion reg[VLEN/32];
-  for (int i = start_addr; i < start_addr+vcsr.vl; i++)
+  for (int i = start_addr; i < start_addr+VLEN / 32; i++)
   {
     std::memcpy(&output_bits[i-start_addr], &pmem[i].as_float, sizeof(float));
     // std::memcpy(&reg[i-start_addr].as_uint32, &output_bits[i-start_addr], sizeof(float));
