@@ -51,9 +51,12 @@ class Expander extends Module {
   val expdLenRemainRegIsZero = expdLenRemainReg === 0.U
   val uopIdxReg = Reg(UInt(3.W))
   val uopIdx = Mux(state === IDLE, 0.U, uopIdxReg)
+  val paddrReg = Reg(UInt(PAddrBits.W)) 
+  val paddr = Mux(state === IDLE, io.in.bits.rs.rs1, paddrReg)
   when (state === IDLE || canOut && state === BUSY && !expdLenRemainRegIsZero) {
     expdLenRemainReg := expdLenRemain - 1.U
     uopIdxReg := uopIdx + 1.U
+    paddrReg := paddr + vlenb.U // Note: only for unit-stride load/store
   }
   // val uopEnd = uopIdx === expdLen - 1.U
 
@@ -161,14 +164,15 @@ class Expander extends Module {
   uopOut.lmaskValUop := !ctrl.vm
 
   // Final output
-  val out_bits = Reg(new ExpdOutput)
+  val out_bits_reg = Reg(new ExpdOutput)
+  val out_paddr_reg = Reg(UInt(PAddrBits.W))
   when (fire || canOut && state === BUSY) {
-    out_bits.uop := uopOut
-    // out_bits.uop.uopIdx := uopIdx
-    // out_bits.uop.uopEnd := uopEnd
+    out_bits_reg.uop := uopOut
+    out_paddr_reg := paddr
   }
   
-  io.out.bits.rs1 := rs_reg.rs1
+  // io.out.bits.rs1 := rs_reg.rs1
+  io.out.bits.rs1 := out_paddr_reg
   io.out.bits.uop.ctrl := mop_reg.ctrl
   io.out.bits.uop.csr := mop_reg.csr
   io.out.bits.uop.robIdx := mop_reg.robIdx
@@ -176,13 +180,13 @@ class Expander extends Module {
   if (debugMode) { io.out.bits.uop.emulVd.get := mop_reg.emulVd }
   
   // For uop members that updates in each uop-idx
-  io.out.bits.uop.uopIdx := out_bits.uop.uopIdx
-  io.out.bits.uop.uopEnd := out_bits.uop.uopEnd
-  io.out.bits.uop.lsrcUop := out_bits.uop.lsrcUop
-  io.out.bits.uop.ldestUop := out_bits.uop.ldestUop
-  io.out.bits.uop.lsrcValUop := out_bits.uop.lsrcValUop
-  io.out.bits.uop.ldestValUop := out_bits.uop.ldestValUop
-  io.out.bits.uop.lmaskValUop := out_bits.uop.lmaskValUop
+  io.out.bits.uop.uopIdx := out_bits_reg.uop.uopIdx
+  io.out.bits.uop.uopEnd := out_bits_reg.uop.uopEnd
+  io.out.bits.uop.lsrcUop := out_bits_reg.uop.lsrcUop
+  io.out.bits.uop.ldestUop := out_bits_reg.uop.ldestUop
+  io.out.bits.uop.lsrcValUop := out_bits_reg.uop.lsrcValUop
+  io.out.bits.uop.ldestValUop := out_bits_reg.uop.ldestValUop
+  io.out.bits.uop.lmaskValUop := out_bits_reg.uop.lmaskValUop
 
   // Scoreboard Read
   io.readScoreboard.req := uopOut
