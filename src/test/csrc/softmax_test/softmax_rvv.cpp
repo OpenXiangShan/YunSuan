@@ -59,7 +59,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmv_v_f(8,"fa2", vcsr.vl);//vfmv.v.f	v8,fa2
     //dut execution
-    dut_input_execute(0x5e065257 , vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa2")].as_uint64,   0, false, robIdx++);
+    dut_input_execute(0x5e065457 , vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa2")].as_uint64,   0, false, robIdx++);
     check=check_vreg(8);
     printf("The result of \"Instr 3:vfmv.v.f	v8,fa2\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -72,7 +72,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmv_v_f(18,"fa3", vcsr.vl);//vfmv.v.f	v18,fa3
     //dut execution
-    dut_input_execute(0x5e06d4d7 , vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa3")].as_uint64,   0, false, robIdx++);
+    dut_input_execute(0x5e06d957 , vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa3")].as_uint64,   0, false, robIdx++);
     check=check_vreg(18);
     printf("The result of \"Instr 4:vfmv.v.f	v18,fa3\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -83,7 +83,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmv_v_f(10, "fa4", vcsr.vl);//vfmv.v.f	v10,fa4
     //dut execution
-    dut_input_execute(0x5e0752d7 , vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa4")].as_uint64,   0, false, robIdx++);
+    dut_input_execute(0x5e075557 , vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa4")].as_uint64,   0, false, robIdx++);
     check=check_vreg(10);
     printf("The result of \"Instr 5: vfmv.v.f	v10,fa4\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -94,7 +94,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmv_v_f(14, "fa5", vcsr.vl);//vfmv.v.f	v14,fa5
     //dut execution
-    dut_input_execute(0x5e07d3d7 , vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa5")].as_uint64,   0, false, robIdx++);
+    dut_input_execute(0x5e07d757, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa5")].as_uint64,   0, false, robIdx++);
     check=check_vreg(14);
     printf("The result of \"Instr 6: vfmv.v.f	v14,fa5\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -105,7 +105,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmv_v_f(16, "fa6", vcsr.vl);//vfmv.v.f	v16,fa6
     //dut execution
-    dut_input_execute(0x5e085457 , vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa6")].as_uint64,   0, false, robIdx++);
+    dut_input_execute(0x5e085857 , vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa6")].as_uint64,   0, false, robIdx++);
     check=check_vreg(16);
     printf("The result of \"Instr 7:vfmv.v.f	v16,fa6\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -116,7 +116,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmv_v_f(20, "fa7", vcsr.vl);//vfmv.v.f	v20,fa7
     //dut excecution
-    dut_input_execute(0x5e08d557 , vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa7")].as_uint64,   0, false, robIdx++);
+    dut_input_execute(0x5e08da57 , vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa7")].as_uint64,   0, false, robIdx++);
     check=check_vreg(20);
     printf("The result of \"Instr 8: vfmv.v.f	v20,fa7\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -127,7 +127,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmv_v_f(22, "fa3", vcsr.vl);//vfmv.v.f	v22,fa3
     //dut excecution
-    dut_input_execute(0x5e06d5d7, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa3")].as_uint64,   0, false, robIdx++);
+    dut_input_execute(0x5e06db57, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa3")].as_uint64,   0, false, robIdx++);
     check=check_vreg(22);
     printf("The result of \"Instr 9:vfmv.v.f	v22,fa3\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -138,7 +138,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmv_v_f(12, "fa4", vcsr.vl);//vfmv.v.f	v12,fa4////9
     // dut excecution
-    dut_input_execute(0x5e075357, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa4")].as_uint64, 0, false, robIdx++);
+    dut_input_execute(0x5e075657, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa4")].as_uint64, 0, false, robIdx++);
     check = check_vreg(12);
     printf("The result of \"Instr 10: vfmv.v.f	v12,fa4\" difftest is :%s\n", check ? "True" : "False");
     kill_sim(check);
@@ -186,7 +186,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfsub_vf(6,cpu.fpr[isa_freg_index("fs0")].as_fp32,4,vcsr.vl);//x-max_x          	vfsub.vf	v6,v4,fs0
     //dut execution
-    dut_input_execute(0x0a2451d7, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fs0")].as_uint64, 0, false, robIdx++);
+    dut_input_execute(0x0a445357, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fs0")].as_uint64, 0, false, robIdx++);
     check=check_vreg(6);
     printf("The result of \"Instr 11: vfsub.vf	v6,v4,fs0\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -195,7 +195,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmul_vf(2,6,cpu.fpr[isa_freg_index("fa1")].as_fp32,vcsr.vl);//vxiln2=(x-max_x )iln2  vfmul.vf	v2,v6,fa1 
     // dut execution
-    dut_input_execute(0x9235d0d7, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa1")].as_uint64, 0, false, robIdx++);
+    dut_input_execute(0x9265d157, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa1")].as_uint64, 0, false, robIdx++);
     check = check_vreg(2);
     printf("The result of \"Instr 12: vfmul.vf	v2,v6,fa1 \" difftest is :%s\n", check ? "True" : "False");
     kill_sim(check);
@@ -204,7 +204,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfcvt_x_f_v_i32m1(24,2,vcsr.vl);//vfcvt.x.f.v	v12,v1
     //dut execution
-    dut_input_execute(0x4a109657, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    dut_input_execute(0x4a209c57, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg_i(24);
     printf("The result of \"Instr 13: vfcvt.x.f.v	v24,v2\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -213,7 +213,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfcvt_f_x_v_f32m1(28,24,vcsr.vl);//vfcvt.f.x.v	v28,v24
     //dut execution
-    dut_input_execute(0x4ac19757, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    dut_input_execute(0x4b819e57, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg(28);
     printf("The result of \"Instr 14: vfcvt.f.x.v	v28,v24\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -231,33 +231,37 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfnmsac_vf(6,isa_freg_index("fa5"),28,vcsr.vl);//bee7d1d7          	vfnmsac.vf	v6,fa5,v28 r = x - k * log(2)
     //dut execution
-    dut_input_execute(0xbee7d1d7, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa5")].as_uint64, 0, false, robIdx++);
+    dut_input_execute(0xbfc7d357, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa5")].as_uint64, 0, false, robIdx++);
     check=check_vreg(6);
     printf("The result of \"Instr 15: vfnmsac.vf	v6,fa5,v28\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
     
     //polynomial approximation exp(r)
 
-    //Instr 16: vmv1r.v	v2,v12
+    //Instr 16: vmv2r.v	v2,v12
     //model execution
-    #if LMUL==2
-    vmv2r_v(2,12);//vmv1r.v	v2,v12
-    #elif LMUL==1
-    vmv1r_v(2,12);//vmv1r.v	v2,v12
-    #endif
-    vmv2r_v(2,12);
-
-    //dut execution
-    dut_input_execute(0x9e6030d7, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    #if LMUL == 2
+    vmv2r_v(2,12);//vmv2r.v	v2,v12
+    dut_input_execute(0x9ec0b157, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg(2);
     printf("The result of \"Instr 16: vmv2r.v	v2,v12\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
+    #elif LMUL == 1
+    vmv1r_v(2,12);//vmv1r.v	v2,v12
+    dut_input_execute(0x9e6030d7, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    check=check_vreg(2);
+    printf("The result of \"Instr 16: vmv1r.v	v2,v12\" difftest is :%s\n",check?"True":"False");
+    kill_sim(check);
+    #endif
+
+    //dut execution
+    
 
     //Instr 17: vfmadd.vv	v2,v6,v22
     //model execution
     vfmadd_vv(2,6,22,vcsr.vl);//vfmadd.vv	v2,v6,v22
     //dut execution
-    dut_input_execute(0xa2b190d7, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    dut_input_execute(0xa3631157, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg(2);
     printf("The result of \"Instr 17: vfmadd.vv	v2,v6,v22\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -266,7 +270,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmadd_vv(2,6,20,vcsr.vl);//vfmadd.vv	v2,v6,v20
     //dut execution
-    dut_input_execute(0xa2a190d7, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    dut_input_execute(0xa3431157, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg(2);
     printf("The result of \"Instr 18: vfmadd.vv	v2,v6,v20\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -275,7 +279,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmadd_vv(2,6,16,vcsr.vl);//vfmadd.vv	v2,v6,v16
     // dut execution
-    dut_input_execute(0xa28190d7, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    dut_input_execute(0xa3031157, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check = check_vreg(2);
     printf("The result of \"Instr 19: vfmadd.vv	v2,v6,v16\" difftest is :%s\n", check ? "True" : "False");
     kill_sim(check);
@@ -284,7 +288,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmadd_vv(2,6,14,vcsr.vl);//vfmadd.vv	v2,v6,v14
     // dut execution
-    dut_input_execute(0xa27190d7, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    dut_input_execute(0xa2e31157, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check = check_vreg(2);
     printf("The result of \"Instr 20: vfmadd.vv	v2,v6,v14\" difftest is :%s\n", check ? "True" : "False");
     kill_sim(check);
@@ -293,19 +297,17 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmadd_vv(2,6,10,vcsr.vl);//vfmadd.vv	v2,v6,v10
     // dut execution
-    dut_input_execute(0xa25190d7, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    dut_input_execute(0xa2a31157, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check = check_vreg(2);
     printf("The result of \"Instr 21: vfmadd.vv	v2,v6,v10\" difftest is :%s\n", check ? "True" : "False");
     kill_sim(check);
-    // for(int i=0; i < VLEN/32; i++){
-    //     printf("cpu.vreg[1][%d]=%x\t  diff.vreg[1][%d]=%x\n", i, cpu.vreg[1][i].u, i,diff_vreg[1][i].as_uint32);
-    // }
+
 
 
     //Instr 22: vfmadd.vv	v2,v6,v18
     vfmadd_vv(2,6,18,vcsr.vl);//vfmadd.vv	v2,v6,v18
     // dut execution
-    dut_input_execute(0xa29190d7, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    dut_input_execute(0xa3231157, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check = check_vreg(2);
     printf("The result of \"Instr 22: vfmadd.vv	v2,v6,v18\" difftest is :%s\n", check ? "True" : "False");
 
@@ -327,7 +329,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vadd_vx(8,24,cpu.gpr[isa_reg_index("a3")],vcsr.vl);//vadd.vx	v8,v24,a3
     //dut execution
-    dut_input_execute(0x02c6c257, vcsr.sew, vcsr.lmul, cpu.gpr[isa_reg_index("a3")], 0, false, robIdx++);
+    dut_input_execute(0x0386c457, vcsr.sew, vcsr.lmul, cpu.gpr[isa_reg_index("a3")], 0, false, robIdx++);
     check=check_vreg(8);
     printf("The result of \"Instr 23: vadd.vx	v8,v24,a3\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -336,7 +338,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vsll_vx(6,8,23,vcsr.vl);//vsll.vi	v3,v4,23
     //dut execution
-    dut_input_execute(0x964bb1d7, vcsr.sew, vcsr.lmul, 23, 0, false, robIdx++);
+    dut_input_execute(0x968bb357, vcsr.sew, vcsr.lmul, 23, 0, false, robIdx++);
     check=check_vreg(6);
     printf("The result of \"Instr 24: vsll.vi	v6,v8,23\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -345,7 +347,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmul_vv(4,6,2,vcsr.vl);//vfmul.vv	v2,v3,v1
     //dut execution
-    dut_input_execute(0x92309157, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    dut_input_execute(0x92611157, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg(4);
     printf("The result of \"Instr 25: vfmul.vv	v4,v6,v2\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -353,7 +355,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //Instr 26: vmv.v.i	v1,0
     vfmv_v_i_f32m1(2,0,vcsr.vl);//vmv.v.i	v1,0
     //dut execution
-    dut_input_execute(0x5e0030d7, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    dut_input_execute(0x5e003157, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg(2);
     printf("The result of \"Instr 26: vmv.v.i	v2,0\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -361,7 +363,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //Instr 27: vfredusum.vs	v8,v4,v2
     vfredusum_vs(8,4,2,vcsr.vl);//vfredusum.vs	v8,v4,v2
     //dut execution
-    dut_input_execute(0x06209257, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    dut_input_execute(0x06411457, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg(8);
     printf("The result of \"Instr 27: vfredusum.vs	v8,v4,v2\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -399,7 +401,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     //model execution
     vle32(4, &pmem->as_float, vcsr.vl);//vle32.v	v4,(a3)  
     //dut execution
-    dut_input_execute(0x0206e107, vcsr.sew, vcsr.lmul, cpu.gpr[isa_reg_index("a3")], 0, false, robIdx++);
+    dut_input_execute(0x0206e207, vcsr.sew, vcsr.lmul, cpu.gpr[isa_reg_index("a3")], 0, false, robIdx++);
     check=check_vreg(4);
     printf("The result of \"Instr 0: vle32.v	v4,(a3)\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -418,7 +420,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     //model execution
     vfmv_v_f(2, "fa5", vcsr.vl);//vfmv.v.f	v2,fa5
     //dut execution
-    dut_input_execute(0x5e07d0d7 , vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa5")].as_uint64, 0, false, robIdx++);
+    dut_input_execute(0x5e07d157 , vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa5")].as_uint64, 0, false, robIdx++);
     check=check_vreg(2);
     printf("The result of \"Instr 1: vfmv.v.f	v2,fa5\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -427,7 +429,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     //model execution
     vfredmax_vs(2,4,2,vcsr.vl);//vfredmax.vs	v2,v4,v2  
     //dut execution
-    dut_input_execute(0x1e2090d7, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    dut_input_execute(0x1e411157, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg(2);
     printf("The result of \"Instr 2: vfredmax.vs	v2,v4,v2\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -438,7 +440,6 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
         if (src[i] > max_x) max_x = src[i]; 
     }
     
-    //TODO: wait result; compare dut and golden model: v1  and max_x
     float sum = 0.;
     sum =quick_dirty_vector_expf(dst, src, max_x, n);
 
@@ -454,7 +455,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     cpu.fpr[isa_freg_index("fa0")].as_uint32x2.high=0xffffffff;
     vfmul_vf(4,4,cpu.fpr[isa_freg_index("fa0")].as_fp32,vcsr.vl);//vfmul.vf	v4,v4,fa0
     //dut execution
-    dut_input_execute(0x92255157, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa0")].as_uint64, 0, false, robIdx++);
+    dut_input_execute(0x92455257, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa0")].as_uint64, 0, false, robIdx++);
     check=check_vreg(4);
     printf("The result of \"Instr 28: vfmul.vf	v4,v4,fa0\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -467,7 +468,6 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
         dst[i] =dst[i] *inv_sum ;
     } 
     
-    //TODO: wait result and compare dut and golden model: v1 and dst
     
     softmax_bench_result_t bench_result;
     // initializing bench result error values
@@ -513,8 +513,10 @@ bool check_vreg(uint8_t rf_addr){
             if(diff>5) {
                 printf("The different register id is %d\n",i);
                 printf("The element index is : %d\n",element);
-                for(int i=0;i<VLEN/32;i++){
-                    printf("cpu.vreg[%d][%d]=%x\t  diff.vreg[%d][%d]=%x\n",rf_addr, i, cpu.vreg[rf_addr][i].u, rf_addr, i,diff_vreg[rf_addr][i].as_uint32);
+                for(int m=rf_addr; m < rf_addr+LMUL; m++){
+                    for(int n=0;n<VLEN/32;n++){
+                        printf("cpu.vreg[%d][%d]=%x\t  diff.vreg[%d][%d]=%x\n",m, n, cpu.vreg[m][n].u, m, n,diff_vreg[m][n].as_uint32);
+                    }
                 }
                 return false;
             }
@@ -531,8 +533,10 @@ bool check_vreg_i(uint8_t rf_addr){
             if(cpu.vreg[i][element].u!=diff_vreg[i][element].as_uint32) {
                 printf("The different register id is %d\n",i);
                 printf("The element index is : %d\n",element);
-                for(int i=0;i<VLEN/32;i++){
-                    printf("cpu.vreg[%d][%d]=%d\t  diff.vreg[%d][%d]=%d\n",rf_addr, i, cpu.vreg[rf_addr][i].i, rf_addr, i,diff_vreg[rf_addr][i].as_int32);
+                for(int m=rf_addr; m < rf_addr+LMUL; m++){
+                    for(int n=0;n<VLEN/32;n++){
+                        printf("cpu.vreg[%d][%d]=%d\t  diff.vreg[%d][%d]=%d\n",m, n, cpu.vreg[m][n].i, m, n,diff_vreg[m][n].as_int32);
+                    }
                 }
                 return false;
             }
@@ -620,10 +624,10 @@ void dut_input_execute(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t
 }
 
 void kill_sim(bool abort_flag){
-    // if(abort_flag==false){
-    //     wave->close();
-    //     delete top;
-    //     delete contextp;
-    //     assert(0);
-    // 
+    if(abort_flag==false){
+        wave->close();
+        delete top;
+        delete contextp;
+        assert(0);
+    }
 }
