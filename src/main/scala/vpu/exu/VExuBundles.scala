@@ -99,10 +99,6 @@ class Vfd_setuop extends Bundle {
   def fvv = (funct3 === "b001".U)
   def fvf = (funct3 === "b101".U)
 
-  // TODO:  
-  // val is_frs1 = Bool()
-  // val is_frs2 = Bool()
-
   def op_gen = Mux(funct6 === Vfdfunc6.fsqrt, VfdOpCode.vfsqrt, VfdOpCode.vfdiv)
   
   def is_frs1 = op === funct6 === Vfdfunc6.fdiv  && fvf
@@ -126,16 +122,14 @@ class Vcvt_setuop extends Bundle {
   def mvx = (funct3 === "b110".U)
   def fvv = (funct3 === "b001".U)
   def fvf = (funct3 === "b101".U)
-  
-  //
-  // val is_frs1 = Bool()
-  // val is_frs2 = Bool()
-  
+
   def op_gen = Mux1H(Seq(
   (funct6 === Vfcvtfunc6.vfncvt_xfw    & fvv & (vs1 === "b10001".U))   -> VfcvtOpCode.vfncvt_xfw,
   (funct6 === Vfcvtfunc6.vfcvt_xfv     & fvv & (vs1 === "b00001".U))   -> VfcvtOpCode.vfcvt_xfv,
   (funct6 === Vfcvtfunc6.vfwcvt_fxv    & fvv & (vs1 === "b01011".U))   -> VfcvtOpCode.vfwcvt_fxv,
   (funct6 === Vfcvtfunc6.vfcvt_fxv     & fvv & (vs1 === "b00011".U))   -> VfcvtOpCode.vfcvt_fxv,
+  (funct6 === Vfcvtfunc6.vfrec7        & fvv & (vs1 === "b00101".U))   -> VfcvtOpCode.vfrec7,
+  (funct6 === Vfcvtfunc6.vfrsqrt7      & fvv & (vs1 === "b00100".U))   -> VfcvtOpCode.vfrsqrt7,
   ))
   
 }

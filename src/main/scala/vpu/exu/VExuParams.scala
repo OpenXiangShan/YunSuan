@@ -138,15 +138,40 @@ object Vfcvtfunc6 {
   def vfwcvt_fxv  = "b010010".U(width.W)
   def vfcvt_xfv   = "b010010".U(width.W)
   def vfcvt_fxv   = "b010010".U(width.W)
+  def vfrec7      = "b010011".U(width.W)
+  def vfrsqrt7    = "b010011".U(width.W)
 }
 
 object VfcvtOpCode {
-  def dummy         = "b11111111".U(8.W)
-  def vfncvt_xfw    = "b10000000".U(8.W)
-  def vfwcvt_fxv    = "b01001011".U(8.W)
-  def vfcvt_xfv     = "b10000001".U(8.W)
-  def vfcvt_fxv     = "b01000011".U(8.W)
+  def vfcvt_xufv        = "b10_000000".U(8.W)
+  def vfcvt_xfv         = "b10_000001".U(8.W)
+  def vfcvt_fxuv        = "b01_000010".U(8.W)
+  def vfcvt_fxv         = "b01_000011".U(8.W)
+  def vfcvt_rtz_xufv    = "b10_000110".U(8.W)
+  def vfcvt_rtz_xfv     = "b10_000111".U(8.W)
+
+  def vfrsqrt7          = "b11_100000".U(8.W)
+  def vfrec7            = "b11_100001".U(8.W)
+
+  def vfwcvt_xufv       = "b10_001000".U(8.W)
+  def vfwcvt_xfv        = "b10_001001".U(8.W)
+  def vfwcvt_fxuv       = "b01_001010".U(8.W)
+  def vfwcvt_fxv        = "b01_001011".U(8.W)
+  def vfwcvt_ffv        = "b11_001100".U(8.W)
+  def vfwcvt_rtz_xufv   = "b10_001110".U(8.W)
+  def vfwcvt_rtz_xfv    = "b10_001111".U(8.W)
+
+  def vfncvt_xufw       = "b10_010000".U(8.W)
+  def vfncvt_xfw        = "b10_010001".U(8.W)
+  def vfncvt_fxuw       = "b01_010010".U(8.W)
+  def vfncvt_fxw        = "b01_010011".U(8.W)
+  def vfncvt_ffw        = "b11_010100".U(8.W)
+  def vfncvt_rod_ffw    = "b11_010101".U(8.W)
+  def vfncvt_rtz_xufw   = "b10_010110".U(8.W)
+  def vfncvt_rtz_xfw    = "b10_010111".U(8.W)
+
 }
+
 
 // vrg
 object Vrgfunc6 {
