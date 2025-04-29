@@ -367,9 +367,6 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     check=check_vreg(8);
     printf("The result of \"Instr 27: vfredusum.vs	v8,v4,v2\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
-    printf("refvreg[8]=%f\n",cpu.vreg[8][0].f);
-    printf("gloden=%f\n",sum);
-    
     //v2 stores the result of expf
     //v4 stores the sum of expf
     return sum;
@@ -459,12 +456,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     dut_input_execute(0x92455257, vcsr.sew, vcsr.lmul, cpu.fpr[isa_freg_index("fa0")].as_uint64, 0, false, robIdx++);
     check=check_vreg(4);
     printf("The result of \"Instr 28: vfmul.vf	v4,v4,fa0\" difftest is :%s\n",check?"True":"False");
-    kill_sim(check);
-    for (int i = 0; i < VLEN/32; i++){
-        printf("Softmax final result:\n");
-         printf("cpu.vreg[2][%d]=%x\t  diff.vreg[2][%d]=%x\n", i, cpu.vreg[2][i].u, i,diff_vreg[2][i].as_uint32);
-    }
-    
+    kill_sim(check);    
     printf("Softmax final result:\n\n");
     for (int idx=4; idx < 4+LMUL; idx++ ){
         for (int i = 0; i < VLEN/32; i++){
