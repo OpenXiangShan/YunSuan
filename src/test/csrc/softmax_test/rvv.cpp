@@ -112,8 +112,14 @@ void vfmadd_vv(int vreg_dst_index, int vreg_src1_index, int vreg_src2_index,int 
         cpu.vreg[vreg_dst_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f=cpu.vreg[vreg_dst_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f*cpu.vreg[vreg_src1_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f+cpu.vreg[vreg_src2_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f;
     }
 }
-void vmv1r_v(int vreg_dst_index, int vreg_src_index,int vl){
-    for(int i=0;i<vl;i++){
+void vmv1r_v(int vreg_dst_index, int vreg_src_index){
+    for(int i=0;i<VLEN/32;i++){
+        cpu.vreg[vreg_dst_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f=cpu.vreg[vreg_src_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f;
+    }
+}
+
+void vmv2r_v(int vreg_dst_index, int vreg_src_index){
+    for(int i=0;i<VLEN*2/32;i++){
         cpu.vreg[vreg_dst_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f=cpu.vreg[vreg_src_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f;
     }
 }

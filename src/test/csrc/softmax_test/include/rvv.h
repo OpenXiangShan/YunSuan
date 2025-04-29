@@ -15,7 +15,7 @@ void vfcvt_x_f_v_i32m1(int vreg_dst_index, int vreg_src_index,int vl);
 void vfcvt_f_x_v_f32m1(int vreg_dst_index, int vreg_src_index,int vl);
 void vfnmsac_vf(int vreg_dst_index,int vreg_fsrc1_index, int vreg_src2_index,int vl);
 void vfmadd_vv(int vreg_dst_index, int vreg_src1_index, int vreg_src2_index,int vl);
-void vmv1r_v(int vreg_dst_index, int vreg_src_index,int vl);
+void vmv1r_v(int vreg_dst_index, int vreg_src_index);
 void vadd_vx(int vreg_dst_index, int vreg_src1_index, int value,int vl);
 void vsll_vx(int vreg_dst_index, int vreg_src1_index, int value,int vl);
 void vfmul_vv(int vreg_dst_index, int vreg_src1_index, int vreg_src2_index,int vl);
@@ -23,4 +23,5 @@ void vfredusum_vs(int vreg_dst_index, int vreg_src2_index, int vreg_src1_index,i
 void vfmv_v_i_f32m1(int vreg_dst_index, int value,int vl);
 void vfmax_vv(int vreg_dst_index, int vreg_src1_index, int vreg_src2_index,int vl);
 void vfredmax_vs(int vreg_dst_index, int vreg_src2_index, int vreg_src1_index, int vl);
+void vmv2r_v(int vreg_dst_index, int vreg_src_index);
 #endif

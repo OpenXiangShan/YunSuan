@@ -35,8 +35,10 @@ VERILATOR_CFLAGS += -MMD --build -cc \
 VERILATOR_CFLAGS += -j 33
 
 # Include path
+
+LMUL ?= 1
 INCFLAGS = $(addprefix -I, $(INCLUDE_DIR))
-CXXFLAGS += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\"" 
+CXXFLAGS += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\""  -DLMUL=$(LMUL)
 
 $(BIN): $(DEPS)
 	@verilator $(VERILATOR_CFLAGS) \

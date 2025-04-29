@@ -6,35 +6,35 @@ Disassembly of section .text:
 
 0000000000000000 <_start>:
    0:	090077d7          	vsetvli	a5,zero,e32,m1,tu,ma
-   4:	0206e107          	vle32.v	v2,(a3)
-   8:	5e07d0d7          	vfmv.v.f	v1,fa5
-   c:	1e2090d7          	vfredmax.vs	v1,v2,v1
+   4:	0206e107          	vle32.v	v4,(a3)
+   8:	5e07d0d7          	vfmv.v.f	v2,fa5
+   c:	1e2090d7          	vfredmax.vs	v2,v4,v2
   10:	0d0079d7          	vsetvli	s3,zero,e32,m1,ta,ma
-  14:	5e065257          	vfmv.v.f	v4,fa2
-  18:	5e06d4d7          	vfmv.v.f	v9,fa3
-  1c:	5e0752d7          	vfmv.v.f	v5,fa4
-  20:	5e07d3d7          	vfmv.v.f	v7,fa5
-  24:	5e085457          	vfmv.v.f	v8,fa6
-  28:	5e08d557          	vfmv.v.f	v10,fa7
-  2c:	5e06d5d7          	vfmv.v.f	v11,fa3
-  30:	5e075357          	vfmv.v.f	v6,fa4
+  14:	5e065257          	vfmv.v.f	v8,fa2
+  18:	5e06d4d7          	vfmv.v.f	v18,fa3
+  1c:	5e0752d7          	vfmv.v.f	v10,fa4
+  20:	5e07d3d7          	vfmv.v.f	v14,fa5
+  24:	5e085457          	vfmv.v.f	v16,fa6
+  28:	5e08d557          	vfmv.v.f	v20,fa7
+  2c:	5e06d5d7          	vfmv.v.f	v22,fa3
+  30:	5e075357          	vfmv.v.f	v12,fa4
   34:	090077d7          	vsetvli	a5,zero,e32,m1,tu,ma
-  38:	0a2451d7          	vfsub.vf	v3,v2,fs0
-  3c:	9235d0d7          	vfmul.vf	v1,v3,fa1
-  40:	4a109657          	vfcvt.x.f.v	v12,v1
-  44:	4ac19757          	vfcvt.f.x.v	v14,v12
-  48:	bee7d1d7          	vfnmsac.vf	v3,fa5,v14
-  4c:	9e6030d7          	vmv1r.v	v1,v6
-  50:	a2b190d7          	vfmadd.vv	v1,v3,v11
-  54:	a2a190d7          	vfmadd.vv	v1,v3,v10
-  58:	a28190d7          	vfmadd.vv	v1,v3,v8
-  5c:	a27190d7          	vfmadd.vv	v1,v3,v7
-  60:	a25190d7          	vfmadd.vv	v1,v3,v5
-  64:	a29190d7          	vfmadd.vv	v1,v3,v9
-  68:	02c6c257          	vadd.vx	v4,v12,a3
-  6c:	964bb1d7          	vsll.vi	v3,v4,23
-  70:	92309157          	vfmul.vv	v2,v3,v1
-  74:	5e0030d7          	vmv.v.i	v1,0
-  78:	06209257          	vfredusum.vs	v4,v2,v1
+  38:	0a2451d7          	vfsub.vf	v6,v4,fs0
+  3c:	9235d0d7          	vfmul.vf	v2,v6,fa1
+  40:	4a109657          	vfcvt.x.f.v	v24,v2
+  44:	4ac19757          	vfcvt.f.x.v	v28,v24
+  48:	bee7d1d7          	vfnmsac.vf	v6,fa5,v28
+  4c:	9e6030d7          	vmv2r.v	v2,v12
+  50:	a2b190d7          	vfmadd.vv	v2,v6,v22
+  54:	a2a190d7          	vfmadd.vv	v2,v6,v20
+  58:	a28190d7          	vfmadd.vv	v2,v6,v16
+  5c:	a27190d7          	vfmadd.vv	v2,v6,v14
+  60:	a25190d7          	vfmadd.vv	v2,v6,v10
+  64:	a29190d7          	vfmadd.vv	v2,v6,v18
+  68:	02c6c257          	vadd.vx	v8,v24,a3
+  6c:	964bb1d7          	vsll.vi	v6,v8,23
+  70:	92309157          	vfmul.vv	v2,v6,v2
+  74:	5e0030d7          	vmv.v.i	v2,0
+  78:	06209257          	vfredusum.vs	v8,v4,v2
   7c:	090077d7          	vsetvli	a5,zero,e32,m1,tu,ma
-  80:	92255157          	vfmul.vf	v2,v2,fa0
+  80:	92255157          	vfmul.vf	v4,v4,fa0
