@@ -19,7 +19,7 @@ WORK_DIR=$(shell pwd)
 V_FILES=$(abspath ../../../../build/verilog_vpu_debug/load_l2_dpic.sv)  \
 		$(abspath ../../../../build/verilog_vpu_debug/VTopDebug.v) \
 		$(abspath ../../../../build/verilog_vpu_debug/get_vreg_dpic.sv)
-$(info V=$(abspath ../../../../build/verilog_vpu_debug/get_vreg_dpic.sv))
+
 BUILD_DIR = $(abspath $(WORK_DIR)/build/load_test)
 BIN = $(BUILD_DIR)/$(TOPNAME)
 OBJ_DIR = $(BUILD_DIR)/obj_dir
@@ -30,7 +30,7 @@ SIM_CSRCS = $(shell find -L $(abspath ./)  -name "*.cc" -or -name "*.cpp")
 
 DEPS=$(V_FILES) $(SIM_CSRCS)
 
-VERILATOR_CFLAGS += -MMD --build -cc \
+VERILATOR_CFLAGS += -MMD -MP --build -cc \
 										-O3 --x-assign fast --x-initial fast --noassert --trace
 VERILATOR_CFLAGS += -j 33
 
@@ -38,7 +38,7 @@ VERILATOR_CFLAGS += -j 33
 
 LMUL ?= 1
 INCFLAGS = $(addprefix -I, $(INCLUDE_DIR))
-CXXFLAGS += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\""
+CXXFLAGS += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\"" 
 
 $(BIN): $(DEPS)
 	@verilator $(VERILATOR_CFLAGS) \

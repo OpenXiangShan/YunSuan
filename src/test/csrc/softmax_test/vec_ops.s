@@ -27,7 +27,7 @@ _start:
     vfcvt.x.f.v	v24,v2
     vfcvt.f.x.v	v28,v24
     vfnmsac.vf	v6,fa5,v28
-    vmv2r.v	v2,v12
+    vmv1r.v	v2,v12
     vfmadd.vv	v2,v6,v22
     vfmadd.vv	v2,v6,v20
     vfmadd.vv	v2,v6,v16
@@ -36,7 +36,7 @@ _start:
     vfmadd.vv	v2,v6,v18
     vadd.vx	v8,v24,a3
     vsll.vi	v6,v8,23
-    vfmul.vv	v2,v6,v2
+    vfmul.vv	v4,v6,v2
     vmv.v.i	v2,0
     vfredusum.vs	v8,v4,v2
  ## END: quick_dirty_vector_expf

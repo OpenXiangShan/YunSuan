@@ -19,7 +19,7 @@ extern VerilatedContext *contextp;
 extern VerilatedVcdC *wave ;
 extern FloatUintUnion  pmem[CONFIG_MSIZE];
 extern bool commit_global;
-#define CLK_PERIOD 10    // 时钟周期（单位：ns）
+#define CLK_PERIOD 10    // 时钟周期（单位：ps）
 vluint64_t main_time = 0;
 static uint8_t robIdx=0;
 
@@ -202,7 +202,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
 
     //Instr 13: vfcvt.x.f.v	v24,v2
     //model execution
-    vfcvt_x_f_v_i32m1(24,2,vcsr.vl);//vfcvt.x.f.v	v12,v1
+    vfcvt_x_f_v_i32m1(24,2,vcsr.vl);//vfcvt.x.f.v	v24,v2
     //dut execution
     dut_input_execute(0x4a209c57, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg_i(24);
@@ -248,7 +248,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     kill_sim(check);
     #elif LMUL == 1
     vmv1r_v(2,12);//vmv1r.v	v2,v12
-    dut_input_execute(0x9e6030d7, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    dut_input_execute(0x9ec03157, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg(2);
     printf("The result of \"Instr 16: vmv1r.v	v2,v12\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -347,7 +347,7 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     //model execution
     vfmul_vv(4,6,2,vcsr.vl);//vfmul.vv	v2,v3,v1
     //dut execution
-    dut_input_execute(0x92611157, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    dut_input_execute(0x92611257, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg(4);
     printf("The result of \"Instr 25: vfmul.vv	v4,v6,v2\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
@@ -367,12 +367,13 @@ float quick_dirty_vector_expf(float* dst, float* src, float max_x, size_t n) {
     check=check_vreg(8);
     printf("The result of \"Instr 27: vfredusum.vs	v8,v4,v2\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
+    printf("refvreg[8]=%f\n",cpu.vreg[8][0].f);
+    printf("gloden=%f\n",sum);
     
     //v2 stores the result of expf
     //v4 stores the sum of expf
     return sum;
 }
-
 
 softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, double* golden, size_t n) {
     bool check=true;
@@ -464,6 +465,14 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
          printf("cpu.vreg[2][%d]=%x\t  diff.vreg[2][%d]=%x\n", i, cpu.vreg[2][i].u, i,diff_vreg[2][i].as_uint32);
     }
     
+    printf("Softmax final result:\n\n");
+    for (int idx=4; idx < 4+LMUL; idx++ ){
+        for (int i = 0; i < VLEN/32; i++){
+         printf("cpu.vreg[%d][%d]=%x\t  diff.vreg[%d][%d]=%x\n", idx, i, cpu.vreg[idx][i].u, idx, i,diff_vreg[idx][i].as_uint32);
+    }
+    }
+
+    
     for (int i = 0; i < n; ++i) {
         dst[i] =dst[i] *inv_sum ;
     } 
@@ -481,7 +490,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
         printf("relative errors: ");
 #       endif
     for (i = 0; i < n; ++i) {
-        double abs_error = fabs(dst[i] - cpu.vreg[4][i].f);
+        double abs_error = fabs(dst[i] - cpu.vreg[4+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f);
         double rel_error = abs_error / (double) dst[i];
 #       ifdef VERY_VERBOSE
         printf("%.8e ", rel_error);
@@ -631,3 +640,4 @@ void kill_sim(bool abort_flag){
         assert(0);
     }
 }
+//

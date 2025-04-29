@@ -24,7 +24,7 @@ Disassembly of section .text:
   40:	4a209c57          	vfcvt.x.f.v	v24,v2
   44:	4b819e57          	vfcvt.f.x.v	v28,v24
   48:	bfc7d357          	vfnmsac.vf	v6,fa5,v28
-  4c:	9ec0b157          	vmv2r.v	v2,v12
+  4c:	9ec03157          	vmv1r.v	v2,v12
   50:	a3631157          	vfmadd.vv	v2,v6,v22
   54:	a3431157          	vfmadd.vv	v2,v6,v20
   58:	a3031157          	vfmadd.vv	v2,v6,v16
@@ -33,7 +33,7 @@ Disassembly of section .text:
   64:	a3231157          	vfmadd.vv	v2,v6,v18
   68:	0386c457          	vadd.vx	v8,v24,a3
   6c:	968bb357          	vsll.vi	v6,v8,23
-  70:	92611157          	vfmul.vv	v2,v6,v2
+  70:	92611257          	vfmul.vv	v4,v6,v2
   74:	5e003157          	vmv.v.i	v2,0
   78:	06411457          	vfredusum.vs	v8,v4,v2
   7c:	090077d7          	vsetvli	a5,zero,e32,m1,tu,ma
