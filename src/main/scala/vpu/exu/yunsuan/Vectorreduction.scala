@@ -18,7 +18,7 @@ class Vfreduction extends Module{
 
   val vredu_pipes = Seq.tabulate(stages) { i =>
     val num = (VLEN / 32) / scala.math.pow(2, i + 1).toInt
-    Module(new VfredFP32WidenMixedFP16_Pipeline_Wrapped(num = num))
+    Module(new VfredFP32WidenMixedFP16_Pipelined(num = num))
   }
 
   for (i <- 0 until stages) {
@@ -37,19 +37,20 @@ class Vfreduction extends Module{
 
   // final stage for fp32
   // with one reg for accumulating the result
-  val vctrl_pipe_stage_last       = vredu_pipes(stages-1).io.vctrl_pipe_out
-  val vd_pipe_stage_last          = vredu_pipes(stages-1).io.vd_pipe_out
-  val vctrl_pipe_fp32       = RegNext(vctrl_pipe_stage_last)
+  val vctrl_pipe_stage_last = vredu_pipes(stages-1).io.vctrl_pipe_out
+  val vctrl_pipe_fp32       = RegNext(RegNext(vctrl_pipe_stage_last))
 
-  val vfred_pipe_fp32 = Module(new VfredFP32WidenMixedFP16_SingleUnit)
-  val vfred_pipe6_vs2 = Mux(vctrl_pipe_stage_last.uop.csr.vsew(1, 0) === "b01".U, Cat(Fill(16, 0.U), vctrl_pipe_stage_last.vs1(15, 0)), Mux(vctrl_pipe_stage_last.uop.csr.vsew(1, 0) === "b10".U, vctrl_pipe_stage_last.vs1(31, 0), 0.U))
+  val vd_pipe_stage_last    = vredu_pipes(stages-1).io.vd_pipe_out
+  val vfred_pipe_fp32 = Module(new VfredFP32WidenMixedFP16_Wrapped)
+
+  val vfred_pipe6_vs1 = Mux(vctrl_pipe_stage_last.uop.csr.vsew(1, 0) === "b01".U, Cat(Fill(16, 0.U), vctrl_pipe_stage_last.vs1(15, 0)), Mux(vctrl_pipe_stage_last.uop.csr.vsew(1, 0) === "b10".U, vctrl_pipe_stage_last.vs1(31, 0), 0.U))
   val fp32_result = vfred_pipe_fp32.io.fp_result
   val fp32_fflags = vfred_pipe_fp32.io.fflags
   val fp32_uop    = vctrl_pipe_fp32.uop
 
   vfred_pipe_fp32.io.fire := vctrl_pipe_stage_last.fire
-  vfred_pipe_fp32.io.fp_a := Mux(vctrl_pipe_stage_last.uop.uopIdx =/= 0.U, fp32_result, vfred_pipe6_vs2)
-  vfred_pipe_fp32.io.fp_b := vd_pipe_stage_last
+  vfred_pipe_fp32.io.fp_a := vd_pipe_stage_last 
+  vfred_pipe_fp32.io.fp_b := Mux(vctrl_pipe_stage_last.uop.uopIdx =/= 0.U, fp32_result, vfred_pipe6_vs1)
   vfred_pipe_fp32.io.is_vec := vctrl_pipe_stage_last.uop.ctrl.vv
   vfred_pipe_fp32.io.round_mode := vctrl_pipe_stage_last.uop.csr.frm
   
@@ -60,7 +61,6 @@ class Vfreduction extends Module{
   vfred_pipe_fp32.io.fp_aIsFpCanonicalNAN := 0.U
   vfred_pipe_fp32.io.fp_bIsFpCanonicalNAN := 0.U
 
-
   val vlmul_pipe_fp32_cvt = MuxLookup(vctrl_pipe_fp32.uop.csr.vlmul, "b000".U, Seq(
     "b000".U -> "b000".U,   // LMUL = 1 → 000
     "b001".U -> "b001".U,   // LMUL = 2 → 001
@@ -70,9 +70,9 @@ class Vfreduction extends Module{
 
   // pipeline for fp16
   // if fp16, need another stage to caculate
-  val vctrl_pipe_fp16  = RegNext(vctrl_pipe_fp32)
+  val vctrl_pipe_fp16  = RegNext(RegNext(vctrl_pipe_fp32))
 
-  val vfred_pipe_fp16 = Module(new FloatAdderF16Pipeline)
+  val vfred_pipe_fp16 = Module(new FloatAdderF16Pipeline_Wrapped)
   val fp16_result = vfred_pipe_fp16.io.fp_c
   val fp16_fflags = vfred_pipe_fp16.io.fflags
   val fp16_uop    = vctrl_pipe_fp16.uop
@@ -115,7 +115,7 @@ class Vfreduction extends Module{
 }
 
 // num = VLEN/XLEN/2^i
-class VfredFP32WidenMixedFP16_Pipeline_Wrapped(val num: Int = 0) extends Module {
+class VfredFP32WidenMixedFP16_Pipelined(val num: Int = 0) extends Module {
   val io = IO(new Bundle() {
     val vctrl_pipe_in = Input(new Vfredctrl)
     val vctrl_pipe_out = Output(new Vfredctrl)
@@ -125,14 +125,12 @@ class VfredFP32WidenMixedFP16_Pipeline_Wrapped(val num: Int = 0) extends Module 
 
   val result_pipe_out  = Wire(Vec(num, UInt(32.W)))
   val fflags_pipe_out  = Wire(Vec(num, UInt(5.W)))
-  val vd_pipe_out      = Wire(UInt((num*32).W))
-  vd_pipe_out := Cat(result_pipe_out.reverse)
-  val vctrl_pipe_out   = RegNext(io.vctrl_pipe_in)
+
   for (i <- 0 until num) {
       val fp_a = io.vd_pipe_in(31-1+i*64, 0+i*64)
       val fp_b = io.vd_pipe_in(64-1+i*64, 32+i*64)
       val mask = io.vctrl_pipe_in.mask(i*4+3, i*4)
-      val vfred = Module(new VfredFP32WidenMixedFP16_SingleUnit)
+      val vfred = Module(new VfredFP32WidenMixedFP16_Wrapped)
       vfred.io.fire := io.vctrl_pipe_in.fire
       vfred.io.fp_a := fp_a
       vfred.io.fp_b := fp_b
@@ -150,12 +148,14 @@ class VfredFP32WidenMixedFP16_Pipeline_Wrapped(val num: Int = 0) extends Module 
       fflags_pipe_out(i) := vfred.io.fflags
   }
 
-  io.vd_pipe_out := vd_pipe_out
+  val vctrl_pipe_out = RegNext(RegNext(io.vctrl_pipe_in))
+
+  io.vd_pipe_out    := result_pipe_out.asTypeOf(io.vd_pipe_out)
   io.vctrl_pipe_out := vctrl_pipe_out
 }
 
-
-class VfredFP32WidenMixedFP16_SingleUnit() extends Module {
+// latency + 1 = 2
+class VfredFP32WidenMixedFP16_Wrapped() extends Module {
     val exponentWidth = 8
     val significandWidth = 24
     val floatWidth = exponentWidth + significandWidth
@@ -177,6 +177,7 @@ class VfredFP32WidenMixedFP16_SingleUnit() extends Module {
   })
 
   val fire = io.fire
+  val fire_next = RegNext(fire)
   val is_vec_reg    = RegEnable(io.is_vec, fire)
   val fp_format_reg = RegEnable(io.fp_format, fire)
 
@@ -236,7 +237,8 @@ class VfredFP32WidenMixedFP16_SingleUnit() extends Module {
   val fp_f32_result = U_F32_result
   val fp_f16_result = Cat(Fill(16, is_vec_reg) & U_F16_1_result, U_F16_0_result)
 
-  io.fp_result := Mux1H(
+
+  val fp_result = Mux1H(
     Seq(
       res_is_f16,
       res_is_f32
@@ -247,5 +249,45 @@ class VfredFP32WidenMixedFP16_SingleUnit() extends Module {
     )
   )
 
-  io.fflags := Mux(res_is_f32, U_F32_fflags, (U_F16_1_fflags | U_F16_0_fflags))
+  val fflags = Mux(res_is_f32, U_F32_fflags, (U_F16_1_fflags | U_F16_0_fflags))
+
+  io.fp_result := RegNext(fp_result)
+  io.fflags    := RegNext(fflags)
+}
+
+class FloatAdderF16Pipeline_Wrapped (val is_print:Boolean = false,val hasMinMaxCompare:Boolean = false) extends Module {
+  val exponentWidth = 5
+  val significandWidth = 11
+  val floatWidth = exponentWidth + significandWidth
+  val io = IO(new Bundle() {
+    val fire        = Input (Bool())
+    val fp_a, fp_b  = Input (UInt(floatWidth.W))
+    val fp_c        = Output(UInt(floatWidth.W))
+    val is_sub      = Input (Bool())
+    val mask        = Input (Bool())
+    val round_mode  = Input (UInt(3.W))
+    val fflags      = Output(UInt(5.W))
+    val op_code     = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
+    val fp_aIsFpCanonicalNAN = Input(Bool())
+    val fp_bIsFpCanonicalNAN = Input(Bool())
+    val maskForReduction = Input(UInt(2.W))
+  })
+
+  val fp16_adder  = Module(new FloatAdderF16Pipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
+  val fp16_result = fp16_adder.io.fp_c
+  val fp16_fflags = fp16_adder.io.fflags
+
+  fp16_adder.io.fire        := io.fire
+  fp16_adder.io.fp_a        := io.fp_a
+  fp16_adder.io.fp_b        := io.fp_b
+  fp16_adder.io.is_sub      := io.is_sub
+  fp16_adder.io.round_mode  := io.round_mode
+  fp16_adder.io.mask        := io.mask
+  fp16_adder.io.op_code     := io.op_code
+  fp16_adder.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
+  fp16_adder.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
+  fp16_adder.io.maskForReduction := io.maskForReduction
+
+  io.fp_c   := RegNext(fp16_result)
+  io.fflags := RegNext(fp16_fflags)
 }
