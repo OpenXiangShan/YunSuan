@@ -171,10 +171,9 @@ class Expander extends Module {
     out_paddr_reg := paddr
   }
   
-  // io.out.bits.rs1 := rs_reg.rs1
-  io.out.bits.rs1 := out_paddr_reg
   io.out.bits.uop.ctrl := mop_reg.ctrl
   io.out.bits.uop.csr := mop_reg.csr
+  io.out.bits.rs1 := Mux(mop_reg.ctrl.arith, rs_reg.rs1, out_paddr_reg)
   io.out.bits.uop.robIdx := mop_reg.robIdx
   io.out.bits.uop.veewVd := mop_reg.veewVd
   if (debugMode) { io.out.bits.uop.emulVd.get := mop_reg.emulVd }
