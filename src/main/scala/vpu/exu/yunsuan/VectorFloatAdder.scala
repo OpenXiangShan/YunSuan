@@ -153,6 +153,7 @@ class VectorFloatAdder_Width64() extends Module {
   widen_a_foldTo1_2 := io.vs2_fold(127, 64)
   widen_a_foldTo1_4 := io.vs2_fold(63, 32)
 
+  val f64_fp_a = Wire(UInt(floatWidth.W))
   val f32_0_fp_a = Wire(UInt(floatWidth.W))
   val f32_1_fp_a = Wire(UInt(floatWidth.W))
   val f16_1_fp_a = Wire(UInt(floatWidth.W))
@@ -164,7 +165,7 @@ class VectorFloatAdder_Width64() extends Module {
   U_Widen_Fotmat_64_fold.io.widen_b := 0.U
   U_Widen_Fotmat_64_fold.io.is_frs1 := false.B
   U_Widen_Fotmat_64_fold.io.frs1 := false.B
-  
+
   val U_Widen_Fotmat_32_fold = Module(new FloatAdderWidenFormat())
   U_Widen_Fotmat_32_fold.io.uop_idx := false.B
   U_Widen_Fotmat_32_fold.io.widen_a := widen_a_foldTo1_4
@@ -179,6 +180,7 @@ class VectorFloatAdder_Width64() extends Module {
   U_Widen_Fotmat.io.is_frs1 := io.is_frs1
   U_Widen_Fotmat.io.frs1 := io.frs1
 
+  f64_fp_a := io.fp_a // TODO: check here
   f32_0_fp_a := Mux1H(
     Seq(
       fold(0) -> io.vs2_fold(95, 64),
@@ -830,6 +832,37 @@ class ClosePathFloatAdderF64WidenPipeline(
   }
 
 }
+
+class FarPathAdderF64WidenPipeline(val AW:Int, val AdderType:String, val stage0AdderWidth: Int = 0) extends Module {
+  val io = IO(new Bundle() {
+    val fire = Input(Bool())
+    val A   = Input (UInt(AW.W))
+    val B   = Input (UInt(AW.W))
+    val result = Output(UInt(AW.W))
+  })
+  val fire = io.fire
+  if (stage0AdderWidth == 0) io.result  := RegEnable(io.A, fire) + RegEnable(io.B, fire)
+  else if (stage0AdderWidth > 0) {
+    val short_adder_num = AW/stage0AdderWidth + 1
+    val seq_short_full_adder = (for (i <- 0 until short_adder_num) yield {
+      if (i == (short_adder_num - 1)) io.A(AW-1,stage0AdderWidth*i) + io.B(AW-1,stage0AdderWidth*i)
+      else io.A(stage0AdderWidth*(i+1)-1,stage0AdderWidth*i) +& io.B(stage0AdderWidth*(i+1)-1,stage0AdderWidth*i)
+    }).reverse.reduce(Cat(_,_))
+    val reg_short_adder_sum = (for (i <- 0 until short_adder_num) yield {
+      if (i == (short_adder_num - 1)) seq_short_full_adder(seq_short_full_adder.getWidth-1,(stage0AdderWidth+1)*i)
+      else seq_short_full_adder((stage0AdderWidth+1)*i+stage0AdderWidth-1,(stage0AdderWidth+1)*i)
+    }).reverse.reduce(Cat(_,_))
+    val reg_short_adder_car = (for (i <- 0 until short_adder_num) yield {
+      if (i == (short_adder_num - 1)) 0.U((AW-stage0AdderWidth*i-1).W)
+      else Cat(seq_short_full_adder((stage0AdderWidth+1)*(i+1)-1),0.U((stage0AdderWidth-1).W))
+    }).reverse.reduce(Cat(_,_))
+    io.result := Cat(
+      RegEnable(reg_short_adder_sum(AW-1,stage0AdderWidth), fire) + RegEnable(Cat(reg_short_adder_car,0.U)(AW-1,stage0AdderWidth), fire),
+      RegEnable(reg_short_adder_sum(stage0AdderWidth-1,0), fire)
+    )
+  }
+}
+
 class FarPathFloatAdderF64WidenPipeline(
                                                        exponentWidth : Int = 11,
                                                        significandWidth : Int = 53,
