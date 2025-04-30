@@ -41,4 +41,13 @@ _start:
     vfredusum.vs	v8,v4,v2
  ## END: quick_dirty_vector_expf
     vsetvli	a5,zero,e32,m1,tu,ma
-    vfmul.vf	v4,v4,fa0
+    #division
+    vrgather.vi v10, v8,0 #v10=v8[0]
+    vfrec7.v v12, v10 #v12=1/v10
+    vmv.v.x v14,t0 #v14=0x40000000
+    vfnmsac.vv v14, v10, v12 #v14=2-v10/est(v10)
+    vfmul.vv v12, v12, v14
+    vmv.v.x v14,t0 #v14=0x40000000
+    vfnmsac.vv v14, v10, v12 #v14=2-v10/est(v10)
+    vfmul.vv v12, v12, v14
+    vfmul.vv	v4,v4,v12

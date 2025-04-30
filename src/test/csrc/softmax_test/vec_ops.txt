@@ -37,4 +37,12 @@ Disassembly of section .text:
   74:	5e003157          	vmv.v.i	v2,0
   78:	06411457          	vfredusum.vs	v8,v4,v2
   7c:	090077d7          	vsetvli	a5,zero,e32,m1,tu,ma
-  80:	92455257          	vfmul.vf	v4,v4,fa0
+  80:	32803557          	vrgather.vi	v10,v8,0
+  84:	4ea29657          	vfrec7.v	v12,v10
+  88:	5e02c757          	vmv.v.x	v14,t0
+  8c:	bec51757          	vfnmsac.vv	v14,v10,v12
+  90:	92c71657          	vfmul.vv	v12,v12,v14
+  94:	5e02c757          	vmv.v.x	v14,t0
+  98:	bec51757          	vfnmsac.vv	v14,v10,v12
+  9c:	92c71657          	vfmul.vv	v12,v12,v14
+  a0:	92461257          	vfmul.vv	v4,v4,v12

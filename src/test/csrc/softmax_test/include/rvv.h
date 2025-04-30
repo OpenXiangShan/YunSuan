@@ -24,4 +24,7 @@ void vfmv_v_i_f32m1(int vreg_dst_index, int value,int vl);
 void vfmax_vv(int vreg_dst_index, int vreg_src1_index, int vreg_src2_index,int vl);
 void vfredmax_vs(int vreg_dst_index, int vreg_src2_index, int vreg_src1_index, int vl);
 void vmv2r_v(int vreg_dst_index, int vreg_src_index);
+void vrgather_vi(int vreg_dst_index, int vreg_src2_index, uint32_t uimm, int vl);
+void vmv_v_x(int vreg_index, const char *s, int vl);
+void vfnmsac_vv(int vreg_dst_index,int vreg_src1_index, int vreg_src2_index,int vl);
 #endif

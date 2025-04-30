@@ -176,3 +176,21 @@ void vfredmax_vs(int vreg_dst_index, int vreg_src2_index, int vreg_src1_index, i
         //TODO: tail agnostic 
     }
 }
+void vrgather_vi(int vreg_dst_index, int vreg_src2_index, uint32_t uimm, int vl){
+    uint32_t value=uimm>VLEN*LMUL/vcsr.sew? 0: cpu.vreg[vreg_src2_index][uimm].u;
+    for(int i=0; i < vl; i++){
+        cpu.vreg[vreg_dst_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].u=value;
+    }
+
+}
+void vmv_v_x(int vreg_index, const char *s, int vl){
+    for(int i=0;i<vl;i++){
+        cpu.vreg[vreg_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].u=cpu.gpr[isa_reg_index(s)];
+    }
+}
+void vfnmsac_vv(int vreg_dst_index,int vreg_src1_index, int vreg_src2_index,int vl){
+    for(int i=0;i<vl;i++){
+        cpu.vreg[vreg_dst_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f=cpu.vreg[vreg_dst_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f \
+        -cpu.vreg[vreg_src1_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f*cpu.vreg[vreg_src2_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f;
+    }
+}
