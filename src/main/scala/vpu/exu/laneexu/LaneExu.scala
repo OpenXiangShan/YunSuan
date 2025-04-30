@@ -19,6 +19,7 @@ class LaneExu extends Module {
     lanes(i).io.in.bits.uop := io.in.bits.uop
     lanes(i).io.in.bits.vs1 := vSrcSplit(0)(i)
     lanes(i).io.in.bits.vs2 := vSrcSplit(1)(i)
+    lanes(i).io.in.bits.vs3 := vSrcSplit(2)(i)
     // lanes(i).io.in.bits.oldVd := vSrcSplit(2)(i)
     // lanes(i).io.in.bits.mask := vSrcSplit(3)(i)
     lanes(i).io.in.bits.rs1 := io.in.bits.rs1

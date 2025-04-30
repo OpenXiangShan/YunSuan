@@ -11,58 +11,50 @@ import scala.collection.mutable.ListBuffer
 class VectorExuFloatFMA() extends Module{
   val io = IO(new Bundle() {
     val fire            = Input (Bool())
-    val vs1, vs2, vs3   = Input (UInt(VLEN.W)) // fp_a->VS2,fp_b->VS1,fp_c->VD
+    val vs1, vs2, vs3   = Input (UInt(LaneWidth.W)) // fp_a->VS2,fp_b->VS1,fp_c->VD
     val uop_idx         = Input (Bool())
     // val widen_a      = Input (UInt(floatWidth.W)) 
     // val widen_b      = Input (UInt(floatWidth.W)) 
     val round_mode   = Input (UInt(3.W))
     val fp_format    = Input (UInt(2.W)) 
     val op_code      = Input (UInt(4.W))
-    val frs1         = Input (UInt(XLEN.W))
+    val frs1         = Input (UInt(LaneWidth.W))
     val is_vec       = Input (Bool())
     val is_frs1      = Input (Bool())
     val res_widening = Input (Bool())
     val in_uop       = Input(new VUop)
-    val result       = Output(UInt(VLEN.W))
-    val fflags       = Output(Vec(VLEN/16, UInt(5.W)))
+    val result       = Output(UInt(LaneWidth.W))
+    val fflags       = Output(Vec(LaneWidth/16, UInt(5.W)))
     val out_uop      = ValidIO(new VUop)
     val fp_aIsFpCanonicalNAN = Input(Bool())
     val fp_bIsFpCanonicalNAN = Input(Bool())
     val fp_cIsFpCanonicalNAN = Input(Bool())
   })
 
-  val result = Wire(Vec(VLEN/XLEN, UInt(XLEN.W)))
-  val fflags = Wire(Vec(VLEN/XLEN, UInt(20.W)))
+  val fp_a = io.vs2(LaneWidth-1, 0)
+  val fp_b = io.vs1(LaneWidth-1, 0)
+  val fp_c = io.vs3(LaneWidth-1, 0)
+  val vff = Module(new VectorFloatFMA_W64)
+  vff.io.fire := io.fire
+  vff.io.fp_a := fp_a
+  vff.io.fp_b := fp_b
+  vff.io.fp_c := fp_c 
+  vff.io.widen_a := 0.U //TODO:
+  vff.io.widen_b := 0.U
+  vff.io.res_widening := false.B
+  vff.io.frs1   := io.frs1
+  vff.io.is_frs1 := io.is_frs1  
+  vff.io.uop_idx := io.uop_idx
+  vff.io.is_vec := io.is_vec
+  vff.io.round_mode := io.round_mode
+  vff.io.fp_format := io.fp_format  
+  vff.io.op_code    := io.op_code
+  vff.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
+  vff.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
+  vff.io.fp_cIsFpCanonicalNAN := io.fp_cIsFpCanonicalNAN
 
-  for (i <- 0 until (VLEN/XLEN)) {
-      val fp_a = io.vs2(XLEN-1+i*XLEN, 0+i*XLEN) //TODO: vs1 fp_b ? 
-      val fp_b = io.vs1(XLEN-1+i*XLEN, 0+i*XLEN)
-      val fp_c = io.vs3(XLEN-1+i*XLEN, 0+i*XLEN)
-      val vff = Module(new VectorFloatFMA_W64)
-      vff.io.fire := io.fire
-      vff.io.fp_a := fp_a
-      vff.io.fp_b := fp_b
-      vff.io.fp_c := fp_c 
-      vff.io.widen_a := 0.U //TODO:
-      vff.io.widen_b := 0.U
-      vff.io.res_widening := false.B
-      vff.io.frs1   := io.frs1
-      vff.io.is_frs1 := io.is_frs1  
-      vff.io.uop_idx := io.uop_idx
-      vff.io.is_vec := io.is_vec
-      vff.io.round_mode := io.round_mode
-      vff.io.fp_format := io.fp_format  
-      vff.io.op_code    := io.op_code
-      vff.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
-      vff.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
-      vff.io.fp_cIsFpCanonicalNAN := io.fp_cIsFpCanonicalNAN
-
-      result(i) := vff.io.fp_result
-      fflags(i) := vff.io.fflags
-  }
-
-  io.result := result.asTypeOf(io.result)
-  io.fflags := fflags.asTypeOf(io.fflags)
+  io.result := vff.io.fp_result.asTypeOf(io.result)
+  io.fflags := vff.io.fflags.asTypeOf(io.fflags)
 
   // latency = 3
   val reg_valid_0   = RegNext(io.fire)

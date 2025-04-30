@@ -27,7 +27,7 @@ class VectorExuCvt extends  Module {
   val XLEN = 32
   val io = IO(new Bundle() {
       val fire              = Input(Bool())
-      val vs2               = Input(UInt(VLEN.W))
+      val vs2               = Input(UInt(LaneWidth.W))
       val op_code           = Input(UInt(8.W))
       val sew               = Input(UInt(2.W))
       val rm                = Input(UInt(3.W))
@@ -36,15 +36,15 @@ class VectorExuCvt extends  Module {
       val isFcvtmod         = Input(Bool())
       val in_uop            = Input(new VUop)
 
-      val result            = Output(UInt(VLEN.W))
-      val fflags            = Output(Vec(VLEN/16, UInt(5.W)))
+      val result            = Output(UInt(LaneWidth.W))
+      val fflags            = Output(Vec(LaneWidth/16, UInt(5.W)))
       val out_uop           = ValidIO(new VUop)
   })
   
-  val result = Wire(Vec(VLEN/XLEN, UInt(XLEN.W)))
-  val fflags = Wire(Vec(VLEN/XLEN, UInt(20.W)))
+  val result = Wire(Vec(LaneWidth/XLEN, UInt(XLEN.W)))
+  val fflags = Wire(Vec(LaneWidth/XLEN, UInt(20.W)))
 
-  for (i <- 0 until (VLEN/XLEN)) {
+  for (i <- 0 until (LaneWidth/XLEN)) {
     val vcvt = Module(new VectorCvt(64))
     // connect vcvt's io
     val src =  io.vs2(XLEN-1+i*XLEN, 0+i*XLEN) ## io.vs2(XLEN-1+i*XLEN, 0+i*XLEN)

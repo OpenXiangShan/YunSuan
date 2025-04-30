@@ -31,13 +31,13 @@ import race.vpu.yunsuan._
 class VectorExuFloatAdder() extends Module {
   val io = IO(new Bundle() {
   val fire                  = Input (Bool())
-  val vs1, vs2            = Input (UInt(VLEN.W)) // fp_a -> vs2, fp_b -> vs1
-  val widen_a               = Input (UInt(VLEN.W)) // widen_a -> Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
-  val widen_b               = Input (UInt(VLEN.W)) // widen_b -> Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
+  val vs1, vs2            = Input (UInt(XLEN.W)) // fp_a -> vs2, fp_b -> vs1
+  val widen_a               = Input (UInt(XLEN.W)) // widen_a -> Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
+  val widen_b               = Input (UInt(XLEN.W)) // widen_b -> Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
   val frs1                  = Input (UInt(XLEN.W)) // VS1(63,0)
   val is_frs1               = Input (Bool()) // VS1()
   val is_vm                 = Input (Bool()) // vector mask
-  val mask                  = Input (UInt(VLEN.W))
+  val mask                  = Input (UInt(XLEN.W))
   val uop_idx               = Input (Bool())
   val is_vec                = Input (Bool())
   val round_mode            = Input (UInt(3.W))
@@ -47,62 +47,54 @@ class VectorExuFloatAdder() extends Module {
   val op_code               = Input (UInt(5.W))
   val fp_aIsFpCanonicalNAN  = Input (Bool())
   val fp_bIsFpCanonicalNAN  = Input (Bool())
-  val maskForReduction      = Input(UInt((8*VLEN/64).W)) // need to modify
+  val maskForReduction      = Input(UInt((8*XLEN/64).W)) // need to modify
   val is_vfwredosum         = Input (Bool()) // true -> vfwredosum inst
   val is_fold               = Input (UInt(3.W))
-  val vs2_fold              = Input (UInt(VLEN.W))
   val in_uop                = Input(new VUop)
 
-  val result                = Output(UInt(VLEN.W))
-  val fflags                = Output(Vec(VLEN/16, UInt(5.W)))
+  val result                = Output(UInt(XLEN.W))
+  val fflags                = Output(Vec(XLEN/16, UInt(5.W)))
   val out_uop               = ValidIO(new VUop)
   })
-
-  val result = Wire(Vec(VLEN/XLEN, UInt(XLEN.W)))
-  val fflags = Wire(Vec(VLEN/XLEN, UInt(20.W)))
   
   val is_fp16 = io.fp_format === 1.U
   val is_fp32 = io.fp_format === 2.U
   val is_bf16 = io.fp_format === 0.U
 
-  for (i <- 0 until (VLEN/XLEN)) {
-      val mask_fp16 = io.mask(4-1+i*4, 0+i*4)
-      val mask_fp32 = Cat(0.U(2.W), io.mask(2-1+i*2, 0+i*2))
-      val fp_b = io.vs1(XLEN-1+i*XLEN, 0+i*XLEN)
-      val fp_a = io.vs2(XLEN-1+i*XLEN, 0+i*XLEN)
-      val vfa = Module(new VectorFloatAdder_Width64)
-      vfa.io.fire := io.fire
-      vfa.io.fp_a := fp_a
-      vfa.io.fp_b := fp_b
-      vfa.io.widen_a := io.widen_a
-      vfa.io.widen_b := io.widen_b
-      vfa.io.frs1 := io.frs1
-      vfa.io.is_frs1 := io.is_frs1  
-      vfa.io.mask := Mux(is_fp32, mask_fp32, Mux(is_fp16 || is_bf16, mask_fp16, 0.U))
-      vfa.io.uop_idx := io.uop_idx
-      vfa.io.is_vec := io.is_vec
-      vfa.io.round_mode := io.round_mode
-      vfa.io.fp_format := io.fp_format  
+  val mask_fp16 = io.mask(4-1, 0)
+  val mask_fp32 = Cat(0.U(2.W), io.mask(2-1, 0))
+  val fp_b = io.vs1(XLEN-1, 0)
+  val fp_a = io.vs2(XLEN-1, 0)
+
+  val vfa = Module(new VectorFloatAdder_Width64)
+  vfa.io.fire := io.fire
+  vfa.io.fp_a := fp_a
+  vfa.io.fp_b := fp_b
+  vfa.io.widen_a := io.widen_a
+  vfa.io.widen_b := io.widen_b
+  vfa.io.frs1 := io.frs1
+  vfa.io.is_frs1 := io.is_frs1  
+  vfa.io.mask := Mux(is_fp32, mask_fp32, Mux(is_fp16 || is_bf16, mask_fp16, 0.U))
+  vfa.io.uop_idx := io.uop_idx
+  vfa.io.is_vec := io.is_vec
+  vfa.io.round_mode := io.round_mode
+  vfa.io.fp_format := io.fp_format  
 
 
-      vfa.io.op_code    := io.op_code
-      vfa.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
-      vfa.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
-      //
-      vfa.io.maskForReduction := io.maskForReduction(8-1+i*8, 0+i*8)
-      vfa.io.is_vfwredosum := io.is_vfwredosum
-      vfa.io.is_fold := io.is_fold
-      vfa.io.vs2_fold := io.vs2_fold
-      //
-      vfa.io.opb_widening := io.opb_widening
-      vfa.io.res_widening := io.res_widening
+  vfa.io.op_code    := io.op_code
+  vfa.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
+  vfa.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
+  //
+  vfa.io.maskForReduction := io.maskForReduction(8-1, 0)
+  vfa.io.is_vfwredosum := io.is_vfwredosum
+  vfa.io.is_fold := io.is_fold
+  vfa.io.vs2_fold := 0.U
+  //
+  vfa.io.opb_widening := io.opb_widening
+  vfa.io.res_widening := io.res_widening
 
-      result(i) := vfa.io.fp_result
-      fflags(i) := vfa.io.fflags
-  }
-
-  io.result := result.asTypeOf(io.result)
-  io.fflags := fflags.asTypeOf(io.fflags)
+  io.result := vfa.io.fp_result.asTypeOf(io.result)
+  io.fflags := vfa.io.fflags.asTypeOf(io.fflags)
 
   // latency = 1
   val reg_valid_0 = RegNext(io.fire)
@@ -166,6 +158,13 @@ class VectorFloatAdder_Width64() extends Module {
   val f16_1_fp_a = Wire(UInt(floatWidth.W))
   val f16_3_fp_a = Wire(UInt(floatWidth.W))
 
+  val U_Widen_Fotmat_64_fold = Module(new FloatAdderWidenFormat())
+  U_Widen_Fotmat_64_fold.io.uop_idx := false.B
+  U_Widen_Fotmat_64_fold.io.widen_a := widen_a_foldTo1_2
+  U_Widen_Fotmat_64_fold.io.widen_b := 0.U
+  U_Widen_Fotmat_64_fold.io.is_frs1 := false.B
+  U_Widen_Fotmat_64_fold.io.frs1 := false.B
+  
   val U_Widen_Fotmat_32_fold = Module(new FloatAdderWidenFormat())
   U_Widen_Fotmat_32_fold.io.uop_idx := false.B
   U_Widen_Fotmat_32_fold.io.widen_a := widen_a_foldTo1_4
@@ -197,6 +196,25 @@ class VectorFloatAdder_Width64() extends Module {
 
   f16_1_fp_a := Mux(fold(0), io.vs2_fold(95, 80), io.fp_a(31, 16)) // TODO: check here
   f16_3_fp_a := Mux(fold(0), io.vs2_fold(127, 112), io.fp_a(63, 48))
+
+  val U_F64_Widen_0 = Module(new FloatAdderF64WidenPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
+  U_F64_Widen_0.io.fire := fire
+  U_F64_Widen_0.io.fp_a := f64_fp_a
+  U_F64_Widen_0.io.fp_b := Mux(io.is_frs1,io.frs1,io.fp_b)
+  U_F64_Widen_0.io.widen_a := Mux(fold(0), U_Widen_Fotmat_64_fold.io.widen_a_f64, U_Widen_Fotmat.io.widen_a_f64)
+  U_F64_Widen_0.io.widen_b := U_Widen_Fotmat.io.widen_b_f64
+  U_F64_Widen_0.io.mask := io.mask(0)
+  U_F64_Widen_0.io.is_sub := fast_is_sub
+  U_F64_Widen_0.io.round_mode := io.round_mode
+  U_F64_Widen_0.io.res_widening := io.res_widening
+  U_F64_Widen_0.io.opb_widening := io.opb_widening
+  U_F64_Widen_0.io.op_code      := io.op_code
+  U_F64_Widen_0.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
+  U_F64_Widen_0.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
+  U_F64_Widen_0.io.maskForReduction := Cat(io.maskForReduction(4), io.maskForReduction(0))
+  U_F64_Widen_0.io.is_vfwredosum := io.is_vfwredosum
+  val U_F64_Widen_0_result = U_F64_Widen_0.io.fp_c
+  val U_F64_Widen_0_fflags = U_F64_Widen_0.io.fflags
 
   val U_F32_Mixed_0 = Module(new FloatAdderF32WidenF16MixedPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F32_Mixed_0.io.fire := fire
@@ -598,6 +616,20 @@ class FarPathF32WidenF16MixedPipeline(
   else io.isEfp_bGreater := 0.U
 }
 
+class ClosePathAdder(val adderWidth:Int, val adderType:String) extends Module {
+  val io = IO(new Bundle() {
+    val adder_op0    = Input(UInt(adderWidth.W))
+    val adder_op1    = Input(UInt(adderWidth.W))
+    val result       = Output(UInt((adderWidth+1).W))
+  })
+  if (adderType == "CS0" | adderType == "CS1") {
+    io.result  :=  Cat(0.U,io.adder_op0) - Cat(0.U,io.adder_op1)
+  }
+  if (adderType == "CS2" | adderType == "CS3") {
+    io.result  :=  Cat(io.adder_op0,0.U) - Cat(0.U,io.adder_op1)
+  }
+}
+
 class ClosePathF32WidenF16MixedPipelineAdder(val adderWidth:Int, val adderType:String) extends Module {
   val io = IO(new Bundle() {
     val adder_op0    = Input(UInt(adderWidth.W))
@@ -611,6 +643,670 @@ class ClosePathF32WidenF16MixedPipelineAdder(val adderWidth:Int, val adderType:S
     io.result  :=  Cat(io.adder_op0,0.U) - Cat(0.U,io.adder_op1)
   }
 }
+
+class ClosePathFloatAdderF64WidenPipeline(
+                                                         exponentWidth : Int = 11,
+                                                         var significandWidth : Int = 53,
+                                                         val is_print:Boolean = false,
+                                                         val hasMinMaxCompare:Boolean = false) extends Module {
+  val floatWidth = exponentWidth + significandWidth
+  val io = IO(new Bundle() {
+    val fire        = Input (Bool())
+    val fp_a, fp_b  = Input (UInt(floatWidth.W))
+    val fp_c        = Output(UInt(floatWidth.W))
+    val round_mode  = Input (UInt(3.W))
+    val fflags      = Output(UInt(5.W))
+    val CS1         = if (hasMinMaxCompare) Output(UInt((significandWidth+1).W)) else Output(UInt(0.W))
+  })
+  val fire = io.fire
+  val fp_a_sign = io.fp_a.head(1).asBool
+  val fp_b_sign = io.fp_b.head(1).asBool
+  val RNE = io.round_mode === "b000".U
+  val RTZ = io.round_mode === "b001".U
+  val RDN = io.round_mode === "b010".U
+  val RUP = io.round_mode === "b011".U
+  val RMM = io.round_mode === "b100".U
+  val NV = WireInit(false.B)
+  val DZ = WireInit(false.B)
+  val OF = WireInit(false.B)
+  val UF = WireInit(false.B)
+  val NX = WireInit(false.B)
+  io.fflags := Cat(NV,DZ,OF,UF,NX)
+  val fp_a_mantissa = io.fp_a.tail(1 + exponentWidth)
+  val fp_b_mantissa = io.fp_b.tail(1 + exponentWidth)
+  val Efp_a = io.fp_a(floatWidth - 2, floatWidth - 1 - exponentWidth)
+  val Efp_b = io.fp_b(floatWidth - 2, floatWidth - 1 - exponentWidth)
+  val Efp_a_is_not_zero = Efp_a.orR
+  val Efp_b_is_not_zero = Efp_b.orR
+  val Efp_b_is_greater = (Efp_b(0) ^ Efp_a(0)) & !(Efp_a(1) ^ Efp_b(1) ^ Efp_a(0))
+  val absEaSubEb = Efp_a(0) ^ Efp_b(0)
+  val exp_is_equal = !absEaSubEb | (!Efp_a_is_not_zero ^ !Efp_b_is_not_zero)
+  val significand_fp_a = Cat(Efp_a_is_not_zero, fp_a_mantissa)
+  val significand_fp_b = Cat(Efp_b_is_not_zero, fp_b_mantissa)
+  val EA = Mux(Efp_b_is_greater, Efp_b, Efp_a)
+
+  val B_guard = Mux(Efp_b_is_greater, Mux(Efp_a_is_not_zero, fp_a_mantissa(0), false.B),
+    Mux(Efp_b_is_not_zero, fp_b_mantissa(0), false.B))
+  val B_round = false.B
+  val B_sticky = false.B
+
+  val mask_Efp_a_onehot = Cat(
+    Efp_a === 0.U | Efp_a === 1.U,
+    (for (i <- 2 until significandWidth + 1) yield
+      (Efp_a === i.U).asUInt
+      ).reduce(Cat(_, _))
+  )
+  val mask_Efp_b_onehot = Cat(
+    Efp_b === 0.U | Efp_b === 1.U,
+    (for (i <- 2 until significandWidth + 1) yield
+      (Efp_b === i.U).asUInt
+      ).reduce(Cat(_, _))
+  )
+
+  val U_CS0 = Module(new ClosePathAdder(adderWidth = significandWidth, adderType = "CS0"))
+  U_CS0.io.adder_op0 := significand_fp_a
+  U_CS0.io.adder_op1 := significand_fp_b
+  val CS0 = U_CS0.io.result(significandWidth-1,0)
+  val priority_lshift_0 = CS0 | mask_Efp_a_onehot
+
+  val U_CS1 = Module(new ClosePathAdder(adderWidth = significandWidth, adderType = "CS1"))
+  U_CS1.io.adder_op0 := significand_fp_b
+  U_CS1.io.adder_op1 := significand_fp_a
+  val CS1 = U_CS1.io.result(significandWidth-1,0)
+  val priority_lshift_1 = CS1 | mask_Efp_b_onehot
+
+  val U_CS2 = Module(new ClosePathAdder(adderWidth = significandWidth, adderType = "CS2"))
+  U_CS2.io.adder_op0 := Cat(1.U,fp_a_mantissa)
+  U_CS2.io.adder_op1 := Cat(1.U,fp_b_mantissa)
+  val CS2 = U_CS2.io.result(significandWidth,0)
+  val priority_lshift_2 = CS2 | Cat(mask_Efp_a_onehot,Efp_a===(significandWidth+1).U)
+
+  val U_CS3 = Module(new ClosePathAdder(adderWidth = significandWidth, adderType = "CS3"))
+  U_CS3.io.adder_op0 := Cat(1.U,fp_b_mantissa)
+  U_CS3.io.adder_op1 := Cat(1.U,fp_a_mantissa)
+  val CS3 = U_CS3.io.result(significandWidth,0)
+  val priority_lshift_3 = CS3 | Cat(mask_Efp_b_onehot,Efp_b===(significandWidth+1).U)
+
+  val U_CS4 = Module(new ClosePathAdder(adderWidth = significandWidth, adderType = "CS0"))
+  U_CS4.io.adder_op0 := RegEnable(Mux(Efp_b_is_greater,significand_fp_b,significand_fp_a), fire)
+  U_CS4.io.adder_op1 := RegEnable(Mux(Efp_b_is_greater,Cat(0.U,significand_fp_a(significandWidth-1,1)),Cat(0.U,significand_fp_b(significandWidth-1,1))), fire)
+  val CS4_reg = U_CS4.io.result
+
+  val close_sign_result = Wire(Bool())
+  val close_exponent_result = Wire(UInt(exponentWidth.W))
+  val close_fraction_result = Wire(UInt((significandWidth - 1).W))
+  val CS2_round_up = significand_fp_b(0) & (
+    (RUP & !fp_a_sign) | (RDN & fp_a_sign) | (RNE & CS2(1) & CS2(0)) | RMM
+    )
+  val CS3_round_up = significand_fp_a(0) & (
+    (RUP & fp_a_sign) | (RDN & !fp_a_sign) | (RNE & CS3(1) & CS3(0)) | RMM
+    )
+  val sel_CS0 = exp_is_equal & !U_CS0.io.result.head(1).asBool
+  val sel_CS1 = exp_is_equal & U_CS0.io.result.head(1).asBool
+  val sel_CS2 = !exp_is_equal & !Efp_b_is_greater & ((!U_CS2.io.result.head(1).asBool | !U_CS2.io.result(0).asBool) | !CS2_round_up)
+  val sel_CS3 = !exp_is_equal &  Efp_b_is_greater & ((!U_CS3.io.result.head(1).asBool | !U_CS3.io.result(0).asBool) | !CS3_round_up)
+  val sel_CS4 = !exp_is_equal & (
+    (!Efp_b_is_greater & U_CS2.io.result.head(1).asBool & U_CS2.io.result(0).asBool & CS2_round_up) |
+      (Efp_b_is_greater & U_CS3.io.result.head(1).asBool & U_CS3.io.result(0).asBool & CS3_round_up)
+    )
+  val CS_0123_result = Mux1H(
+    Seq(
+      sel_CS0,
+      sel_CS1,
+      sel_CS2,
+      sel_CS3
+    ),
+    Seq(
+      Cat(CS0,0.U),
+      Cat(CS1,0.U),
+      CS2,
+      CS3
+    )
+  )
+  val mask_onehot = Mux1H(
+    Seq(
+      sel_CS0,
+      sel_CS1,
+      sel_CS2,
+      sel_CS3
+    ),
+    Seq(
+      Cat(mask_Efp_a_onehot,1.U),
+      Cat(mask_Efp_b_onehot,1.U),
+      Cat(mask_Efp_a_onehot,Efp_a===(significandWidth+1).U),
+      Cat(mask_Efp_b_onehot,Efp_b===(significandWidth+1).U)
+    )
+  )
+  val priority_mask = CS_0123_result | mask_onehot
+  val lzd_0123 = LZD(priority_mask)
+  val lzd_0123_reg = RegEnable(lzd_0123, fire)
+  val U_Lshift = Module(new CloseShiftLeftWithMux(CS_0123_result.getWidth,priority_mask.getWidth.U.getWidth))
+  U_Lshift.io.src := RegEnable(CS_0123_result, fire)
+  U_Lshift.io.shiftValue := lzd_0123_reg
+  val CS_0123_lshift_result_reg = U_Lshift.io.result(significandWidth,1)
+  NX := RegEnable(Mux(
+    (sel_CS2 & (U_CS2.io.result.head(1).asBool & U_CS2.io.result(0).asBool & !CS2_round_up)) |
+      (sel_CS3 & (U_CS3.io.result.head(1).asBool & U_CS3.io.result(0).asBool & !CS3_round_up)) | sel_CS4,
+    B_guard,
+    0.U
+  ), fire)
+  close_fraction_result := Mux(RegEnable(sel_CS4, fire),CS4_reg.tail(1),CS_0123_lshift_result_reg.tail(1))
+  val lshift_result_head_is_one = ((RegEnable(EA-1.U, fire) > lzd_0123_reg) & RegEnable(CS_0123_result, fire).orR) | RegEnable(mask_onehot & CS_0123_result, fire).orR
+  val EA_sub_value = Mux(
+    RegEnable(sel_CS4, fire),
+    0.U(exponentWidth.W),
+    Mux(
+      lshift_result_head_is_one,
+      lzd_0123_reg.asTypeOf(EA),
+      RegEnable(EA, fire)
+    )
+  )
+  close_exponent_result := RegEnable(EA, fire) - EA_sub_value
+  close_sign_result := RegEnable(Mux1H(
+    Seq(
+      sel_CS0 & (exp_is_equal & (U_CS0.io.result.head(1).asBool | U_CS1.io.result.head(1).asBool)),
+      sel_CS0 & exp_is_equal & (!U_CS0.io.result.head(1).asBool & !U_CS1.io.result.head(1).asBool),
+      sel_CS1,
+      sel_CS2,
+      sel_CS3,
+      sel_CS4
+    ),
+    Seq(
+      fp_a_sign,
+      RDN,
+      !fp_a_sign,
+      fp_a_sign,
+      !fp_a_sign,
+      Mux(Efp_b_is_greater,!fp_a_sign,fp_a_sign)
+    )
+  ), fire)
+  io.fp_c := Cat(close_sign_result,close_exponent_result,close_fraction_result)
+  if (hasMinMaxCompare) io.CS1 := U_CS1.io.result
+  else io.CS1 := 0.U
+  if (is_print){
+    printf(p"*****close path*****\n")
+    printf(p"CS1 = ${Binary(CS1)}\n")
+    printf(p"CS0 = ${Binary(CS0)}\n")
+  }
+
+}
+class FarPathFloatAdderF64WidenPipeline(
+                                                       exponentWidth : Int = 11,
+                                                       significandWidth : Int = 53,
+                                                       val is_print:Boolean = false,
+                                                       val hasMinMaxCompare:Boolean = false) extends Module {
+  val floatWidth = exponentWidth + significandWidth
+  val io = IO(new Bundle() {
+    val fire        = Input (Bool())
+    val fp_a, fp_b  = Input (UInt(floatWidth.W))
+    val fp_c        = Output(UInt(floatWidth.W))
+    val is_sub      = Input (Bool())
+    val round_mode  = Input (UInt(3.W))
+    val fflags      = Output(UInt(5.W))
+    val absEaSubEb  = Output(UInt(exponentWidth.W))
+    val isEfp_bGreater = if (hasMinMaxCompare) Output(UInt(1.W)) else Output(UInt(0.W))
+  })
+  val fire = io.fire
+  val fp_a_sign = io.fp_a.head(1).asBool
+  val fp_b_sign = io.fp_b.head(1).asBool
+  val efficient_fp_b_sign = (fp_b_sign ^ io.is_sub).asBool
+  val EOP = ( fp_a_sign ^ efficient_fp_b_sign ).asBool
+  val EOP_reg = RegEnable(EOP, fire)
+  val RNE_reg = RegEnable(io.round_mode === "b000".U, fire)
+  val RTZ_reg = RegEnable(io.round_mode === "b001".U, fire)
+  val RDN_reg = RegEnable(io.round_mode === "b010".U, fire)
+  val RUP_reg = RegEnable(io.round_mode === "b011".U, fire)
+  val RMM_reg = RegEnable(io.round_mode === "b100".U, fire)
+  val NV  = WireInit(false.B)
+  val DZ  = WireInit(false.B)
+  val OF  = WireInit(false.B)
+  val UF  = WireInit(false.B)
+  val NX  = WireInit(false.B)
+  io.fflags := Cat(NV,DZ,OF,UF,NX)
+  val fp_a_mantissa            = io.fp_a.tail(1 + exponentWidth)
+  val fp_b_mantissa            = io.fp_b.tail(1 + exponentWidth)
+  val fp_a_mantissa_isnot_zero = io.fp_a.tail(1 + exponentWidth).orR
+  val fp_b_mantissa_isnot_zero = io.fp_b.tail(1 + exponentWidth).orR
+  val Efp_a = io.fp_a(floatWidth-2, floatWidth-1-exponentWidth)
+  val Efp_b = io.fp_b(floatWidth-2, floatWidth-1-exponentWidth)
+  val Efp_a_is_not_zero  = Efp_a.orR
+  val Efp_b_is_not_zero  = Efp_b.orR
+  val Efp_a_is_greater_than_1= Efp_a.head(exponentWidth-1).orR
+  val Efp_b_is_greater_than_1= Efp_b.head(exponentWidth-1).orR
+  val Efp_a_is_all_one   = Efp_a.andR
+  val Efp_b_is_all_one   = Efp_b.andR
+  val U_Efp_aSubEfp_b = Module(new Adder(Efp_a.getWidth,Efp_a.getWidth,Efp_a.getWidth,is_sub = true))
+  U_Efp_aSubEfp_b.io.a := Efp_a | !Efp_a_is_not_zero
+  U_Efp_aSubEfp_b.io.b := Efp_b | !Efp_b_is_not_zero
+  val Efp_aSubEfp_b     = U_Efp_aSubEfp_b.io.c
+  val U_Efp_bSubEfp_a = Module(new Adder(Efp_a.getWidth,Efp_a.getWidth,Efp_a.getWidth,is_sub = true))
+  U_Efp_bSubEfp_a.io.a := Efp_b | !Efp_b_is_not_zero
+  U_Efp_bSubEfp_a.io.b := Efp_a | !Efp_a_is_not_zero
+  val Efp_bSubEfp_a     = U_Efp_bSubEfp_a.io.c
+  val isEfp_bGreater    = Efp_b > Efp_a
+  val Efp_a_sub_1       = Mux(Efp_a_is_not_zero,Efp_a - 1.U,0.U)
+  val Efp_b_sub_1       = Mux(Efp_b_is_not_zero,Efp_b - 1.U,0.U)
+  val absEaSubEb        = Wire(UInt(Efp_a.getWidth.W))
+  io.absEaSubEb := absEaSubEb
+  absEaSubEb := Mux(isEfp_bGreater, Efp_bSubEfp_a, Efp_aSubEfp_b)
+  val significand_fp_a   = Cat(Efp_a_is_not_zero,fp_a_mantissa)
+  val significand_fp_b   = Cat(Efp_b_is_not_zero,fp_b_mantissa)
+  val E_greater          = Mux(isEfp_bGreater, Efp_b, Efp_a)
+  val EA                 = Mux(EOP, E_greater-1.U, E_greater)
+  val EA_add1            = EA + 1.U
+  val greaterSignificand = Mux(isEfp_bGreater, significand_fp_b, significand_fp_a)
+  val smallerSignificand = Mux(isEfp_bGreater, significand_fp_a, significand_fp_b)
+  val farmaxShiftValue   = (significandWidth+2).U
+  val A_wire              = Mux(EOP,Cat(greaterSignificand,0.U),Cat(0.U,greaterSignificand))
+  val A_wire_FS1 = Mux(EOP,Cat(greaterSignificand,0.U),Cat(0.U,greaterSignificand)) + 2.U
+  val widenWidth = significandWidth + 3
+  val fp_b_mantissa_widen = Mux(EOP,Cat(~significand_fp_b,1.U,Fill(widenWidth,1.U)),Cat(0.U,significand_fp_b,0.U(widenWidth.W)))
+  val U_far_rshift_1 = Module(new FarShiftRightWithMuxInvFirst(fp_b_mantissa_widen.getWidth,farmaxShiftValue.getWidth))
+  U_far_rshift_1.io.src := fp_b_mantissa_widen
+  U_far_rshift_1.io.shiftValue := Efp_aSubEfp_b.asTypeOf(farmaxShiftValue)
+  U_far_rshift_1.io.EOP := EOP
+  val U_far_rshift_fp_b_result = U_far_rshift_1.io.result
+  val fp_a_mantissa_widen = Mux(EOP,Cat(~significand_fp_a,1.U,Fill(widenWidth,1.U)),Cat(0.U,significand_fp_a,0.U(widenWidth.W)))
+  val U_far_rshift_2 = Module(new FarShiftRightWithMuxInvFirst(fp_a_mantissa_widen.getWidth,farmaxShiftValue.getWidth))
+  U_far_rshift_2.io.src := fp_a_mantissa_widen
+  U_far_rshift_2.io.shiftValue := Efp_bSubEfp_a.asTypeOf(farmaxShiftValue)
+  U_far_rshift_2.io.EOP := EOP
+  val U_far_rshift_fp_a_result = U_far_rshift_2.io.result
+
+  val far_rshift_widen_result = Mux(isEfp_bGreater,U_far_rshift_fp_a_result,U_far_rshift_fp_b_result)
+  val absEaSubEb_is_greater = absEaSubEb > (significandWidth + 3).U
+  val B_wire = Mux(absEaSubEb_is_greater,Fill(significandWidth+1,EOP),far_rshift_widen_result.head(significandWidth+1))
+  val B_guard_normal_reg     = RegEnable(Mux(
+    absEaSubEb_is_greater,
+    false.B,
+    Mux(EOP,!far_rshift_widen_result.head(significandWidth+2)(0).asBool,far_rshift_widen_result.head(significandWidth+2)(0).asBool)
+  ), fire)
+  val B_round_normal_reg     = RegEnable(Mux(
+    absEaSubEb_is_greater,
+    false.B,
+    Mux(EOP,!far_rshift_widen_result.head(significandWidth+3)(0).asBool,far_rshift_widen_result.head(significandWidth+3)(0).asBool)
+  ), fire)
+  val B_sticky_normal_reg    = Mux(
+    RegEnable(absEaSubEb_is_greater, fire),
+    RegEnable(smallerSignificand.orR, fire),
+    Mux(EOP_reg,RegEnable(~far_rshift_widen_result.tail(significandWidth+3), fire).asUInt.orR,RegEnable(far_rshift_widen_result.tail(significandWidth+3), fire).orR)
+  )
+  val B_rsticky_normal_reg   = B_round_normal_reg | B_sticky_normal_reg
+  val B_guard_overflow_reg   = RegEnable(Mux(
+    absEaSubEb_is_greater,
+    false.B,
+    Mux(EOP,!far_rshift_widen_result.head(significandWidth+1)(0).asBool,far_rshift_widen_result.head(significandWidth+1)(0).asBool)
+  ), fire)
+  val B_round_overflow_reg   = B_guard_normal_reg
+  val B_sticky_overflow_reg  = B_round_normal_reg | B_sticky_normal_reg
+  val B_rsticky_overflow_reg = B_round_overflow_reg | B_sticky_overflow_reg
+  val U_FS0 = Module(new FarPathAdderF64WidenPipeline(AW = significandWidth+1, AdderType = "FS0", stage0AdderWidth = 0))
+  U_FS0.io.fire := fire
+  U_FS0.io.A := A_wire
+  U_FS0.io.B := B_wire
+  val FS0 = U_FS0.io.result
+  val U_FS1 = Module(new FarPathAdderF64WidenPipeline(AW = significandWidth+1, AdderType = "FS1", stage0AdderWidth = 0))
+  U_FS1.io.fire := fire
+  U_FS1.io.A := A_wire_FS1
+  U_FS1.io.B := B_wire
+  val FS1 = U_FS1.io.result
+  val far_case_normal   = !FS0.head(1).asBool
+  val far_case_overflow = FS0.head(1).asBool
+  val lgs_normal_reg = Cat(FS0(0),Mux(EOP_reg,(~Cat(B_guard_normal_reg,B_rsticky_normal_reg)).asUInt+1.U,Cat(B_guard_normal_reg,B_rsticky_normal_reg)))
+
+  val far_sign_result_reg = RegEnable(Mux(isEfp_bGreater, efficient_fp_b_sign, fp_a_sign), fire)
+  val far_case_normal_round_up = (EOP_reg & !lgs_normal_reg(1) & !lgs_normal_reg(0)) |
+    (RNE_reg & lgs_normal_reg(1) & (lgs_normal_reg(2) | lgs_normal_reg(0))) |
+    (RDN_reg & far_sign_result_reg & (lgs_normal_reg(1) | lgs_normal_reg(0))) |
+    (RUP_reg & !far_sign_result_reg & (lgs_normal_reg(1) | lgs_normal_reg(0))) |
+    (RMM_reg & lgs_normal_reg(1))
+  val normal_fsel0 = (!FS0(0) & far_case_normal_round_up) | !far_case_normal_round_up
+  val normal_fsel1 = FS0(0) & far_case_normal_round_up
+  val grs_overflow = Mux(EOP_reg,Cat(RegEnable(A_wire(0), fire),0.U,0.U) - Cat(RegEnable(~B_wire(0), fire),B_guard_normal_reg,B_rsticky_normal_reg),Cat(FS0(0),B_guard_normal_reg,B_rsticky_normal_reg))
+  val lgs_overflow = Cat(FS0(1),grs_overflow(2),grs_overflow(1) | grs_overflow(0))
+  val far_case_overflow_round_up = (EOP_reg & !lgs_overflow(1) & !lgs_overflow(0)) |
+    (RNE_reg & lgs_overflow(1) & (lgs_overflow(2) | lgs_overflow(0))) |
+    (RDN_reg & far_sign_result_reg & (lgs_overflow(1) | lgs_overflow(0))) |
+    (RUP_reg & !far_sign_result_reg & (lgs_overflow(1) | lgs_overflow(0))) |
+    (RMM_reg & lgs_overflow(1))
+  val overflow_fsel0 = (!FS0(1) & far_case_overflow_round_up) | !far_case_overflow_round_up
+  val overflow_fsel1 =  FS0(1) & far_case_overflow_round_up
+  val far_exponent_result = Wire(UInt(exponentWidth.W))
+  val far_fraction_result = Wire(UInt((significandWidth-1).W))
+  far_exponent_result := Mux(
+    far_case_overflow | (FS1.head(1).asBool & FS0(0) & far_case_normal_round_up) | (RegEnable(!EA.orR, fire) & FS0.tail(1).head(1).asBool),
+    RegEnable(EA_add1, fire),
+    RegEnable(EA, fire)
+  )
+  OF := RegEnable(EA_add1.andR, fire) & (far_case_overflow | (FS1.head(1).asBool & FS0(0) & far_case_normal_round_up))
+  NX := Mux(far_case_normal,lgs_normal_reg(1,0).orR,lgs_overflow(1,0).orR) | OF
+  far_fraction_result := Mux1H(
+    Seq(
+      far_case_normal & normal_fsel0,
+      far_case_normal & normal_fsel1,
+      far_case_overflow & overflow_fsel0,
+      far_case_overflow & overflow_fsel1
+    ),
+    Seq(
+      Cat(FS0(significandWidth-2,1),FS0(0) ^ far_case_normal_round_up),
+      Cat(FS1(significandWidth-2,1),0.U),
+      Cat(FS0(significandWidth-1,2),FS0(1) ^ far_case_overflow_round_up),
+      FS1(significandWidth-1,1)
+    )
+  )
+  val result_overflow = Mux(
+    RTZ_reg | (RDN_reg & !far_sign_result_reg) | (RUP_reg & far_sign_result_reg),
+    Cat(far_sign_result_reg,Fill(exponentWidth-1,1.U),0.U,Fill(significandWidth-1,1.U)),
+    Cat(far_sign_result_reg,Fill(exponentWidth,1.U),Fill(significandWidth-1,0.U))
+  )
+  io.fp_c := Mux(OF,
+    result_overflow,
+    Cat(far_sign_result_reg,far_exponent_result,far_fraction_result)
+  )
+  if (hasMinMaxCompare) io.isEfp_bGreater := isEfp_bGreater
+  else io.isEfp_bGreater := 0.U
+}
+
+class FloatAdderF64WidenPipeline(val is_print:Boolean = false,val hasMinMaxCompare:Boolean = false) extends Module {
+  val exponentWidth = 11
+  val significandWidth = 53
+  val floatWidth = exponentWidth + significandWidth
+  val io = IO(new Bundle() {
+    val fire        = Input (Bool())
+    val fp_a, fp_b  = Input (UInt(floatWidth.W))
+    val widen_a     = Input (UInt(64.W))
+    val widen_b     = Input (UInt(64.W))
+    val fp_c        = Output(UInt(floatWidth.W))
+    val mask        = Input (Bool())
+    val is_sub      = Input (Bool())
+    val round_mode  = Input (UInt(3.W))
+    val fflags      = Output(UInt(5.W))
+    val opb_widening = Input (Bool())
+    val res_widening = Input (Bool())
+    val op_code = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
+    val fp_aIsFpCanonicalNAN = Input(Bool())
+    val fp_bIsFpCanonicalNAN = Input(Bool())
+    val maskForReduction = Input(UInt(2.W))
+    val is_vfwredosum = Input (Bool())
+  })
+  val fire = io.fire
+//  val fp_a_to64_is_denormal = !io.widen_a(30,23).orR
+//  val fp_a_lshift = Wire(UInt(23.W))
+//  val U_fp_a_is_denormal_to_f64 = Module(new ShiftLeftPriorityWithF64EXPResult(srcW = 23, priorityShiftValueW = 23, expW = 11))
+//  U_fp_a_is_denormal_to_f64.io.src := io.widen_a(22,0)
+//  U_fp_a_is_denormal_to_f64.io.priority_shiftValue := io.widen_a(22,0)
+//  fp_a_lshift := U_fp_a_is_denormal_to_f64.io.lshift_result
+//  val fp_a_is_denormal_to_f64_exp = U_fp_a_is_denormal_to_f64.io.exp_result
+//  val fp_a_to64_mantissa = Mux(fp_a_to64_is_denormal,Cat(fp_a_lshift.tail(1),0.U(30.W)),Cat(io.widen_a(22,0),0.U(29.W)))
+//  val fp_a_to64_exp = Mux(fp_a_to64_is_denormal,
+//    fp_a_is_denormal_to_f64_exp,
+//    Mux(io.widen_a(30), Cat("b1000".U,io.widen_a(29,23)), Cat("b0111".U,io.widen_a(29,23)))
+//  )
+  val fp_a_to64 = Mux(io.res_widening & !io.opb_widening,io.widen_a,io.fp_a)
+
+//  val fp_b_to64_is_denormal = !io.widen_b(30,23).orR
+//  val fp_b_lshift = Wire(UInt(23.W))
+//  val U_fp_b_is_denormal_to_f64 = Module(new ShiftLeftPriorityWithF64EXPResult(srcW = 23, priorityShiftValueW = 23, expW = 11))
+//  U_fp_b_is_denormal_to_f64.io.src := io.widen_b(22,0)
+//  U_fp_b_is_denormal_to_f64.io.priority_shiftValue := io.widen_b(22,0)
+//  fp_b_lshift := U_fp_b_is_denormal_to_f64.io.lshift_result
+//  val fp_b_is_denormal_to_f64_exp = U_fp_b_is_denormal_to_f64.io.exp_result
+//  val fp_b_to64_mantissa = Mux(fp_b_to64_is_denormal,Cat(fp_b_lshift.tail(1),0.U(30.W)),Cat(io.widen_b(22,0),0.U(29.W)))
+//  val fp_b_to64_exp = Mux(fp_b_to64_is_denormal,
+//    fp_b_is_denormal_to_f64_exp,
+//    Mux(io.widen_b(30), Cat("b1000".U,io.widen_b(29,23)), Cat("b0111".U,io.widen_b(29,23)))
+//  )
+  val fp_b_to64 = Mux(io.res_widening & !io.is_vfwredosum,io.widen_b,io.fp_b)
+
+  val EOP = (fp_a_to64.head(1) ^ io.is_sub ^ fp_b_to64.head(1)).asBool
+  val U_far_path = Module(new FarPathFloatAdderF64WidenPipeline(exponentWidth = exponentWidth,significandWidth = significandWidth, is_print = is_print, hasMinMaxCompare=hasMinMaxCompare))
+  U_far_path.io.fire := fire
+  U_far_path.io.fp_a := fp_a_to64
+  U_far_path.io.fp_b := fp_b_to64
+  U_far_path.io.is_sub := io.is_sub
+  U_far_path.io.round_mode := io.round_mode
+  val U_close_path = Module(new ClosePathFloatAdderF64WidenPipeline(exponentWidth = exponentWidth,significandWidth = significandWidth, is_print = is_print, hasMinMaxCompare=hasMinMaxCompare))
+  U_close_path.io.fire := fire
+  U_close_path.io.fp_a := fp_a_to64
+  U_close_path.io.fp_b := fp_b_to64
+  U_close_path.io.round_mode := io.round_mode
+  val absEaSubEb = U_far_path.io.absEaSubEb
+
+  val fp_a_mantissa            = fp_a_to64.tail(1 + exponentWidth)
+  val fp_b_mantissa            = fp_b_to64.tail(1 + exponentWidth)
+  val fp_a_mantissa_isnot_zero = fp_a_to64.tail(1 + exponentWidth).orR
+  val fp_b_mantissa_isnot_zero = fp_b_to64.tail(1 + exponentWidth).orR
+  val fp_a_is_f32 = io.res_widening & !io.opb_widening
+  val fp_b_is_f32 = io.res_widening & !io.is_vfwredosum
+  val Efp_a = fp_a_to64(floatWidth-2, floatWidth-1-exponentWidth)
+  val Efp_b = fp_b_to64(floatWidth-2, floatWidth-1-exponentWidth)
+  val Efp_a_is_zero  = !Efp_a.orR | (fp_a_is_f32 & Efp_a==="b01101101001".U)
+  val Efp_b_is_zero  = !Efp_b.orR | (fp_b_is_f32 & Efp_b==="b01101101001".U)
+  val Efp_a_is_all_one   = Efp_a.andR | (fp_a_is_f32 & Efp_a==="b10001111111".U)
+  val Efp_b_is_all_one   = Efp_b.andR | (fp_b_is_f32 & Efp_b==="b10001111111".U)
+  val fp_a_is_NAN        = io.fp_aIsFpCanonicalNAN | Efp_a_is_all_one & fp_a_mantissa_isnot_zero
+  val fp_a_is_SNAN       = !io.fp_aIsFpCanonicalNAN & Efp_a_is_all_one & fp_a_mantissa_isnot_zero & !fp_a_to64(significandWidth-2)
+  val fp_b_is_NAN        = io.fp_bIsFpCanonicalNAN | Efp_b_is_all_one & fp_b_mantissa_isnot_zero
+  val fp_b_is_SNAN       = !io.fp_bIsFpCanonicalNAN & Efp_b_is_all_one & fp_b_mantissa_isnot_zero & !fp_b_to64(significandWidth-2)
+  val fp_a_is_infinite   = !io.fp_aIsFpCanonicalNAN & Efp_a_is_all_one & (!fp_a_mantissa_isnot_zero)
+  val fp_b_is_infinite   = !io.fp_bIsFpCanonicalNAN & Efp_b_is_all_one & (!fp_b_mantissa_isnot_zero)
+  val fp_a_is_zero = !io.fp_aIsFpCanonicalNAN & Efp_a_is_zero & !fp_a_mantissa_isnot_zero
+  val fp_b_is_zero = !io.fp_bIsFpCanonicalNAN & Efp_b_is_zero & !fp_b_mantissa_isnot_zero
+  val fp_a_is_zero_reg   = RegEnable(fp_a_is_zero, fire)
+  val fp_b_is_zero_reg   = RegEnable(fp_b_is_zero, fire)
+  val res_widening_reg   = RegEnable(io.res_widening, fire)
+
+  val is_far_path_reg     = RegEnable(!EOP | absEaSubEb(absEaSubEb.getWidth - 1, 1).orR | (absEaSubEb === 1.U & (Efp_a_is_zero ^ Efp_b_is_zero)), fire)
+  val float_adder_fflags = Wire(UInt(5.W))
+  val float_adder_result = Wire(UInt(floatWidth.W))
+  when(RegEnable((fp_a_is_SNAN | fp_b_is_SNAN) | (EOP & fp_a_is_infinite & fp_b_is_infinite), fire)){
+    float_adder_fflags := "b10000".U
+  }.elsewhen(RegEnable(fp_a_is_NAN | fp_b_is_NAN | fp_a_is_infinite | fp_b_is_infinite, fire) | ((fp_b_is_zero_reg | fp_a_is_zero_reg) & res_widening_reg)){
+    float_adder_fflags := "b00000".U
+  }.otherwise{
+    float_adder_fflags := Mux(is_far_path_reg,U_far_path.io.fflags,U_close_path.io.fflags)
+  }
+
+  when(RegEnable(fp_a_is_NAN | fp_b_is_NAN | (EOP & fp_a_is_infinite & fp_b_is_infinite), fire) ){
+    float_adder_result := RegEnable(Cat(0.U,Fill(exponentWidth,1.U),1.U,Fill(significandWidth-2,0.U)), fire)
+  }.elsewhen(RegEnable(fp_a_is_infinite | fp_b_is_infinite, fire)) {
+    float_adder_result := RegEnable(Cat(Mux(fp_a_is_infinite,fp_a_to64.head(1),io.is_sub^fp_b_to64.head(1)), Fill(exponentWidth,1.U),Fill(significandWidth-1,0.U)), fire)
+  }.elsewhen(res_widening_reg & fp_a_is_zero_reg & fp_b_is_zero_reg){
+    float_adder_result := RegEnable(Cat(Mux(io.round_mode==="b010".U & EOP | (fp_a_to64.head(1).asBool & !EOP),1.U,0.U),0.U(63.W)), fire)
+  }.elsewhen(res_widening_reg & fp_a_is_zero_reg){
+    float_adder_result := RegEnable(Cat(io.is_sub ^ fp_b_to64.head(1),fp_b_to64(62,0)), fire)
+  }.elsewhen(res_widening_reg & fp_b_is_zero_reg){
+    float_adder_result := RegEnable(fp_a_to64, fire)
+  }.otherwise{
+    float_adder_result := Mux(is_far_path_reg,U_far_path.io.fp_c,U_close_path.io.fp_c)
+  }
+  if (hasMinMaxCompare) {
+    val is_add = io.op_code === VfaddOpCode.fadd
+    val is_sub = io.op_code === VfaddOpCode.fsub
+    val is_min = io.op_code === VfaddOpCode.fmin
+    val is_max = io.op_code === VfaddOpCode.fmax
+    val is_feq = io.op_code === VfaddOpCode.feq
+    val is_fne = io.op_code === VfaddOpCode.fne
+    val is_flt = io.op_code === VfaddOpCode.flt
+    val is_fle = io.op_code === VfaddOpCode.fle
+    val is_fgt = io.op_code === VfaddOpCode.fgt
+    val is_fge = io.op_code === VfaddOpCode.fge
+    val is_fsgnj  = io.op_code === VfaddOpCode.fsgnj 
+    val is_fsgnjn = io.op_code === VfaddOpCode.fsgnjn
+    val is_fsgnjx = io.op_code === VfaddOpCode.fsgnjx
+    val is_fclass = io.op_code === VfaddOpCode.fclass
+    val is_fmerge = io.op_code === VfaddOpCode.fmerge
+    val is_fmove  = (io.op_code === VfaddOpCode.fmove) || (io.op_code === VfaddOpCode.fmv_f_s) || (io.op_code === VfaddOpCode.fmv_s_f)
+    val is_fsum_ure = io.op_code === VfaddOpCode.fsum_ure
+    val is_fmin_re = io.op_code === VfaddOpCode.fmin_re
+    val is_fmax_re = io.op_code === VfaddOpCode.fmax_re
+    val is_fsum_ore = io.op_code === VfaddOpCode.fsum_ore
+    val fp_a_sign = io.fp_a.head(1)
+    val fp_b_sign = io.fp_b.head(1)
+    val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
+    val fp_b_sign_is_equal   = fp_a_sign === fp_b_sign
+    val fp_b_sign_is_smaller = !fp_a_sign & fp_b_sign
+    val fp_b_exponent_is_greater = U_far_path.io.isEfp_bGreater
+    val fp_b_exponent_is_equal   = Efp_a === Efp_b
+    val fp_b_exponent_is_smaller = !fp_b_exponent_is_greater & !fp_b_exponent_is_equal
+    val fp_b_significand_is_greater = !U_close_path.io.CS1.head(1) & (fp_a_mantissa =/= fp_b_mantissa)
+    val fp_b_significand_is_equal   = fp_a_mantissa === fp_b_mantissa
+    val fp_b_significand_is_smaller = !fp_b_significand_is_greater & !fp_b_significand_is_equal
+    val fp_b_is_greater = (!fp_b_sign & ((fp_a_sign & !(fp_b_is_zero & fp_a_is_zero)) | fp_b_exponent_is_greater | (fp_b_exponent_is_equal & fp_b_significand_is_greater))) |
+                          (fp_b_sign & fp_a_sign & (fp_b_exponent_is_smaller | (fp_b_exponent_is_equal & fp_b_significand_is_smaller)))
+    val fp_b_is_equal = (fp_b_sign_is_equal & fp_b_exponent_is_equal & fp_b_significand_is_equal) | (fp_b_is_zero & fp_a_is_zero)
+    val fp_b_is_less = !fp_b_is_greater & !fp_b_is_equal
+    val result_min = Wire(UInt(floatWidth.W))
+    val result_max = Wire(UInt(floatWidth.W))
+    val result_feq = Wire(UInt(floatWidth.W))
+    val result_fne = Wire(UInt(floatWidth.W))
+    val result_flt = Wire(UInt(floatWidth.W))
+    val result_fle = Wire(UInt(floatWidth.W))
+    val result_fgt = Wire(UInt(floatWidth.W))
+    val result_fge = Wire(UInt(floatWidth.W))
+    val in_NAN = Cat(0.U, Fill(exponentWidth, 1.U), 1.U, Fill(significandWidth - 2, 0.U))
+    val fp_aFix = Mux(io.fp_aIsFpCanonicalNAN, in_NAN, io.fp_a)
+    val fp_bFix = Mux(io.fp_bIsFpCanonicalNAN, in_NAN, io.fp_b)
+    val result_fsgnj = Cat(fp_bFix.head(1), fp_aFix.tail(1))
+    val result_fsgnjn = Cat(~fp_bFix.head(1), fp_aFix.tail(1))
+    val result_fsgnjx = Cat(fp_bFix.head(1) ^ fp_aFix.head(1), fp_aFix.tail(1))
+    val result_fclass = Wire(UInt(floatWidth.W))
+    val result_fmerge = Mux(io.mask, fp_bFix, fp_aFix)
+    val result_fmove = fp_bFix
+    val out_NAN = Cat(0.U, Fill(exponentWidth, 1.U), 1.U, Fill(significandWidth - 2, 0.U))
+    val out_Nzero = Cat(Mux(io.round_mode ==="b010".U, 0.U, 1.U), Fill(floatWidth - 1, 0.U))
+    result_min := Mux1H(
+      Seq(
+        !fp_a_is_NAN & !fp_b_is_NAN,
+        !fp_a_is_NAN & fp_b_is_NAN,
+        fp_a_is_NAN & !fp_b_is_NAN,
+        fp_a_is_NAN & fp_b_is_NAN,
+      ),
+      Seq(
+        Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), io.fp_b, io.fp_a),
+        io.fp_a,
+        io.fp_b,
+        out_NAN
+      )
+    )
+    result_max := Mux1H(
+      Seq(
+        !fp_a_is_NAN & !fp_b_is_NAN,
+        !fp_a_is_NAN & fp_b_is_NAN,
+        fp_a_is_NAN & !fp_b_is_NAN,
+        fp_a_is_NAN & fp_b_is_NAN,
+      ),
+      Seq(
+        Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), io.fp_b, io.fp_a),
+        io.fp_a,
+        io.fp_b,
+        out_NAN
+      )
+    )
+    result_feq := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_equal)
+    result_fne := !result_feq
+    result_flt := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_greater)
+    result_fle := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_greater | fp_b_is_equal)
+    result_fgt := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_less)
+    result_fge := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_less | fp_b_is_equal)
+    result_fclass := Mux(io.fp_aIsFpCanonicalNAN, (1 << 9).U, Reverse(Cat(
+      fp_a_sign & fp_a_is_infinite,
+      fp_a_sign & !Efp_a_is_zero & !Efp_a_is_all_one,
+      fp_a_sign & Efp_a_is_zero & fp_a_mantissa_isnot_zero,
+      fp_a_sign & Efp_a_is_zero & !fp_a_mantissa_isnot_zero,
+      ~fp_a_sign & Efp_a_is_zero & !fp_a_mantissa_isnot_zero,
+      ~fp_a_sign & Efp_a_is_zero & fp_a_mantissa_isnot_zero,
+      ~fp_a_sign & !Efp_a_is_zero & !Efp_a_is_all_one,
+      ~fp_a_sign & fp_a_is_infinite,
+      fp_a_is_SNAN,
+      fp_a_is_NAN & !fp_a_is_SNAN
+    )))
+    val is_fsum_ure_notmasked = is_fsum_ure && io.maskForReduction.andR
+    val is_fsum_ure_masked = is_fsum_ure && !io.maskForReduction.andR
+    val is_fsum_ore_notmasked = is_fsum_ore && io.maskForReduction(0)
+    val is_fsum_ore_masked = is_fsum_ore && !io.maskForReduction(0)
+    val result_fsum_ure_masked = Mux(
+      io.maskForReduction === 0.U,
+      out_Nzero,
+      Mux(io.maskForReduction(0), io.fp_a, io.fp_b)
+    )
+    val result_fsum_ore_masked = Mux(
+      io.maskForReduction(0) === 0.U,
+      io.fp_b,
+      0.U(floatWidth.W)
+    )
+    val outInf = Cat(is_fmax_re, Fill(exponentWidth, 1.U), 0.U((significandWidth-1).W))
+    val re_masked_one_out = Mux(
+      io.maskForReduction(0),
+      io.fp_a,
+      io.fp_b
+    )
+    val result_fmax_re = Mux(
+      io.maskForReduction === 0.U,
+      out_NAN,
+      Mux(io.maskForReduction.andR, result_max, re_masked_one_out)
+    )
+    val result_fmin_re = Mux(
+      io.maskForReduction === 0.U,
+      out_NAN,
+      Mux(io.maskForReduction.andR, result_min, re_masked_one_out)
+    )
+    val result_stage0 = Mux1H(
+      Seq(
+        is_min,
+        is_max,
+        is_feq,
+        is_fne,
+        is_flt,
+        is_fle,
+        is_fgt,
+        is_fge,
+        is_fsgnj,
+        is_fsgnjn,
+        is_fsgnjx,
+        is_fclass,
+        is_fmerge,
+        is_fmove,
+        is_fsum_ure_masked,
+        is_fmax_re,
+        is_fmin_re,
+        is_fsum_ore_masked,
+      ),
+      Seq(
+        result_min,
+        result_max,
+        result_feq,
+        result_fne,
+        result_flt,
+        result_fle,
+        result_fgt,
+        result_fge,
+        result_fsgnj,
+        result_fsgnjn,
+        result_fsgnjx,
+        result_fclass,
+        result_fmerge,
+        result_fmove,
+        result_fsum_ure_masked,
+        result_fmax_re,
+        result_fmin_re,
+        result_fsum_ore_masked,
+      )
+    )
+    val fflags_NV_stage0 = ((is_min | is_max) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
+      ((is_feq | is_fne) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
+      ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN)) |
+      ((is_fmax_re | is_fmin_re) & ((io.maskForReduction(0) & fp_a_is_SNAN) | (io.maskForReduction(1) & fp_b_is_SNAN)))
+    val fflags_stage0 = Cat(fflags_NV_stage0, 0.U(4.W))
+    io.fp_c := Mux(RegEnable(is_add | is_sub | is_fsum_ure_notmasked | is_fsum_ore_notmasked, fire), float_adder_result, RegEnable(result_stage0, fire))
+    io.fflags := Mux(RegEnable(is_add | is_sub | is_fsum_ure_notmasked | is_fsum_ore_notmasked, fire), float_adder_fflags, RegEnable(fflags_stage0, fire))
+  }
+  else {
+    io.fp_c := float_adder_result
+    io.fflags := float_adder_fflags
+  }
+}
+
 
 class FarPathF32WidenF16MixedAdderPipeline(val AW:Int, val AdderType:String, val stage0AdderWidth: Int = 0) extends Module {
   val io = IO(new Bundle() {
