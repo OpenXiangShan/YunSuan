@@ -25,6 +25,7 @@ static uint8_t robIdx=0;
 
 bool check_vreg(uint8_t rf_addr);
 bool check_vreg_i(uint8_t rf_addr);
+bool check_vreg_rec(uint8_t rf_addr);
 void single_cycle(VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
 void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
 void dut_input_execute(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t rs2, bool robIdx_flag, uint8_t robIdx);
@@ -451,7 +452,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     
     //Instr 28:vrgather.vi	v10,v8,0
     //DIVISION HERE
-    printf("The value of v[8] is :%x\n",cpu.vreg[8][0].u);
+    // printf("The value of v[8] is :%x\n",cpu.vreg[8][0].u);
     vrgather_vi(10,8,0,vcsr.vl);//vrgather.vi	v10,v8,0
     dut_input_execute(0x32803557, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg(10);
@@ -460,10 +461,16 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     
     //Instr 29:vfrec7.v	v12,v10
     dut_input_execute(0x4ea29657, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    // for (int i=0; i < VLEN*LMUL/vcsr.sew; i++){
+    //     cpu.vreg[12][i].u=diff_vreg[12][i].as_uint32;
+    // }
     for (int i=0; i < VLEN*LMUL/vcsr.sew; i++){
-        cpu.vreg[12][i].u=diff_vreg[12][i].as_float;
+        cpu.vreg[12][i].f=1/cpu.vreg[8][0].f;
     }
-    printf("The result of \"Instr 28: vrgather.vi	v10,v8,0\" is copied to REF model!\n");
+    check=check_vreg_rec(12);
+    printf("The result of \"Instr 29:vfrec7.v	v12,v10\" difftest is :%s\n",check?"True":"False");
+    // printf("The result of \"Instr 29:vfrec7.v	v12,v10\" is copied to REF model!\n");
+    kill_sim(check); 
 
     //Instr 30:vmv.v.x	v14,t0
     cpu.gpr[isa_reg_index("t0")]=0x40000000;
@@ -621,6 +628,29 @@ bool check_vreg_i(uint8_t rf_addr){
     return true;
 }
 
+bool check_vreg_rec(uint8_t rf_addr){
+    printf("rob index: %02d  ", robIdx-1);
+    for(int i=rf_addr; i<rf_addr+LMUL;i++){
+        for(int element=0;element<VLEN/32;element++){
+            auto diff = cpu.vreg[i][element].u > diff_vreg[i][element].as_uint32 ?
+            cpu.vreg[i][element].u - diff_vreg[i][element].as_uint32 :
+            diff_vreg[i][element].as_uint32 - cpu.vreg[i][element].u;
+            if(diff>100) {
+                printf("The different register id is %d\n",i);
+                printf("The element index is : %d\n",element);
+                for(int m=rf_addr; m < rf_addr+LMUL; m++){
+                    for(int n=0;n<VLEN/32;n++){
+                        printf("cpu.vreg[%d][%d]=%x\t  diff.vreg[%d][%d]=%x\n",m, n, cpu.vreg[m][n].u, m, n,diff_vreg[m][n].as_uint32);
+                    }
+                }
+                return false;
+            }
+        }
+    }
+    commit_global=false;
+    return true;
+}
+
 void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave)
 {
   top->reset = 1;
@@ -697,4 +727,3 @@ void kill_sim(bool abort_flag){
         assert(0);
     }
 }
-//
