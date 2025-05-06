@@ -56,14 +56,27 @@ typedef struct Decode
     uint64_t pc;
     Inst inst;
     bool is_vec;
+    bool is_vec_cfg;
     bool is_scalar_store;
     bool is_scalar_gpr;
     bool is_fp_reg;
+    bool is_ebreak;
     uint64_t rs1;
     uint64_t rs2;
     uint64_t imm;
-    char logbuf[128];
+    uint8_t store_instr;
+    // char logbuf[128];
 } Decode;
+typedef struct VPU_STATE{
+    union {
+      uint64_t _64[VENUM64];
+      uint32_t _32[VENUM32];
+      uint16_t _16[VENUM16];
+      uint8_t  _8[VENUM8];
+    } vr[32];
+    uint64_t pc;
+    Inst inst;
+}VPU_STATE;
 
 class Emulator {
 
@@ -80,11 +93,18 @@ private:
   EmuArgs args;
   void reset_ncycles(size_t n);
   void single_cycle();
-  uint64_t next_pc;
-  uint64_t present_pc;
 
-  Decode *present;
-  Decode *next;
+  // Decode *present;
+  // Decode *next;
+  std::unique_ptr<Decode> present;  // 自动管理内存
+  std::unique_ptr<Decode> next;
+  VPU_STATE ref_ouput_pool[16];
+
+  uint8_t store_ptr;
+  uint8_t cmp_ptr;
+
+  uint8_t robIdx;
+  bool robIdx_flag;
 
  
 
@@ -98,22 +118,20 @@ public:
   EmuArgs get_args() const {
     return args;
   }
-  bool is_good_trap() {
-    return trapCode == STATE_GOODTRAP || trapCode == STATE_LIMIT_EXCEEDED || trapCode == STATE_SIM_EXIT;
-  };
+  // bool is_good_trap() {
+  //   return trapCode == STATE_GOODTRAP || trapCode == STATE_LIMIT_EXCEEDED || trapCode == STATE_SIM_EXIT;
+  // };
   int get_trapcode() {
     return trapCode;
   }
   int tick();
-  int decode_exec(Decode* s)
+  int decode_instr(Decode* s);
+  void vpu_state_store();
 
 };
 
 enum {
-    STATE_GOODTRAP = 0,
-    STATE_BADTRAP = 1,
-    STATE_ABORT = 2,
-    STATE_SIM_EXIT = 6,
+    STATE_TRAP = 0,
     STATE_RUNNING = -1
 };
 

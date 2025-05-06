@@ -56,12 +56,6 @@ typedef struct {
   #endif // CONFIG_DIFF_RVH
   
   #ifdef CONFIG_DIFF_RVV
-    #define VLEN 1024
-    #define VENUM64 (VLEN/64)
-    #define VENUM32 (VLEN/32)
-    #define VENUM16 (VLEN/16)
-    #define VENUM8  (VLEN/8)
-  
     union {
       uint64_t _64[VENUM64];
       uint32_t _32[VENUM32];

@@ -2,7 +2,7 @@
 #include "difftest.h"
 #include "emu.h"
 
-diff_context_t ref_cpu_state;
+diff_context_t ref_cpu_state={};
 
 static void restart(diff_context_t *cpu) {
   /* Set the initial program counter. */
