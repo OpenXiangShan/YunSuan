@@ -92,8 +92,9 @@ class VScoreboard extends Module {
     val fcvt = uop.ctrl.vfcvt
     val fredFp16 = uop.ctrl.vfred && uop.csr.vsew === 1.U
     val fredFp32 = uop.ctrl.vfred && uop.csr.vsew === 2.U
-    val fixedDelay      = Seq(alu, fadd, fma, fcvt, fredFp16, fredFp32)
-    val fixedDelayValue = Seq(aluDelay, faddDelay, fmaDelay, fcvtDelay, fredFp16Delay, fredFp32Delay).map(_.U)
+    val vrgather = uop.ctrl.vrg
+    val fixedDelay      = Seq(alu, fadd, fma, fcvt, fredFp16, fredFp32, vrgather)
+    val fixedDelayValue = Seq(aluDelay, faddDelay, fmaDelay, fcvtDelay, fredFp16Delay, fredFp32Delay, vrgatherDelay).map(_.U)
     val isFixed = fixedDelay.reduce(_||_)
     val delayValue = MuxLookup(!isFixed, 0.U, fixedDelay.zip(fixedDelayValue))
     (isFixed, delayValue)
