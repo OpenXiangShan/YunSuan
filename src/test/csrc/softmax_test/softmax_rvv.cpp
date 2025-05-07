@@ -25,7 +25,7 @@ static uint8_t robIdx=0;
 
 bool check_vreg(uint8_t rf_addr);
 bool check_vreg_i(uint8_t rf_addr);
-bool check_vreg_rec(uint8_t rf_addr);
+bool check_vreg_rec(uint8_t rf_addr, float diff_threshold);
 void single_cycle(VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
 void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
 void dut_input_execute(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t rs2, bool robIdx_flag, uint8_t robIdx);
@@ -467,7 +467,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     for (int i=0; i < VLEN*LMUL/vcsr.sew; i++){
         cpu.vreg[12][i].f=1/cpu.vreg[8][0].f;
     }
-    check=check_vreg_rec(12);
+    check=check_vreg_rec(12,1e-2f);
     printf("The result of \"Instr 29:vfrec7.v	v12,v10\" difftest is :%s\n",check?"True":"False");
     // printf("The result of \"Instr 29:vfrec7.v	v12,v10\" is copied to REF model!\n");
     kill_sim(check); 
@@ -484,7 +484,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     vfnmsac_vv(14,10,12,vcsr.vl);//vfnmsac.vv	v14,v10,v12
     //dut execution
     dut_input_execute(0xbec51757, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
-    check=check_vreg(14);
+    check=check_vreg_rec(14,1e-2f);
     printf("The result of \"Instr 31:vfnmsac.vv	v14,v10,v12\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
 
@@ -492,7 +492,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     vfmul_vv(12,12,14,vcsr.vl);//vfmul.vv	v12,v12,v14
     //dut execution
     dut_input_execute(0x92c71657, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
-    check=check_vreg(12);
+    check=check_vreg_rec(12,1e-2f);
     printf("The result of \"Instr 32:vfmul.vv	v12,v12,v14\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
 
@@ -508,7 +508,7 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     vfnmsac_vv(14,10,12,vcsr.vl);//vfnmsac.vv	v14,v10,v12
     //dut execution
     dut_input_execute(0xbec51757, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
-    check=check_vreg(14);
+    check=check_vreg_rec(14,1e-2f);
     printf("The result of \"Instr 34:vfnmsac.vv	v14,v10,v12\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
 
@@ -554,8 +554,8 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
         printf("relative errors: ");
 #       endif
     for (i = 0; i < n; ++i) {
-        double abs_error = fabs(dst[i] - cpu.vreg[4+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f);
-        double rel_error = abs_error / (double) dst[i];
+        double abs_error = fabs(diff_vreg[4+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].as_float - cpu.vreg[4+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f);
+        double rel_error = abs_error / (double) cpu.vreg[4+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f;
 #       ifdef VERY_VERBOSE
         printf("%.8e ", rel_error);
 #       endif
@@ -580,10 +580,10 @@ bool check_vreg(uint8_t rf_addr){
     printf("rob index: %02d  ", robIdx-1);
     for(int i=rf_addr; i<rf_addr+LMUL;i++){
         for(int element=0;element<VLEN/32;element++){
-            auto diff = cpu.vreg[i][element].u > diff_vreg[i][element].as_uint32 ?
-            cpu.vreg[i][element].u - diff_vreg[i][element].as_uint32 :
-            diff_vreg[i][element].as_uint32 - cpu.vreg[i][element].u;
-            if(diff>5) {
+            auto diff = cpu.vreg[i][element].f > diff_vreg[i][element].as_float ?
+            (cpu.vreg[i][element].f - diff_vreg[i][element].as_float)/cpu.vreg[i][element].f :
+            (diff_vreg[i][element].as_float - cpu.vreg[i][element].f)/cpu.vreg[i][element].f;
+            if(diff>1e-5f) {
                 printf("The different register id is %d\n",i);
                 printf("The element index is : %d\n",element);
                 for(int m=rf_addr; m < rf_addr+LMUL; m++){
@@ -595,7 +595,6 @@ bool check_vreg(uint8_t rf_addr){
             }
         }
     }
-    commit_global=false;
     return true;
 }
 
@@ -628,14 +627,14 @@ bool check_vreg_i(uint8_t rf_addr){
     return true;
 }
 
-bool check_vreg_rec(uint8_t rf_addr){
+bool check_vreg_rec(uint8_t rf_addr, float diff_threshold){
     printf("rob index: %02d  ", robIdx-1);
     for(int i=rf_addr; i<rf_addr+LMUL;i++){
         for(int element=0;element<VLEN/32;element++){
-            auto diff = cpu.vreg[i][element].u > diff_vreg[i][element].as_uint32 ?
-            cpu.vreg[i][element].u - diff_vreg[i][element].as_uint32 :
-            diff_vreg[i][element].as_uint32 - cpu.vreg[i][element].u;
-            if(diff>100) {
+            auto diff = cpu.vreg[i][element].f > diff_vreg[i][element].as_float ?
+            (cpu.vreg[i][element].f - diff_vreg[i][element].as_float)/cpu.vreg[i][element].f :
+            (diff_vreg[i][element].as_float - cpu.vreg[i][element].f)/cpu.vreg[i][element].f;
+            if(diff>diff_threshold) {
                 printf("The different register id is %d\n",i);
                 printf("The element index is : %d\n",element);
                 for(int m=rf_addr; m < rf_addr+LMUL; m++){

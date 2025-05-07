@@ -118,10 +118,10 @@ int main(int argc, char **argv){
             printf("--------------------------------------------------------------------------------\n");
             printf("%s evaluate softmax on a %ld-element array.\n",
                 benchmarks[benchId].label,  n);
-            printf("  max absolute error:  %.4a\n", bench_result.max_abs_error);
-            printf("  max relative error:  %.4a\n", bench_result.max_rel_error);
-            printf("  mean relative error: %.4a\n", bench_result.mean_rel_error);
-            printf("  error norm 2:       %.4a\n", bench_result.error_norm2);
+            printf("  max absolute error:  %.4e\n", bench_result.max_abs_error);
+            printf("  max relative error:  %.4e\n", bench_result.max_rel_error);
+            printf("  mean relative error: %.4e\n", bench_result.mean_rel_error);
+            printf("  error norm 2:       %.4e\n", bench_result.error_norm2);
 #           else
             // condensed display
             printf("%s, %d, %d, %.3e, %.3e, %.3e %.3e\n", 
