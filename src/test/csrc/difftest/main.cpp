@@ -38,7 +38,7 @@ int main(){
       emu->tick();
   }
 
-    ref_isa_reg_display();
-    printf("pc=0x%0lx\n",cpu.pc);
+    // ref_isa_reg_display();
+    // printf("pc=0x%0lx\n",cpu.pc);
     return 0;
 }

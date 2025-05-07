@@ -2,6 +2,7 @@
 #include "decode.h"
 #include "difftest.h"
 extern diff_context_t ref_cpu_state;
+extern commit;
 // Emulator::Emulator(int argc, const char *argv[]) {
 
 //     sim_time=0;
@@ -68,13 +69,6 @@ Emulator::~Emulator() {
     delete contextp;
 }
 
-// Emulator::~Emulator() {
-//     if(wave) wave->close();
-//     delete wave;
-//     delete dut_ptr;
-//     delete contextp;
-// }
-
 void Emulator::reset_ncycles(size_t n) {
     dut_ptr->reset = 1;
     n--;
@@ -133,7 +127,9 @@ int Emulator::tick()
             top->io_dispatch_s2v_bits_vcsr_frm=((ref_cpu_state.fcsr)>> 5) &0b111U; 
             top->io_dispatch_s2v_bits_vcsr_ma=(ref_cpu_state.vtype>>7)&0b1U; 
             top->io_dispatch_s2v_bits_vcsr_ta=(ref_cpu_state.vtype>>8)&0b1U; 
-            top->io_dispatch_s2v_bits_vcsr_vill=(ref_cpu_state.vtype>>31)&0b1U; 
+            top->io_dispatch_s2v_bits_vcsr_vill=(ref_cpu_state.vtype>>31)&0b1U;
+            top->io_dispatch_s2v_bits_ ==(ref_cpu_state.vtype>>3)&0b111U;
+            top->io_dispatch_s2v_bits_vcsr_vlmul==(ref_cpu_state.vtype)&0b111U;
         }
         else if (present->is_ebreak == true)
         {
@@ -145,9 +141,15 @@ int Emulator::tick()
             while (total_vector_instr > 0)
             {
                 single_cycle();
-                // compare stage TODO!!!
-                if (dut_ptr->commit == true)
+                if (commit == true)
                 {
+                    if(check_vregs_state(dut_ptr) ==false) {
+                        printf("VPU state mismatch at pc=0x%016lx, instr=0x%08x\n", ref_ouput_pool[cmp_ptr].pc,ref_ouput_pool[cmp_ptr].inst.val);
+                    }else {
+                        printf("PC=0x%016lx,instr=0x%08x  passes!\n",ref_ouput_pool[cmp_ptr].pc,ref_ouput_pool[cmp_ptr].inst.val);
+                    }
+                    cmp_ptr = cmp_ptr ==15 ? 0 : cmp_ptr + 1;
+                    total_vector_instr= total_vector_instr > 0: total_vector_instr-1 :0;
                 }
             }
             switch (present->store_instr)
@@ -165,8 +167,8 @@ int Emulator::tick()
         decode_instr(next);
         if(next->is_vec == true)
         {
-            output_pool[store_ptr].pc=next->pc;
-            output_pool[store_ptr].inst.val=next->inst.val;
+            ref_ouput_pool[store_ptr].pc=next->pc;
+            ref_ouput_pool[store_ptr].inst.val=next->inst.val;
             while(dut->ready!=1)
             {
                 single_cycle();
@@ -182,10 +184,17 @@ int Emulator::tick()
             dut_ptr->io_dispatch_s2v_valid=0;
         }
     }
-    if(dut_ptr->commit ==true)
+    if(commit ==true)
     {
-        //TODO:COMPARE
+        if(check_vregs_state(dut_ptr) ==false) {
+            printf("VPU state mismatch at pc=0x%016lx, instr=0x%08x\n", ref_ouput_pool[cmp_ptr].pc,ref_ouput_pool[cmp_ptr].inst.val);
+        }else {
+            printf("PC=0x%016lx,instr=0x%08x  passes!\n",ref_ouput_pool[cmp_ptr].pc,ref_ouput_pool[cmp_ptr].inst.val);
+        }
+        cmp_ptr = cmp_ptr ==15 ? 0 : cmp_ptr + 1;
+        total_vector_instr= total_vector_instr > 0: total_vector_instr-1 :0;
     }
+    commit=false;
 }
 
 int Emulator::decode_instr(Decode *s) {
@@ -265,3 +274,31 @@ void clear_flags(Decode &s) {
     s.imm               = 0    ;
     s.store_instr       = 0    ;
 }
+
+bool Emulator::check_vregs_state(VPU_STATE *dut){
+    for(int i=0;i<32;i++){
+        for(int j=0;j<VLEN/32;j++){
+            if(dut->vr[i]._32[j] != ref_ouput_pool[cmp_ptr].vr[i]._32[j]){
+                printf("VPU state mismatch at vreg[%d][%d]: expected %016x, got %016x\n", i, j, ref_ouput_pool[cmp_ptr].vr[i]._32[j], dut->vr[i]._32[j]);
+                /*print register value*/
+                printf("REF model [v%d]: \n",i);
+                for(int element = 0; element < VLEN/32;  element++) {
+                    printf("[%02d] %08x  ", element , ref_output_pool[cmp_ptr].vr[i]._32[element]);
+                    if (element % 4 == 0) {
+                        printf("\n");
+                      }
+                }
+                printf("DUT model [v%d]: \n",i);
+                for(int element = 0; element < VLEN/32;  element++) {
+                    printf("[%02d] %08x  ", element , dut->vr[i]._32[element]);
+                    if (element % 4 == 0) {
+                        printf("\n");
+                      }
+                }
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
