@@ -96,19 +96,19 @@ class Vfreduction extends Module{
                                           vfred_pipe_fp32.io.vctrl_pipe_out, 0.U.asTypeOf(new Vfredctrl))
   adder_for_lmul.io.vd_pipe_in := Cat(reg_res1, reg_res2)
   
-  val fp32_uop  = adder_for_lmul.io.vctrl_pipe_out.uop
 
   // arbitrate the result
+  val uop  = Mux(vfred_pipe_fp32.io.vctrl_pipe_out.uop.csr.vlmul === 0.U, vfred_pipe_fp32.io.vctrl_pipe_out.uop, adder_for_lmul.io.vctrl_pipe_out.uop)
   val fp_finish = Mux(vfred_pipe_fp32.io.vctrl_pipe_out.uop.csr.vlmul === 0.U, vfred_pipe_fp32.io.vctrl_pipe_out.fire, adder_for_lmul.io.vctrl_pipe_out.fire)
-  val is_res_fp32 = fp32_uop.csr.vsew(1, 0) === "b10".U
-  val is_res_fp16 = fp32_uop.csr.vsew(1, 0) === "b01".U
-  val is_res_bf16 = fp32_uop.csr.vsew(1, 0) === "b00".U
+  val is_res_fp32 = uop.csr.vsew(1, 0) === "b10".U
+  val is_res_fp16 = uop.csr.vsew(1, 0) === "b01".U
+  val is_res_bf16 = uop.csr.vsew(1, 0) === "b00".U
 
   // here need narrow the result to fp16 and bf16
   val fp32_result = Mux(vfred_pipe_fp32.io.vctrl_pipe_out.uop.csr.vlmul === 0.U, vfred_fp32_result, adder_for_lmul.io.vd_pipe_out)
   val fp16_result = Cat(Fill(16, 0.U), Fill(16, 0.U))
   val bf16_result = Cat(Fill(16, 0.U), Fill(16, 0.U))
-  
+
   io.out.bits.result := Mux(is_res_fp32 && fp_finish, fp32_result,
   Mux(is_res_fp16 && fp_finish, Cat(Fill(16, 0.U), fp16_result), 0.U))
 
@@ -116,7 +116,7 @@ class Vfreduction extends Module{
 
   io.out.valid := fp_finish
 
-  io.out.bits.uop :=  Mux(fp_finish, fp32_uop, 0.U.asTypeOf(new VUop))
+  io.out.bits.uop :=  Mux(fp_finish, uop, 0.U.asTypeOf(new VUop))
 }
 
 // num = VLEN/XLEN/2^i

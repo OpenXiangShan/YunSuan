@@ -5,7 +5,7 @@
 #define VLEN 1024
 
 
-#define LMUL 1
+#define LMUL 2
 
 
 
