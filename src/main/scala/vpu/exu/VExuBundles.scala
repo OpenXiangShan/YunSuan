@@ -187,7 +187,6 @@ class Vfredctrl extends Bundle{
   val op_code       = UInt(5.W)
   val vs1           = UInt(XLEN.W)
   val uop           = new VUop
-  val fire          = Bool()
 } 
 
 

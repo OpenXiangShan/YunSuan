@@ -34,13 +34,13 @@ class VExuBlock extends Module {
   vfred_setuop.vs2 := in.uop.ctrl.lsrc(1)
   vfred_setuop.op := vfred_setuop.op_gen
 
-  vfred.io.in.fire := io.in.valid && in.uop.ctrl.vfred
-  vfred.io.in.vs1  := in.vSrc(0)(XLEN-1, 0)
-  vfred.io.in.vs2  := in.vSrc(1)
+  vfred.io.in.valid := io.in.valid && in.uop.ctrl.vfred
+  vfred.io.in.bits.vs1  := in.vSrc(0)(XLEN-1, 0)
+  vfred.io.in.bits.vs2  := in.vSrc(1)
 
-  vfred.io.in.op_code       := vfred_setuop.op
-  vfred.io.in.mask          := in.vSrc(3)
-  vfred.io.in.uop           := in.uop
+  vfred.io.in.bits.op_code       := vfred_setuop.op
+  vfred.io.in.bits.mask          := in.vSrc(3)
+  vfred.io.in.bits.uop           := in.uop
   // vfred_out.vd              := Cat(Fill((VLEN-XLEN), 0.U), vfred.io.out.bits.result)
   // vfred_out.fflags          := 0.U.asTypeOf(vfred_out.fflags)
   // vfred_out.fflags(0)       := vfred.io.out.bits.fflags
