@@ -6,14 +6,14 @@ uint8_t pmem[PMEM_SIZE] __attribute((aligned(4096))) ={};
 
 uint8_t *guest_to_host(uint32_t paddr){ return pmem +paddr - MBASE;}
 
-static void out_of_bound(uint64_t pc,uint32_t addr) {
-    printf("address = 0x%08x is out of bound of pmem [0x%08, 0x%08] at pc = 0x%08x",
+void out_of_bound(uint64_t pc,uint32_t addr) {
+    printf("address = 0x%08x is out of bound of pmem [0x%08x, 0x%08x] at pc = 0x%08lx\n",
         addr, (uint32_t)MBASE, (uint32_t)(MBASE + PMEM_SIZE),pc);
     assert(0);
   }
   
 
-static long load_img(const char *img_file) {
+long load_img(const char *img_file) {
     if (img_file == NULL) {
       printf("No image is give.");
       return 4096; // built-in image size

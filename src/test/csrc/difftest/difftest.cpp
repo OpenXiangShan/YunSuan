@@ -6,6 +6,12 @@ extern diff_context_t ref_cpu_state;
 static bool is_skip_ref = false;
 static int skip_dut_nr_inst = 0;
 
+void (*ref_difftest_memcpy)(uint64_t, void*, size_t, bool) = nullptr;
+void (*ref_difftest_regcpy)(void*, bool, bool) = nullptr;
+void (*ref_difftest_exec)(uint64_t) = nullptr;
+void (*ref_difftest_raise_intr)(uint64_t) = nullptr;
+void (*ref_isa_reg_display)() = nullptr;
+
 void init_difftest(const char *ref_so_file,long img_size, int port) {
     assert(ref_so_file != NULL);
   

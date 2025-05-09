@@ -91,13 +91,14 @@ typedef struct {
   #endif // CONFIG_DIFF_DEBUG_MODE
   } diff_context_t;
 
-  void (*ref_difftest_memcpy)(uint64_t addr, void *buf, size_t n, bool direction) = NULL;
-  void (*ref_difftest_regcpy)(void *dut, bool direction, bool on_demand) = NULL;
-  void (*ref_difftest_exec)(uint64_t n) = NULL;
-  void (*ref_difftest_raise_intr)(uint64_t NO) = NULL;
-  void (*ref_difftest_init)(int port) =NULL ;
-  void (*ref_isa_reg_display)()=NULL;
-
+  extern void (*ref_difftest_memcpy)(uint64_t addr, void *buf, size_t n, bool direction) ;
+  extern void (*ref_difftest_regcpy)(void *dut, bool direction, bool on_demand) ;
+  extern void (*ref_difftest_exec)(uint64_t n) ;
+  extern void (*ref_difftest_raise_intr)(uint64_t NO) ;
+  extern void (*ref_difftest_init)(int port)  ;
+  extern void (*ref_isa_reg_display)();
+  extern void init_difftest(const char *ref_so_file,long img_size, int port);
   enum { DIFFTEST_TO_DUT, DIFFTEST_TO_REF };
-
+  extern diff_context_t ref_cpu_state;
+  
   #endif

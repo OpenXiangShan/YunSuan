@@ -1,9 +1,11 @@
 #include "common.h"
 #include "emu.h"
 #include "pmem.h"
+#include "dpic_port.h"
 
 VPU_STATE dut_state;
-extern uint8_t pmem [CONFIG_MSIZE];
+extern uint8_t pmem [PMEM_SIZE];
+uint64_t vpu_pc=0;
 
 bool commit=false;
 // void out_of_bound(uint64_t paddr)
@@ -16,7 +18,7 @@ bool commit=false;
 
 //   import "DPI-C" function void pmem_read(input longint unsigned paddr,input byte unsigned len, output int unsigned output_bits[VLEN/32]);
 
-extern "C" void pmem_read(unsigned long long paddr, uint8_t len, uint32_t output_bits[VLEN / 32])
+extern "C" void pmem_read(unsigned long long paddr, unsigned long long len, uint32_t output_bits[VLEN / 32])
 { 
   if(in_pmem(paddr)){
     int start_addr = paddr - MBASE;
@@ -26,13 +28,14 @@ extern "C" void pmem_read(unsigned long long paddr, uint8_t len, uint32_t output
       return ;
     }
   }else{
-    out_of_bound(paddr);//memory bound check
+    uint64_t pc = Emulator::get_current_instance()->get_current_pc();
+    out_of_bound(pc,paddr);//memory bound check
     return ;
   }
 }
 
 //   import "DPI-C" function void pmem_read(input longint unsigned paddr, input int unsigned output_bits[VLEN/32],input byte unsigned len );
-extern "C" void pmem_write(unsigned long long paddr, uint8_t len, uint32_t output_bits[VLEN / 32])
+extern "C" void pmem_write(unsigned long long paddr, uint32_t len, uint32_t output_bits[VLEN / 32])
 { 
   if(in_pmem(paddr)){
     int start_addr = paddr - MBASE;
@@ -42,7 +45,8 @@ extern "C" void pmem_write(unsigned long long paddr, uint8_t len, uint32_t outpu
       return ;
     }
   }else{
-    out_of_bound(paddr);//memory bound check
+    uint64_t pc = Emulator::get_current_instance()->get_current_pc();
+    out_of_bound(pc,paddr);//memory bound check
     return ;
   }
 }
@@ -75,7 +79,7 @@ extern "C" void get_vreg(
   if(wr_rf==1){
     for(int chunk = 0; chunk < VLEN / 32; chunk++) {
       for(int i = 0; i < rf_group_size; i++) {
-        std::memcpy.(&dut_state.vr[rf_addr+i]._32[chunk], &data[i][chunk], sizeof(uint32_t));
+        std::memcpy(&dut_state.vr[rf_addr+i]._32[chunk], &data[i][chunk], sizeof(uint32_t));
       }
      }
      commit=true;

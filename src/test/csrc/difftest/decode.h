@@ -2,6 +2,7 @@
 #define _DECODE_H_
 #include "common.h"
 #include "emu.h"
+#include "difftest.h"
 
 enum {
 	TYPE_I, TYPE_U, TYPE_S, TYPE_J, TYPE_N, TYPE_R,TYPE_B, TYPE_OPIVV, TYPE_OPFVV, TYPE_OPMVV, TYPE_OPIVI, TYPE_OPIVX, TYPE_OPFVF, TYPE_OPMVX, TYPE_OPCFG,TYPE_VL, TYPE_VLS,TYPE_VLX,TYPE_VS 
@@ -67,7 +68,7 @@ finish:
   
 #define INSTPAT_START(name) \
     {                       \
-        const void **__instpat_end = &&concat(__instpat_end_, name);
+        const void **__instpat_end = (const void**)&&concat(__instpat_end_, name);
 #define INSTPAT_END(name)           \
     concat(__instpat_end_, name) :; \
     }
@@ -75,9 +76,9 @@ finish:
 
 
     #define gpr_src1() do { s->rs1 = GPR(rs1_addr); } while (0)
-    #define gpr_src2() do { s->rs1 = GPR(rs2_addr); } while (0)
+    #define gpr_src2() do { s->rs2 = GPR(rs2_addr); } while (0)
     #define fpr_src1() do { s->rs1 = FPR(rs1_addr); } while (0)
-    #define fpr_src2() do { s->rs1 = FPR(rs2_addr); } while (0)
+    #define fpr_src2() do { s->rs2 = FPR(rs2_addr); } while (0)
     #define isvec() do { s->is_vec = true; } while (0)
     #define isveccfg() do { s->is_vec_cfg = true; } while (0)
     // #define is_scalar_store() do { s->is_scalar_store = true; } while (0)
@@ -94,14 +95,14 @@ finish:
     
     
     static void decode_operand(Decode* s, int type) {
-        uint32_t i = s->isa.inst.val;
+        uint32_t i = s->inst.val;
         int rs1_addr = BITS(i, 19, 15);
         int rs2_addr = BITS(i, 24, 20);
         // *rd = BITS(i, 11, 7);
         switch (type) {
         case TYPE_I: gpr_src1();             immI(); break;
         case TYPE_U:                         immU(); break;
-        case TYPE_S: /*is_scalar_store();*/ gpr_src1(); gpr_src2(); immS(); break;
+        case TYPE_S:  gpr_src1(); gpr_src2(); immS(); break;
         case TYPE_J:									 immJ(); break;
         case TYPE_R: gpr_src1(); gpr_src2();         break;
         case TYPE_B: gpr_src1(); gpr_src2(); immB(); break;

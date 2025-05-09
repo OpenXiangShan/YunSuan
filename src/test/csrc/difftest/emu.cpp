@@ -1,37 +1,11 @@
 #include "emu.h"
 #include "decode.h"
-#include "difftest.h"
+#include "dpic_port.h"
+#include "pmem.h"
 extern diff_context_t ref_cpu_state;
-extern commit;
-// Emulator::Emulator(int argc, const char *argv[]) {
-
-//     sim_time=0;
-
-//     contextp = new VerilatedContext;
-//     contextp->commandArgs(argc, argv);
-
-//     dut_ptr = new VVTopDebug{contextp};
-//     wave = new VerilatedVcdC;
-
-//     contextp->traceEverOn(true);
-//     dut_ptr->trace(wave, 5);
-//     wave->open("build/vpu.vcd");
-//     wave->set_time_unit("ns");
-//     trapCode = STATE_RUNNING;
-
-//     // init core
-//     reset_ncycles(3);
-
-//     total_vector_instr = 0;
-//     store_ptr = 0;
-//     cmp_ptr = 0;
-
-//     present = new Decode();  // 分配内存
-//     next = new Decode();
-//     present->pc= 0x80000000;
-//     next->pc= 0x80000000;
-// }
-
+extern bool commit;
+#define VEC_STORE_TRACE
+Emulator* Emulator::current_instance = nullptr; 
 Emulator::Emulator(int argc, const char *argv[])
     : contextp(new VerilatedContext),   // 初始化列表显式初始化成员
       dut_ptr(new VVTopDebug{contextp}),
@@ -39,10 +13,8 @@ Emulator::Emulator(int argc, const char *argv[])
       total_vector_instr(0),
       sim_time(0),
       trapCode(STATE_RUNNING),
-      next_pc(0x80000000),
-      present_pc(0x80000000),
       store_ptr(0),
-      cmp_ptr(0),
+      cur_vec_ptr(0),
       present(std::make_unique<Decode>()),
       next(std::make_unique<Decode>()),
       robIdx(0){    // 初始化列表顺序与类声明一致
@@ -60,6 +32,17 @@ Emulator::Emulator(int argc, const char *argv[])
     present->pc = 0x80000000;
     next->pc = 0x80000000;
     dut_ptr->io_dispatch_s2v_bits_robIdx_flag =false;
+
+    //initialize log file
+    log_file.open("emu.log",std::ios::out | std::ios::trunc);
+    if (log_file.is_open()) {
+        log_initialized = true;
+        log_file << "==== Simulation Start ====\n";
+        log_file.flush();
+    }else {
+        std::cerr << "无法打开日志文件！错误: " << strerror(errno) << std::endl;
+    }
+
 }
 
 // 析构函数释放内存
@@ -67,6 +50,11 @@ Emulator::~Emulator() {
     delete wave;
     delete dut_ptr;
     delete contextp;
+    if (log_initialized) {
+        log_file << "==== Simulation End ====\n";
+        log_file.flush();
+        log_file.close();
+    }
 }
 
 void Emulator::reset_ncycles(size_t n) {
@@ -105,31 +93,44 @@ int Emulator::tick()
 {
     clear_flags(*next);
     clear_flags(*present);
-    single_cycle();
+    single_cycle();//DUT executes one cycle
     if (total_vector_instr <= 16)
     {
-        ref_difftest_exec(1);
+        ref_difftest_exec(1);//REF executes one cycle
         present->pc = next->pc;
         ref_difftest_regcpy(&ref_cpu_state, DIFFTEST_TO_DUT, 0);
         present->inst.val = mem_addr_read(present->pc,present->pc, 4);
-        decode_instr(present);
+        decode_instr(present.get());
+        // if(ref_cpu_state.pc==0x80000240||ref_cpu_state.pc==0x8000026c){
+        //     printf("present->pc=0x%08lx\n",present->pc);
+        //     printf("next->pc=0x%08lx\n",next->pc);
+        //     for(int i=0; i<32;i++){
+        //         printf("gpr[%02d]:0x%08lx ",i,ref_cpu_state.gpr[i]);
+        //         if(i%4==3) printf("\n");
+        //     }
+        //     // ref_isa_reg_display();
+        // }
 
         if (present->is_vec == true)
         {
             vpu_state_store();
+            #ifdef VEC_STORE_TRACE
+            // printf("A vector instr result is stored in output_pool[%d]!\n",store_ptr);
+            log("A vector instr result is stored in output_pool["+std::to_string(store_ptr)+"]!");
+            #endif
             store_ptr = store_ptr == 15 ? 0 : store_ptr + 1;
             total_vector_instr += 1;
         }
-        else if(present->is_vector_cfg == true){
-            top->io_dispatch_s2v_bits_vcsr_vstart=ref_cpu_state.vstart; 
-            top->io_dispatch_s2v_bits_vcsr_vl=ref_cpu_state.vl; 
-            top->io_dispatch_s2v_bits_vcsr_vxrm=ref_cpu_state.vxrm; 
-            top->io_dispatch_s2v_bits_vcsr_frm=((ref_cpu_state.fcsr)>> 5) &0b111U; 
-            top->io_dispatch_s2v_bits_vcsr_ma=(ref_cpu_state.vtype>>7)&0b1U; 
-            top->io_dispatch_s2v_bits_vcsr_ta=(ref_cpu_state.vtype>>8)&0b1U; 
-            top->io_dispatch_s2v_bits_vcsr_vill=(ref_cpu_state.vtype>>31)&0b1U;
-            top->io_dispatch_s2v_bits_ ==(ref_cpu_state.vtype>>3)&0b111U;
-            top->io_dispatch_s2v_bits_vcsr_vlmul==(ref_cpu_state.vtype)&0b111U;
+        else if(present->is_vec_cfg == true){
+            dut_ptr->io_dispatch_s2v_bits_vcsr_vstart=ref_cpu_state.vstart; 
+            dut_ptr->io_dispatch_s2v_bits_vcsr_vl=ref_cpu_state.vl; 
+            dut_ptr->io_dispatch_s2v_bits_vcsr_vxrm=ref_cpu_state.vxrm; 
+            dut_ptr->io_dispatch_s2v_bits_vcsr_frm=((ref_cpu_state.fcsr)>> 5) &0b111U; 
+            dut_ptr->io_dispatch_s2v_bits_vcsr_ma=(ref_cpu_state.vtype>>7)&0b1U; 
+            dut_ptr->io_dispatch_s2v_bits_vcsr_ta=(ref_cpu_state.vtype>>8)&0b1U; 
+            dut_ptr->io_dispatch_s2v_bits_vcsr_vill=(ref_cpu_state.vtype>>31)&0b1U;
+            dut_ptr->io_dispatch_s2v_bits_vcsr_vsew =(ref_cpu_state.vtype>>3)&0b111U;
+            dut_ptr->io_dispatch_s2v_bits_vcsr_vlmul=(ref_cpu_state.vtype)&0b111U;
         }
         else if (present->is_ebreak == true)
         {
@@ -141,21 +142,39 @@ int Emulator::tick()
             while (total_vector_instr > 0)
             {
                 single_cycle();
-                if (commit == true)
+                if (commit == true)//in case the same instruction commits two cycles....
                 {
-                    if(check_vregs_state(dut_ptr) ==false) {
-                        printf("VPU state mismatch at pc=0x%016lx, instr=0x%08x\n", ref_ouput_pool[cmp_ptr].pc,ref_ouput_pool[cmp_ptr].inst.val);
+                    if(check_vregs_state(&dut_state) ==false) {
+                        // printf("VPU state mismatch at pc=0x%016lx, instr=0x%08x\n", ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
+                        std::stringstream ss;
+                        ss << "VPU state mismatch at PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc<<", instr=0x"  \
+                        << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val<< " ";
+                        log(ss.str());
+
                     }else {
-                        printf("PC=0x%016lx,instr=0x%08x  passes!\n",ref_ouput_pool[cmp_ptr].pc,ref_ouput_pool[cmp_ptr].inst.val);
+                        // printf("PC=0x%016lx,instr=0x%08x  passes!\n",ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
+                        std::stringstream ss;
+                        ss << "PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc<<", instr=0x"  \
+                        << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val<< " passes! ";
+                        log(ss.str());
                     }
-                    cmp_ptr = cmp_ptr ==15 ? 0 : cmp_ptr + 1;
-                    total_vector_instr= total_vector_instr > 0: total_vector_instr-1 :0;
+                    #ifdef VEC_STORE_TRACE
+                    // printf("A vector instr result is fetched in output_pool[%d]!\n",cur_vec_ptr);
+                    log("A vector instr result is fetched in output_pool["+std::to_string(cur_vec_ptr)+"]!");
+                    #endif
+                    cur_vec_ptr = cur_vec_ptr ==15 ? 0 : cur_vec_ptr + 1;
+                    total_vector_instr= total_vector_instr > 0? total_vector_instr-1 :0;
                 }
             }
             switch (present->store_instr)
             {
             case SD:
-                mem_addr_write(present->pc, present->rs1 + present->imm, ref_cpu_state.gpr[present->rs2], 8);
+                // printf("present->pc=0x%08lx\n",present->pc);
+                // printf("next->pc=0x%08lx\n",next->pc);
+                // printf("rs1=%lx\n",present->rs1);
+                // printf("rs2=%lx\n",present->rs2);
+                // printf("imm=%lx\n",present->imm);
+                mem_addr_write(present->pc, present->rs1 + present->imm, present->rs2, 8);
                 break;
             default:
                 printf("Unsupported store instruction type!\n");
@@ -164,12 +183,12 @@ int Emulator::tick()
         }
         next->pc =ref_cpu_state.pc;
         next->inst.val = mem_addr_read(next->pc,next->pc, 4);
-        decode_instr(next);
+        decode_instr(next.get());
         if(next->is_vec == true)
         {
-            ref_ouput_pool[store_ptr].pc=next->pc;
-            ref_ouput_pool[store_ptr].inst.val=next->inst.val;
-            while(dut->ready!=1)
+            ref_output_pool[store_ptr].pc=next->pc;
+            ref_output_pool[store_ptr].inst.val=next->inst.val;
+            while(dut_ptr->io_dispatch_s2v_ready!=1)
             {
                 single_cycle();
             }
@@ -186,15 +205,28 @@ int Emulator::tick()
     }
     if(commit ==true)
     {
-        if(check_vregs_state(dut_ptr) ==false) {
-            printf("VPU state mismatch at pc=0x%016lx, instr=0x%08x\n", ref_ouput_pool[cmp_ptr].pc,ref_ouput_pool[cmp_ptr].inst.val);
+        if(check_vregs_state(&dut_state) ==false) {
+            // printf("VPU state mismatch at pc=0x%016lx, instr=0x%08x\n", ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
+            std::stringstream ss;
+            ss << "VPU state mismatch at PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
+               << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << " ";
+            log(ss.str());
         }else {
-            printf("PC=0x%016lx,instr=0x%08x  passes!\n",ref_ouput_pool[cmp_ptr].pc,ref_ouput_pool[cmp_ptr].inst.val);
+            // printf("PC=0x%016lx,instr=0x%08x  passes!\n",ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
+            std::stringstream ss;
+            ss << "PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
+               << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << " passes! ";
+            log(ss.str());
         }
-        cmp_ptr = cmp_ptr ==15 ? 0 : cmp_ptr + 1;
-        total_vector_instr= total_vector_instr > 0: total_vector_instr-1 :0;
+        #ifdef VEC_STORE_TRACE
+        // printf("A vector instr result is fetched in output_pool[%d]!\n",cur_vec_ptr);
+        log("A vector instr result is fetched in output_pool["+std::to_string(cur_vec_ptr)+"]!");
+        #endif
+        cur_vec_ptr = cur_vec_ptr ==15 ? 0 : cur_vec_ptr + 1;
+        total_vector_instr= total_vector_instr > 0? total_vector_instr-1 :0;
     }
     commit=false;
+    return 0;
 }
 
 int Emulator::decode_instr(Decode *s) {
@@ -256,19 +288,19 @@ int Emulator::decode_instr(Decode *s) {
 void Emulator::vpu_state_store(){
     for (int i=0;i<32;i++){
         for(int j=0; j < VENUM64; j++){
-            ref_ouput_pool[store_ptr].vr[i]._64[j] = ref_cpu_state.vr[i]._64[j];
+            ref_output_pool[store_ptr].vr[i]._64[j] = ref_cpu_state.vr[i]._64[j];
         }
     }
 }
 
-void clear_flags(Decode &s) {
+void Emulator::clear_flags(Decode &s) {
     s.is_vec            = false;
     s.is_vec_cfg        = false;
     s.is_scalar_store   = false;
     s.is_scalar_gpr     = false;
     s.is_fp_reg         = false;
     s.is_ebreak         = false;
-    s.inst,val          = 0    ;
+    s.inst.val          = 0    ;
     s.rs1               = 0    ;
     s.rs2               = 0    ;
     s.imm               = 0    ;
@@ -278,27 +310,61 @@ void clear_flags(Decode &s) {
 bool Emulator::check_vregs_state(VPU_STATE *dut){
     for(int i=0;i<32;i++){
         for(int j=0;j<VLEN/32;j++){
-            if(dut->vr[i]._32[j] != ref_ouput_pool[cmp_ptr].vr[i]._32[j]){
-                printf("VPU state mismatch at vreg[%d][%d]: expected %016x, got %016x\n", i, j, ref_ouput_pool[cmp_ptr].vr[i]._32[j], dut->vr[i]._32[j]);
+            if(dut->vr[i]._32[j] != ref_output_pool[cur_vec_ptr].vr[i]._32[j]){
+                std::stringstream ss;
+                ss << "VPU state mismatch at PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
+                   << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << " ";
+                // printf("VPU state mismatch at vreg[%d][%d]: expected %016x, got %016x\n", i, j, ref_output_pool[cur_vec_ptr].vr[i]._32[j], dut->vr[i]._32[j]);
+                ss << "VPU state mismatch at vreg[" << i << "][" << j << "]: expected "
+                   << std::hex << std::setfill('0') << std::setw(8)
+                   << ref_output_pool[cur_vec_ptr].vr[i]._32[j] << ", got 0x" 
+                   << std::hex << std::setfill('0') << std::setw(8)
+                   << dut->vr[i]._32[j] << "\n";
                 /*print register value*/
-                printf("REF model [v%d]: \n",i);
+                // printf("REF model [v%d]: \n",i);
+                ss <<"REF model [v" << std::to_string(i) <<"]: \n";
                 for(int element = 0; element < VLEN/32;  element++) {
-                    printf("[%02d] %08x  ", element , ref_output_pool[cmp_ptr].vr[i]._32[element]);
-                    if (element % 4 == 0) {
-                        printf("\n");
-                      }
+                    // printf("[%02d] %08x  ", element , ref_output_pool[cur_vec_ptr].vr[i]._32[element]);
+                    ss << "[" << std::setfill('0') << std::setw(2) << std::to_string(element) << "] " 
+                        << std::hex << std::setfill('0') << std::setw(8) 
+                        << ref_output_pool[cur_vec_ptr].vr[i]._32[element] <<" ";
+                    if (element % 4 == 3)   {
+                        ss <<"\n";
+                        // printf("\n");
+
+                    }
                 }
-                printf("DUT model [v%d]: \n",i);
+                // printf("DUT model [v%d]: \n",i);
+                ss <<"DUT model [v" << std::to_string(i) <<"]: \n";
                 for(int element = 0; element < VLEN/32;  element++) {
-                    printf("[%02d] %08x  ", element , dut->vr[i]._32[element]);
-                    if (element % 4 == 0) {
-                        printf("\n");
-                      }
+                    // printf("[%02d] %08x  ", element , dut->vr[i]._32[element]);
+                    ss << "[" << std::setfill('0') << std::setw(2) << std::to_string(element) << "] " 
+                        << std::hex << std::setfill('0') << std::setw(8) 
+                        << dut->vr[i]._32[element] <<" ";
+                    if (element % 4 == 3)
+                    {
+                        ss << "\n";
+                        // printf("\n");
+                    }
                 }
+                log(ss.str());
                 return false;
             }
         }
     }
     return true;
+}
+
+bool Emulator::is_finished() {
+    return trapCode ==STATE_TRAP || contextp->gotFinish();
+}
+
+void Emulator::log(const std::string& message) {
+    if (log_initialized) {
+        log_file << message << "\n";
+        log_file.flush();
+    }
+    // 同时输出到控制台
+    printf("%s\n", message.c_str()); 
 }
 

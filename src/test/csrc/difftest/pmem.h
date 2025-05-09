@@ -14,7 +14,7 @@ typedef MUXDEF(PMEM64, uint64_t, uint32_t) paddr_t;
 
 
 uint8_t *guest_to_host(paddr_t paddr);
-static long load_img(const char *img_file);
+long load_img(const char *img_file);
 
 static inline bool in_pmem(paddr_t addr) {
     return addr - MBASE <  PMEM_SIZE;
@@ -23,4 +23,5 @@ uint64_t mem_addr_read(uint64_t pc,paddr_t addr, int len);
 static uint64_t mem_read(paddr_t addr, int len);
 void mem_addr_write(uint64_t pc, paddr_t addr, uint64_t data, int len);
 void mem_write(paddr_t addr, uint64_t data, int len);
+void out_of_bound(uint64_t pc,uint32_t addr) ;
 #endif

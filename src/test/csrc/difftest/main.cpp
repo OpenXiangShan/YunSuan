@@ -1,6 +1,7 @@
 #include <dlfcn.h>
 #include "difftest.h"
 #include "emu.h"
+#include "pmem.h"
 
 diff_context_t ref_cpu_state={};
 
@@ -37,7 +38,7 @@ int main(){
     while(!emu->is_finished()){
       emu->tick();
   }
-
+  delete emu;
     // ref_isa_reg_display();
     // printf("pc=0x%0lx\n",cpu.pc);
     return 0;
