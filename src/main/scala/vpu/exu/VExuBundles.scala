@@ -55,7 +55,7 @@ class Vfa_setuop extends Bundle {
 }
 
 // fma
-class Vff_setuop extends Bundle {
+class Vfma_setuop extends Bundle {
   val funct = UInt(9.W)
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)

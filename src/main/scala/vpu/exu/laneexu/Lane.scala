@@ -56,9 +56,7 @@ class Lane extends Module {
   vfadd.io.in_uop := in.uop
   vfadd.io.vs1  := in.vs1
   vfadd.io.vs2  := in.vs2
-  vfadd.io.widen_a := in.vs1  
-  vfadd.io.widen_b := in.vs2  
-
+  
   vfadd.io.frs1 := in.rs1
   vfadd.io.is_frs1 := in.uop.ctrl.vx
   vfadd.io.mask := 0.U // TODO: check it
@@ -81,7 +79,7 @@ class Lane extends Module {
 
 
   val vfma = Module(new VectorExuFloatFMA)
-  val vfma_op = Wire(new Vff_setuop)
+  val vfma_op = Wire(new Vfma_setuop)
 
   vfma_op.funct  := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
   vfma_op.vm     := in.uop.ctrl.vm
