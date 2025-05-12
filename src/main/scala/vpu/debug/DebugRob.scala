@@ -32,6 +32,8 @@ class DebugRob extends Module {
       val emulVd = UInt(4.W)
       val data = Vec(robEntry_dataDepth, UInt(VLEN.W))
       val isStore = Bool()
+      val veewVd = UInt(3.W)
+      val isFp = Bool()
     }))
   })
 
@@ -170,10 +172,10 @@ class DebugRob extends Module {
   }
   io.commit.bits.data := commitData
   io.commit.bits.isStore := commitUop.ctrl.store
+  io.commit.bits.veewVd := commitUop.veewVd
+  io.commit.bits.isFp := commitUop.ctrl.fp
 
   io.commit.bits.robIdx := commitUop.robIdx
   dontTouch(io.commit.bits.robIdx)
-
-  //TODO: change dpi-c interface to tell the number of regs to be compared
 
 } 

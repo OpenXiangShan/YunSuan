@@ -37,6 +37,8 @@ class VTopDebug extends Module {
   dpicGetVReg.io.isStore := debugRob.io.commit.bits.isStore
   dpicGetVReg.io.wrRf := debugRob.io.commit.bits.wrRf
   dpicGetVReg.io.rfAddr := debugRob.io.commit.bits.rfAddr
+  dpicGetVReg.io.veewVd := debugRob.io.commit.bits.veewVd
+  dpicGetVReg.io.isFp := debugRob.io.commit.bits.isFp
   dpicGetVReg.io.emulVd := debugRob.io.commit.bits.emulVd
   for (i <- 0 until 8) {
     if (i < robEntry_dataDepth) {

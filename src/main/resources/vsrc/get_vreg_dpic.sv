@@ -12,6 +12,8 @@ module get_vreg_dpic #(
     input wr_rf,
     input [7:0] rf_addr,          // 8-bit signed register address
     input [7:0] rf_group_size,          // 8-bit signed register group size
+    input [7:0] veew_vd,
+    input is_fp,
     input [VLEN-1:0]     data_0_in,
     input [VLEN-1:0]     data_1_in,
     input [VLEN-1:0]     data_2_in,
@@ -56,6 +58,8 @@ module get_vreg_dpic #(
         input bit wr_rf,
         input byte unsigned rf_addr,                 // 8-bit signed register address
         input byte unsigned rf_group_size,          // 8-bit signed register group size
+        input byte unsigned veew_vd,
+        input bit is_fp,
         input int unsigned data_0[VLEN/32], // 32-bit unsigned integer arrays
         input int unsigned data_1[VLEN/32],
         input int unsigned data_2[VLEN/32],
@@ -80,6 +84,8 @@ module get_vreg_dpic #(
                     wr_rf,
                     rf_addr,
                     rf_group_size,
+                    veew_vd,
+                    is_fp,
                     data_0_in_vec,
                     data_1_in_vec,
                     data_2_in_vec,

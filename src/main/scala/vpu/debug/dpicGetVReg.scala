@@ -15,6 +15,8 @@ class get_vreg_dpic extends BlackBox(Map(
     val wr_rf = Input(Bool())
     val rf_addr = Input(UInt(8.W))
     val rf_group_size = Input(UInt(8.W))
+    val veew_vd = Input(UInt(8.W))
+    val is_fp = Input(Bool())
     val data_0_in = Input(UInt(VLEN.W))
     val data_1_in = Input(UInt(VLEN.W))
     val data_2_in = Input(UInt(VLEN.W))
@@ -37,6 +39,8 @@ class DpicGetVReg extends Module {
     val emulVd = Input(UInt(4.W))
     val data8Regs = Input(Vec(8, UInt(VLEN.W)))
     val isStore = Input(Bool())
+    val veewVd = Input(UInt(3.W))
+    val isFp = Input(Bool())
   })
 
   val getVRegDpic = Module(new get_vreg_dpic())
@@ -47,6 +51,8 @@ class DpicGetVReg extends Module {
   getVRegDpic.io.wr_rf := io.wrRf
   getVRegDpic.io.rf_addr := io.rfAddr.pad(8)
   getVRegDpic.io.rf_group_size := io.emulVd.pad(8)
+  getVRegDpic.io.veew_vd := io.veewVd.pad(8)
+  getVRegDpic.io.is_fp := io.isFp
   getVRegDpic.io.data_0_in := io.data8Regs(0)
   getVRegDpic.io.data_1_in := io.data8Regs(1)
   getVRegDpic.io.data_2_in := io.data8Regs(2)
