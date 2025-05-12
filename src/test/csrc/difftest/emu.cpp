@@ -59,7 +59,6 @@ Emulator::~Emulator() {
 
 void Emulator::reset_ncycles(size_t n) {
     dut_ptr->reset = 1;
-    n--;
     while (n-- > 0)
     {
         single_cycle();
@@ -139,17 +138,23 @@ int Emulator::tick()
         }
         else if (present->is_scalar_store == true)
         {
+            log("Here is a scalar store instruction!");
             while (total_vector_instr > 0)
             {
-                single_cycle();
                 if (commit == true)//in case the same instruction commits two cycles....
                 {
+                    #ifdef VEC_STORE_TRACE
+                    // printf("A vector instr result is fetched from output_pool[%d]!\n",cur_vec_ptr);
+                    log("A vector instr result is fetched from output_pool["+std::to_string(cur_vec_ptr)+"]!");
+                    #endif
                     if(check_vregs_state(&dut_state) ==false) {
                         // printf("VPU state mismatch at pc=0x%016lx, instr=0x%08x\n", ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
-                        std::stringstream ss;
-                        ss << "VPU state mismatch at PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc<<", instr=0x"  \
+                        // std::stringstream ss;
+                        // ss << "VPU state mismatch at simulation time= "<< std::to_string(get_sim_time()) << "PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc<<", instr=0x"  \
                         << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val<< " ";
-                        log(ss.str());
+                        // log(ss.str());
+                        trapCode=STATE_TRAP;
+                        return 0;
 
                     }else {
                         // printf("PC=0x%016lx,instr=0x%08x  passes!\n",ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
@@ -158,13 +163,11 @@ int Emulator::tick()
                         << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val<< " passes! ";
                         log(ss.str());
                     }
-                    #ifdef VEC_STORE_TRACE
-                    // printf("A vector instr result is fetched in output_pool[%d]!\n",cur_vec_ptr);
-                    log("A vector instr result is fetched in output_pool["+std::to_string(cur_vec_ptr)+"]!");
-                    #endif
                     cur_vec_ptr = cur_vec_ptr ==15 ? 0 : cur_vec_ptr + 1;
                     total_vector_instr= total_vector_instr > 0? total_vector_instr-1 :0;
+                    commit=false;
                 }
+                single_cycle();
             }
             switch (present->store_instr)
             {
@@ -205,12 +208,19 @@ int Emulator::tick()
     }
     if(commit ==true)
     {
+        #ifdef VEC_STORE_TRACE
+        // printf("A vector instr result is fetched from output_pool[%d]!\n",cur_vec_ptr);
+        log("A vector instr result is fetched from output_pool["+std::to_string(cur_vec_ptr)+"]!");
+        #endif
         if(check_vregs_state(&dut_state) ==false) {
             // printf("VPU state mismatch at pc=0x%016lx, instr=0x%08x\n", ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
-            std::stringstream ss;
-            ss << "VPU state mismatch at PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
+            // std::stringstream ss;
+            // ss << "VPU state mismatch at simulation time= "<< std::to_string(get_sim_time()) << ", PC=0x" \
+               << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"\
                << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << " ";
-            log(ss.str());
+            // log(ss.str());
+            trapCode=STATE_TRAP;
+            return 0;
         }else {
             // printf("PC=0x%016lx,instr=0x%08x  passes!\n",ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
             std::stringstream ss;
@@ -218,14 +228,11 @@ int Emulator::tick()
                << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << " passes! ";
             log(ss.str());
         }
-        #ifdef VEC_STORE_TRACE
-        // printf("A vector instr result is fetched in output_pool[%d]!\n",cur_vec_ptr);
-        log("A vector instr result is fetched in output_pool["+std::to_string(cur_vec_ptr)+"]!");
-        #endif
+        
         cur_vec_ptr = cur_vec_ptr ==15 ? 0 : cur_vec_ptr + 1;
         total_vector_instr= total_vector_instr > 0? total_vector_instr-1 :0;
-    }
-    commit=false;
+        commit=false;
+    } 
     return 0;
 }
 
@@ -312,10 +319,10 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
         for(int j=0;j<VLEN/32;j++){
             if(dut->vr[i]._32[j] != ref_output_pool[cur_vec_ptr].vr[i]._32[j]){
                 std::stringstream ss;
-                ss << "VPU state mismatch at PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
+                ss << "VPU state mismatch at simulation time= "<< std::to_string(get_sim_time()) << "ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
                    << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << " ";
                 // printf("VPU state mismatch at vreg[%d][%d]: expected %016x, got %016x\n", i, j, ref_output_pool[cur_vec_ptr].vr[i]._32[j], dut->vr[i]._32[j]);
-                ss << "VPU state mismatch at vreg[" << i << "][" << j << "]: expected "
+                ss << "vreg[" << i << "][" << j << "]: expected 0x"
                    << std::hex << std::setfill('0') << std::setw(8)
                    << ref_output_pool[cur_vec_ptr].vr[i]._32[j] << ", got 0x" 
                    << std::hex << std::setfill('0') << std::setw(8)

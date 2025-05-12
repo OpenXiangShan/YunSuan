@@ -101,9 +101,9 @@ public:
   Emulator(int argc, const char *argv[]);
   ~Emulator();
   uint64_t execute(uint64_t max_cycle, uint64_t max_instr);
-  // uint64_t get_cycles() const {
-  //   return cycles;
-  // }
+  vluint64_t get_sim_time() const {
+    return sim_time;
+  }
   EmuArgs get_args() const {
     return args;
   }
