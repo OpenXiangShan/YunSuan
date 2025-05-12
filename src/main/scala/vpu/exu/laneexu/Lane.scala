@@ -102,10 +102,6 @@ class Lane extends Module {
   vfma.io.is_frs1 := in.uop.ctrl.vx
   vfma.io.res_widening := in.uop.ctrl.widen2  
   
-  vfma.io.fp_aIsFpCanonicalNAN := false.B
-  vfma.io.fp_bIsFpCanonicalNAN := false.B
-  vfma.io.fp_cIsFpCanonicalNAN := false.B
-  
   vfma_out.vd := vfma.io.result
   vfma_out.fflags := vfma.io.fflags
   vfma_out.uop := vfma.io.out_uop.bits
@@ -122,6 +118,7 @@ class Lane extends Module {
   vcvt.io.fire := io.in.valid && in.uop.ctrl.vfcvt 
   vcvt.io.in_uop := in.uop
   vcvt.io.vs2  := in.vs2
+  vcvt.io.uop_idx := in.uop.uopIdx 
   vcvt.io.op_code := vcvt_setuop.op
   vcvt.io.sew := in.uop.csr.vsew(1, 0)
   vcvt.io.rm := in.uop.csr.frm

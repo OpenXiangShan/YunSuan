@@ -24,13 +24,13 @@ class VectorCvtIO(width: Int) extends Bundle {
 }
 
 class VectorExuCvt extends  Module {
-  val XLEN = 32
   val io = IO(new Bundle() {
       val fire              = Input(Bool())
       val vs2               = Input(UInt(LaneWidth.W))
       val op_code           = Input(UInt(8.W))
       val sew               = Input(UInt(2.W))
       val rm                = Input(UInt(3.W))
+      val uop_idx           = Input(Bool())
       val isFpToVecInst     = Input(Bool())
       val isFround          = Input(UInt(2.W))
       val isFcvtmod         = Input(Bool())
@@ -40,34 +40,30 @@ class VectorExuCvt extends  Module {
       val fflags            = Output(Vec(LaneWidth/16, UInt(5.W)))
       val out_uop           = ValidIO(new VUop)
   })
-  
-  val result = Wire(Vec(LaneWidth/XLEN, UInt(XLEN.W)))
-  val fflags = Wire(Vec(LaneWidth/XLEN, UInt(20.W)))
 
-  for (i <- 0 until (LaneWidth/XLEN)) {
-    val vcvt = Module(new VectorCvt(64))
-    // connect vcvt's io
-    val src =  io.vs2(XLEN-1+i*XLEN, 0+i*XLEN) ## io.vs2(XLEN-1+i*XLEN, 0+i*XLEN)
-    vcvt.io.fire          := io.fire
-    vcvt.io.sew           := io.sew
-    vcvt.io.opType        := io.op_code
-    vcvt.io.rm            := io.rm
-    vcvt.io.src           := src // 128 bit->vcvt
-    vcvt.io.isFpToVecInst := false.B
-    vcvt.io.isFround      := 0.U
-    vcvt.io.isFcvtmod     := false.B
-    result(i) := vcvt.io.result(31, 0)
-    fflags(i) := vcvt.io.fflags
-  }
+  val vcvt = Module(new VectorCvt(64))
+  // connect vcvt's io
+  val element32 = Wire(Vec(2, UInt(32.W)))
+  element32 := io.vs2.asTypeOf(element32)
 
-  io.result := result.asTypeOf(io.result)  
-  io.fflags := fflags.asTypeOf(io.fflags)
+  val src =  Mux(io.uop_idx, Cat(element32(0), element32(1)), element32.asTypeOf(UInt(XLEN.W)))
+  vcvt.io.fire          := io.fire
+  vcvt.io.sew           := io.sew
+  vcvt.io.opType        := io.op_code
+  vcvt.io.rm            := io.rm
+  vcvt.io.src           := src // 128 bit->vcvt
+  vcvt.io.isFpToVecInst := false.B
+  vcvt.io.isFround      := 0.U
+  vcvt.io.isFcvtmod     := false.B
+
+  io.result :=  vcvt.io.result  
+  io.fflags :=  vcvt.io.fflags.asTypeOf(io.fflags)
   
   // latency = 2
   val reg_valid_0 = RegNext(io.fire)
   val reg_valid_1 = RegNext(reg_valid_0)
-  val reg_uop_0     = RegEnable(io.in_uop, io.fire)
-  val reg_uop_1     = RegEnable(reg_uop_0, reg_valid_0)
+  val reg_uop_0   = RegEnable(io.in_uop, io.fire)
+  val reg_uop_1   = RegEnable(reg_uop_0, reg_valid_0)
 
   io.out_uop.valid := reg_valid_1
   io.out_uop.bits := reg_uop_1
@@ -135,7 +131,7 @@ class VectorCvt(xlen :Int) extends Module{
   val element32 = Wire(Vec(2,UInt(32.W)))
   val element64 = Wire(Vec(1,UInt(64.W)))
 
-  element8 := src.asTypeOf(element8)
+  element8  := src.asTypeOf(element8)
   element16 := src.asTypeOf(element16)
   element32 := src.asTypeOf(element32)
   element64 := src.asTypeOf(element64)

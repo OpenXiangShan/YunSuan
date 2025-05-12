@@ -13,13 +13,14 @@ object VectorElementFormat {
   def apply() = UInt(width.W)
 }
 
-object Vfauop_format {
-  def width = 2
-  def b = "b00".U(width.W)
-  def h = "b01".U(width.W)  // f16
-  def w = "b10".U(width.W)  // f32
-  def d = "b11".U(width.W)  // f64
 
+object VSew {
+  def width = 2
+  def bf16 = "b00".U(width.W)
+  def fp16 = "b01".U(width.W)  // f16
+  def fp32 = "b10".U(width.W)  // f32
+  def fp64 = "b11".U(width.W)  // f64
+  
   def apply() = UInt(width.W)
 }
 
