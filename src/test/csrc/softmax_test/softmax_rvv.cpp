@@ -13,6 +13,7 @@
 #include "VVTopDebug__Dpi.h"
 #include <verilated_vcd_c.h>
 #include <cmath>
+// #include <half.hpp>
 
 extern VVTopDebug *top;
 extern VerilatedContext *contextp;
@@ -536,12 +537,23 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     }
     }
 
-    
-    for (int i = 0; i < n; ++i) {
-        dst[i] =dst[i] *inv_sum ;
-    } 
-    
-    
+    //Instr 37: vfmacc.vv	v4,v4,v12
+    // 随机数生成器
+    // constexpr size_t TOTAL_NUM = 1024;
+    // std::random_device rd;
+    // std::mt19937 gen(rd());
+    // std::uniform_real_distribution<float> dist(-4.0f, 4.0f);
+    // uint16_t
+    // for (size_t i = 0; i < TOTAL_NUM/16; ++i) {
+    //     size_t elem_idx = i / 2;  // 每 2 个 FP16 存到一个 32 位单元
+    //     size_t h_idx = i % 2;     // 0=低16位, 1=高16位
+    //     cpu.vreg[10][elem_idx].h[h_idx] = half_float::half(dist(gen)).bits();
+    //     cpu.vreg[12][elem_idx].h[h_idx] = half_float::half(dist(gen)).bits();
+    //     cpu.vreg[14][elem_idx].h[h_idx] = half_float::half(dist(gen)).bits();
+    // }
+    // for (int i = 0; i < n; ++i) {
+    //     dst[i] =dst[i] *inv_sum ;
+    // }
     softmax_bench_result_t bench_result;
     // initializing bench result error values
     bench_result.max_abs_error = 0.0;

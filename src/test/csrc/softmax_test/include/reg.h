@@ -36,6 +36,7 @@ typedef struct {
     uint64_t gpr[32];
     FloatReg fpr[32];
     union {
+        uint16_t h[2];
         uint32_t u;
         float f;
         int32_t i;
