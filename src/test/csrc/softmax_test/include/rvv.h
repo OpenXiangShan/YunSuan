@@ -27,4 +27,6 @@ void vmv2r_v(int vreg_dst_index, int vreg_src_index);
 void vrgather_vi(int vreg_dst_index, int vreg_src2_index, uint32_t uimm, int vl);
 void vmv_v_x(int vreg_index, const char *s, int vl);
 void vfnmsac_vv(int vreg_dst_index,int vreg_src1_index, int vreg_src2_index,int vl);
+void vfwmacc_vv(int vreg_dst_index,int vreg_src1_index, int vreg_src2_index,int vl);
+void vfncvt_f_f(int vreg_dst_index,int vreg_src2_index, int vl);
 #endif

@@ -14,6 +14,7 @@
 #define TU 0
 #define MU 0
 typedef union {
+    uint16_t as_half[2];
     float as_float;
     uint32_t as_uint32;
     int32_t as_int32;

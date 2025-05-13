@@ -4,6 +4,8 @@
 #include <string.h>
 #include <rvv.h>
 #include <assert.h>
+#include <half.hpp>
+#include <vector>
 int isa_reg_index(const char *s);
 
 const char *regs[] = {
@@ -192,5 +194,35 @@ void vfnmsac_vv(int vreg_dst_index,int vreg_src1_index, int vreg_src2_index,int 
     for(int i=0;i<vl;i++){
         cpu.vreg[vreg_dst_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f=cpu.vreg[vreg_dst_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f \
         -cpu.vreg[vreg_src1_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f*cpu.vreg[vreg_src2_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f;
+    }
+}
+void vfwmacc_vv(int vreg_dst_index,int vreg_src1_index, int vreg_src2_index,int vl){//vl=vlen/16
+    std::vector<FloatUintUnion> temp(vl, {0});
+    for(int i=0 ; i<vl ; i++){
+        half_float::half fp16_val_src1;
+        half_float::half fp16_val_src2;
+        half_float::half fp16_val_vd;
+        size_t elem_idx = i / 2; // 每 2 个 FP16 存到一个 32 位单元
+        size_t h_idx = i % 2;    // 0=低16位, 1=高16位
+
+        std::memcpy(&fp16_val_src1, &cpu.vreg[vreg_src1_index][elem_idx].h[h_idx], sizeof(uint16_t));
+        std::memcpy(&fp16_val_src2, &cpu.vreg[vreg_src2_index][elem_idx].h[h_idx], sizeof(uint16_t));
+        std::memcpy(&fp16_val_vd, &cpu.vreg[vreg_dst_index][elem_idx].h[h_idx], sizeof(uint16_t));
+
+        float fp32_val_src1 = static_cast<float>(fp16_val_src1);
+        float fp32_val_src2 = static_cast<float>(fp16_val_src2);
+        float fp32_val_vd = static_cast<float>(fp16_val_vd);
+        temp[i].as_float =fp32_val_src1*fp32_val_src2+fp32_val_vd;
+    }
+     for(int i=0;i<vl;i++){
+         cpu.vreg[vreg_dst_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f = temp[i].as_float;
+     }
+}
+void vfncvt_f_f(int vreg_dst_index,int vreg_src2_index, int vl){
+    for(int i=0;i<vl;i++){
+        half_float::half fp16_val = half_float::half(cpu.vreg[vreg_src2_index+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f);
+        uint16_t raw_fp16_bits;
+        std::memcpy(&raw_fp16_bits, &fp16_val, sizeof(uint16_t));
+        cpu.vreg[vreg_dst_index][i/2].h[i%2]=raw_fp16_bits;
     }
 }

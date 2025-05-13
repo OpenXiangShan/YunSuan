@@ -46,3 +46,8 @@ Disassembly of section .text:
   98:	bec51757          	vfnmsac.vv	v14,v10,v12
   9c:	92c71657          	vfmul.vv	v12,v12,v14
   a0:	92461257          	vfmul.vv	v4,v4,v12
+  a4:	0206e507          	vle32.v	v10,(a3)
+  a8:	0206e607          	vle32.v	v12,(a3)
+  ac:	0206e707          	vle32.v	v14,(a3)
+  b0:	f2c51757          	vfwmacc.vv	v14,v10,v12
+  b4:	4aea1857          	vfncvt.f.f.w	v16,v14

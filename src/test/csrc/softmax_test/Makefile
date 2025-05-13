@@ -28,6 +28,7 @@ $(shell mkdir -p $(BUILD_DIR))
 
 SIM_CSRCS = $(shell find -L $(abspath ./)  -name "*.cc" -or -name "*.cpp") 
 
+
 DEPS=$(V_FILES) $(SIM_CSRCS)
 
 VERILATOR_CFLAGS += -MMD -MP --build -cc \
@@ -39,6 +40,7 @@ VERILATOR_CFLAGS += -j 33
 LMUL ?= 1
 INCFLAGS = $(addprefix -I, $(INCLUDE_DIR))
 CXXFLAGS += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\"" 
+
 
 $(BIN): $(DEPS)
 	@verilator $(VERILATOR_CFLAGS) \
@@ -64,7 +66,7 @@ clean:
 	rm -rf $(abspath ./vec_ops.o) $(abspath ./vec_ops.bin)
 
 sim: $(BIN)
-	$(BIN)
+	@$(BIN)
 
 gdb: $(BIN)
 	gdb --args $(BIN)

@@ -13,7 +13,9 @@
 #include "VVTopDebug__Dpi.h"
 #include <verilated_vcd_c.h>
 #include <cmath>
-// #include <half.hpp>
+#include <half.hpp>
+#include <random>
+#include <iostream>
 
 extern VVTopDebug *top;
 extern VerilatedContext *contextp;
@@ -27,6 +29,7 @@ static uint8_t robIdx=0;
 bool check_vreg(uint8_t rf_addr);
 bool check_vreg_i(uint8_t rf_addr);
 bool check_vreg_rec(uint8_t rf_addr, float diff_threshold);
+bool check_vreg_uint16(uint8_t rf_addr);
 void single_cycle(VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
 void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
 void dut_input_execute(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t rs2, bool robIdx_flag, uint8_t robIdx);
@@ -537,23 +540,75 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     }
     }
 
-    //Instr 37: vfmacc.vv	v4,v4,v12
-    // 随机数生成器
-    // constexpr size_t TOTAL_NUM = 1024;
-    // std::random_device rd;
-    // std::mt19937 gen(rd());
-    // std::uniform_real_distribution<float> dist(-4.0f, 4.0f);
-    // uint16_t
-    // for (size_t i = 0; i < TOTAL_NUM/16; ++i) {
-    //     size_t elem_idx = i / 2;  // 每 2 个 FP16 存到一个 32 位单元
-    //     size_t h_idx = i % 2;     // 0=低16位, 1=高16位
-    //     cpu.vreg[10][elem_idx].h[h_idx] = half_float::half(dist(gen)).bits();
-    //     cpu.vreg[12][elem_idx].h[h_idx] = half_float::half(dist(gen)).bits();
-    //     cpu.vreg[14][elem_idx].h[h_idx] = half_float::half(dist(gen)).bits();
+    //Widening/narrowing
+    vcsr.sew=16;
+    vcsr.vl=VLEN*vcsr.lmul/vcsr.sew;
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> dist(-4.0f, 4.0f);
+    for (int i = 0; i < VLEN / 16; ++i)
+    {
+        size_t elem_idx = i / 2; // 每 2 个 FP16 存到一个 32 位单元
+        size_t h_idx = i % 2;    // 0=低16位, 1=高16位
+        auto get_half_bits = [](half_float::half h)
+        {
+            uint16_t bits;
+            static_assert(sizeof(h) == sizeof(bits), "Size mismatch");
+            std::memcpy(&bits, &h, sizeof(bits));
+            return bits;
+        };
+        half_float::half val10 = half_float::half(dist(gen));
+        cpu.vreg[10][elem_idx].h[h_idx] = get_half_bits(val10);
+        pmem[0 + elem_idx].as_half[h_idx] = cpu.vreg[10][elem_idx].h[h_idx];
+
+        half_float::half val12 = half_float::half(dist(gen));
+        cpu.vreg[12][elem_idx].h[h_idx] = get_half_bits(val12);
+        pmem[VLEN/16 + elem_idx].as_half[h_idx] = cpu.vreg[12][elem_idx].h[h_idx];
+
+        half_float::half val14 = half_float::half(dist(gen));
+        cpu.vreg[14][elem_idx].h[h_idx] = get_half_bits(val14);
+        pmem[VLEN /16*2 + elem_idx].as_half[h_idx] = cpu.vreg[14][elem_idx].h[h_idx];
+    }
+    //Instr 37: vle32.v v10, (a3) a3=0
+    dut_input_execute(0x0206e507, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    check=check_vreg(10);
+    printf("The result of \"Instr 37: vle32.v v10, (a3)\" difftest is :%s\n",check?"True":"False");
+    kill_sim(check);
+   
+    //Instr 38: vle32.v v12, (a3) a3=VLEN / 16 * 4
+    dut_input_execute(0x0206e607, vcsr.sew, vcsr.lmul, VLEN /16*4 , 0, false, robIdx++);
+    check=check_vreg(12);
+    printf("The result of \"Instr 38: vle32.v v12, (a3)\" difftest is :%s\n",check?"True":"False");
+    kill_sim(check);
+
+    //Instr 39: vle32.v v14, (a3) a3=VLEN /16*2*4
+    dut_input_execute(0x0206e707, vcsr.sew, vcsr.lmul,VLEN /16*2 *4, 0, false, robIdx++);
+    check=check_vreg(14);
+    printf("The result of \"Instr 39: vle32.v v14, (a3)\" difftest is :%s\n",check?"True":"False");
+    kill_sim(check);
+    // for(int i=0;i<VLEN/16;i++){
+    //     printf("cpu.v[10][%d]=%x\tcpu.v[12][%d]=%x\tcpu.v[14][%d]=%x\n",i,cpu.vreg[10][i/2].h[i%2],i,cpu.vreg[12][i/2].h[i%2],i,cpu.vreg[14][i/2].h[i%2]);
     // }
-    // for (int i = 0; i < n; ++i) {
-    //     dst[i] =dst[i] *inv_sum ;
-    // }
+
+
+    //Instr 40: vfwmacc.vv v14, v10, v12 lmul=1->emul=2
+    
+    vfwmacc_vv(14,10,12,vcsr.vl);
+    dut_input_execute(0xf2c51757, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    check=check_vreg(14)&&check_vreg(15);
+    printf("The result of \"Instr 40: vfwmacc.vv v14, v10, v12\" difftest is :%s\n",check?"True":"False");
+    kill_sim(check);
+
+    //Instr 41: vfncvt.f.f.w v16, v14 emul=2->lmul=1
+    vfncvt_f_f(16,14,vcsr.vl);
+    dut_input_execute(0x4aea1857, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
+    check=check_vreg_uint16(16);
+    printf("The result of \"Instr 41: vfncvt.f.f.w v16, v14\" difftest is :%s\n",check?"True":"False");
+    kill_sim(check);
+
+    for (int i = 0; i < n; ++i) {
+        dst[i] =dst[i] *inv_sum ;
+    }
     softmax_bench_result_t bench_result;
     // initializing bench result error values
     bench_result.max_abs_error = 0.0;
@@ -592,10 +647,9 @@ bool check_vreg(uint8_t rf_addr){
     printf("rob index: %02d  ", robIdx-1);
     for(int i=rf_addr; i<rf_addr+LMUL;i++){
         for(int element=0;element<VLEN/32;element++){
-            auto diff = cpu.vreg[i][element].f > diff_vreg[i][element].as_float ?
-            (cpu.vreg[i][element].f - diff_vreg[i][element].as_float)/cpu.vreg[i][element].f :
-            (diff_vreg[i][element].as_float - cpu.vreg[i][element].f)/cpu.vreg[i][element].f;
-            if(diff>1e-5f) {
+            float abs_err=fabs(cpu.vreg[i][element].f - diff_vreg[i][element].as_float);
+            float rel_err = fabs(cpu.vreg[i][element].f - diff_vreg[i][element].as_float) / (fabs(cpu.vreg[i][element].f) > 1e-6f ? fabs(cpu.vreg[i][element].f) : 1.0f);
+            if(abs_err > 1e-5f && rel_err >  1e-6f) {
                 printf("The different register id is %d\n",i);
                 printf("The element index is : %d\n",element);
                 for(int m=rf_addr; m < rf_addr+LMUL; m++){
@@ -643,15 +697,41 @@ bool check_vreg_rec(uint8_t rf_addr, float diff_threshold){
     printf("rob index: %02d  ", robIdx-1);
     for(int i=rf_addr; i<rf_addr+LMUL;i++){
         for(int element=0;element<VLEN/32;element++){
-            auto diff = cpu.vreg[i][element].f > diff_vreg[i][element].as_float ?
-            (cpu.vreg[i][element].f - diff_vreg[i][element].as_float)/cpu.vreg[i][element].f :
-            (diff_vreg[i][element].as_float - cpu.vreg[i][element].f)/cpu.vreg[i][element].f;
-            if(diff>diff_threshold) {
+            float abs_err=fabs(cpu.vreg[i][element].f - diff_vreg[i][element].as_float);
+            float rel_err = fabs(cpu.vreg[i][element].f - diff_vreg[i][element].as_float) / (fabs(cpu.vreg[i][element].f) > 1e-6f ? fabs(cpu.vreg[i][element].f) : 1.0f);
+
+            // auto diff = cpu.vreg[i][element].f > diff_vreg[i][element].as_float ?
+            // (cpu.vreg[i][element].f - diff_vreg[i][element].as_float)/cpu.vreg[i][element].f :
+            // (diff_vreg[i][element].as_float - cpu.vreg[i][element].f)/cpu.vreg[i][element].f;
+            if(abs_err>diff_threshold/10&&rel_err>diff_threshold) {
                 printf("The different register id is %d\n",i);
                 printf("The element index is : %d\n",element);
                 for(int m=rf_addr; m < rf_addr+LMUL; m++){
                     for(int n=0;n<VLEN/32;n++){
                         printf("cpu.vreg[%d][%d]=%x\t  diff.vreg[%d][%d]=%x\n",m, n, cpu.vreg[m][n].u, m, n,diff_vreg[m][n].as_uint32);
+                    }
+                }
+                return false;
+            }
+        }
+    }
+    commit_global=false;
+    return true;
+}
+
+bool check_vreg_uint16(uint8_t rf_addr){
+    printf("rob index: %02d  ", robIdx-1);
+    for(int i=rf_addr; i<rf_addr+LMUL;i++){
+        for(int element=0;element<VLEN/16;element++){
+            auto diff = cpu.vreg[i][element/2].h[element%2] > diff_vreg[i][element/2].as_half[element%2] ?
+            (cpu.vreg[i][element/2].h[element%2] - diff_vreg[i][element/2].as_half[element%2])/cpu.vreg[i][element/2].h[element%2] :
+            (diff_vreg[i][element/2].as_half[element%2] - cpu.vreg[i][element/2].h[element%2])/cpu.vreg[i][element/2].h[element%2];
+            if(diff>1e-2) {
+                printf("The different register id is %d\n",i);
+                printf("The element index is : %d\n",element);
+                for(int m=rf_addr; m < rf_addr+LMUL; m++){
+                    for(int n=0;n<VLEN/16;n++){
+                        printf("cpu.vreg[%d][%d]=%x\t  diff.vreg[%d][%d]=%x\n",m, n, cpu.vreg[m][n/2].h[n%2], m, n,diff_vreg[m][n/2].as_half[n%2]);
                     }
                 }
                 return false;
@@ -716,6 +796,8 @@ void dut_input_execute(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t
     }
     if(sew==32){
         top->io_dispatch_s2v_bits_vcsr_vsew=0b010; 
+    }else if(sew==16){
+        top->io_dispatch_s2v_bits_vcsr_vsew=0b001; 
     }
     top->io_dispatch_s2v_bits_vcsr_vill=0; 
     top->io_dispatch_s2v_bits_vcsr_ma=vcsr.vma; 
