@@ -9,6 +9,7 @@ import race.vpu.yunsuan._
 import race.vpu.yunsuan.VectorConvert._
 import race.vpu.yunsuan.util._
 import race.vpu.VParams._
+import _root_.yunsuan.encoding.Opcode.VialuOpcode.vctz
 
 class VectorCvtIO(width: Int) extends Bundle {
   val fire = Input(Bool())
@@ -41,12 +42,23 @@ class VectorExuCvt extends  Module {
       val out_uop           = ValidIO(new VUop)
   })
 
-  val vcvt = Module(new VectorCvt(64))
-  // connect vcvt's io
-  val element32 = Wire(Vec(2, UInt(32.W)))
-  element32 := io.vs2.asTypeOf(element32)
+  val widen  = io.op_code(4, 3)
+  val is_widen = widen === 1.U
+  val vcvt   = Module(new VectorCvt(LaneWidth))
 
-  val src =  Mux(io.uop_idx, Cat(element32(0), element32(1)), element32.asTypeOf(UInt(XLEN.W)))
+  // connect vcvt's io
+  // input width 8， 16， 32， 64
+  val element64 = Wire(Vec((LaneWidth/64), UInt(64.W)))
+  val element32 = Wire(Vec((LaneWidth/32), UInt(32.W)))
+  val element16 = Wire(Vec((LaneWidth/16), UInt(16.W)))
+  val element8  = Wire(Vec((LaneWidth/8), UInt(8.W)))
+  element64 := io.vs2.asTypeOf(element64)
+  element32 := io.vs2.asTypeOf(element32)
+  element16 := io.vs2.asTypeOf(element16)
+  element8  := io.vs2.asTypeOf(element8)
+
+  // if widen
+  val src =  Mux(io.uop_idx && is_widen, Cat(element32(0), element32(1)), io.vs2)
   vcvt.io.fire          := io.fire
   vcvt.io.sew           := io.sew
   vcvt.io.opType        := io.op_code
@@ -55,9 +67,6 @@ class VectorExuCvt extends  Module {
   vcvt.io.isFpToVecInst := false.B
   vcvt.io.isFround      := 0.U
   vcvt.io.isFcvtmod     := false.B
-
-  io.result :=  vcvt.io.result  
-  io.fflags :=  vcvt.io.fflags.asTypeOf(io.fflags)
   
   // latency = 2
   val reg_valid_0 = RegNext(io.fire)
@@ -65,8 +74,28 @@ class VectorExuCvt extends  Module {
   val reg_uop_0   = RegEnable(io.in_uop, io.fire)
   val reg_uop_1   = RegEnable(reg_uop_0, reg_valid_0)
 
-  io.out_uop.valid := reg_valid_1
-  io.out_uop.bits := reg_uop_1
+  val reg_valid_2 = RegNext(reg_valid_1)
+  val reg_uop_2   = RegEnable(reg_uop_1, reg_valid_1)
+  
+  val reg_widen_0 = RegEnable(widen, io.fire)
+  val reg_widen_1 = RegEnable(reg_widen_0, reg_valid_0)
+  val reg_widen_2 = RegEnable(reg_widen_1, reg_valid_1)
+  // if narrow need one more latency
+  val reg_narrow_vd    = RegEnable(vcvt.io.result((LaneWidth/2), 0), (reg_widen_1 === 2.U))
+  val reg_narrow_fflag = RegEnable(vcvt.io.fflags, (reg_widen_1 === 2.U))
+
+  val widen_or_single = reg_valid_1 && (reg_widen_1 === 1.U || reg_widen_1 === 0.U)
+  val narrow          = reg_valid_2 && (reg_widen_2 === 2.U)
+  val vd_narrow       = Cat(reg_narrow_vd, vcvt.io.result((LaneWidth/2), 0)).asTypeOf(UInt(LaneWidth.W))
+  val fflags_narrow   = reg_narrow_fflag | vcvt.io.fflags
+
+  io.out_uop.valid  := widen_or_single || narrow
+  io.out_uop.bits   := Mux(widen_or_single, reg_uop_1, 
+                        Mux(narrow, reg_uop_2, 0.U.asTypeOf(new VUop)))
+  io.result         := Mux(widen_or_single, vcvt.io.result, 
+                        Mux(narrow, vd_narrow, 0.U))
+  io.fflags         := Mux(widen_or_single, vcvt.io.fflags.asTypeOf(io.fflags), 
+                        Mux(narrow, fflags_narrow.asTypeOf(io.fflags), 0.U.asTypeOf(io.fflags)))
 }
 
 
