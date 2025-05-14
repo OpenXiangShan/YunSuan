@@ -11,7 +11,7 @@
 #include "verilated.h"
 #include "svdpi.h"
 #include "VVTopDebug__Dpi.h"
-#include <verilated_vcd_c.h>
+#include <verilated_fst_c.h>
 #include <cmath>
 #include <half.hpp>
 #include <random>
@@ -19,7 +19,7 @@
 
 extern VVTopDebug *top;
 extern VerilatedContext *contextp;
-extern VerilatedVcdC *wave ;
+extern VerilatedFstC *wave ;
 extern FloatUintUnion  pmem[CONFIG_MSIZE];
 extern bool commit_global;
 #define CLK_PERIOD 10    // 时钟周期（单位：ps）
@@ -30,8 +30,8 @@ bool check_vreg(uint8_t rf_addr);
 bool check_vreg_i(uint8_t rf_addr);
 bool check_vreg_rec(uint8_t rf_addr, float diff_threshold);
 bool check_vreg_uint16(uint8_t rf_addr);
-void single_cycle(VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
-void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
+void single_cycle(VVTopDebug *top, VerilatedContext *contextp, VerilatedFstC *wave);
+void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedFstC *wave);
 void dut_input_execute(uint32_t instr, int sew, int lmul, uint64_t rs1, uint64_t rs2, bool robIdx_flag, uint8_t robIdx);
 void kill_sim(bool abort_flag);
 
@@ -742,7 +742,7 @@ bool check_vreg_uint16(uint8_t rf_addr){
     return true;
 }
 
-void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave)
+void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedFstC *wave)
 {
   top->reset = 1;
   n--;
@@ -763,7 +763,7 @@ void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wa
   main_time += CLK_PERIOD / 2;
 }
 
-void single_cycle(VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave)
+void single_cycle(VVTopDebug *top, VerilatedContext *contextp, VerilatedFstC *wave)
 {
   top->clock = 1;
   top->eval();

@@ -32,7 +32,7 @@ SIM_CSRCS = $(shell find -L $(abspath ./)  -name "*.cc" -or -name "*.cpp")
 DEPS=$(V_FILES) $(SIM_CSRCS)
 
 VERILATOR_CFLAGS += -MMD -MP --build -cc \
-										-O3 --x-assign fast --x-initial fast --noassert --trace
+										-O3 --x-assign fast --x-initial fast --noassert --trace-fst
 VERILATOR_CFLAGS += -j 33
 
 # Include path

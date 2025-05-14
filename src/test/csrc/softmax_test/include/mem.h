@@ -6,7 +6,7 @@
 #include "verilated.h"
 #include "svdpi.h"
 #include "VVTopDebug__Dpi.h"
-#include <verilated_vcd_c.h>
+#include <verilated_fst_c.h>
 
 #define CONFIG_PMEM 0
 #define CONFIG_MSIZE 0x8000000

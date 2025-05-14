@@ -10,15 +10,14 @@
 #include "verilated.h"
 #include "svdpi.h"
 #include "VVTopDebug__Dpi.h"
-#include <verilated_vcd_c.h>
-
+#include <verilated_fst_c.h>
 
 #define VERBOSE 1
 #define NUM_TESTS 1
 
 softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, double* golden, size_t n);
 void softmax_golden_fp32_fp64(double* dst, float* src, size_t n);
-void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedVcdC *wave);
+void reset(int n, VVTopDebug *top, VerilatedContext *contextp, VerilatedFstC *wave);
 
 
 CPU_STATE cpu={};
@@ -26,7 +25,7 @@ VCSR vcsr={.lmul=1, .sew=32, .vlenb=VLEN/8,.vstart=0};
 
 VerilatedContext *contextp = NULL;
 VVTopDebug *top = NULL;
-VerilatedVcdC *wave = NULL;
+VerilatedFstC *wave = NULL;
 int main(int argc, char **argv){
     int i;
     CPU_STATE cpu;
@@ -34,11 +33,11 @@ int main(int argc, char **argv){
     contextp = new VerilatedContext;
     contextp->commandArgs(argc, argv);
     top = new VVTopDebug{contextp};
-    wave = new VerilatedVcdC;
+    wave = new VerilatedFstC;
 
     contextp->traceEverOn(true);
     top->trace(wave, 99);
-    wave->open("build/top.vcd");
+    wave->open("build/top.fst");
     reset(3, top, contextp, wave);
 
     softmax_bench_t benchmarks[] = {
