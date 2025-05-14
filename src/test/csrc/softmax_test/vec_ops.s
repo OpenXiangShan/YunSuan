@@ -53,6 +53,7 @@ _start:
     vfmul.vv	v4,v4,v12
     vle32.v v10, (a3)        #a3=0
     vle32.v v12, (a3)        #a3=VLEN/32
-    vle32.v v14, (a3)        #a3=VLEN/32*2
+    vle32.v v14, (a3)        #a3=VLEN /16*2*4
+    vle32.v v15, (a3)        #(VLEN /16*2 + VLEN /32) *4
     vfwmacc.vv v14, v10, v12 #lmul=1->emul=2
     vfncvt.f.f.w v16, v14    #emul=2->lmul=1

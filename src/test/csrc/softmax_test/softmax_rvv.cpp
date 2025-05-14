@@ -565,9 +565,11 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
         cpu.vreg[12][elem_idx].h[h_idx] = get_half_bits(val12);
         pmem[VLEN/16 + elem_idx].as_half[h_idx] = cpu.vreg[12][elem_idx].h[h_idx];
 
-        half_float::half val14 = half_float::half(dist(gen));
-        cpu.vreg[14][elem_idx].h[h_idx] = get_half_bits(val14);
-        pmem[VLEN /16*2 + elem_idx].as_half[h_idx] = cpu.vreg[14][elem_idx].h[h_idx];
+        // half_float::half val14 = half_float::half(dist(gen));
+        // cpu.vreg[14][elem_idx].h[h_idx] = get_half_bits(val14);
+        float val_fp32=dist(gen);
+        cpu.vreg[14+i/(VLEN/32)][i%(VLEN/32)].f=val_fp32;
+        pmem[VLEN /16*2 + i].as_float= val_fp32;
     }
     //Instr 37: vle32.v v10, (a3) a3=0
     dut_input_execute(0x0206e507, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
@@ -586,24 +588,30 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
     check=check_vreg(14);
     printf("The result of \"Instr 39: vle32.v v14, (a3)\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
-    // for(int i=0;i<VLEN/16;i++){
-    //     printf("cpu.v[10][%d]=%x\tcpu.v[12][%d]=%x\tcpu.v[14][%d]=%x\n",i,cpu.vreg[10][i/2].h[i%2],i,cpu.vreg[12][i/2].h[i%2],i,cpu.vreg[14][i/2].h[i%2]);
-    // }
 
-
-    //Instr 40: vfwmacc.vv v14, v10, v12 lmul=1->emul=2
+    //Instr 40: vle32.v v15, (a3) (VLEN /16*2 + VLEN /32) *4
+    dut_input_execute(0x0206e787, vcsr.sew, vcsr.lmul,(VLEN /16*2 + VLEN /32) *4, 0, false, robIdx++);
+    check=check_vreg(15);
+    printf("The result of \"Instr 40: vle32.v v15, (a3)\" difftest is :%s\n",check?"True":"False");
+    kill_sim(check);
+  
+    printf("v10, v12, v14 values before vfwmacc:\n");
+    for(int i=0;i<VLEN/16;i++){
+        printf("v[10][%d]=%x\tv[12][%d]=%x\tv[%d][%d]=%x\n",i,cpu.vreg[10][i/2].h[i%2],i,cpu.vreg[12][i/2].h[i%2],(int)(14+i/(VLEN/32)),(int)(i%(VLEN/32)),cpu.vreg[14+i/(VLEN/32)][i%(VLEN/32)].u);
+    }
+    //Instr 41: vfwmacc.vv v14, v10, v12 lmul=1->emul=2
     
     vfwmacc_vv(14,10,12,vcsr.vl);
     dut_input_execute(0xf2c51757, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg(14)&&check_vreg(15);
-    printf("The result of \"Instr 40: vfwmacc.vv v14, v10, v12\" difftest is :%s\n",check?"True":"False");
+    printf("The result of \"Instr 41: vfwmacc.vv v14, v10, v12\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
 
-    //Instr 41: vfncvt.f.f.w v16, v14 emul=2->lmul=1
+    //Instr 42: vfncvt.f.f.w v16, v14 emul=2->lmul=1
     vfncvt_f_f(16,14,vcsr.vl);
     dut_input_execute(0x4aea1857, vcsr.sew, vcsr.lmul, 0, 0, false, robIdx++);
     check=check_vreg_uint16(16);
-    printf("The result of \"Instr 41: vfncvt.f.f.w v16, v14\" difftest is :%s\n",check?"True":"False");
+    printf("The result of \"Instr 42: vfncvt.f.f.w v16, v14\" difftest is :%s\n",check?"True":"False");
     kill_sim(check);
 
     for (int i = 0; i < n; ++i) {
@@ -621,6 +629,8 @@ softmax_bench_result_t softmax_stable_rvv_fp32_bench(float* dst, float* src, dou
         printf("relative errors: ");
 #       endif
     for (i = 0; i < n; ++i) {
+        // double abs_error = fabs(dst[i] - cpu.vreg[4+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f);
+        // double rel_error = abs_error / (double) dst[i] ;
         double abs_error = fabs(diff_vreg[4+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].as_float - cpu.vreg[4+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f);
         double rel_error = abs_error / (double) cpu.vreg[4+(i/(VLEN/vcsr.sew))][i%(VLEN/vcsr.sew)].f;
 #       ifdef VERY_VERBOSE
