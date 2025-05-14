@@ -22,13 +22,13 @@ DEPS			=$(V_FILES) $(SIM_CSRCS)
 VERILATOR_ROOT := $(shell verilator --getenv VERILATOR_ROOT)
 CXXFLAGS = -g -O2 -std=c++14 -I$(OBJ_DIR)
 CXXFLAGS += -I$(VERILATOR_ROOT)/include -I$(VERILATOR_ROOT)/include/vltstd
-LDFLAGS = -ldl -lSDL2 -lpthread -no-pie -latomic # 根据实际需求调整其他库
+LDFLAGS = -ldl -lSDL2 -lpthread -no-pie -latomic -lz# 根据实际需求调整其他库
 INCLUDE_DIR = $(abspath ./include)
 include $(VERILATOR_ROOT)/include/verilated.mk
 
 #VERILATOR FLAGS
 VERILATOR_CFLAGS += -MMD -MP --build -cc \
-					-threads 1 -O2  --noassert --trace -j 4
+					-threads 1 -O2  --noassert --trace-fst -j 4
 # Include path
 INCFLAGS = $(addprefix -I, $(INCLUDE_DIR))
 CXXFLAGS += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\"" 
@@ -55,6 +55,7 @@ $(TARGET):$(SIM_CSRCS) $(HEADER_FILES) $(OBJ_DIR)/V$(TOPNAME)__ALL.a
 	$(VERILATOR_ROOT)/include/verilated.cpp \
 	$(VERILATOR_ROOT)/include/verilated_vcd_c.cpp \
 	$(VERILATOR_ROOT)/include/verilated_threads.cpp \
+	$(VERILATOR_ROOT)/include/verilated_fst_c.cpp \
 	$(OBJ_DIR)/V$(TOPNAME).cpp \
 	$(OBJ_DIR)/V$(TOPNAME)__ALL.a  -I$(INCLUDE_DIR) $(LDFLAGS) -o $@  
 

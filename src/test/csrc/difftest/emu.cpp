@@ -4,12 +4,13 @@
 #include "pmem.h"
 extern diff_context_t ref_cpu_state;
 extern bool commit;
+extern uint8_t commit_v_index;
 #define VEC_STORE_TRACE
 Emulator* Emulator::current_instance = nullptr; 
 Emulator::Emulator(int argc, const char *argv[])
     : contextp(new VerilatedContext),   // 初始化列表显式初始化成员
       dut_ptr(new VVTopDebug{contextp}),
-      wave(new VerilatedVcdC),
+      wave(new VerilatedFstC),
       total_vector_instr(0),
       sim_time(0),
       trapCode(STATE_RUNNING),
@@ -23,7 +24,7 @@ Emulator::Emulator(int argc, const char *argv[])
     contextp->commandArgs(argc, argv);
     contextp->traceEverOn(true);
     dut_ptr->trace(wave, 5);
-    wave->open("build/vpu.vcd");
+    wave->open("build/vpu.fst");
     wave->set_time_unit("ns");
 
     // 硬件复位
@@ -95,11 +96,17 @@ int Emulator::tick()
     single_cycle();//DUT executes one cycle
     if (total_vector_instr <= 16)
     {
+        // if(dut_state.vr[5]._32[0] !=0){
+        //     std::stringstream ss;
+        //     ss << "v5!=0, The present pc is=0x" << std::hex << ref_output_pool[cur_vec_ptr].pc;
+        //     log(ss.str());
+        // } 
         ref_difftest_exec(1);//REF executes one cycle
         present->pc = next->pc;
         ref_difftest_regcpy(&ref_cpu_state, DIFFTEST_TO_DUT, 0);
         present->inst.val = mem_addr_read(present->pc,present->pc, 4);
         decode_instr(present.get());
+        
         // if(ref_cpu_state.pc==0x80000240||ref_cpu_state.pc==0x8000026c){
         //     printf("present->pc=0x%08lx\n",present->pc);
         //     printf("next->pc=0x%08lx\n",next->pc);
@@ -147,6 +154,7 @@ int Emulator::tick()
                     // printf("A vector instr result is fetched from output_pool[%d]!\n",cur_vec_ptr);
                     log("A vector instr result is fetched from output_pool["+std::to_string(cur_vec_ptr)+"]!");
                     #endif
+                    log("v["+std::to_string(commit_v_index)+"] is committed!");
                     if(check_vregs_state(&dut_state) ==false) {
                         // printf("VPU state mismatch at pc=0x%016lx, instr=0x%08x\n", ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
                         // std::stringstream ss;
@@ -212,6 +220,12 @@ int Emulator::tick()
         // printf("A vector instr result is fetched from output_pool[%d]!\n",cur_vec_ptr);
         log("A vector instr result is fetched from output_pool["+std::to_string(cur_vec_ptr)+"]!");
         #endif
+        log("v["+std::to_string(commit_v_index)+"] is committed!");
+        // if(dut_state.vr[5]._32[0] !=0){
+        //     std::stringstream ss;
+        //     ss << "v5!=0, The present pc is=0x" << std::hex << ref_output_pool[cur_vec_ptr].pc;
+        //     log(ss.str());
+        // } 
         if(check_vregs_state(&dut_state) ==false) {
             // printf("VPU state mismatch at pc=0x%016lx, instr=0x%08x\n", ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
             // std::stringstream ss;
@@ -232,7 +246,8 @@ int Emulator::tick()
         cur_vec_ptr = cur_vec_ptr ==15 ? 0 : cur_vec_ptr + 1;
         total_vector_instr= total_vector_instr > 0? total_vector_instr-1 :0;
         commit=false;
-    } 
+    }
+    
     return 0;
 }
 
@@ -275,6 +290,7 @@ int Emulator::decode_instr(Decode *s) {
     INSTPAT("??? 0 ?1 ? ????? ????? 11? ????? 01001 11", vsx*, VSX);
 
     INSTPAT("?????? ? ????? ????? 000 ????? 10101 11", ivector-vector, OPIVV);
+    INSTPAT("010000 1 ????? 00000 001 ????? 10101 11", fvector-vector, VFMV_F_S);//skip vfmv.f.s 
     INSTPAT("?????? ? ????? ????? 001 ????? 10101 11", fvector-vector, OPFVV);
     INSTPAT("?????? ? ????? ????? 010 ????? 10101 11", mvector-vector, OPMVV);
     INSTPAT("?????? ? ????? ????? 011 ????? 10101 11", ivector-immediate, OPIVI);
@@ -298,6 +314,7 @@ void Emulator::vpu_state_store(){
             ref_output_pool[store_ptr].vr[i]._64[j] = ref_cpu_state.vr[i]._64[j];
         }
     }
+    ref_output_pool[store_ptr].issued_time=get_sim_time()-10;
 }
 
 void Emulator::clear_flags(Decode &s) {
@@ -319,8 +336,9 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
         for(int j=0;j<VLEN/32;j++){
             if(dut->vr[i]._32[j] != ref_output_pool[cur_vec_ptr].vr[i]._32[j]){
                 std::stringstream ss;
-                ss << "VPU state mismatch at simulation time= "<< std::to_string(get_sim_time()) << "ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
-                   << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << " ";
+                ss << "VPU state mismatch at simulation time= "<< std::to_string(get_sim_time()-10) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
+                   << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << ".\n";
+                ss <<"It is dispatched to vpu at simulation time ="<<std::to_string( ref_output_pool[cur_vec_ptr].issued_time)<<" ps.\n";
                 // printf("VPU state mismatch at vreg[%d][%d]: expected %016x, got %016x\n", i, j, ref_output_pool[cur_vec_ptr].vr[i]._32[j], dut->vr[i]._32[j]);
                 ss << "vreg[" << i << "][" << j << "]: expected 0x"
                    << std::hex << std::setfill('0') << std::setw(8)
@@ -328,7 +346,6 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
                    << std::hex << std::setfill('0') << std::setw(8)
                    << dut->vr[i]._32[j] << "\n";
                 /*print register value*/
-                // printf("REF model [v%d]: \n",i);
                 ss <<"REF model [v" << std::to_string(i) <<"]: \n";
                 for(int element = 0; element < VLEN/32;  element++) {
                     // printf("[%02d] %08x  ", element , ref_output_pool[cur_vec_ptr].vr[i]._32[element]);
@@ -342,7 +359,7 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
                     }
                 }
                 // printf("DUT model [v%d]: \n",i);
-                ss <<"DUT model [v" << std::to_string(i) <<"]: \n";
+                ss <<"DUT [v" << std::to_string(i) <<"]: \n";
                 for(int element = 0; element < VLEN/32;  element++) {
                     // printf("[%02d] %08x  ", element , dut->vr[i]._32[element]);
                     ss << "[" << std::setfill('0') << std::setw(2) << std::to_string(element) << "] " 

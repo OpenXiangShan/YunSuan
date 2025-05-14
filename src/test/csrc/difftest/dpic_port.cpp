@@ -8,6 +8,7 @@ extern uint8_t pmem [PMEM_SIZE];
 uint64_t vpu_pc=0;
 
 bool commit=false;
+uint8_t commit_v_index=0;
 // void out_of_bound(uint64_t paddr)
 // {
 //   if ((paddr - CONFIG_PMEM + vcsr.vl) < CONFIG_MSIZE)
@@ -88,6 +89,7 @@ extern "C" void get_vreg(
       }
      }
      commit=true;
+     commit_v_index=rf_addr;
   }
 }
 

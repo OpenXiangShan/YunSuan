@@ -10,8 +10,8 @@
 #include "verilated.h"
 #include "svdpi.h"
 #include "VVTopDebug__Dpi.h"
-#include <verilated_vcd_c.h>
-
+// #include <verilated_vcd_c.h>
+#include <verilated_fst_c.h>
 
 #define RESET_VECTOR 0x80000000
 #define concat_temp(x, y) x ## y

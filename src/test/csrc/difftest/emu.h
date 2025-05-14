@@ -64,6 +64,7 @@ typedef struct VPU_STATE{
     } vr[32];
     uint64_t pc;
     Inst inst;
+    vluint64_t issued_time;
 }VPU_STATE;
 
 class Emulator {
@@ -72,7 +73,7 @@ private:
 
   VerilatedContext *contextp ;
   VVTopDebug *dut_ptr ;
-  VerilatedVcdC *wave ;
+  VerilatedFstC *wave ;
   uint8_t total_vector_instr;
 
   // emu control variable

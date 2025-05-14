@@ -6,7 +6,7 @@
 
 enum {
 	TYPE_I, TYPE_U, TYPE_S, TYPE_J, TYPE_N, TYPE_R,TYPE_B, TYPE_OPIVV, TYPE_OPFVV, TYPE_OPMVV, TYPE_OPIVI, TYPE_OPIVX, TYPE_OPFVF, TYPE_OPMVX, TYPE_OPCFG,TYPE_VL, TYPE_VLS,TYPE_VLX,TYPE_VS 
-    ,TYPE_VSS,TYPE_VSX
+    ,TYPE_VSS,TYPE_VSX,TYPE_VFMV_F_S
 };
 enum {
 	SD
@@ -120,6 +120,7 @@ finish:
         case TYPE_VS :isvec();gpr_src1();            break;
         case TYPE_VSS:isvec();gpr_src1();gpr_src2(); break;
         case TYPE_VSX:isvec();gpr_src1();            break;
+        case TYPE_VFMV_F_S:                          break;
         default:printf("Unsupported type!\n");assert(0);break;
 
         }
