@@ -160,6 +160,7 @@ class VectorFloatAdder() extends Module {
    *                                                                                f32_0_fp_a = io.vs2_fold(31,16)
    * other inst don't change
    */
+
   val f64_fp_a = Wire(UInt(floatWidth.W))
   val f32_0_fp_a = Wire(UInt(floatWidth.W))
   val f32_1_fp_a = Wire(UInt(floatWidth.W))

@@ -8,6 +8,11 @@ import scala.collection.mutable.ListBuffer
 import race.vpu.VParams._
 import scala.math._
 
+// only can do 1 fp64, 1 fp32, 1 fp16, 1 bf16
+// fma
+// booth significand(53, 24, 11, 8)
+// csa booth result add together
+// output
 class FloatFMAMixedWithDifferentFormat(
   val support_fp64: Boolean,
   val support_fp32: Boolean,

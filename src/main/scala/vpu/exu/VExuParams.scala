@@ -2,6 +2,7 @@ package race.vpu.yunsuan
 
 import chisel3._
 import chisel3.util._
+import race.vpu.yunsuan.VectorElementFormat.w
 
 object VectorElementFormat {
   def width = 2
@@ -99,7 +100,7 @@ object Vfffunc6 {
   def fnmadd    = "b101001".U(width.W)
   def fmsub     = "b101010".U(width.W)
   def fnmsub    = "b101011".U(width.W)
-
+  def fwmacc    = "b111100".U(width.W)
 }
 
 object VfmaOpCode {
@@ -207,9 +208,9 @@ object VfredOpCode {
 
 
 //latency
-object Yunsuan_latency {
-  val VFD_latency: Int = 99 // unknown
-  val VFA_latency: Int = 1
-  val VFr_latency: Int  = 8 // ?? need to be confirmed
-  val VCVT_latency: Int = 2 // ??
-}
+// object Yunsuan_latency {
+//   val VFD_latency: Int = 99 // unknown
+//   val VFA_latency: Int = 1
+//   val VFr_latency: Int  = 8 // ?? need to be confirmed
+//   val VCVT_latency: Int = 2 // ??
+// }

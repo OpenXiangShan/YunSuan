@@ -102,7 +102,7 @@ class VectorExuFloatAdder() extends Module {
   io.out_uop.bits := reg_uop
 }
 
-// support fp32, fp16, bf16
+// support fp64, fp32, fp16, bf16
 class VectorFloatAdder_Width64() extends Module {
   val VLEN = 2048
   val exponentWidth = 11
@@ -133,6 +133,14 @@ class VectorFloatAdder_Width64() extends Module {
     val fp_result     = Output(UInt(floatWidth.W))
     val fflags        = Output(UInt(20.W))
   })
+
+  // width 64, 
+  // 1 fp64,
+  // 2 fp32mixedfp16, 2 pure fp16
+  // 4 bf16
+
+  // can calcaulate 4 fp16 or 4 bf16, 2 fp32, 1 fp64 at a time
+
   // TODO change fp_format is_vec logic
   // assert(io.fp_format=/=0.U) // TODO: add valid to enable assert
 

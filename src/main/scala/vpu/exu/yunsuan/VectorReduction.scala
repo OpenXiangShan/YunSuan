@@ -145,8 +145,8 @@ class VfredFP32_Pipelined(val num: Int = 0) extends Module {
       vfred.io.is_vec := io.vctrl_pipe_in.bits.uop.ctrl.vv
       vfred.io.round_mode := io.vctrl_pipe_in.bits.uop.csr.frm
       
-      vfred.io.fp_format  :=   "b10".U(2.W)
-      vfred.io.mask := mask
+      vfred.io.fp_format := "b10".U(2.W)
+      vfred.io.mask      := mask
 
       vfred.io.op_code    := io.vctrl_pipe_in.bits.op_code
       vfred.io.fp_aIsFpCanonicalNAN := 0.U

@@ -76,7 +76,8 @@ class Vfma_setuop extends Bundle {
     (funct6 === Vfffunc6.fmadd   & (fvv  | fvf))       -> VfmaOpCode.vfmadd ,
     (funct6 === Vfffunc6.fnmadd  & (fvv  | fvf))       -> VfmaOpCode.vfnmadd,
     (funct6 === Vfffunc6.fmsub   & (fvv  | fvf))       -> VfmaOpCode.vfmsub ,
-    (funct6 === Vfffunc6.fnmsub  & (fvv  | fvf))       -> VfmaOpCode.vfnmsub
+    (funct6 === Vfffunc6.fnmsub  & (fvv  | fvf))       -> VfmaOpCode.vfnmsub,
+    (funct6 === Vfffunc6.fwmacc  & (fvv  | fvf))       -> VfmaOpCode.vfmacc,
   ))
 
 }

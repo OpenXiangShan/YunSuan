@@ -58,7 +58,7 @@ class VectorExuCvt extends  Module {
   element8  := io.vs2.asTypeOf(element8)
 
   // if widen
-  val src =  Mux(io.uop_idx && is_widen, Cat(element32(0), element32(1)), io.vs2)
+  val src =  Mux(io.uop_idx && is_widen, Cat(element32(0), element32(1)), io.vs2) //TODO: widen or narrow
   vcvt.io.fire          := io.fire
   vcvt.io.sew           := io.sew
   vcvt.io.opType        := io.op_code
