@@ -26,19 +26,19 @@ class VExuBlock extends Module {
     */
   // val vfred_out = Wire(new VExuOutput)
   val vfred     = Module(new Vfreduction)
-  val vfred_setuop = Wire(new Vfred_setuop)
+  val vfred_setop = Wire(new Vfred_setop)
 
-  vfred_setuop.funct := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
-  vfred_setuop.vm := in.uop.ctrl.vm
-  vfred_setuop.vs1 := in.uop.ctrl.lsrc(0)
-  vfred_setuop.vs2 := in.uop.ctrl.lsrc(1)
-  vfred_setuop.op := vfred_setuop.op_gen
+  vfred_setop.funct := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
+  vfred_setop.vm := in.uop.ctrl.vm
+  vfred_setop.vs1 := in.uop.ctrl.lsrc(0)
+  vfred_setop.vs2 := in.uop.ctrl.lsrc(1)
+  vfred_setop.op := vfred_setop.op_gen
 
   vfred.io.in.valid := io.in.valid && in.uop.ctrl.vfred
   vfred.io.in.bits.vs1  := in.vSrc(0)(XLEN-1, 0)
   vfred.io.in.bits.vs2  := in.vSrc(1)
 
-  vfred.io.in.bits.op_code       := vfred_setuop.op
+  vfred.io.in.bits.op_code       := vfred_setop.op
   vfred.io.in.bits.mask          := in.vSrc(3)
   vfred.io.in.bits.uop           := in.uop
   // vfred_out.vd              := Cat(Fill((VLEN-XLEN), 0.U), vfred.io.out.bits.result)

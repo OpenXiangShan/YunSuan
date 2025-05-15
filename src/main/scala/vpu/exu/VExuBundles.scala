@@ -5,7 +5,7 @@ import chisel3.util._
 import race.vpu._
 import race.vpu.VParams._
 
-class Vfa_setuop extends Bundle {
+class Vfa_setop extends Bundle {
   val funct = UInt(9.W)
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)
@@ -55,7 +55,7 @@ class Vfa_setuop extends Bundle {
 }
 
 // fma
-class Vfma_setuop extends Bundle {
+class Vfma_setop extends Bundle {
   val funct = UInt(9.W)
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)
@@ -83,7 +83,7 @@ class Vfma_setuop extends Bundle {
 }
 
 // 
-class Vfd_setuop extends Bundle {
+class Vfd_setop extends Bundle {
   val funct = UInt(9.W)
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)
@@ -107,7 +107,7 @@ class Vfd_setuop extends Bundle {
 
 }
 
-class Vcvt_setuop extends Bundle {
+class Vcvt_setop extends Bundle {
   val funct = UInt(9.W)
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)
@@ -125,17 +125,18 @@ class Vcvt_setuop extends Bundle {
   def fvf = (funct3 === "b101".U)
 
   def op_gen = Mux1H(Seq(
-  (funct6 === Vfcvtfunc6.vfncvt_xfw    & fvv & (vs1 === "b10001".U))   -> VfcvtOpCode.vfncvt_xfw,
-  (funct6 === Vfcvtfunc6.vfcvt_xfv     & fvv & (vs1 === "b00001".U))   -> VfcvtOpCode.vfcvt_xfv,
-  (funct6 === Vfcvtfunc6.vfwcvt_fxv    & fvv & (vs1 === "b01011".U))   -> VfcvtOpCode.vfwcvt_fxv,
-  (funct6 === Vfcvtfunc6.vfcvt_fxv     & fvv & (vs1 === "b00011".U))   -> VfcvtOpCode.vfcvt_fxv,
-  (funct6 === Vfcvtfunc6.vfrec7        & fvv & (vs1 === "b00101".U))   -> VfcvtOpCode.vfrec7,
-  (funct6 === Vfcvtfunc6.vfrsqrt7      & fvv & (vs1 === "b00100".U))   -> VfcvtOpCode.vfrsqrt7,
+  (funct6 === Vfcvtfunc6.vfncvt_xfw    && fvv && (vs1 === "b10001".U))   -> VfcvtOpCode.vfncvt_xfw,
+  (funct6 === Vfcvtfunc6.vfcvt_xfv     && fvv && (vs1 === "b00001".U))   -> VfcvtOpCode.vfcvt_xfv,
+  (funct6 === Vfcvtfunc6.vfwcvt_fxv    && fvv && (vs1 === "b01011".U))   -> VfcvtOpCode.vfwcvt_fxv,
+  (funct6 === Vfcvtfunc6.vfcvt_fxv     && fvv && (vs1 === "b00011".U))   -> VfcvtOpCode.vfcvt_fxv,
+  (funct6 === Vfcvtfunc6.vfrec7        && fvv && (vs1 === "b00101".U))   -> VfcvtOpCode.vfrec7,
+  (funct6 === Vfcvtfunc6.vfrsqrt7      && fvv && (vs1 === "b00100".U))   -> VfcvtOpCode.vfrsqrt7,
+  (funct6 === Vfcvtfunc6.vfncvt_ffw    && fvv && (vs1 === "b10100".U))   -> VfcvtOpCode.vfncvt_ffw,
   ))
   
 }
 
-class Vrg_setuop extends Bundle {
+class Vrg_setop extends Bundle {
   val funct = UInt(9.W)
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)
@@ -159,7 +160,7 @@ class Vrg_setuop extends Bundle {
 }
 
 // for vfred
-class Vfred_setuop extends Bundle {
+class Vfred_setop extends Bundle {
   val funct = UInt(9.W)
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)

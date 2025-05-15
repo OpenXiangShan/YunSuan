@@ -44,7 +44,7 @@ class Lane extends Module {
   alu_out := alu.io.out.bits
 
   val vfadd = Module(new VectorExuFloatAdder)
-  val vfadd_op = Wire(new Vfa_setuop)
+  val vfadd_op = Wire(new Vfa_setop)
 
   vfadd_op.funct := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
   vfadd_op.vm := in.uop.ctrl.vm
@@ -79,7 +79,7 @@ class Lane extends Module {
 
 
   val vfma = Module(new VectorExuFloatFMA)
-  val vfma_op = Wire(new Vfma_setuop)
+  val vfma_op = Wire(new Vfma_setop)
 
   vfma_op.funct  := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
   vfma_op.vm     := in.uop.ctrl.vm
@@ -107,19 +107,19 @@ class Lane extends Module {
   vfma_out.uop := vfma.io.out_uop.bits
 
   val vcvt = Module(new VectorExuCvt)
-  val vcvt_setuop = Wire(new Vcvt_setuop)
+  val vcvt_setop = Wire(new Vcvt_setop)
 
-  vcvt_setuop.funct := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
-  vcvt_setuop.vm := in.uop.ctrl.vm
-  vcvt_setuop.vs1 := in.uop.ctrl.lsrc(0)
-  vcvt_setuop.vs2 := in.uop.ctrl.lsrc(1)
-  vcvt_setuop.op := vcvt_setuop.op_gen
+  vcvt_setop.funct := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
+  vcvt_setop.vm := in.uop.ctrl.vm
+  vcvt_setop.vs1 := in.uop.ctrl.lsrc(0)
+  vcvt_setop.vs2 := in.uop.ctrl.lsrc(1)
+  vcvt_setop.op := vcvt_setop.op_gen
 
   vcvt.io.fire := io.in.valid && in.uop.ctrl.vfcvt 
   vcvt.io.in_uop := in.uop
   vcvt.io.vs2  := in.vs2
   vcvt.io.uop_idx := in.uop.uopIdx 
-  vcvt.io.op_code := vcvt_setuop.op
+  vcvt.io.op_code := vcvt_setop.op
   vcvt.io.sew := in.uop.csr.vsew(1, 0)
   vcvt.io.rm := in.uop.csr.frm
   vcvt.io.isFpToVecInst := false.B

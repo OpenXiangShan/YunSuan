@@ -142,6 +142,7 @@ object Vfcvtfunc6 {
   def vfcvt_fxv   = "b010010".U(width.W)
   def vfrec7      = "b010011".U(width.W)
   def vfrsqrt7    = "b010011".U(width.W)
+  def vfncvt_ffw  = "b010010".U(width.W)
 }
 
 object VfcvtOpCode {
