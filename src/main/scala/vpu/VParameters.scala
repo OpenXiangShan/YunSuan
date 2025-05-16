@@ -27,7 +27,7 @@ object VParams {
   // Execution delays
   val bMaxFuDelay = 4 // Exclude long-latency (div) operations
   val issueDelay = 1  // Read RF
-  val wbDelay = 1  // Write back to RF
+  val wbDelay = 0  // Write back to RF
   val delayBias = issueDelay + wbDelay
   // Concrete execution delays
   val aluDelay = 1 + delayBias

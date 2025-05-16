@@ -181,7 +181,8 @@ class VCtrlBlock extends Module {
   /**
     *  (2) Then we generate the ready signal "expander.io.out.ready" that is from exuInputReg/Load to expander
     */
-  expander.io.out.ready := io.lsu.loadReq.ready && expdrOutIsLoad || readyExuStore && (expdrOutIsExu || expdrOutIsStore)
+  // expander.io.out.ready := io.lsu.loadReq.ready && expdrOutIsLoad || readyExuStore && (expdrOutIsExu || expdrOutIsStore)
+  expander.io.out.ready := !expdrOutValid || io.lsu.loadReq.ready && expdrOutIsLoad || readyExuStore && (expdrOutIsExu || expdrOutIsStore)
   io.lsu.loadReq.valid := expdrOutValid && expdrOutIsLoad
   io.lsu.loadReq.bits.uop := expander.io.out.bits.uop
   io.lsu.loadReq.bits.ldstCtrl := 0.U.asTypeOf(new LdstCtrl) // FIXME: use the real ldstCtrl from expander
@@ -193,16 +194,28 @@ class VCtrlBlock extends Module {
   if (debugMode) {
     io.debugRob.get.issuedUopRobIdx.valid := expander.io.out.fire && expander.io.out.bits.uop.uopEnd
     io.debugRob.get.issuedUopRobIdx.bits := expander.io.out.bits.uop.robIdx
-    io.debugRob.get.wbLoad.valid := RegNext(io.lsu.loadWb.valid)
-    io.debugRob.get.wbLoad.bits.uop := RegNext(io.lsu.loadWb.bits.uop)
-    vrf.io.raddr(5) := RegNext(io.lsu.loadWb.bits.uop.ldestUop)
+
+    // io.debugRob.get.wbLoad.valid := RegNext(io.lsu.loadWb.valid)
+    // io.debugRob.get.wbLoad.bits.uop := RegNext(io.lsu.loadWb.bits.uop)
+    // vrf.io.raddr(5) := RegNext(io.lsu.loadWb.bits.uop.ldestUop)
+    // io.debugRob.get.wbLoad.bits.vd := vrf.io.rdata(5)
+    // io.debugRob.get.wbExu.valid := RegNext(io.fromExu(0).valid)
+    // io.debugRob.get.wbExu.bits.uop := RegNext(io.fromExu(0).bits.uop)
+    // vrf.io.raddr(4) := RegNext(io.fromExu(0).bits.uop.ldestUop)
+    // io.debugRob.get.wbExu.bits.vd := vrf.io.rdata(4)
+    // io.debugRob.get.wbStore.valid := RegNext(io.lsu.storeReq.fire)
+    // io.debugRob.get.wbStore.bits.uop := RegNext(io.lsu.storeReq.bits.uop)
+
+    io.debugRob.get.wbLoad.valid := io.lsu.loadWb.valid
+    io.debugRob.get.wbLoad.bits.uop := io.lsu.loadWb.bits.uop
+    vrf.io.raddr(5) := io.lsu.loadWb.bits.uop.ldestUop
     io.debugRob.get.wbLoad.bits.vd := vrf.io.rdata(5)
-    io.debugRob.get.wbExu.valid := RegNext(io.fromExu(0).valid)
-    io.debugRob.get.wbExu.bits.uop := RegNext(io.fromExu(0).bits.uop)
-    vrf.io.raddr(4) := RegNext(io.fromExu(0).bits.uop.ldestUop)
+    io.debugRob.get.wbExu.valid := io.fromExu(0).valid
+    io.debugRob.get.wbExu.bits.uop := io.fromExu(0).bits.uop
+    vrf.io.raddr(4) := io.fromExu(0).bits.uop.ldestUop
     io.debugRob.get.wbExu.bits.vd := vrf.io.rdata(4)
-    io.debugRob.get.wbStore.valid := RegNext(io.lsu.storeReq.fire)
-    io.debugRob.get.wbStore.bits.uop := RegNext(io.lsu.storeReq.bits.uop)
+    io.debugRob.get.wbStore.valid := io.lsu.storeReq.fire
+    io.debugRob.get.wbStore.bits.uop := io.lsu.storeReq.bits.uop
   }
 }
 

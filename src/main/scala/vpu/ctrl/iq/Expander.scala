@@ -71,7 +71,8 @@ class Expander extends Module {
   }
   io.out.valid := out_valid
 
-  io.in.ready := state === IDLE && canOut || state === IDLE && !io.out.valid
+  // io.in.ready := state === IDLE && canOut || state === IDLE && !io.out.valid
+  io.in.ready := state === IDLE && canOut
   
   //---- Some ctrl signals should be hold during this instruction expanding process ----
   val v_ext = io.in.bits.mop.ctrl.alu && io.in.bits.mop.ctrl.funct3 === "b010".U && io.in.bits.mop.ctrl.funct6 === "b010010".U
