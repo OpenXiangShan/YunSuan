@@ -21,9 +21,12 @@ class VTopDebug extends Module {
   vTop.io.l2.loadRsp.valid := dpicL2.io.load_data.valid
   vTop.io.l2.loadRsp.bits.data := dpicL2.io.load_data.bits.data
   
+  val dpicStoreL2 = Module(new DpicStoreL2)
   vTop.io.l2.storeReq.ready := true.B
   vTop.io.l2.storeAck.valid := false.B
   vTop.io.l2.storeAck.bits.dummy := false.B
+  dpicStoreL2.io.store_req.bits := vTop.io.l2.storeReq.bits
+  dpicStoreL2.io.store_req.valid := vTop.io.l2.storeReq.valid
 
   val debugRob = Module(new DebugRob)
   if (debugMode) {

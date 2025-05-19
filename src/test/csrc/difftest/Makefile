@@ -13,6 +13,7 @@ VTOP 		:= $(BUILD_DIR)/$(TOPNAME)
 SIM_CSRCS 		= $(shell find $(abspath ./) -maxdepth 1   -name "*.cpp") 
 HEADER_FILES 	= $(shell find $(abspath ./) -maxdepth 1 -name '*.h') 
 V_FILES			=$(abspath ../../../../build/verilog_vpu_debug/load_l2_dpic.sv)  \
+                 $(abspath ../../../../build/verilog_vpu_debug/store_l2_dpic.sv)  \
 				$(abspath ../../../../build/verilog_vpu_debug/VTopDebug.v) \
 				$(abspath ../../../../build/verilog_vpu_debug/get_vreg_dpic.sv)
 DEPS			=$(V_FILES) $(SIM_CSRCS)
