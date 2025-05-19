@@ -45,6 +45,7 @@ typedef struct Decode
     Inst inst;
     bool is_vec;
     bool is_vec_cfg;
+    bool is_vec_store;
     bool is_scalar_store;
     bool is_scalar_gpr;
     bool is_fp_reg;

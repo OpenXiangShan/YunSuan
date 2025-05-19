@@ -81,6 +81,7 @@ finish:
     #define fpr_src2() do { s->rs2 = FPR(rs2_addr); } while (0)
     #define isvec() do { s->is_vec = true; } while (0)
     #define isveccfg() do { s->is_vec_cfg = true; } while (0)
+    #define isvecstore() do { s->is_vec_store = true; } while (0)
     // #define is_scalar_store() do { s->is_scalar_store = true; } while (0)
 
 
@@ -117,9 +118,9 @@ finish:
         case TYPE_VL :isvec();gpr_src1();            break;
         case TYPE_VLS:isvec();gpr_src1();gpr_src2(); break;
         case TYPE_VLX:isvec();gpr_src1();            break;
-        case TYPE_VS :/*isvec();*/gpr_src1();            break;
-        case TYPE_VSS:/*isvec();*/gpr_src1();gpr_src2(); break;
-        case TYPE_VSX:/*isvec();*/gpr_src1();            break;
+        case TYPE_VS :isvecstore();gpr_src1();            break;
+        case TYPE_VSS:isvecstore();gpr_src1();gpr_src2(); break;
+        case TYPE_VSX:isvecstore();gpr_src1();            break;
         case TYPE_VFMV_F_S:                          break;
         default:printf("Unsupported type!\n");assert(0);break;
 

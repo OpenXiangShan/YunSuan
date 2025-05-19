@@ -5,7 +5,7 @@
 extern diff_context_t ref_cpu_state;
 extern bool commit;
 extern uint8_t commit_v_index;
-#define VEC_STORE_TRACE
+// #define VEC_STORE_TRACE
 Emulator* Emulator::current_instance = nullptr; 
 Emulator::Emulator(int argc, const char *argv[])
     : contextp(new VerilatedContext),   // 初始化列表显式初始化成员
@@ -20,6 +20,7 @@ Emulator::Emulator(int argc, const char *argv[])
       next(std::make_unique<Decode>()),
       robIdx(0){    // 初始化列表顺序与类声明一致
 
+    current_instance = this;
     // Verilator相关初始化
     contextp->commandArgs(argc, argv);
     contextp->traceEverOn(true);
@@ -48,6 +49,7 @@ Emulator::Emulator(int argc, const char *argv[])
 
 // 析构函数释放内存
 Emulator::~Emulator() {
+    current_instance = nullptr; 
     delete wave;
     delete dut_ptr;
     delete contextp;
@@ -163,7 +165,6 @@ int Emulator::tick()
                         // log(ss.str());
                         trapCode=STATE_TRAP;
                         return 0;
-
                     }else {
                         // printf("PC=0x%016lx,instr=0x%08x  passes!\n",ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
                         std::stringstream ss;
@@ -211,8 +212,26 @@ int Emulator::tick()
             dut_ptr->io_dispatch_s2v_bits_rs2=next->rs2;
             ref_output_pool[store_ptr].robidx=dut_ptr->io_dispatch_s2v_bits_robIdx_value;
             ref_output_pool[store_ptr].robIdx_flag=dut_ptr->io_dispatch_s2v_bits_robIdx_flag;
-        }else
-        {
+        }else if(next->is_vec_store == true){
+             while(dut_ptr->io_dispatch_s2v_ready!=1)
+            {
+                single_cycle();
+            }
+            dut_ptr->io_dispatch_s2v_valid=1; 
+            dut_ptr->io_dispatch_s2v_bits_robIdx_flag=(robIdx==0xff?~dut_ptr->io_dispatch_s2v_bits_robIdx_flag:dut_ptr->io_dispatch_s2v_bits_robIdx_flag); 
+            dut_ptr->io_dispatch_s2v_bits_robIdx_value=robIdx++; 
+            dut_ptr->io_dispatch_s2v_bits_inst=next->inst.val;
+            dut_ptr->io_dispatch_s2v_bits_rs1=next->rs1;
+            dut_ptr->io_dispatch_s2v_bits_rs2=next->rs2;
+            std::stringstream ss;
+            ss << "Vector store instruction 0x" << std::hex << std::setfill('0') << std::setw(8) << next->inst.val << " is sent to VPU at PC = 0X"
+               << std::hex << std::setfill('0') << std::setw(16) <<next->pc<<" , simulation time = " 
+                << std::to_string(get_sim_time()) << " ps! ";
+             ss <<"ROB index is " << std::hex<< static_cast<unsigned>(dut_ptr->io_dispatch_s2v_bits_robIdx_value) << ", ";
+                ss <<"ROB flag is " <<+dut_ptr->io_dispatch_s2v_bits_robIdx_flag << ".";
+            log(ss.str());
+        }
+        else{
             dut_ptr->io_dispatch_s2v_valid=0;
         }
     }
@@ -223,18 +242,7 @@ int Emulator::tick()
         log("A vector instr result is fetched from output_pool["+std::to_string(cur_vec_ptr)+"]!");
         #endif
         log("v["+std::to_string(commit_v_index)+"] is committed!");
-        // if(dut_state.vr[5]._32[0] !=0){
-        //     std::stringstream ss;
-        //     ss << "v5!=0, The present pc is=0x" << std::hex << ref_output_pool[cur_vec_ptr].pc;
-        //     log(ss.str());
-        // } 
         if(check_vregs_state(&dut_state) ==false) {
-            // printf("VPU state mismatch at pc=0x%016lx, instr=0x%08x\n", ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
-            // std::stringstream ss;
-            // ss << "VPU state mismatch at simulation time= "<< std::to_string(get_sim_time()) << ", PC=0x" \
-               << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"\
-               << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << " ";
-            // log(ss.str());
             trapCode=STATE_TRAP;
             return 0;
         }else {
@@ -322,6 +330,7 @@ void Emulator::vpu_state_store(){
 void Emulator::clear_flags(Decode &s) {
     s.is_vec            = false;
     s.is_vec_cfg        = false;
+    s.is_vec_store      = false;
     s.is_scalar_store   = false;
     s.is_scalar_gpr     = false;
     s.is_fp_reg         = false;
@@ -342,7 +351,7 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
                    << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << ".\n";
                 ss <<"It is dispatched to vpu at simulation time = "<<std::to_string( ref_output_pool[cur_vec_ptr].issued_time)<<" ps.\n";
                 ss <<"ROB index is " << std::hex<< static_cast<unsigned>(ref_output_pool[cur_vec_ptr].robidx) << ", ";
-                ss <<"ROB flag is " <<ref_output_pool[cur_vec_ptr].robIdx_flag << ".\n ";
+                ss <<"ROB flag is " <<ref_output_pool[cur_vec_ptr].robIdx_flag << ".\n";
                 ss << "vreg[" << i << "][" << j << "]: expected 0x"
                    << std::hex << std::setfill('0') << std::setw(8)
                    << ref_output_pool[cur_vec_ptr].vr[i]._32[j] << ", got 0x" 

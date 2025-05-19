@@ -2,49 +2,51 @@
 #include "emu.h"
 #include "pmem.h"
 #include "dpic_port.h"
-
+#define MEM_TRACE
 VPU_STATE dut_state;
 extern uint8_t pmem [PMEM_SIZE];
 uint64_t vpu_pc=0;
 
 bool commit=false;
 uint8_t commit_v_index=0;
-// void out_of_bound(uint64_t paddr)
-// {
-//   if ((paddr - CONFIG_PMEM + vcsr.vl) < CONFIG_MSIZE)
-//     return;
-//   printf("Memory is out of bound!\n");
-//   assert(0);
-// }
 
 //   import "DPI-C" function void pmem_read(input longint unsigned paddr,input byte unsigned len, output int unsigned output_bits[VLEN/32]);
 
 extern "C" void pmem_read(unsigned long long paddr, uint32_t output_bits[VLEN / 32])
-{ 
+{
+  uint64_t pc = Emulator::get_current_instance()->get_current_pc();
+  vluint64_t sim_time = Emulator::get_current_instance()->get_sim_time();
   if(in_pmem(paddr)){
     int start_addr = paddr - MBASE;
     const int expected_bytes = (VLEN / 32) * sizeof(uint32_t);
     std::memcpy(output_bits, &pmem[start_addr], expected_bytes);
-    // for (int i = start_addr; i < start_addr+len; i++)
-    // {
-    //   std::memcpy(&output_bits[i-start_addr], &pmem[i], sizeof(uint8_t));
-
-    // }
+#ifdef MEM_TRACE
+    std::stringstream ss;
+    ss << "Load data from pmem at address 0x"  << std::hex << std::setfill('0') << std::setw(8) << static_cast<unsigned>(paddr)<<", ";
+    ss << "at simulation time = " << std::to_string(sim_time) << " ps!";
+    Emulator::get_current_instance()->log(ss.str());
+#endif 
   }else{
-    uint64_t pc = Emulator::get_current_instance()->get_current_pc();
     out_of_bound(pc,paddr);//memory bound check
     return ;
   }
 }
 
-//   import "DPI-C" function void pmem_read(input longint unsigned paddr, input int unsigned output_bits[VLEN/32],input byte unsigned len );
 //   import "DPI-C" function void pmem_write(input longint unsigned paddr, input int unsigned input_bits[VLEN/32]);
 extern "C" void pmem_write(unsigned long long paddr, const unsigned int input_bits[VLEN / 32])
 { 
+  uint64_t pc = Emulator::get_current_instance()->get_current_pc();
+  vluint64_t sim_time = Emulator::get_current_instance()->get_sim_time();
   if(in_pmem(paddr)){
     int start_addr = paddr - MBASE;
     const int expected_bytes = (VLEN / 32) * sizeof(uint32_t);
     std::memcpy(&pmem[start_addr], input_bits, expected_bytes);
+#ifdef MEM_TRACE
+    std::stringstream ss;
+    ss << "Store data to pmem at address 0x"  << std::hex << std::setfill('0') << std::setw(8) << static_cast<unsigned>(paddr)<<".";
+    ss << "at simulation time = " << std::to_string(sim_time) << " ps!";
+    Emulator::get_current_instance()->log(ss.str());
+#endif 
   }else{
     uint64_t pc = Emulator::get_current_instance()->get_current_pc();
     out_of_bound(pc,paddr);//memory bound check
