@@ -29,7 +29,7 @@ include $(VERILATOR_ROOT)/include/verilated.mk
 
 #VERILATOR FLAGS
 VERILATOR_CFLAGS += -MMD -MP --build -cc \
-					-threads 1 -O2  --noassert --trace-fst -j 4
+					-threads 1 -O2  --noassert --trace-fst -j 30
 # Include path
 INCFLAGS = $(addprefix -I, $(INCLUDE_DIR))
 CXXFLAGS += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\"" 

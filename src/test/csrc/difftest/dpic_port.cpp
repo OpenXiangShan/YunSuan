@@ -39,17 +39,12 @@ extern "C" void pmem_read(unsigned long long paddr, uint32_t output_bits[VLEN / 
 
 //   import "DPI-C" function void pmem_read(input longint unsigned paddr, input int unsigned output_bits[VLEN/32],input byte unsigned len );
 //   import "DPI-C" function void pmem_write(input longint unsigned paddr, input int unsigned input_bits[VLEN/32]);
-extern "C" void pmem_write(unsigned long long paddr, uint32_t input_bits[VLEN / 32])
+extern "C" void pmem_write(unsigned long long paddr, const unsigned int input_bits[VLEN / 32])
 { 
   if(in_pmem(paddr)){
     int start_addr = paddr - MBASE;
     const int expected_bytes = (VLEN / 32) * sizeof(uint32_t);
     std::memcpy(&pmem[start_addr], input_bits, expected_bytes);
-    // for (int i = start_addr; i < start_addr+len; i++)
-    // {
-    //   std::memcpy(&pmem[i],&output_bits[i-start_addr], sizeof(uint8_t));
-    //   return ;
-    // }
   }else{
     uint64_t pc = Emulator::get_current_instance()->get_current_pc();
     out_of_bound(pc,paddr);//memory bound check

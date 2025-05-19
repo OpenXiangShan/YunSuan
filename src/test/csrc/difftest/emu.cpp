@@ -209,6 +209,8 @@ int Emulator::tick()
             dut_ptr->io_dispatch_s2v_bits_inst=next->inst.val;
             dut_ptr->io_dispatch_s2v_bits_rs1=next->rs1;
             dut_ptr->io_dispatch_s2v_bits_rs2=next->rs2;
+            ref_output_pool[store_ptr].robidx=dut_ptr->io_dispatch_s2v_bits_robIdx_value;
+            ref_output_pool[store_ptr].robIdx_flag=dut_ptr->io_dispatch_s2v_bits_robIdx_flag;
         }else
         {
             dut_ptr->io_dispatch_s2v_valid=0;
@@ -339,7 +341,8 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
                 ss << "VPU state mismatch at simulation time = "<< std::to_string(get_sim_time()-10) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
                    << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << ".\n";
                 ss <<"It is dispatched to vpu at simulation time = "<<std::to_string( ref_output_pool[cur_vec_ptr].issued_time)<<" ps.\n";
-                // printf("VPU state mismatch at vreg[%d][%d]: expected %016x, got %016x\n", i, j, ref_output_pool[cur_vec_ptr].vr[i]._32[j], dut->vr[i]._32[j]);
+                ss <<"ROB index is " << std::hex<< static_cast<unsigned>(ref_output_pool[cur_vec_ptr].robidx) << ", ";
+                ss <<"ROB flag is " <<ref_output_pool[cur_vec_ptr].robIdx_flag << ".\n ";
                 ss << "vreg[" << i << "][" << j << "]: expected 0x"
                    << std::hex << std::setfill('0') << std::setw(8)
                    << ref_output_pool[cur_vec_ptr].vr[i]._32[j] << ", got 0x" 

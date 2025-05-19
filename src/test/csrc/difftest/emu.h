@@ -64,6 +64,8 @@ typedef struct VPU_STATE{
     } vr[32];
     uint64_t pc;
     Inst inst;
+    uint8_t robidx;
+    bool robIdx_flag;
     vluint64_t issued_time;
 }VPU_STATE;
 
