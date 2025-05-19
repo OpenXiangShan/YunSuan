@@ -29,6 +29,7 @@ object VParams {
   val issueDelay = 1  // Read RF
   val wbDelay = 0  // Write back to RF
   val delayBias = issueDelay + wbDelay
+  require(delayBias >= 1)
   // Concrete execution delays
   val aluDelay = 1 + delayBias
   val faddDelay = 1 + delayBias

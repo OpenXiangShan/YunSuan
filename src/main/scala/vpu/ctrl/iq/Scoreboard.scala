@@ -107,7 +107,7 @@ class VScoreboard extends Module {
   for (i <- 0 until 32) {
     val setHit = setReqAddrOH(i) && setReqAddr.valid
     when (setHit && setFuDelay._1) {
-      delay(i) := setFuDelay_minus_1
+      delay(i) := setFuDelay_minus_1 - 1.U
     }.elsewhen (delay(i) =/= 0.U) {
       delay(i) := delay(i) - 1.U
     }
@@ -151,7 +151,7 @@ class VScoreboard extends Module {
     * Clear the busy table
     */
   // RF-write-read-bypass
-  val rfWriteReadBypass = delay zip table map { case (x, y) => (x === 1.U || x === 2.U) && y }
+  val rfWriteReadBypass = delay zip table map { case (x, y) => x === 1.U && y }
   val rfBypass = VecInit(rfWriteReadBypass).asUInt & delayIsFixed.asUInt
   // (1) RF writeback ports, or (2) RF-write-read-bypass clear
   // clear(wbAddrs.map(_.valid), wbAddrs.map(_.bits), rfBypass)
@@ -160,10 +160,10 @@ class VScoreboard extends Module {
   val wbAddrsValid = wbAddrs.map(_.valid)
   val wbAddrsHit = (0 until 32).map(i => (wbAddrsValid zip wbAddrsOH map {case (v, oh) => v && oh(i)}).reduce(_||_))
   for (i <- 0 until 32) {
-    when (wbAddrsHit(i) || rfBypass(i)) {
-      table(i) := false.B
-    }.elsewhen (setReqAddr.valid && setReqAddrOH(i)) {
+    when (setReqAddr.valid && setReqAddrOH(i)) {
       table(i) := true.B
+    }.elsewhen (wbAddrsHit(i) || rfBypass(i)) {
+      table(i) := false.B
     }
   }
 
