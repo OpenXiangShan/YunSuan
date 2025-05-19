@@ -38,7 +38,7 @@ extern "C" void pmem_read(unsigned long long paddr, uint32_t output_bits[VLEN / 
 }
 
 //   import "DPI-C" function void pmem_read(input longint unsigned paddr, input int unsigned output_bits[VLEN/32],input byte unsigned len );
-
+//   import "DPI-C" function void pmem_write(input longint unsigned paddr, input int unsigned input_bits[VLEN/32]);
 extern "C" void pmem_write(unsigned long long paddr, uint32_t input_bits[VLEN / 32])
 { 
   if(in_pmem(paddr)){

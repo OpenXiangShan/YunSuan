@@ -117,9 +117,9 @@ finish:
         case TYPE_VL :isvec();gpr_src1();            break;
         case TYPE_VLS:isvec();gpr_src1();gpr_src2(); break;
         case TYPE_VLX:isvec();gpr_src1();            break;
-        case TYPE_VS :isvec();gpr_src1();            break;
-        case TYPE_VSS:isvec();gpr_src1();gpr_src2(); break;
-        case TYPE_VSX:isvec();gpr_src1();            break;
+        case TYPE_VS :/*isvec();*/gpr_src1();            break;
+        case TYPE_VSS:/*isvec();*/gpr_src1();gpr_src2(); break;
+        case TYPE_VSX:/*isvec();*/gpr_src1();            break;
         case TYPE_VFMV_F_S:                          break;
         default:printf("Unsupported type!\n");assert(0);break;
 
