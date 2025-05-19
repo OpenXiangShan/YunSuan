@@ -15,14 +15,15 @@ $(TOP_V): $(SCALA_FILE) $(TEST_FILE)
 
 EMU_CSRC_DIR = $(abspath ./src/test/csrc)
 # EMU_VSRC_DIR = $(abspath ./src/test/vsrc)
-EMU_CXXFILES += $(shell find $(EMU_CSRC_DIR) -name "*.cpp")
+#EMU_CXXFILES += $(shell find $(EMU_CSRC_DIR) -name "*.cpp")
 # EMU_VFILES = $(shell find $(EMU_VSRC_DIR) -name "*.v" -or -name "*.sv")
-
+EMU_BLACK_LIST_DIRS := $(EMU_CSRC_DIR)/difftest $(EMU_CSRC_DIR)/softmax_test
+EMU_CXXFILES += $(filter-out $(addsuffix /%, $(EMU_BLACK_LIST_DIRS)), $(shell find $(EMU_CSRC_DIR) -name "*.cpp"))
 
 EMU_DEPS :=  $(EMU_CXXFILES)
 # $(EMU_VFILES)
-EMU_HEADERS += $(shell find $(EMU_CSRC_DIR) -name "*.h")
-
+#EMU_HEADERS += $(shell find $(EMU_CSRC_DIR) -name "*.h")
+EMU_HEADERS += $(filter-out $(addsuffix /%, $(EMU_BLACK_LIST_DIRS)), $(shell find $(EMU_CSRC_DIR) -name "*.h"))
 # Verilator trace support
 EMU_TRACE ?=
 ifneq (,$(filter $(EMU_TRACE),1 vcd VCD))
@@ -65,6 +66,7 @@ $(EMU_MK): $(TOP_V) | $(EMU_DEPS)
 $(EMU): $(EMU_MK) $(EMU_DEPS) $(EMU_HEADERS)
 	$(MAKE) VM_PARRLLEL_BUILDS=1 -C $(dir $(EMU_MK)) -j33 -f $(abspath $(EMU_MK))
 
+	
 clean-softfloat:
 	$(MAKE) -s -C $(SOFTFLOAT_BUILD_PATH) clean
 

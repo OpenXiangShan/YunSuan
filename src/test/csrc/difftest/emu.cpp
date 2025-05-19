@@ -336,9 +336,9 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
         for(int j=0;j<VLEN/32;j++){
             if(dut->vr[i]._32[j] != ref_output_pool[cur_vec_ptr].vr[i]._32[j]){
                 std::stringstream ss;
-                ss << "VPU state mismatch at simulation time= "<< std::to_string(get_sim_time()-10) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
+                ss << "VPU state mismatch at simulation time = "<< std::to_string(get_sim_time()-10) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
                    << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << ".\n";
-                ss <<"It is dispatched to vpu at simulation time ="<<std::to_string( ref_output_pool[cur_vec_ptr].issued_time)<<" ps.\n";
+                ss <<"It is dispatched to vpu at simulation time = "<<std::to_string( ref_output_pool[cur_vec_ptr].issued_time)<<" ps.\n";
                 // printf("VPU state mismatch at vreg[%d][%d]: expected %016x, got %016x\n", i, j, ref_output_pool[cur_vec_ptr].vr[i]._32[j], dut->vr[i]._32[j]);
                 ss << "vreg[" << i << "][" << j << "]: expected 0x"
                    << std::hex << std::setfill('0') << std::setw(8)
