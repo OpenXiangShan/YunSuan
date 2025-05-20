@@ -8,6 +8,7 @@ void *memset(void *s, int c, size_t n);
 void halt(int code);
 void _trm_init();
 int main();
+extern void __am_asm_trap(void);
 
 float src[VLEN/32]={-0.50183952f,1.80285728f,0.92797577f,0.39463395f,-1.37592542f,-1.37602186f,-1.76766551f,1.46470463f,0.40446004f,0.83229029f,-1.91766202f,1.87963939f,1.32977057f,-1.15064359f,-1.27270019f,-1.26638198f,-0.78303105f,0.09902573f,-0.27221993f,-0.83508343f,0.44741157f,-1.44202459f,-0.83142143f,-0.53455263f,-0.17572007f,1.14070380f,-1.20130491f,0.05693775f,0.36965826f,-1.81419837f,0.43017942f,-1.31790352f};
 float dst[VLEN/32]={0};
@@ -160,8 +161,9 @@ void *memset(void *s, int c, size_t n) {
 
   
 void _trm_init() {
+    asm volatile("csrw mtvec, %0" : : "r"(__am_asm_trap));
     int ret = main();
-    asm volatile("mv a0, %0; " : :"r"(ret));
+    asm volatile("mv a0, %0; ebreak;" : :"r"(ret));
     while(1);
 }
   

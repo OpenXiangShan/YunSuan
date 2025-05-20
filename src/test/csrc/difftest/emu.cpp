@@ -5,7 +5,7 @@
 extern diff_context_t ref_cpu_state;
 extern bool commit;
 extern uint8_t commit_v_index;
-// #define VEC_STORE_TRACE
+#define VEC_STORE_TRACE
 Emulator* Emulator::current_instance = nullptr; 
 Emulator::Emulator(int argc, const char *argv[])
     : contextp(new VerilatedContext),   // 初始化列表显式初始化成员
@@ -81,14 +81,18 @@ void Emulator::reset_ncycles(size_t n) {
 
 void Emulator::single_cycle()
 {
+    // std::stringstream ss;
+    // ss << "Before eval (clock=1)" <<"\n";
     dut_ptr->clock = 1;
     dut_ptr->eval();
+    // ss << "After eval (clock=1)";
     wave->dump(sim_time); // simulation time
     sim_time += CLK_PERIOD / 2;
     dut_ptr->clock = 0;
     dut_ptr->eval();
     wave->dump(sim_time); // simulation time
     sim_time += CLK_PERIOD / 2;
+    // log(ss.str());
 }
 
 int Emulator::tick()
@@ -142,8 +146,8 @@ int Emulator::tick()
         }
         else if (present->is_ebreak == true)
         {
-            trapCode = STATE_TRAP;
-            return 0;
+            breakpoint = true;
+            
         }
         else if (present->is_scalar_store == true)
         {
@@ -192,6 +196,9 @@ int Emulator::tick()
                 printf("Unsupported store instruction type!\n");
                 assert(0);
             }
+        }else if (breakpoint==true && total_vector_instr == 0){
+            trapCode = STATE_TRAP;
+            return 0;
         }
         next->pc =ref_cpu_state.pc;
         next->inst.val = mem_addr_read(next->pc,next->pc, 4);
@@ -200,9 +207,19 @@ int Emulator::tick()
         {
             ref_output_pool[store_ptr].pc=next->pc;
             ref_output_pool[store_ptr].inst.val=next->inst.val;
+            int loop=0;
             while(dut_ptr->io_dispatch_s2v_ready!=1)
             {
                 single_cycle();
+                loop++;
+                if(loop>40){
+                    std::stringstream ss;
+                    ss << "VPU is busy at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << next->pc << ", instr=0x"
+                       << std::hex << std::setfill('0') << std::setw(8) << next->inst.val<< ".\n";
+                    log(ss.str());
+                    trapCode = STATE_TRAP;
+                    return 0;
+                }
             }
             dut_ptr->io_dispatch_s2v_valid=1; 
             dut_ptr->io_dispatch_s2v_bits_robIdx_flag=(robIdx==0xff?~dut_ptr->io_dispatch_s2v_bits_robIdx_flag:dut_ptr->io_dispatch_s2v_bits_robIdx_flag); 
@@ -213,9 +230,19 @@ int Emulator::tick()
             ref_output_pool[store_ptr].robidx=dut_ptr->io_dispatch_s2v_bits_robIdx_value;
             ref_output_pool[store_ptr].robIdx_flag=dut_ptr->io_dispatch_s2v_bits_robIdx_flag;
         }else if(next->is_vec_store == true){
+            int loop=0;
              while(dut_ptr->io_dispatch_s2v_ready!=1)
             {
                 single_cycle();
+                loop++;
+                if(loop>40){
+                    std::stringstream ss;
+                    ss << "VPU is busy at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << next->pc << ", instr=0x"
+                       << std::hex << std::setfill('0') << std::setw(8) << next->inst.val<< ".\n";
+                    log(ss.str());
+                    trapCode = STATE_TRAP;
+                    return 0;
+                }
             }
             dut_ptr->io_dispatch_s2v_valid=1; 
             dut_ptr->io_dispatch_s2v_bits_robIdx_flag=(robIdx==0xff?~dut_ptr->io_dispatch_s2v_bits_robIdx_flag:dut_ptr->io_dispatch_s2v_bits_robIdx_flag); 

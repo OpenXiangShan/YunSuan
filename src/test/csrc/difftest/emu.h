@@ -101,6 +101,8 @@ private:
   std::ofstream log_file;
   bool log_initialized = false;
 
+  bool breakpoint = false;
+
 public:
   Emulator(int argc, const char *argv[]);
   ~Emulator();
