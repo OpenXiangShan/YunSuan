@@ -174,7 +174,7 @@ class VCtrlBlock extends Module {
   io.toExu.bits.vSrc := exuInputReg.vSrc
   io.toExu.bits.rs1 := exuInputReg.rs1
   io.lsu.storeReq.bits.uop := exuInputReg.uop
-  io.lsu.storeReq.bits.vs3 := exuInputReg.vSrc(3)
+  io.lsu.storeReq.bits.vs3 := exuInputReg.vSrc(2)
   io.lsu.storeReq.bits.paddr := paddrBaseStoreReg
   io.lsu.storeReq.bits.ldstCtrl := ldstCtrlStoreReg
 

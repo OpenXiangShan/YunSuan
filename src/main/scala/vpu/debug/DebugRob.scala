@@ -26,6 +26,7 @@ class DebugRob extends Module {
   val io = IO(new Bundle {
     val fromCtrl = Input(new FromCtrlToDebugRob)
     val commit = Output(ValidIO(new Bundle {
+      val robIdx = new RobPtr
       val wrRf = Bool()
       val rfAddr = UInt(5.W)
       val emulVd = UInt(4.W)
@@ -136,6 +137,9 @@ class DebugRob extends Module {
   }
   io.commit.bits.data := commitData
   io.commit.bits.isStore := commitUop.ctrl.store
+
+  io.commit.bits.robIdx := commitUop.robIdx
+  dontTouch(io.commit.bits.robIdx)
 
   //TODO: change dpi-c interface to tell the number of regs to be compared
 
