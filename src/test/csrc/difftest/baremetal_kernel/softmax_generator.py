@@ -2,7 +2,8 @@ import numpy as np
 import struct
 
 VLEN=1024
-VECTOR_LENGTH=VLEN//32
+LMUL=2
+VECTOR_LENGTH=VLEN*LMUL//32
 
 def generate_softmax_io():
     # 生成随机输入向量 (32个FP32元素)
@@ -15,7 +16,7 @@ def generate_softmax_io():
     
     return input_vector, softmax_output
 
-def save_as_binary(data, filename):
+def save_as_float(data, filename):
     with open(filename, 'w') as f:
         line = ','.join(f"{val:.8f}f" for val in data)
         f.write(line)
@@ -39,7 +40,7 @@ print(output_vec)
 print("\nSum of softmax output:", np.sum(output_vec))
 
 # 保存为二进制文件
-save_as_uint32_text(input_vec, './build/softmax_input.txt')
-save_as_binary(output_vec, './build/softmax_output.txt')
+save_as_float(input_vec, './build/softmax_input.txt')
+save_as_uint32_text(output_vec, './build/softmax_output.txt')
 
 print("\nBinary files saved: softmax_input.txt and softmax_output.txt")

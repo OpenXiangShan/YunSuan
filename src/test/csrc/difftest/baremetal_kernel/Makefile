@@ -26,14 +26,15 @@ INCLUDE_DIR ?= ../../../../../../difftest/xs-env/opt/riscv/lib/gcc/riscv64-unkno
 WORK_DIR := $(shell pwd)
 BUILD_DIR := $(WORK_DIR)/build
 $(shell mkdir -p $(BUILD_DIR))
-SRCS := $(wildcard *.c)  $(wildcard *.S)
+FILES ?= $(wildcard *.c)
+SRCS := $(FILES)  $(wildcard *.S)
 OBJS := $(addprefix $(BUILD_DIR)/, $(addsuffix .o, $(basename $(notdir $(SRCS)))))
 
 $(BUILD_DIR)/%.o: %.c
-	$(RISCVCLANG) $(CFLAGS)  -I./ -I$(INCLUDE_DIR)  -O2 -march=rv64gv -c -o $@ $<
+	$(RISCVCC) $(CFLAGS)  -I./ -I$(INCLUDE_DIR)  -O2 -march=rv64gv -c -o $@ $<
 
 $(BUILD_DIR)/%.o: %.S
-	$(RISCVCLANG) $(CFLAGS)  -I./ -I$(INCLUDE_DIR)  -O2 -march=rv64gv -c -o $@ $<
+	$(RISCVCC) $(CFLAGS)  -I./ -I$(INCLUDE_DIR)  -O2 -march=rv64gv -c -o $@ $<
 
 $(BUILD_DIR)/softmax.elf: $(OBJS)
 	$(RISCVCC) $(CFLAGS) -T default.ld -I./ -I$(INCLUDE_DIR)  -O2 -march=rv64gcv $^ -o $@
