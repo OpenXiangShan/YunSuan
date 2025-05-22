@@ -16,6 +16,8 @@ import chisel3._
 import chisel3.util._
 import race.vpu._
 import VParams._
+import race.vpu.yunsuan.util._
+
 
 class FMUL_16_32 extends Module {
   val (expWidth_bf16, sigWidth_bf16) = (8, 8)
@@ -162,7 +164,13 @@ class FMUL_16_32 extends Module {
   val (res_is_inf_high_case1, res_is_inf_low_case1) = (Wire(Bool()), Wire(Bool()))
   val exp_res_low_under_1 = 1.U - exp_res_adjsubn_low_S1
   val exp_res_low_over_1 = exp_res_adjsubn_low_S1 - 1.U
-  
+  val lzd_low_22 = LZD(res_intMul_low24(21, 0))
+  val lzd_high_22 = LZD(res_intMul_high24(21, 0))
+  val lzd_46 = LZD(res_intMul_48)
+  val lzd_low = Mux(lzd_low_22(4), 15.U(4.W), lzd_low_22(3, 0))
+  val lzd_high = Mux(lzd_high_22(4), 15.U(4.W), lzd_high_22(3, 0))
+  val lzd_whole = Mux(lzd_46(5), 31.U(5.W), lzd_46(4, 0))
+
   when (int_part_low(1)) { // integer part >= 2
     when (exp_res_adjsubn_low_S1(9)) {
       res_is_subnorm_low := true.B
@@ -180,18 +188,18 @@ class FMUL_16_32 extends Module {
     shift_right_low := true.B
     shift_amount_low := Mux(!res_is_subnorm_low, 0.U, exp_res_low_under_1)
   }.otherwise { // Integer part == 0; At least one input is sub-normal
-    when (!exp_res_low_under_1(9)) {
+    when (!exp_res_low_under_1(9)) { // exp <= 1
       res_is_subnorm_low := true.B
       shift_right_low := true.B
       shift_amount_low := exp_res_low_under_1
-    }.elsewhen(exp_res_low_over_1 <= LZC(xx)) {
+    }.elsewhen(exp_res_low_over_1 <= lzd_low) { // exp > 1  &&  (exp-1) <= LZD of fraction
       res_is_subnorm_low := true.B
       shift_right_low := false.B
       shift_amount_low := exp_res_low_over_1
-    }.otherwise {
+    }.otherwise {  // exp > 1  &&  (exp-1) > LZD of fraction
       res_is_subnorm_low := false.B
       shift_right_low := false.B
-      shift_amount_low := LZC(xx) + 1.U
+      shift_amount_low := lzd_low + 1.U
     }
     res_is_inf_low_case1 := true.B
     
