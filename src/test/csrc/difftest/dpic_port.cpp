@@ -43,7 +43,7 @@ extern "C" void pmem_write(unsigned long long paddr, const unsigned int input_bi
     std::memcpy(&pmem[start_addr], input_bits, expected_bytes);
 #ifdef MEM_TRACE
     std::stringstream ss;
-    ss << "Store data to pmem at address 0x"  << std::hex << std::setfill('0') << std::setw(8) << static_cast<unsigned>(paddr)<<".";
+    ss << "Store data to pmem at address 0x"  << std::hex << std::setfill('0') << std::setw(8) << static_cast<unsigned>(paddr)<<",";
     ss << "at simulation time = " << std::to_string(sim_time) << " ps!";
     Emulator::get_current_instance()->log(ss.str());
 #endif 

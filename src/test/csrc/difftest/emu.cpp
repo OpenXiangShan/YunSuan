@@ -100,35 +100,36 @@ int Emulator::tick()
     clear_flags(*next);
     clear_flags(*present);
     single_cycle();//DUT executes one cycle
+    if(commit == false){// avoid infinite loop
+        uncommit_cycle += 1;
+        if (uncommit_cycle > 100){
+            std::stringstream ss;
+            ss << "Uncommitted cycle exceeds 100 at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << present->pc << ", instr=0x"
+               << std::hex << std::setfill('0') << std::setw(8) << present->inst.val<< ".\n";
+            log(ss.str());
+            trapCode = STATE_TRAP;
+            return 0;
+        }
+    }else {
+        uncommit_cycle = 0;
+    }
     if (total_vector_instr <= 16)
     {
-        // if(dut_state.vr[5]._32[0] !=0){
-        //     std::stringstream ss;
-        //     ss << "v5!=0, The present pc is=0x" << std::hex << ref_output_pool[cur_vec_ptr].pc;
-        //     log(ss.str());
-        // } 
         ref_difftest_exec(1);//REF executes one cycle
         present->pc = next->pc;
         ref_difftest_regcpy(&ref_cpu_state, DIFFTEST_TO_DUT, 0);
         present->inst.val = mem_addr_read(present->pc,present->pc, 4);
         decode_instr(present.get());
-        
-        // if(ref_cpu_state.pc==0x80000240||ref_cpu_state.pc==0x8000026c){
-        //     printf("present->pc=0x%08lx\n",present->pc);
-        //     printf("next->pc=0x%08lx\n",next->pc);
-        //     for(int i=0; i<32;i++){
-        //         printf("gpr[%02d]:0x%08lx ",i,ref_cpu_state.gpr[i]);
-        //         if(i%4==3) printf("\n");
-        //     }
-        //     // ref_isa_reg_display();
-        // }
 
         if (present->is_vec == true)
         {
             vpu_state_store();
             #ifdef VEC_STORE_TRACE
-            // printf("A vector instr result is stored in output_pool[%d]!\n",store_ptr);
-            log("A vector instr result is stored in output_pool["+std::to_string(store_ptr)+"]!");
+            std::stringstream ss;
+            ss << "[STORE] The result of Vector instruction PC = 0x" 
+                << std::hex << std::setfill('0') << std::setw(16) << present->pc << ", instr=0x"
+               << std::hex << std::setfill('0') << std::setw(8) << present->inst.val <<" is stored in output_pool["<<std::to_string(store_ptr)<<"]!";
+            log(ss.str());
             #endif
             store_ptr = store_ptr == 15 ? 0 : store_ptr + 1;
             total_vector_instr += 1;
@@ -156,10 +157,14 @@ int Emulator::tick()
             {
                 if (commit == true)//in case the same instruction commits two cycles....
                 {
-                    #ifdef VEC_STORE_TRACE
-                    // printf("A vector instr result is fetched from output_pool[%d]!\n",cur_vec_ptr);
-                    log("A vector instr result is fetched from output_pool["+std::to_string(cur_vec_ptr)+"]!");
-                    #endif
+                #ifdef VEC_STORE_TRACE
+                    std::stringstream ss;
+                    ss << "[COMMIT] The result of Vector instruction PC = 0x" 
+                       << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
+                       << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val <<" is fetched from output_pool["<<std::to_string(cur_vec_ptr) 
+                       <<"] at simulation time = "<< std::to_string(get_sim_time()-10)<<" ps!";
+                    log(ss.str());
+                #endif
                     log("v["+std::to_string(commit_v_index)+"] is committed!");
                     if(check_vregs_state(&dut_state) ==false) {
                         // printf("VPU state mismatch at pc=0x%016lx, instr=0x%08x\n", ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
@@ -251,7 +256,7 @@ int Emulator::tick()
             dut_ptr->io_dispatch_s2v_bits_rs1=next->rs1;
             dut_ptr->io_dispatch_s2v_bits_rs2=next->rs2;
             std::stringstream ss;
-            ss << "Vector store instruction 0x" << std::hex << std::setfill('0') << std::setw(8) << next->inst.val << " is sent to VPU at PC = 0X"
+            ss << "Vector store instruction 0x" << std::hex << std::setfill('0') << std::setw(8) << next->inst.val << " is sent to VPU at PC = 0x"
                << std::hex << std::setfill('0') << std::setw(16) <<next->pc<<" , simulation time = " 
                 << std::to_string(get_sim_time()) << " ps! ";
              ss <<"ROB index is " << std::hex<< static_cast<unsigned>(dut_ptr->io_dispatch_s2v_bits_robIdx_value) << ", ";
@@ -264,10 +269,14 @@ int Emulator::tick()
     }
     if(commit ==true)
     {
-        #ifdef VEC_STORE_TRACE
-        // printf("A vector instr result is fetched from output_pool[%d]!\n",cur_vec_ptr);
-        log("A vector instr result is fetched from output_pool["+std::to_string(cur_vec_ptr)+"]!");
-        #endif
+    #ifdef VEC_STORE_TRACE
+        std::stringstream ss;
+        ss << "[COMMIT] The result of Vector instruction PC = 0x" 
+            << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
+            << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val <<" is fetched from output_pool["<<std::to_string(cur_vec_ptr)
+            <<"] at simulation time = "<< std::to_string(get_sim_time()-10)<<" ps!";
+        log(ss.str());
+     #endif
         log("v["+std::to_string(commit_v_index)+"] is committed!");
         if(check_vregs_state(&dut_state) ==false) {
             trapCode=STATE_TRAP;
@@ -352,6 +361,8 @@ void Emulator::vpu_state_store(){
         }
     }
     ref_output_pool[store_ptr].issued_time=get_sim_time()-10;
+    ref_output_pool[store_ptr].pc=present->pc;
+    ref_output_pool[store_ptr].inst.val=present->inst.val;
 }
 
 void Emulator::clear_flags(Decode &s) {

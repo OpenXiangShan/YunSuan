@@ -103,6 +103,8 @@ private:
 
   bool breakpoint = false;
 
+  uint8_t uncommit_cycle =0;
+
 public:
   Emulator(int argc, const char *argv[]);
   ~Emulator();
