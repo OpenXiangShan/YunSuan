@@ -112,7 +112,7 @@ class FMUL_16_32 extends Module {
   val res_intMul_S1 = intMul_12_24.io.res_out
 
   /**
-    * Result normalization
+    * MUL result normalization (partly)
     */
   // Exp calculation
   //----   low_a, low_b, high_a, high_b = 0, 1, 2, 3   ----
@@ -131,10 +131,13 @@ class FMUL_16_32 extends Module {
   val res_is_inf_low = Mux(is_fp16, 
           !exp_res_adjsubn_low(9) && (exp_res_adjsubn_low(8, 5) === "b0001".U || exp_res_adjsubn_low(4, 0) === "b11111".U),
           !exp_res_adjsubn_low(9) && (exp_res_adjsubn_low(8) || exp_res_adjsubn_low(7, 0) === "b1111_1111".U))
+  val res_sign_high = io.a_in(31) ^ io.b_in(31)
+  val res_sign_low = io.a_in(15) ^ io.b_in(15)
 
   //----------------------------------------
   //---- Below is S1 (pipeline 1) stage ----
   //----------------------------------------
+  val input_is_16_S1 = RegEnable(is_16, io.valid_in)
   val res_is_32_S1 = RegEnable(res_is_32, io.valid_in)
   val res_is_bf16_S1 = RegEnable(res_is_bf16, io.valid_in)
   val res_is_fp16_S1 = RegEnable(res_is_fp16, io.valid_in)
@@ -146,6 +149,8 @@ class FMUL_16_32 extends Module {
   val exp_res_adjsubn_low_S1 = RegEnable(exp_res_adjsubn_low, io.valid_in)    // 10 bits
   val res_is_inf_high_S1 = RegEnable(res_is_inf_high, io.valid_in)
   val res_is_inf_low_S1 = RegEnable(res_is_inf_low, io.valid_in)
+  val res_sign_high_S1 = RegEnable(res_sign_high, io.valid_in)
+  val res_sign_low_S1 = RegEnable(res_sign_low, io.valid_in)
 
   // Int MUL result format:
   // xx.xxxxxxxxxxxxxx00000000  bf16 (2 + 14 + "000000" + "00")
@@ -157,13 +162,17 @@ class FMUL_16_32 extends Module {
   val int_part_high = res_intMul_high24(23, 22)
   val int_part_low = res_intMul_low24(23, 22)
 
+  // ----------------------------------------------------
   // ---- Calculate shift direction and shift amount ----
+  // ----------------------------------------------------
   val (shift_right_high, shift_right_low) = (Wire(Bool()), Wire(Bool()))
   val (shift_amount_high, shift_amount_low) = (Wire(UInt(5.W)), Wire(UInt(4.W)))
   val (res_is_subnorm_high, res_is_subnorm_low) = (Wire(Bool()), Wire(Bool()))
   val (res_is_inf_high_case1, res_is_inf_low_case1) = (Wire(Bool()), Wire(Bool()))
-  val exp_res_low_under_1 = 1.U - exp_res_adjsubn_low_S1
-  val exp_res_low_over_1 = exp_res_adjsubn_low_S1 - 1.U
+  val exp_res_low_under_1 = 1.U - exp_res_adjsubn_low_S1 // 10 bits
+  val exp_res_low_over_1 = exp_res_adjsubn_low_S1 - 1.U  // 10 bits
+  val exp_res_high_under_1 = 1.U - exp_res_adjsubn_high_S1 // 10 bits
+  val exp_res_high_over_1 = exp_res_adjsubn_high_S1 - 1.U  // 10 bits
   val lzd_low_22 = LZD(res_intMul_low24(21, 0))
   val lzd_high_22 = LZD(res_intMul_high24(21, 0))
   val lzd_46 = LZD(res_intMul_48)
@@ -171,6 +180,7 @@ class FMUL_16_32 extends Module {
   val lzd_high = Mux(lzd_high_22(4), 15.U(4.W), lzd_high_22(3, 0))
   val lzd_whole = Mux(lzd_46(5), 31.U(5.W), lzd_46(4, 0))
 
+  // Low part
   when (int_part_low(1)) { // integer part >= 2
     when (exp_res_adjsubn_low_S1(9)) {
       res_is_subnorm_low := true.B
@@ -201,8 +211,102 @@ class FMUL_16_32 extends Module {
       shift_right_low := false.B
       shift_amount_low := lzd_low + 1.U
     }
-    res_is_inf_low_case1 := true.B
-    
+    res_is_inf_low_case1 := false.B
+  }
+
+  // High part
+  when (int_part_high(1)) { // integer part >= 2
+    when (exp_res_adjsubn_high_S1(9)) {
+      res_is_subnorm_high := true.B
+    }
+    when (exp_res_adjsubn_high_S1 === Mux(res_is_fp16_S1, "b00_00011110".U, "b00_11111110".U)) {
+      res_is_inf_high_case1 := true.B
+    }
+    shift_right_high := true.B
+    shift_amount_high := Mux(!res_is_subnorm_high, 1.U, exp_res_high_under_1)
+  }.elsewhen (int_part_high(0)) { // integer part = 1
+    when (exp_res_adjsubn_high_S1(9) || exp_res_adjsubn_high_S1 === 0.U) {
+      res_is_subnorm_high := true.B
+    }
+    res_is_inf_high_case1 := false.B
+    shift_right_high := true.B
+    shift_amount_high := Mux(!res_is_subnorm_high, 0.U, exp_res_high_under_1)
+  }.otherwise { // Integer part == 0; At least one input is sub-normal
+    when (!exp_res_high_under_1(9)) { // exp <= 1
+      res_is_subnorm_high := true.B
+      shift_right_high := true.B
+      shift_amount_high := exp_res_high_under_1
+    }.elsewhen(exp_res_high_over_1 <= Mux(res_is_32_S1, lzd_whole, lzd_high)) { // exp > 1  &&  (exp-1) <= LZD of fraction
+      res_is_subnorm_high := true.B
+      shift_right_high := false.B
+      shift_amount_high := exp_res_high_over_1
+    }.otherwise {  // exp > 1  &&  (exp-1) > LZD of fraction
+      res_is_subnorm_high := false.B
+      shift_right_high := false.B
+      shift_amount_high := Mux(res_is_32_S1, lzd_whole, lzd_high) + 1.U
+    }
+    res_is_inf_high_case1 := false.B
+  }
+  
+  //---- Inf, zero, subnormal ----
+  // TODO:  res_is_NaN
+  // TODO:  inf * zero should be NaN, but here we set it to zero
+  val res_is_inf_low_preS2 = is_inf_16_S1(0) || is_inf_16_S1(1) || res_is_inf_low_S1 || res_is_inf_low_case1
+  val res_is_inf_high_preS2 = Mux(input_is_16_S1, is_inf_16_S1(2) || is_inf_16_S1(3), is_inf_32_S1(0) || is_inf_32_S1(1)) ||
+                              res_is_inf_high_S1 || res_is_inf_high_case1
+  val res_is_zero_low_preS2 = is_zero_16_S1(0) || is_zero_16_S1(1)
+  val res_is_zero_high_preS2 = Mux(input_is_16_S1, is_zero_16_S1(2) || is_zero_16_S1(3), is_zero_32_S1(0) || is_zero_32_S1(1))
+
+  //-----------------------------------------
+  //---- Below is S2 (pipeline 2) stage:
+  //-----------------------------------------
+  val valid_S2 = RegNext(valid_S1)
+  val uop_S2 = RegEnable(uop_S1, valid_S1)
+  val input_is_16_S2 = RegEnable(is_16, valid_S1)
+  val res_is_32_S2 = RegEnable(res_is_32, valid_S1)
+  val res_is_bf16_S2 = RegEnable(res_is_bf16, valid_S1)
+  val res_is_fp16_S2 = RegEnable(res_is_fp16, valid_S1)
+  val res_sign_high_S2 = RegEnable(res_sign_high_S1, valid_S1)
+  val res_sign_low_S2 = RegEnable(res_sign_low_S1, valid_S1)
+  val res_is_inf_low_S2 = RegEnable(res_is_inf_low_preS2, valid_S1)
+  val res_is_inf_high_S2 = RegEnable(res_is_inf_high_preS2, valid_S1)
+  val res_is_subnorm_low_S2 = RegEnable(res_is_subnorm_low, valid_S1)
+  val res_is_subnorm_high_S2 = RegEnable(res_is_subnorm_high, valid_S1)
+
+  val res_intMul_S2 = RegEnable(res_intMul_S1, valid_S1)
+  val shift_amount_low_S2 = RegEnable(shift_amount_low, valid_S1) // 4 bits
+  val shift_amount_high_S2 = RegEnable(shift_amount_high, valid_S1) // 5 bits
+  val shift_right_low_S2 = RegEnable(shift_right_low, valid_S1)
+  val shift_right_high_S2 = RegEnable(shift_right_high, valid_S1)
+  val exp_res_adjsubn_low_S2 = RegEnable(exp_res_adjsubn_low_S1, valid_S1) // 10 bits
+  val exp_res_adjsubn_high_S2 = RegEnable(exp_res_adjsubn_high_S1, valid_S1) // 10 bits
+
+  //---- 此处不对乘法的结果significand进行移位，留到加法的时候统一移位 ----
+  //---- The significand of the multiplication result is not shifted here, 
+  //---- leaving the shifting to be handled uniformly during addition.
+  //------------------------------------------------------------------
+  // val sig_res_shifted_low = shift(res_intMul_low24, shift_amount_low, shift_right_low)  // 24 bits
+  // val sig_res_shifted_whole = shift(res_intMul_48, shift_amount_high, shift_right_high)  // 48 bits
+  // val sig_res_shifted_high = sig_res_shifted_whole(47, 24) // 24 bits
+
+  //---- 但是乘法结果的exp会在此处更新 ----
+  //---- However, the exponent of the multiplication result will be updated here
+  val exp_resMul_shifted_low = Mux(shift_right_low_S2, exp_res_adjsubn_low_S2 + shift_amount_low_S2,
+                                                 exp_res_adjsubn_low_S2 - shift_amount_low_S2) // 10 bits
+  val exp_resMul_shifted_high = Mux(shift_right_high_S2, exp_res_adjsubn_high_S2 + shift_amount_high_S2,
+                                                 exp_res_adjsubn_high_S2 - shift_amount_high_S2) // 10 bits
+ 
+
+
+
+  // !!!! After rounding, subnormal may become normal, when exp==1 and sig = 0.1111111111..
+  
+
+  def shift(data: UInt, shift_amount: UInt, shift_right: Bool): UInt = {
+    // Reverse the data when shifting left
+    val reversed_data = Mux(shift_right, data, Cat(data.asBools))
+    val shifted_data = reversed_data >> shift_amount
+    Mux(shift_right, shifted_data, Cat(shifted_data.asBools))
   }
 
 
