@@ -9,6 +9,10 @@ uint64_t vpu_pc=0;
 
 bool commit=false;
 uint8_t commit_v_index=0;
+uint8_t commit_veew = 0;
+bool commit_isfp = false;
+uint8_t commit_rf_addr = 0;
+uint8_t commit_group_size = 0;
 
 //   import "DPI-C" function void pmem_read(input longint unsigned paddr,input byte unsigned len, output int unsigned output_bits[VLEN/32]);
 
@@ -58,7 +62,9 @@ extern "C" void get_vreg(
   svBit is_store,
   svBit wr_rf,
   uint8_t rf_addr,                 // 8-bit signed register address
-  uint8_t rf_group_size, 
+  uint8_t rf_group_size,
+  uint8_t veew_vd,
+  svBit is_fp,
   const uint32_t data_0[VLEN / 32],
   const uint32_t data_1[VLEN / 32],
   const uint32_t data_2[VLEN / 32],
@@ -87,6 +93,10 @@ extern "C" void get_vreg(
      }
      commit=true;
      commit_v_index=rf_addr;
+     commit_veew = veew_vd;
+     commit_isfp = is_fp;
+     commit_rf_addr = rf_addr;
+     commit_group_size =rf_group_size;
   }
 }
 

@@ -5,6 +5,10 @@
 extern diff_context_t ref_cpu_state;
 extern bool commit;
 extern uint8_t commit_v_index;
+extern uint8_t commit_veew ;
+extern bool commit_isfp ;
+extern uint8_t commit_rf_addr ;
+extern uint8_t commit_group_size ;
 #define VEC_STORE_TRACE
 Emulator* Emulator::current_instance = nullptr; 
 Emulator::Emulator(int argc, const char *argv[])
@@ -126,7 +130,7 @@ int Emulator::tick()
             vpu_state_store();
             #ifdef VEC_STORE_TRACE
             std::stringstream ss;
-            ss << "[STORE] The result of Vector instruction PC = 0x" 
+            ss << "[ISSUE] The result of Vector instruction PC = 0x" 
                 << std::hex << std::setfill('0') << std::setw(16) << present->pc << ", instr=0x"
                << std::hex << std::setfill('0') << std::setw(8) << present->inst.val <<" is stored in output_pool["<<std::to_string(store_ptr)<<"]!";
             log(ss.str());
@@ -167,11 +171,6 @@ int Emulator::tick()
                 #endif
                     log("v["+std::to_string(commit_v_index)+"] is committed!");
                     if(check_vregs_state(&dut_state) ==false) {
-                        // printf("VPU state mismatch at pc=0x%016lx, instr=0x%08x\n", ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
-                        // std::stringstream ss;
-                        // ss << "VPU state mismatch at simulation time= "<< std::to_string(get_sim_time()) << "PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc<<", instr=0x"  \
-                        << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val<< " ";
-                        // log(ss.str());
                         trapCode=STATE_TRAP;
                         return 0;
                     }else {
@@ -381,10 +380,88 @@ void Emulator::clear_flags(Decode &s) {
 }
 
 bool Emulator::check_vregs_state(VPU_STATE *dut){
-    for(int i=0;i<32;i++){
-        for(int j=0;j<VLEN/32;j++){
-            if(dut->vr[i]._32[j] != ref_output_pool[cur_vec_ptr].vr[i]._32[j]){
+    int ele_width = 8;
+    switch(commit_veew){
+        case 0b000: ele_width = 8; break;
+        case 0b001: ele_width =16; break;
+        case 0b010: ele_width =32; break;
+        case 0b011: ele_width =64; break;
+        default: ele_width =0;log("Unsupported FP SEW: " + std::to_string(commit_veew)); break;
+    }
+    int elems_per_reg =VLEN / ele_width;
+    for(int i=commit_rf_addr;i<commit_rf_addr + commit_group_size;i++){
+        for(int j=0;j<VLEN/elems_per_reg;j++){
+            bool mismatch = false;
+            if (commit_isfp) {
+                switch (ele_width) {
+                    case 8: {
+                        // TODO: 处理fp8
+                        uint8_t ref = ref_output_pool[cur_vec_ptr].vr[i]._8[j];
+                        uint8_t dut_val = dut->vr[i]._8[j];
+                        mismatch = (ref != dut_val); 
+                        break;
+                    }
+                    case 16: {
+                        // TODO: 处理fp16
+                        uint16_t ref = ref_output_pool[cur_vec_ptr].vr[i]._16[j];
+                        uint16_t dut_val = dut->vr[i]._16[j];
+                        mismatch = (ref != dut_val);  
+                        break;
+                    }
+                    case 32: {
+                        float ref = *reinterpret_cast<float*>(&ref_output_pool[cur_vec_ptr].vr[i]._32[j]);
+                        float dut_val = *reinterpret_cast<float*>(&dut->vr[i]._32[j]);
+                        float abs_err = fabsf(ref - dut_val);
+                        float denom = fmaxf(fabsf(ref), 1e-10f);
+                        float rel_err = fabsf(ref - dut_val) / (denom); // 防止除 0
+                        mismatch = (abs_err > 1e-5f && rel_err > 1e-4f);
+                        if (mismatch) {
+                            std::stringstream ss;
+                            ss << "abs_err=" << abs_err << ", rel_err=" << rel_err;
+                            log(ss.str());
+                        }
+                        break;
+                    }
+                    case 64: {
+                        double ref = *reinterpret_cast<double*>(&ref_output_pool[cur_vec_ptr].vr[i]._64[j]);
+                        double dut_val = *reinterpret_cast<double*>(&dut->vr[i]._64[j]);
+                        double abs_err = fabs(ref - dut_val);
+                        double denom = fmax(fabs(ref), 1e-14f);
+                        double rel_err = fabs(ref - dut_val) / (denom);
+                        mismatch = (abs_err > 1e-10 && rel_err > 1e-9);
+                        if (mismatch) {
+                            std::stringstream ss;
+                            ss << "abs_err=" << abs_err << ", rel_err=" << rel_err;
+                            log(ss.str());
+                        }
+                        break;
+                    }
+                    default:
+                        log("Unsupported FP Element width: " + std::to_string(ele_width));
+                        return false;
+                }
+            } else {
+                switch (ele_width) {
+                    case 8:
+                        mismatch = (dut->vr[i]._8[j] != ref_output_pool[cur_vec_ptr].vr[i]._8[j]);
+                        break;
+                    case 16:
+                        mismatch = (dut->vr[i]._16[j] != ref_output_pool[cur_vec_ptr].vr[i]._16[j]);
+                        break;
+                    case 32:
+                        mismatch = (dut->vr[i]._32[j] != ref_output_pool[cur_vec_ptr].vr[i]._32[j]);
+                        break;
+                    case 64:
+                        mismatch = (dut->vr[i]._64[j] != ref_output_pool[cur_vec_ptr].vr[i]._64[j]);
+                        break;
+                    default:
+                        log("Unsupported int Element width: " + std::to_string(ele_width));
+                        return false;
+                }
+            }
+            if(mismatch == true){
                 std::stringstream ss;
+                ss << "commit_veew="<<std::to_string(commit_veew) << ", commit_isfp=" << commit_isfp << "\n";
                 ss << "VPU state mismatch at simulation time = "<< std::to_string(get_sim_time()-10) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
                    << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << ".\n";
                 ss <<"It is dispatched to vpu at simulation time = "<<std::to_string( ref_output_pool[cur_vec_ptr].issued_time)<<" ps.\n";
@@ -398,27 +475,21 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
                 /*print register value*/
                 ss <<"REF model [v" << std::to_string(i) <<"]: \n";
                 for(int element = 0; element < VLEN/32;  element++) {
-                    // printf("[%02d] %08x  ", element , ref_output_pool[cur_vec_ptr].vr[i]._32[element]);
                     ss << "[" << std::setfill('0') << std::setw(2) << std::to_string(element) << "] " 
                         << std::hex << std::setfill('0') << std::setw(8) 
                         << ref_output_pool[cur_vec_ptr].vr[i]._32[element] <<" ";
                     if (element % 4 == 3)   {
                         ss <<"\n";
-                        // printf("\n");
-
                     }
                 }
-                // printf("DUT model [v%d]: \n",i);
                 ss <<"DUT [v" << std::to_string(i) <<"]: \n";
                 for(int element = 0; element < VLEN/32;  element++) {
-                    // printf("[%02d] %08x  ", element , dut->vr[i]._32[element]);
                     ss << "[" << std::setfill('0') << std::setw(2) << std::to_string(element) << "] " 
                         << std::hex << std::setfill('0') << std::setw(8) 
                         << dut->vr[i]._32[element] <<" ";
                     if (element % 4 == 3)
                     {
                         ss << "\n";
-                        // printf("\n");
                     }
                 }
                 log(ss.str());
