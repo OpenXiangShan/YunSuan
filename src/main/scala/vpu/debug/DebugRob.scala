@@ -69,10 +69,10 @@ class DebugRob extends Module {
   //---- 在当前指令的第一个有效的uop写回时，记录enqOH_wbPort_exu并保持。直到下一条指令的第一个有效uop写回时，再记录新的enqOH_wbPort_exu
   val exu_wb_STATE = RegInit(false.B)
   val enqOH_wbPort_exu_reg = Reg(chiselTypeOf(enqOH_wbPort_exu))
-  when (io.fromCtrl.wbExu.valid && wbExuUop.ldestValUop) {
-    exu_wb_STATE := true.B
-  }.elsewhen (io.fromCtrl.wbExu.valid && wbExuUop.uopEnd) {
+  when (io.fromCtrl.wbExu.valid && wbExuUop.uopEnd) {
     exu_wb_STATE := false.B
+  }.elsewhen (io.fromCtrl.wbExu.valid && wbExuUop.ldestValUop) {
+    exu_wb_STATE := true.B
   }
   // 当前指令的第一个有效的uop写回
   val exu_wb_start = io.fromCtrl.wbExu.valid && wbExuUop.ldestValUop && exu_wb_STATE === false.B
