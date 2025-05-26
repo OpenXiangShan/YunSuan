@@ -169,17 +169,17 @@ class FMUL_16_32 extends Module {
   val (shift_amount_high, shift_amount_low) = (Wire(UInt(5.W)), Wire(UInt(4.W)))
   val (res_is_subnorm_high, res_is_subnorm_low) = (Wire(Bool()), Wire(Bool()))
   val (res_is_inf_high_case1, res_is_inf_low_case1) = (Wire(Bool()), Wire(Bool()))
+  val lzd_low = LZD(res_intMul_low24(21, 0)) // 5 bits
+  val lzd_high = LZD(res_intMul_high24(21, 0)) // 5 bits
+  val lzd_whole = LZD(res_intMul_48(45, 0)) // 6 bits
   val exp_res_low_under_1 = 1.U - exp_res_adjsubn_low_S1 // 10 bits
   val exp_res_low_over_1 = exp_res_adjsubn_low_S1 - 1.U  // 10 bits
   val exp_res_high_under_1 = 1.U - exp_res_adjsubn_high_S1 // 10 bits
   val exp_res_high_over_1 = exp_res_adjsubn_high_S1 - 1.U  // 10 bits
-  val lzd_low_22 = LZD(res_intMul_low24(21, 0))
-  val lzd_high_22 = LZD(res_intMul_high24(21, 0))
-  val lzd_46 = LZD(res_intMul_48)
-  val lzd_low = Mux(lzd_low_22(4), 15.U(4.W), lzd_low_22(3, 0))
-  val lzd_high = Mux(lzd_high_22(4), 15.U(4.W), lzd_high_22(3, 0))
-  val lzd_whole = Mux(lzd_46(5), 31.U(5.W), lzd_46(4, 0))
 
+  val res_is_zero_low_case1 = !exp_res_low_under_1(9) && exp_res_low_under_1(8, 4).orR // > 15
+  val res_is_zero_high_case1 = !exp_res_high_under_1(9) && Mux(res_is_32_S1, exp_res_high_under_1(8, 5).orR, // > 31
+                                                               exp_res_high_under_1(8, 4).orR) // > 15
   // Low part
   when (int_part_low(1)) { // integer part >= 2
     when (exp_res_adjsubn_low_S1(9)) {
@@ -251,11 +251,14 @@ class FMUL_16_32 extends Module {
   //---- Inf, zero, subnormal ----
   // TODO:  res_is_NaN
   // TODO:  inf * zero should be NaN, but here we set it to zero
-  val res_is_inf_low_preS2 = is_inf_16_S1(0) || is_inf_16_S1(1) || res_is_inf_low_S1 || res_is_inf_low_case1
-  val res_is_inf_high_preS2 = Mux(input_is_16_S1, is_inf_16_S1(2) || is_inf_16_S1(3), is_inf_32_S1(0) || is_inf_32_S1(1)) ||
-                              res_is_inf_high_S1 || res_is_inf_high_case1
-  val res_is_zero_low_preS2 = is_zero_16_S1(0) || is_zero_16_S1(1)
-  val res_is_zero_high_preS2 = Mux(input_is_16_S1, is_zero_16_S1(2) || is_zero_16_S1(3), is_zero_32_S1(0) || is_zero_32_S1(1))
+  val res_is_zero_low_preS2 = is_zero_16_S1(0) || is_zero_16_S1(1) || res_is_zero_low_case1
+  val res_is_zero_high_preS2 = Mux(input_is_16_S1, is_zero_16_S1(2) || is_zero_16_S1(3), is_zero_32_S1(0) || is_zero_32_S1(1)) ||
+                               res_is_zero_high_case1
+  val res_is_inf_low_preS2 = Mux(res_is_zero_low_preS2, false.B,
+                                 is_inf_16_S1(0) || is_inf_16_S1(1) || res_is_inf_low_S1 || res_is_inf_low_case1)
+  val res_is_inf_high_preS2 = Mux(res_is_zero_high_preS2, false.B,
+                                  Mux(input_is_16_S1, is_inf_16_S1(2) || is_inf_16_S1(3), is_inf_32_S1(0) || is_inf_32_S1(1)) ||
+                                  res_is_inf_high_S1 || res_is_inf_high_case1)
 
   //-----------------------------------------
   //---- Below is S2 (pipeline 2) stage:
@@ -291,10 +294,15 @@ class FMUL_16_32 extends Module {
 
   //---- 但是乘法结果的exp会在此处更新 ----
   //---- However, the exponent of the multiplication result will be updated here
-  val exp_resMul_shifted_low = Mux(shift_right_low_S2, exp_res_adjsubn_low_S2 + shift_amount_low_S2,
-                                                 exp_res_adjsubn_low_S2 - shift_amount_low_S2) // 10 bits
-  val exp_resMul_shifted_high = Mux(shift_right_high_S2, exp_res_adjsubn_high_S2 + shift_amount_high_S2,
-                                                 exp_res_adjsubn_high_S2 - shift_amount_high_S2) // 10 bits
+  val exp_resMul_shifted_low = (Cat(exp_res_adjsubn_low_S2, !shift_right_low_S2) +
+          Cat(Mux(shift_right_low_S2, shift_amount_low_S2, ~(shift_amount_low_S2.pad(10))), !shift_right_low_S2))(10, 1)
+  val exp_resMul_shifted_high = (Cat(exp_res_adjsubn_high_S2, !shift_right_low_S2) +
+          Cat(Mux(shift_right_high_S2, shift_amount_high_S2, ~(shift_amount_high_S2.pad(10))), !shift_right_high_S2))(10, 1)
+  // 参考下面注释掉的代码，理解上面的代码。上面代码的目的是为了减少一个减法器
+  // val exp_resMul_shifted_low = Mux(shift_right_low_S2, exp_res_adjsubn_low_S2 + shift_amount_low_S2,
+  //                                                exp_res_adjsubn_low_S2 - shift_amount_low_S2) // 10 bits
+  // val exp_resMul_shifted_high = Mux(shift_right_high_S2, exp_res_adjsubn_high_S2 + shift_amount_high_S2,
+  //                                                exp_res_adjsubn_high_S2 - shift_amount_high_S2) // 10 bits
  
 
 
@@ -309,6 +317,7 @@ class FMUL_16_32 extends Module {
     Mux(shift_right, shifted_data, Cat(shifted_data.asBools))
   }
 
+  // 加法时，如果mul res是zero，则结果等于c_in
 
   // Inf, Zero, subnormal
 
