@@ -108,7 +108,7 @@ int Emulator::tick()
         uncommit_cycle += 1;
         if (uncommit_cycle > 100){
             std::stringstream ss;
-            ss << "Uncommitted cycle exceeds 100 at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << present->pc << ".\n";
+            ss << "Uncommitted cycle exceeds 100 at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(8) << present->pc << ".\n";
             log(ss.str());
             trapCode = STATE_TRAP;
             return 0;
@@ -131,7 +131,7 @@ int Emulator::tick()
             #ifdef VEC_STORE_TRACE
             std::stringstream ss;
             ss << "[ISSUE] The result of Vector instruction PC = 0x" 
-                << std::hex << std::setfill('0') << std::setw(16) << present->pc << ", instr=0x"
+                << std::hex << std::setfill('0') << std::setw(8) << present->pc << ", instr=0x"
                << std::hex << std::setfill('0') << std::setw(8) << present->inst.val <<" is stored in output_pool["<<std::to_string(store_ptr)<<"]! ";
             ss <<"ROB index is 0x" << std::hex<< static_cast<unsigned>(dut_ptr->io_dispatch_s2v_bits_robIdx_value) << ", ";
                 ss <<"ROB flag is " <<+dut_ptr->io_dispatch_s2v_bits_robIdx_flag << ".";
@@ -166,9 +166,11 @@ int Emulator::tick()
                 #ifdef VEC_STORE_TRACE
                     std::stringstream ss;
                     ss << "[COMMIT] The result of Vector instruction PC = 0x" 
-                       << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
+                       << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
                        << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val <<" is fetched from output_pool["<<std::to_string(cur_vec_ptr) 
-                       <<"] at simulation time = "<< std::to_string(get_sim_time()-10)<<" ps!";
+                       <<"] at simulation time = "<< std::to_string(get_sim_time()-10)<<" ps! ";
+                    ss <<"ROB index is 0x" << std::hex<< static_cast<unsigned>(ref_output_pool[cur_vec_ptr].robidx) << ", ";
+                    ss <<"ROB flag is " <<ref_output_pool[cur_vec_ptr].robIdx_flag << ".\n";
                     log(ss.str());
                 #endif
                     log("v["+std::to_string(commit_v_index)+"] is committed!");
@@ -178,7 +180,7 @@ int Emulator::tick()
                     }else {
                         // printf("PC=0x%016lx,instr=0x%08x  passes!\n",ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
                         std::stringstream ss;
-                        ss << "PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc<<", instr=0x"  \
+                        ss << "PC=0x" << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].pc<<", instr=0x"  \
                         << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val<< " passes! ";
                         log(ss.str());
                     }
@@ -220,7 +222,7 @@ int Emulator::tick()
                 loop++;
                 if(loop>40){
                     std::stringstream ss;
-                    ss << "VPU is busy at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << next->pc << ", instr=0x"
+                    ss << "VPU is busy at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(8) << next->pc << ", instr=0x"
                        << std::hex << std::setfill('0') << std::setw(8) << next->inst.val<< ".\n";
                     log(ss.str());
                     trapCode = STATE_TRAP;
@@ -243,7 +245,7 @@ int Emulator::tick()
                 loop++;
                 if(loop>40){
                     std::stringstream ss;
-                    ss << "VPU is busy at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << next->pc << ", instr=0x"
+                    ss << "VPU is busy at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(8) << next->pc << ", instr=0x"
                        << std::hex << std::setfill('0') << std::setw(8) << next->inst.val<< ".\n";
                     log(ss.str());
                     trapCode = STATE_TRAP;
@@ -257,8 +259,8 @@ int Emulator::tick()
             dut_ptr->io_dispatch_s2v_bits_rs1=next->rs1;
             dut_ptr->io_dispatch_s2v_bits_rs2=next->rs2;
             std::stringstream ss;
-            ss << "Vector store instruction 0x" << std::hex << std::setfill('0') << std::setw(8) << next->inst.val << " is sent to VPU at PC = 0x"
-               << std::hex << std::setfill('0') << std::setw(16) <<next->pc<<" , simulation time = " 
+            ss << "[ISSUE] Vector store instruction 0x" << std::hex << std::setfill('0') << std::setw(8) << next->inst.val << " is sent to VPU at PC = 0x"
+               << std::hex << std::setfill('0') << std::setw(8) <<next->pc<<" , simulation time = " 
                 << std::to_string(get_sim_time()) << " ps! ";
              ss <<"ROB index is 0x" << std::hex<< static_cast<unsigned>(dut_ptr->io_dispatch_s2v_bits_robIdx_value) << ", ";
                 ss <<"ROB flag is " <<+dut_ptr->io_dispatch_s2v_bits_robIdx_flag << ".";
@@ -275,9 +277,11 @@ int Emulator::tick()
     #ifdef VEC_STORE_TRACE
         std::stringstream ss;
         ss << "[COMMIT] The result of Vector instruction PC = 0x" 
-            << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
+            << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
             << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val <<" is fetched from output_pool["<<std::to_string(cur_vec_ptr)
-            <<"] at simulation time = "<< std::to_string(get_sim_time()-10)<<" ps!";
+            <<"] at simulation time = "<< std::to_string(get_sim_time()-10)<<" ps! ";
+        ss <<"ROB index is 0x" << std::hex<< static_cast<unsigned>(ref_output_pool[cur_vec_ptr].robidx) << ", ";
+        ss <<"ROB flag is " <<ref_output_pool[cur_vec_ptr].robIdx_flag << ".\n";
         log(ss.str());
      #endif
         log("v["+std::to_string(commit_v_index)+"] is committed!");
@@ -287,7 +291,7 @@ int Emulator::tick()
         }else {
             // printf("PC=0x%016lx,instr=0x%08x  passes!\n",ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
             std::stringstream ss;
-            ss << "PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
+            ss << "PC=0x" << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
                << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << " passes! ";
             log(ss.str());
         }
@@ -466,10 +470,10 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
             if(mismatch == true){
                 std::stringstream ss;
                 ss << "commit_veew="<<std::to_string(commit_veew) << ", commit_isfp=" << commit_isfp << "\n";
-                ss << "VPU state mismatch at simulation time = "<< std::to_string(get_sim_time()-10) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
+                ss << "VPU state mismatch at simulation time = "<< std::to_string(get_sim_time()-10) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
                    << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << ".\n";
                 ss <<"It is dispatched to vpu at simulation time = "<<std::to_string( ref_output_pool[cur_vec_ptr].issued_time)<<" ps.\n";
-                ss <<"ROB index is " << std::hex<< static_cast<unsigned>(ref_output_pool[cur_vec_ptr].robidx) << ", ";
+                ss <<"ROB index is 0x" << std::hex<< static_cast<unsigned>(ref_output_pool[cur_vec_ptr].robidx) << ", ";
                 ss <<"ROB flag is " <<ref_output_pool[cur_vec_ptr].robIdx_flag << ".\n";
                 ss << "vreg[" << i << "][" << j << "]: expected 0x"
                    << std::hex << std::setfill('0') << std::setw(8)
