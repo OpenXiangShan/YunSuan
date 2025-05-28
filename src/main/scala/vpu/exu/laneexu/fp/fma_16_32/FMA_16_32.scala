@@ -354,12 +354,12 @@ class FMUL_16_32 extends Module {
     shift_amount_c_low := 31.U
     shift_ab_low := false.B
   }.elsewhen (c_gte_ab_low) {
-    shift_amount_ab_low := 0.U
+    shift_amount_ab_low := exp_diff_low_c_minus_ab(4, 0)
     shift_amount_c_low := 0.U
     shift_ab_low := true.B
   }.otherwise {
     shift_amount_ab_low := 0.U
-    shift_amount_c_low := 0.U
+    shift_amount_c_low := exp_diff_low_ab_minus_c(4, 0)
     shift_ab_low := false.B
   }
   // Select input of shift block, ab or c.
@@ -383,12 +383,12 @@ class FMUL_16_32 extends Module {
     shift_amount_c_high := 63.U
     shift_ab_high := false.B
   }.elsewhen (c_gte_ab_high) {
-    shift_amount_ab_high := 0.U
+    shift_amount_ab_high := exp_diff_high_c_minus_ab(5, 0)
     shift_amount_c_high := 0.U
     shift_ab_high := true.B
   }.otherwise {
     shift_amount_ab_high := 0.U
-    shift_amount_c_high := 0.U
+    shift_amount_c_high := exp_diff_high_ab_minus_c(5, 0)
     shift_ab_high := false.B
   }
   // Select input of shift block, ab or c.
