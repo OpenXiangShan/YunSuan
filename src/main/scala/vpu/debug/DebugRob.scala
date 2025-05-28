@@ -18,7 +18,7 @@ import chisel3.util.log2Ceil // Ensure log2Ceil is imported
 
 object DebugRobParmas {
   val robSize = 12
-  val robEntry_dataDepth = 2 // EMUL > robEntry_dataDepth will cause error
+  val robEntry_dataDepth = 8 // EMUL > robEntry_dataDepth will cause error
 }
 import DebugRobParmas._
 
