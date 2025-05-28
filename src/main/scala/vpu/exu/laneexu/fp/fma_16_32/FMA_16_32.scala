@@ -296,6 +296,7 @@ class FMUL_16_32 extends Module {
   //-------------------------------------------------------
   val c_in_S1 = RegEnable(io.c_in, io.valid_in)
   val c_in_S2 = RegEnable(c_in_S1, valid_S1)
+  val (sign_c_high, sign_c_low) = (c_in_S2(31), c_in_S2(15))
   val widen_S2 = uop_S2.ctrl.widen
   val c_is_32 = !input_is_16_S2 || widen_S2
   val c_is_fp16 = RegEnable(RegEnable(is_fp16, valid_S1), valid_S2)
@@ -397,18 +398,86 @@ class FMUL_16_32 extends Module {
   val shift_amount_in_whole = Mux(shift_ab_high, shift_amount_ab_high, shift_amount_c_high) // 6 bits
   val shift_out_whole = shift_right(shift_in_whole, shift_amount_in_whole) // 48 bits
 
-
+  // sig_resMul_low_S2:   24  (2 + 22)
+  // sig_adjust_subnorm_c_low_24: 24  (2 + 22)
+  // shift_out_low: 24
+  
+  // sig_resMul_whole_S2: 48  (2 + 46)
+  // sig_adjust_subnorm_c_whole_48: 48  (2 + 46)
+  // shift_out_whole: 48
+  
+  //-----------------------------------------
   // Addition:   24 24
   //           + 24 24
-  sig_resMul_low_S2  //24  (2 + 22)
-  sig_adjust_subnorm_c_low_24  //24  (2 + 22)
-  shift_out_low  //24
+  //-----------------------------------------
+  //---- Adder-48 is made of two adder-24s 
+  //-----------------------------------------
+  val adderIn_ab_low_24 = Mux(shift_ab_low, shift_out_low, sig_resMul_low_S2)
+  val adderIn_c_low_24 = Mux(!shift_ab_low, shift_out_low, sig_adjust_subnorm_c_low_24)
+  val adderIn_ab_whole_48 = Mux(shift_ab_high, shift_out_whole, sig_resMul_whole_S2)
+  val adderIn_c_whole_48 = Mux(!shift_ab_high, shift_out_whole, sig_adjust_subnorm_c_whole_48)
+  
+  val ab_p_c_p_high = !resMul_sign_high_S2 && !sign_c_high // ab_high > 0 && c_high > 0
+  val ab_n_c_n_high = resMul_sign_high_S2 && sign_c_high // ab_high < 0 && c_high < 0
+  val ab_p_c_n_high = !resMul_sign_high_S2 && sign_c_high // ab_high > 0 && c_high < 0
+  val ab_n_c_p_high = resMul_sign_high_S2 && !sign_c_high // ab_high < 0 && c_high > 0
+  val ab_p_c_p_low = !resMul_sign_low_S2 && !sign_c_low // ab_low > 0 && c_low > 0
+  val ab_n_c_n_low = resMul_sign_low_S2 && sign_c_low // ab_low < 0 && c_low < 0
+  val ab_p_c_n_low = !resMul_sign_low_S2 && sign_c_low // ab_low > 0 && c_low < 0
+  val ab_n_c_p_low = resMul_sign_low_S2 && !sign_c_low // ab_low < 0 && c_low > 0
 
-  sig_resMul_whole_S2 //48  (2 + 46)
-  sig_adjust_subnorm_c_whole_48 //48  (2 + 46)
-  shift_out_whole //48
+  val adderIn_ab_whole_48_inv = Mux(ab_n_c_p_high, ~adderIn_ab_whole_48, adderIn_ab_whole_48)
+  val adderIn_c_whole_48_inv = Mux(ab_p_c_n_high, ~adderIn_c_whole_48, adderIn_c_whole_48)
+  val adderIn_ab_low_24_inv = Mux(ab_n_c_p_low, ~adderIn_ab_low_24, adderIn_ab_low_24)
+  val adderIn_c_low_24_inv = Mux(ab_p_c_n_low, ~adderIn_c_low_24, adderIn_c_low_24)
+  
+  val adderIn_ab_high_24_final = adderIn_ab_whole_48_inv(47, 24)
+  val adderIn_c_high_24_final = adderIn_c_whole_48_inv(47, 24)
+  val adderIn_ab_low_24_final = Mux(res_is_32_S2, adderIn_ab_whole_48_inv(23, 0), adderIn_ab_low_24_inv)
+  val adderIn_c_low_24_final = Mux(res_is_32_S2, adderIn_c_whole_48_inv(23, 0), adderIn_c_low_24_inv)
 
+  // Low 24-bit adder            cout                             cin for negative addend
+  val adderOut_low_26_temp = Cat(false.B, adderIn_ab_low_24_inv, ab_n_c_p_low || ab_p_c_n_low) +
+                             Cat(false.B, adderIn_c_low_24_inv, ab_n_c_p_low || ab_p_c_n_low)
+  val adderOut_low_cout = adderOut_low_26_temp(25)
+  val adderOut_low_sum = adderOut_low_26_temp(24, 1) // 24 bits
 
+  // High 24-bit adder                                         cin: low-cout (32) or negative addend (16)
+  val adderOut_high_25_temp = Cat(adderIn_ab_high_24_final, Mux(res_is_32_S2, adderOut_low_cout, ab_n_c_p_high || ab_p_c_n_high)) +
+                              Cat(adderIn_c_high_24_final, Mux(res_is_32_S2, adderOut_low_cout, ab_n_c_p_high || ab_p_c_n_high))
+  val adderOut_high_sum = adderOut_high_25_temp(24, 1) // 24 bits
+
+  val adderOut_low_final = Mux(adderOut_low_sum(23), ~adderOut_low_sum, adderOut_low_sum)
+  val adderOut_low_final_compensate_1 = adderOut_low_sum(23) // 负数的话，需要补偿1
+  val adderOut_high_final = Mux(adderOut_high_sum(23), ~adderOut_high_sum, adderOut_high_sum)
+  val adderOut_high_final_compensate_1 = adderOut_high_sum(23) // 负数的话，需要补偿1
+  // TODO: 在下面的stage3中, 为了实现简单，故意不考虑补偿1的情况（潜在的精度影响）
+
+  val adderOut_sign_low = adderOut_low_sum(23)
+  val adderOut_sign_high = adderOut_high_sum(23)
+
+  //--------------------------------------------------
+  //---- Below is S3 (pipeline 3) stage:
+  //       Adder result shifting and rounding
+  //--------------------------------------------------
+  val valid_S3 = RegNext(valid_S2)
+  val uop_S3 = RegEnable(uop_S2, valid_S2)
+  val input_is_16_S3 = RegEnable(input_is_16_S2, valid_S2)
+  val res_is_32_S3 = RegEnable(res_is_32_S2, valid_S2)
+  val res_is_bf16_S3 = RegEnable(res_is_bf16_S2, valid_S2)
+  val res_is_fp16_S3 = RegEnable(res_is_fp16_S2, valid_S2)
+  val resMul_is_inf_low_S3 = RegEnable(resMul_is_inf_low_S2, valid_S2)
+  val resMul_is_inf_high_S3 = RegEnable(resMul_is_inf_high_S2, valid_S2)
+  val resMul_is_subnorm_low_S3 = RegEnable(resMul_is_subnorm_low_S2, valid_S2)
+  val resMul_is_subnorm_high_S3 = RegEnable(resMul_is_subnorm_high_S2, valid_S2)
+  
+  val adderOut_low_S3 = RegEnable(adderOut_low_final, valid_S2)
+  val adderOut_high_S3 = RegEnable(adderOut_high_final, valid_S2)
+  val adderOut_whole_S3 = Cat(adderOut_high_S3, adderOut_low_S3)
+  val adderOut_sign_low_S3 = RegEnable(adderOut_sign_low, valid_S2)
+  val adderOut_sign_high_S3 = RegEnable(adderOut_sign_high, valid_S2)
+  
+  // Shift
 
 
 
