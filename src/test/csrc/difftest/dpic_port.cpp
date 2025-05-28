@@ -2,7 +2,7 @@
 #include "emu.h"
 #include "pmem.h"
 #include "dpic_port.h"
-#define MEM_TRACE
+// #define MEM_TRACE
 VPU_STATE dut_state;
 extern uint8_t pmem [PMEM_SIZE];
 uint64_t vpu_pc=0;

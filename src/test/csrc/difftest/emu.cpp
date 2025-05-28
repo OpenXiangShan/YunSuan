@@ -108,8 +108,7 @@ int Emulator::tick()
         uncommit_cycle += 1;
         if (uncommit_cycle > 100){
             std::stringstream ss;
-            ss << "Uncommitted cycle exceeds 100 at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << present->pc << ", instr=0x"
-               << std::hex << std::setfill('0') << std::setw(8) << present->inst.val<< ".\n";
+            ss << "Uncommitted cycle exceeds 100 at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(16) << present->pc << ".\n";
             log(ss.str());
             trapCode = STATE_TRAP;
             return 0;
@@ -117,7 +116,8 @@ int Emulator::tick()
     }else {
         uncommit_cycle = 0;
     }
-    if (total_vector_instr <= 16)
+
+    if (total_vector_instr < 16)
     {
         ref_difftest_exec(1);//REF executes one cycle
         present->pc = next->pc;
@@ -132,7 +132,9 @@ int Emulator::tick()
             std::stringstream ss;
             ss << "[ISSUE] The result of Vector instruction PC = 0x" 
                 << std::hex << std::setfill('0') << std::setw(16) << present->pc << ", instr=0x"
-               << std::hex << std::setfill('0') << std::setw(8) << present->inst.val <<" is stored in output_pool["<<std::to_string(store_ptr)<<"]!";
+               << std::hex << std::setfill('0') << std::setw(8) << present->inst.val <<" is stored in output_pool["<<std::to_string(store_ptr)<<"]! ";
+            ss <<"ROB index is 0x" << std::hex<< static_cast<unsigned>(dut_ptr->io_dispatch_s2v_bits_robIdx_value) << ", ";
+                ss <<"ROB flag is " <<+dut_ptr->io_dispatch_s2v_bits_robIdx_flag << ".";
             log(ss.str());
             #endif
             store_ptr = store_ptr == 15 ? 0 : store_ptr + 1;
@@ -258,13 +260,15 @@ int Emulator::tick()
             ss << "Vector store instruction 0x" << std::hex << std::setfill('0') << std::setw(8) << next->inst.val << " is sent to VPU at PC = 0x"
                << std::hex << std::setfill('0') << std::setw(16) <<next->pc<<" , simulation time = " 
                 << std::to_string(get_sim_time()) << " ps! ";
-             ss <<"ROB index is " << std::hex<< static_cast<unsigned>(dut_ptr->io_dispatch_s2v_bits_robIdx_value) << ", ";
+             ss <<"ROB index is 0x" << std::hex<< static_cast<unsigned>(dut_ptr->io_dispatch_s2v_bits_robIdx_value) << ", ";
                 ss <<"ROB flag is " <<+dut_ptr->io_dispatch_s2v_bits_robIdx_flag << ".";
             log(ss.str());
         }
         else{
             dut_ptr->io_dispatch_s2v_valid=0;
         }
+    }else{
+        dut_ptr->io_dispatch_s2v_valid = 0;
     }
     if(commit ==true)
     {
