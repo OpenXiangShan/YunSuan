@@ -392,23 +392,24 @@ class FMUL_16_32 extends Module {
     shift_ab_high := false.B
   }
   // Select input of shift block, ab or c.
-  // val sig_adjust_subnorm_c_low_24 = sig_adjust_subnorm_16_c(0) ## 0.U(12.W) // 24 bits
-  // val shift_in_low = Mux(shift_ab_low, sig_resMul_low_S2, sig_adjust_subnorm_c_low_24) // 24 bits
-  // val shift_amount_in_low = Mux(shift_ab_low, shift_amount_ab_low, shift_amount_c_low) // 5 bits
-  // val shift_out_low = shift_right(shift_in_low, shift_amount_in_low) // 24 bits
+  val sig_adjust_subnorm_c_whole_48 = sig_adjust_subnorm_32_c(0) ## 0.U(16.W) // 48 bits
+  val shift_in_whole = Mux(shift_ab_high, sig_resMul_whole_S2, sig_adjust_subnorm_c_whole_48) // 48 bits
+  val shift_amount_in_whole = Mux(shift_ab_high, shift_amount_ab_high, shift_amount_c_high) // 6 bits
+  val shift_out_whole = shift_right(shift_in_whole, shift_amount_in_whole) // 48 bits
 
 
   // Addition:   24 24
   //           + 24 24
   sig_resMul_low_S2  //24  (2 + 22)
   sig_adjust_subnorm_c_low_24  //24  (2 + 22)
-  shift_out_low  //24  (2 + 22)
+  shift_out_low  //24
+
+  sig_resMul_whole_S2 //48  (2 + 46)
+  sig_adjust_subnorm_c_whole_48 //48  (2 + 46)
+  shift_out_whole //48
 
 
 
-
-
-  // 加法要减少位
 
 
 
