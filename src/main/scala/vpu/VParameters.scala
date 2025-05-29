@@ -35,8 +35,8 @@ object VParams {
   val faddDelay = 1 + delayBias
   val fmaDelay = 3 + delayBias
   val fcvtDelay = 2 + delayBias
-  val fredFp16Delay = 2*(log2Up(VLEN/32) + 3) + delayBias //TODO: recheck
-  val fredFp32Delay = 2*(log2Up(VLEN/32) + 2) + delayBias //TODO: recheck
+  val fredFp16Delay = 2*(log2Up(VLEN/32) + 3) + 1 + delayBias //TODO: recheck
+  val fredFp32Delay = 2*(log2Up(VLEN/32) + 2) + 1 + delayBias //TODO: recheck
   val vrgatherDelay = 1 + delayBias
 
   // Load/Store
