@@ -168,7 +168,7 @@ class FMUL_16_32 extends Module {
   // ---- Calculate shift direction and shift amount ----
   // ----------------------------------------------------
   val (shift_right_high, shift_right_low) = (Wire(Bool()), Wire(Bool()))
-  val (shift_amount_high, shift_amount_low) = (Wire(UInt(5.W)), Wire(UInt(4.W)))
+  val (shift_amount_high, shift_amount_low) = (Wire(UInt(6.W)), Wire(UInt(5.W)))
   val (res_is_subnorm_high, res_is_subnorm_low) = (Wire(Bool()), Wire(Bool()))
   val (res_is_inf_high_case1, res_is_inf_low_case1) = (Wire(Bool()), Wire(Bool()))
   val lzd_low = LZD(res_intMul_low24(21, 0)) // 5 bits
@@ -252,8 +252,8 @@ class FMUL_16_32 extends Module {
   
   //---- 对乘法的结果significand进行移位----
   //---- Shift the significand of the multiplication result
-  val sig_res_shifted_low = shift(res_intMul_low24, shift_amount_low, shift_right_low)  // 24 bits
-  val sig_res_shifted_whole = shift(res_intMul_48, shift_amount_high, shift_right_high)  // 48 bits
+  val sig_resMul_shifted_low = shift(res_intMul_low24, shift_amount_low, shift_right_low)  // 24 bits
+  val sig_resMul_shifted_whole = shift(res_intMul_48, shift_amount_high, shift_right_high)  // 48 bits
 
   //---- 乘法结果的exp会在此处更新 ----
   //---- the exponent of the multiplication result will be updated here
@@ -281,13 +281,15 @@ class FMUL_16_32 extends Module {
   val res_is_fp16_S2 = RegEnable(res_is_fp16, valid_S1)
   val resMul_sign_high_S2 = RegEnable(res_sign_high_S1, valid_S1)
   val resMul_sign_low_S2 = RegEnable(res_sign_low_S1, valid_S1)
+  val resMul_is_zero_low_S2 = RegEnable(res_is_zero_low_preS2, valid_S1)
+  val resMul_is_zero_high_S2 = RegEnable(res_is_zero_high_preS2, valid_S1)
   val resMul_is_inf_low_S2 = RegEnable(res_is_inf_low_preS2, valid_S1)
   val resMul_is_inf_high_S2 = RegEnable(res_is_inf_high_preS2, valid_S1)
   val resMul_is_subnorm_low_S2 = RegEnable(res_is_subnorm_low, valid_S1)
   val resMul_is_subnorm_high_S2 = RegEnable(res_is_subnorm_high, valid_S1)
 
-  val sig_resMul_low_S2 = RegEnable(sig_res_shifted_low, valid_S1)
-  val sig_resMul_whole_S2 = RegEnable(sig_res_shifted_whole, valid_S1)
+  val sig_resMul_low_S2 = RegEnable(sig_resMul_shifted_low, valid_S1)
+  val sig_resMul_whole_S2 = RegEnable(sig_resMul_shifted_whole, valid_S1)
   val exp_resMul_low_S2 = RegEnable(exp_resMul_low_final, valid_S1)
   val exp_resMul_high_S2 = RegEnable(exp_resMul_high_final, valid_S1)
  
@@ -462,23 +464,158 @@ class FMUL_16_32 extends Module {
   //--------------------------------------------------
   val valid_S3 = RegNext(valid_S2)
   val uop_S3 = RegEnable(uop_S2, valid_S2)
+  val c_in_S3 = RegEnable(c_in_S2, valid_S2)
   val input_is_16_S3 = RegEnable(input_is_16_S2, valid_S2)
   val res_is_32_S3 = RegEnable(res_is_32_S2, valid_S2)
   val res_is_bf16_S3 = RegEnable(res_is_bf16_S2, valid_S2)
   val res_is_fp16_S3 = RegEnable(res_is_fp16_S2, valid_S2)
+  val resMul_is_zero_low_S3 = RegEnable(resMul_is_zero_low_S2, valid_S2)
+  val resMul_is_zero_high_S3 = RegEnable(resMul_is_zero_high_S2, valid_S2)
   val resMul_is_inf_low_S3 = RegEnable(resMul_is_inf_low_S2, valid_S2)
   val resMul_is_inf_high_S3 = RegEnable(resMul_is_inf_high_S2, valid_S2)
   val resMul_is_subnorm_low_S3 = RegEnable(resMul_is_subnorm_low_S2, valid_S2)
   val resMul_is_subnorm_high_S3 = RegEnable(resMul_is_subnorm_high_S2, valid_S2)
   
-  val adderOut_low_S3 = RegEnable(adderOut_low_final, valid_S2)
-  val adderOut_high_S3 = RegEnable(adderOut_high_final, valid_S2)
-  val adderOut_whole_S3 = Cat(adderOut_high_S3, adderOut_low_S3)
+  val adderOut_low_S3 = RegEnable(adderOut_low_final, valid_S2) // 24 bits
+  val adderOut_high_S3 = RegEnable(adderOut_high_final, valid_S2) // 24 bits
+  val adderOut_whole_S3 = Cat(adderOut_high_S3, adderOut_low_S3) // 48 bits
   val adderOut_sign_low_S3 = RegEnable(adderOut_sign_low, valid_S2)
   val adderOut_sign_high_S3 = RegEnable(adderOut_sign_high, valid_S2)
-  
-  // Shift
 
+  val exp_resMul_low_S3 = RegEnable(exp_resMul_low_S2, valid_S2)  // 8 bits
+  val exp_resMul_high_S3 = RegEnable(exp_resMul_high_S2, valid_S2) // 8 bits
+  val exp_c_low_S3 = RegEnable(exp_adjust_subnorm_c(0), valid_S2) // 8 bits
+  val exp_c_high_S3 = RegEnable(exp_adjust_subnorm_c(1), valid_S2) // 8 bits
+  val c_gte_ab_low_S3 = RegEnable(c_gte_ab_low, valid_S2)
+  val c_gte_ab_high_S3 = RegEnable(c_gte_ab_high, valid_S2)
+
+  val exp_adderOut_low = Mux(c_gte_ab_low_S3, exp_c_low_S3, exp_resMul_low_S3)
+  val exp_adderOut_high = Mux(c_gte_ab_high_S3, exp_c_high_S3, exp_resMul_high_S3)
+
+  val adderOut_is_inf_low = resMul_is_inf_low_S3 || exp_adderOut_low === Mux(res_is_fp16_S3, "b00011111".U, "b11111111".U)
+  val adderOut_is_inf_high = resMul_is_inf_high_S3 || exp_adderOut_high === Mux(res_is_fp16_S3, "b00011111".U, "b11111111".U)
+  
+  val adderOut_int_part_low = adderOut_low_S3(23, 22)
+  val adderOut_int_part_high = adderOut_high_S3(23, 22)
+
+  // ---- Calculate shift amount of adder out----
+  // ----  (shift direction is left) ----
+  val adderOut_is_subnorm_high, adderOut_is_subnorm_low = Wire(Bool())
+  val adderOut_is_inf_high_case1, adderOut_is_inf_low_case1 = Wire(Bool())
+  val (adderOut_shift_amount_high, adderOut_shift_amount_low) = (Wire(UInt(6.W)), Wire(UInt(5.W)))
+  val exp_adderOut_tobe_subtracted_high, exp_adderOut_tobe_subtracted_low = Wire(UInt(8.W))
+  val exp_adderOut_high_over_1 = exp_adderOut_high - 1.U // 8 bits
+  val exp_adderOut_low_over_1 = exp_adderOut_low - 1.U // 8 bits
+  val lzd_adderOut_low = LZD(adderOut_low_S3(21, 0)) // 5 bits
+  val lzd_adderOut_high = LZD(adderOut_high_S3(21, 0)) // 5 bits
+  val lzd_adderOut_whole = LZD(adderOut_whole_S3(45, 0)) // 5 bits
+  // Low part
+  when (adderOut_int_part_low(1)) { // integer part >= 2
+    adderOut_is_subnorm_low := false.B
+    adderOut_is_inf_low_case1 := exp_adderOut_low === Mux(res_is_fp16_S3, "b00011110".U, "b11111110".U)
+    // 由于只进行左移，所以整数部分大于2时，不移动。整数部分为1时，左移一位。
+    // 最终sig的小数点在最高位之后，即 23.22 21 20 --- 1 0
+    adderOut_shift_amount_low := 0.U
+    // 整数部分大于2时，exp需要加1，相当于减去-1
+    exp_adderOut_tobe_subtracted_low := ~0.U(8.W)
+  }.elsewhen (adderOut_int_part_low(0)) { // integer part = 1
+    adderOut_is_subnorm_low := false.B
+    adderOut_is_inf_low_case1 := false.B
+    adderOut_shift_amount_low := 1.U
+    exp_adderOut_tobe_subtracted_low := 0.U
+  }.otherwise { // Integer part == 0;
+    when(exp_adderOut_low_over_1 <= lzd_adderOut_low) { // exp > 1  &&  (exp-1) <= LZD of fraction
+      adderOut_is_subnorm_low := true.B
+      adderOut_shift_amount_low := exp_adderOut_low_over_1 + 1.U
+      exp_adderOut_tobe_subtracted_low := exp_adderOut_low_over_1
+    }.otherwise {  // exp > 1  &&  (exp-1) > LZD of fraction
+      adderOut_is_subnorm_low := false.B
+      adderOut_shift_amount_low := lzd_adderOut_low + 2.U
+      exp_adderOut_tobe_subtracted_low := lzd_adderOut_low + 1.U
+    }
+    adderOut_is_inf_low_case1 := false.B
+  }
+
+  // High part
+  val lzd_adderOut_high_or_whole = Mux(res_is_32_S3, lzd_adderOut_whole, lzd_adderOut_high)
+  when (adderOut_int_part_high(1)) { // integer part >= 2
+    adderOut_is_subnorm_high := false.B
+    adderOut_is_inf_high_case1 := exp_adderOut_high === Mux(res_is_fp16_S3, "b00011110".U, "b11111110".U)
+    // 由于只进行左移，所以整数部分大于2时，不移动。整数部分为1时，左移一位。
+    // 最终sig的小数点在最高位之后，即 23.22 21 20 --- 1 0
+    adderOut_shift_amount_high := 0.U
+    // 整数部分大于2时，exp需要加1，相当于减去-1
+    exp_adderOut_tobe_subtracted_high := ~0.U(8.W)
+  }.elsewhen (adderOut_int_part_high(0)) { // integer part = 1
+    adderOut_is_subnorm_high := false.B
+    adderOut_is_inf_high_case1 := false.B
+    adderOut_shift_amount_high := 1.U
+    exp_adderOut_tobe_subtracted_high := 0.U
+  }.otherwise { // Integer part == 0;
+    when(exp_adderOut_high_over_1 <= lzd_adderOut_high_or_whole) { // exp > 1  &&  (exp-1) <= LZD of fraction
+      adderOut_is_subnorm_high := true.B
+      adderOut_shift_amount_high := exp_adderOut_high_over_1 + 1.U
+      exp_adderOut_tobe_subtracted_high := exp_adderOut_high_over_1
+    }.otherwise {  // exp > 1  &&  (exp-1) > LZD of fraction
+      adderOut_is_subnorm_high := false.B
+      adderOut_shift_amount_high := lzd_adderOut_high_or_whole + 2.U
+      exp_adderOut_tobe_subtracted_high := lzd_adderOut_high_or_whole + 1.U
+    }
+    adderOut_is_inf_high_case1 := false.B
+  }
+
+  val sig_adderOut_shifted_low = shift_left(adderOut_low_S3, adderOut_shift_amount_low)(23, 0) // 24 bits
+  val sig_adderOut_shifted_whole = shift_left(adderOut_whole_S3, adderOut_shift_amount_high)(47, 0) // 48 bits
+
+  val exp_adderOut_shifted_low = exp_adderOut_low - exp_adderOut_tobe_subtracted_low
+  val exp_adderOut_shifted_high = exp_adderOut_high - exp_adderOut_tobe_subtracted_high
+
+  //---- Rouding (only RNE) of adder out ----
+  // Low 16: before rounding: 23.22 21 20 --- 1 0
+  // fp16
+  val lsb_adderOut_low16_fp16 = sig_adderOut_shifted_low(13) // LSB
+  val g_adderOut_low16_fp16 = sig_adderOut_shifted_low(12) // Guard bit
+  val s_adderOut_low16_fp16 = sig_adderOut_shifted_low(11, 0).orR // Sticky bit
+  val sigEff_adderOut_low16_fp16 = sig_adderOut_shifted_low(23, 13) // 11 bits
+  // bf16
+  val lsb_adderOut_low16_bf16 = sig_adderOut_shifted_low(16) // LSB
+  val g_adderOut_low16_bf16 = sig_adderOut_shifted_low(15) // Guard bit
+  val s_adderOut_low16_bf16 = sig_adderOut_shifted_low(14, 12).orR || s_adderOut_low16_fp16 // Sticky bit
+  val sigEff_adderOut_low16_bf16 = sig_adderOut_shifted_low(23, 16) // 8 bits
+  // High 16: before rounding: 47.46 45 44 --- 25 24
+  val sig_adderOut_shifted_high = sig_adderOut_shifted_whole(47, 24) // 24 bits
+  // fp16
+  val lsb_adderOut_high16_fp16 = sig_adderOut_shifted_high(13) // LSB
+  val g_adderOut_high16_fp16 = sig_adderOut_shifted_high(12) // Guard bit
+  val s_adderOut_high16_fp16 = sig_adderOut_shifted_high(11, 0).orR // Sticky bit
+  val sigEff_adderOut_high16_fp16 = sig_adderOut_shifted_high(23, 13) // 11 bits
+  // bf16
+  val lsb_adderOut_high16_bf16 = sig_adderOut_shifted_high(16) // LSB
+  val g_adderOut_high16_bf16 = sig_adderOut_shifted_high(15) // Guard bit
+  val s_adderOut_high16_bf16 = sig_adderOut_shifted_high(14, 12).orR || s_adderOut_high16_fp16 // Sticky bit
+  val sigEff_adderOut_high16_bf16 = sig_adderOut_shifted_high(23, 16) // 8 bits
+  // 32: before rounding: 47.46 45 44 --- 1 0
+  val lsb_adderOut_whole32 = sig_adderOut_shifted_whole(24) // LSB
+  val g_adderOut_whole32 = sig_adderOut_shifted_whole(25) // Guard bit
+  val s_adderOut_whole32 = sig_adderOut_shifted_whole(26, 15).orR || s_adderOut_low16_bf16 // Sticky bit
+  val sigEff_adderOut_whole32 = sig_adderOut_shifted_whole(47, 24) // 8 bits
+
+  // Low fp16
+  val rnd_cin_low_fp16 = Mux(!g_adderOut_low16_fp16, false.B,
+                         Mux(s_adderOut_low16_fp16, true.B, lsb_adderOut_low16_fp16))
+  val sigExt_resFinal_low_fp16 = sigEff_adderOut_low16_fp16 +& rnd_cin_low_fp16.asUInt // 12 bits
+  val sig_resFinal_low_fp16 = Mux(sigExt_resFinal_low_fp16(11),
+                                  sigExt_resFinal_low_fp16(11, 1), sigExt_resFinal_low_fp16(10, 0)) // 11 bits
+  val exp_adjust_resFinal_low_fp16 = exp_adderOut_shifted_low + sigExt_resFinal_low_fp16(11).asUInt
+  val isInf_resFinal_low_fp16 = sigExt_resFinal_low_fp16(11) && exp_adderOut_shifted_low === "b00011110".U
+  val exp_resFinal_low_fp16 = Mux(exp_adjust_resFinal_low_fp16 === 1.U && !sig_resFinal_low_fp16(10), 0.U, exp_adjust_resFinal_low_fp16) // 8 bits
+  val sign_resFinal_low_fp16 = adderOut_sign_low_S3
+  // low bf16
+  val rnd_cin_low_bf16 = Mux(!g_adderOut_low16_bf16, false.B,
+                         Mux(s_adderOut_low16_bf16, true.B, lsb_adderOut_low16_bf16))
+  val sigExt_resFinal_low_bf16 = sigEff_adderOut_low16_bf16 +& rnd_cin_low_bf16.asUInt //  9 bits
+  val sig_resFinal_low_bf16 = Mux(sigExt_resFinal_low_bf16(8),
+                                  sigExt_resFinal_low_bf16(8, 1), sigExt_resFinal_low_bf16(7, 0)) // 8 bits
 
 
 
@@ -495,11 +632,18 @@ class FMUL_16_32 extends Module {
   def shift_right(data: UInt, shift_amount: UInt): UInt = {
     data >> shift_amount
   }
+  def shift_left(data: UInt, shift_amount: UInt): UInt = {
+    data << shift_amount
+  }
 
 
   // 加法时，如果mul res是zero，则结果等于c_in
   // 加法时，如果mul res是inf，则结果等于inf
 
   // Inf, Zero, subnormal
+
+  adderOut_is_inf_low
+  adderOut_is_inf_low_case1
+
 
 }
