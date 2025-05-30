@@ -21,7 +21,7 @@ DEPS			=$(V_FILES) $(SIM_CSRCS)
 
 # 编译选项
 VERILATOR_ROOT := $(shell verilator --getenv VERILATOR_ROOT)
-CXXFLAGS = -g -O2 -std=c++14 -I$(OBJ_DIR)
+CXXFLAGS = -g -O2 -std=c++17 -I$(OBJ_DIR)
 CXXFLAGS += -I$(VERILATOR_ROOT)/include -I$(VERILATOR_ROOT)/include/vltstd
 LDFLAGS = -ldl -lSDL2 -lpthread -no-pie -latomic -lz# 根据实际需求调整其他库
 INCLUDE_DIR = $(abspath ./include)

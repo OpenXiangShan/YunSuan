@@ -13,6 +13,8 @@
 // #include <verilated_vcd_c.h>
 #include <verilated_fst_c.h>
 
+#include "half.hpp"
+
 #define RESET_VECTOR 0x80000000
 #define concat_temp(x, y) x ## y
 #define concat(x, y) concat_temp(x, y)

@@ -38,8 +38,11 @@ int main(){
     while(!emu->is_finished()){
       emu->tick();
   }
+  int is_bad_trap = emu->is_bad_trap();
+  if (!is_bad_trap) {
+    emu->log("Simulation finished successfully.");
+  }
   delete emu;
-    // ref_isa_reg_display();
-    // printf("pc=0x%0lx\n",cpu.pc);
-    return 0;
+  
+  return is_bad_trap;
 }

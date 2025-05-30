@@ -70,6 +70,13 @@ typedef struct VPU_STATE{
     vluint64_t issued_time;
 }VPU_STATE;
 
+enum {
+    STATE_BADTRAP = 0,
+    STATE_RUNNING = -1,
+    STATE_STOPPED =-2
+};
+
+
 class Emulator {
 
 private:
@@ -115,9 +122,9 @@ public:
   EmuArgs get_args() const {
     return args;
   }
-  // bool is_good_trap() {
-  //   return trapCode == STATE_GOODTRAP || trapCode == STATE_LIMIT_EXCEEDED || trapCode == STATE_SIM_EXIT;
-  // };
+  bool is_bad_trap() {
+    return trapCode == STATE_BADTRAP;
+  }
   int get_trapcode() {
     return trapCode;
   }
@@ -134,11 +141,54 @@ public:
 
   void log(const std::string& message);
 
-};
+  template <typename T>
+  void print_vector_register(std::stringstream &ss, int vreg_idx,
+                             decltype(VPU_STATE::vr[0]) &ref_reg, decltype(VPU_STATE::vr[0]) &dut_reg,
+                             int elements_per_line ){
+    constexpr int element_width = sizeof(T) * 8;
+    constexpr int hex_width = element_width / 4;
+    int num_elements = VLEN / element_width;
 
-enum {
-    STATE_TRAP = 0,
-    STATE_RUNNING = -1
+    // Print reference
+    ss << "REF model [v" << vreg_idx << "]: \n";
+    for (int e = 0; e < num_elements; e++){
+      ss << "[" << std::setfill('0') << std::setw(2) << e << "] "
+         << std::hex << std::setfill('0') << std::setw(hex_width);
+
+      if constexpr(std::is_same<T, uint8_t>::value) {
+        ss << static_cast<uint32_t>(ref_reg._8[e]);//uint8 -> uint32; uint8 = ascii
+      } else if constexpr(std::is_same<T, uint16_t>::value) {
+        ss << static_cast<uint32_t>(ref_reg._16[e]);
+      } else if constexpr(std::is_same<T, uint32_t>::value) {
+        ss << ref_reg._32[e];
+      } else {
+        ss << ref_reg._64[e];
+      }
+
+      if (e % elements_per_line == elements_per_line - 1)
+        ss << "\n";
+    }
+
+    // Print DUT
+    ss << "DUT [v" << vreg_idx << "]: \n";
+    for (int e = 0; e < num_elements; e++){
+      ss << "[" << std::setfill('0') << std::setw(2) << e << "] "
+         << std::hex << std::setfill('0') << std::setw(hex_width);
+      
+      if constexpr(std::is_same<T, uint8_t>::value) {
+        ss << static_cast<uint32_t>(dut_reg._8[e]);//uint8 -> uint32; uint8 = ascii
+      } else if constexpr(std::is_same<T, uint16_t>::value) {
+        ss << static_cast<uint32_t>(dut_reg._16[e]);
+      } else if constexpr(std::is_same<T, uint32_t>::value) {
+        ss << dut_reg._32[e];
+      } else {
+        ss << dut_reg._64[e];
+      }
+
+      if (e % elements_per_line == elements_per_line - 1)
+        ss << "\n";
+    }
+  }
 };
 
 

@@ -45,6 +45,7 @@ Emulator::Emulator(int argc, const char *argv[])
         log_initialized = true;
         log_file << "==== Simulation Start ====\n";
         log_file.flush();
+        printf("==== Simulation Start ====\n"); 
     }else {
         std::cerr << "无法打开日志文件！错误: " << strerror(errno) << std::endl;
     }
@@ -61,6 +62,7 @@ Emulator::~Emulator() {
         log_file << "==== Simulation End ====\n";
         log_file.flush();
         log_file.close();
+        printf("==== Simulation End ====\n");
     }
 }
 
@@ -108,9 +110,9 @@ int Emulator::tick()
         uncommit_cycle += 1;
         if (uncommit_cycle > 100){
             std::stringstream ss;
-            ss << "Uncommitted cycle exceeds 100 at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(8) << present->pc << ".\n";
+            ss << "Uncommitted cycle exceeds 100 at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(8) << present->pc << ".";
             log(ss.str());
-            trapCode = STATE_TRAP;
+            trapCode = STATE_BADTRAP;
             return 0;
         }
     }else {
@@ -170,18 +172,18 @@ int Emulator::tick()
                        << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val <<" is fetched from output_pool["<<std::to_string(cur_vec_ptr) 
                        <<"] at simulation time = "<< std::to_string(get_sim_time()-10)<<" ps! ";
                     ss <<"ROB index is 0x" << std::hex<< static_cast<unsigned>(ref_output_pool[cur_vec_ptr].robidx) << ", ";
-                    ss <<"ROB flag is " <<ref_output_pool[cur_vec_ptr].robIdx_flag << ".\n";
+                    ss <<"ROB flag is " <<ref_output_pool[cur_vec_ptr].robIdx_flag << ".";
                     log(ss.str());
                 #endif
                     log("v["+std::to_string(commit_v_index)+"] is committed!");
                     if(check_vregs_state(&dut_state) ==false) {
-                        trapCode=STATE_TRAP;
+                        trapCode=STATE_BADTRAP;
                         return 0;
                     }else {
                         // printf("PC=0x%016lx,instr=0x%08x  passes!\n",ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
                         std::stringstream ss;
                         ss << "PC=0x" << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].pc<<", instr=0x"  \
-                        << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val<< " passes! ";
+                        << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val<< " passes! \n";
                         log(ss.str());
                     }
                     cur_vec_ptr = cur_vec_ptr ==15 ? 0 : cur_vec_ptr + 1;
@@ -205,7 +207,7 @@ int Emulator::tick()
                 assert(0);
             }
         }else if (breakpoint==true && total_vector_instr == 0){
-            trapCode = STATE_TRAP;
+            trapCode=STATE_STOPPED;
             return 0;
         }
         next->pc =ref_cpu_state.pc;
@@ -213,8 +215,8 @@ int Emulator::tick()
         decode_instr(next.get());
         if(next->is_vec == true)
         {
-            ref_output_pool[store_ptr].pc=next->pc;
-            ref_output_pool[store_ptr].inst.val=next->inst.val;
+            // ref_output_pool[store_ptr].pc=next->pc;
+            // ref_output_pool[store_ptr].inst.val=next->inst.val;
             int loop=0;
             while(dut_ptr->io_dispatch_s2v_ready!=1)
             {
@@ -225,7 +227,7 @@ int Emulator::tick()
                     ss << "VPU is busy at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(8) << next->pc << ", instr=0x"
                        << std::hex << std::setfill('0') << std::setw(8) << next->inst.val<< ".\n";
                     log(ss.str());
-                    trapCode = STATE_TRAP;
+                    trapCode = STATE_BADTRAP;
                     return 0;
                 }
             }
@@ -235,8 +237,6 @@ int Emulator::tick()
             dut_ptr->io_dispatch_s2v_bits_inst=next->inst.val;
             dut_ptr->io_dispatch_s2v_bits_rs1=next->rs1;
             dut_ptr->io_dispatch_s2v_bits_rs2=next->rs2;
-            ref_output_pool[store_ptr].robidx=dut_ptr->io_dispatch_s2v_bits_robIdx_value;
-            ref_output_pool[store_ptr].robIdx_flag=dut_ptr->io_dispatch_s2v_bits_robIdx_flag;
         }else if(next->is_vec_store == true){
             int loop=0;
              while(dut_ptr->io_dispatch_s2v_ready!=1)
@@ -248,7 +248,7 @@ int Emulator::tick()
                     ss << "VPU is busy at simulation time = "<< std::to_string(get_sim_time()) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(8) << next->pc << ", instr=0x"
                        << std::hex << std::setfill('0') << std::setw(8) << next->inst.val<< ".\n";
                     log(ss.str());
-                    trapCode = STATE_TRAP;
+                    trapCode = STATE_BADTRAP;
                     return 0;
                 }
             }
@@ -281,18 +281,18 @@ int Emulator::tick()
             << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val <<" is fetched from output_pool["<<std::to_string(cur_vec_ptr)
             <<"] at simulation time = "<< std::to_string(get_sim_time()-10)<<" ps! ";
         ss <<"ROB index is 0x" << std::hex<< static_cast<unsigned>(ref_output_pool[cur_vec_ptr].robidx) << ", ";
-        ss <<"ROB flag is " <<ref_output_pool[cur_vec_ptr].robIdx_flag << ".\n";
+        ss <<"ROB flag is " <<ref_output_pool[cur_vec_ptr].robIdx_flag << ".";
         log(ss.str());
      #endif
         log("v["+std::to_string(commit_v_index)+"] is committed!");
         if(check_vregs_state(&dut_state) ==false) {
-            trapCode=STATE_TRAP;
+            trapCode=STATE_BADTRAP;
             return 0;
         }else {
             // printf("PC=0x%016lx,instr=0x%08x  passes!\n",ref_output_pool[cur_vec_ptr].pc,ref_output_pool[cur_vec_ptr].inst.val);
             std::stringstream ss;
             ss << "PC=0x" << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
-               << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << " passes! ";
+               << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << " passes! \n";
             log(ss.str());
         }
         
@@ -370,6 +370,8 @@ void Emulator::vpu_state_store(){
     ref_output_pool[store_ptr].issued_time=get_sim_time()-10;
     ref_output_pool[store_ptr].pc=present->pc;
     ref_output_pool[store_ptr].inst.val=present->inst.val;
+    ref_output_pool[store_ptr].robidx=dut_ptr->io_dispatch_s2v_bits_robIdx_value;
+    ref_output_pool[store_ptr].robIdx_flag=dut_ptr->io_dispatch_s2v_bits_robIdx_flag;
 }
 
 void Emulator::clear_flags(Decode &s) {
@@ -411,9 +413,28 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
                     }
                     case 16: {
                         // TODO: 处理fp16
-                        uint16_t ref = ref_output_pool[cur_vec_ptr].vr[i]._16[j];
-                        uint16_t dut_val = dut->vr[i]._16[j];
-                        mismatch = (ref != dut_val);  
+                        half_float::half fp16_val_src1;
+                        half_float::half fp16_val_src2;
+                        uint16_t ref_raw = ref_output_pool[cur_vec_ptr].vr[i]._16[j];
+                        uint16_t dut_raw = dut->vr[i]._16[j];
+
+                        //无符号数复制到fp16
+                        std::memcpy(&fp16_val_src1, &ref_raw, sizeof(uint16_t));
+                        std::memcpy(&fp16_val_src2, &dut_raw, sizeof(uint16_t));
+
+                        //转换成fp32 进行误差分析
+                        float f_ref = static_cast<float>(fp16_val_src1);
+                        float f_dut = static_cast<float>(fp16_val_src2);
+
+                        float abs_err = fabsf(f_ref - f_dut);
+                        float denom = fmaxf(fabsf(f_ref), 1e-10f);
+                        float rel_err = fabsf(f_ref - f_dut) / (denom); // 防止除 0
+                        mismatch = (abs_err > 1e-5f && rel_err > 1e-4f);
+                        // if (mismatch) {
+                        //     std::stringstream ss;
+                        //     ss << "abs_err=" << abs_err << ", rel_err=" << rel_err;
+                        //     log(ss.str());
+                        // }
                         break;
                     }
                     case 32: {
@@ -423,11 +444,11 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
                         float denom = fmaxf(fabsf(ref), 1e-10f);
                         float rel_err = fabsf(ref - dut_val) / (denom); // 防止除 0
                         mismatch = (abs_err > 1e-5f && rel_err > 1e-4f);
-                        if (mismatch) {
-                            std::stringstream ss;
-                            ss << "abs_err=" << abs_err << ", rel_err=" << rel_err;
-                            log(ss.str());
-                        }
+                        // if (mismatch) {
+                        //     std::stringstream ss;
+                        //     ss << "abs_err=" << abs_err << ", rel_err=" << rel_err;
+                        //     log(ss.str());
+                        // }
                         break;
                     }
                     case 64: {
@@ -437,11 +458,11 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
                         double denom = fmax(fabs(ref), 1e-14f);
                         double rel_err = fabs(ref - dut_val) / (denom);
                         mismatch = (abs_err > 1e-10 && rel_err > 1e-9);
-                        if (mismatch) {
-                            std::stringstream ss;
-                            ss << "abs_err=" << abs_err << ", rel_err=" << rel_err;
-                            log(ss.str());
-                        }
+                        // if (mismatch) {
+                        //     std::stringstream ss;
+                        //     ss << "abs_err=" << abs_err << ", rel_err=" << rel_err;
+                        //     log(ss.str());
+                        // }
                         break;
                     }
                     default:
@@ -469,37 +490,73 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
             }
             if(mismatch == true){
                 std::stringstream ss;
-                ss << "commit_veew="<<std::to_string(commit_veew) << ", commit_isfp=" << commit_isfp << "\n";
+                ss <<"\n";
+                // ss << "commit_veew="<<std::to_string(commit_veew) << ", commit_isfp=" << commit_isfp << "\n";
                 ss << "VPU state mismatch at simulation time = "<< std::to_string(get_sim_time()-10) << " ps, PC=0x" << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].pc << ", instr=0x"
-                   << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << ".\n";
-                ss <<"It is dispatched to vpu at simulation time = "<<std::to_string( ref_output_pool[cur_vec_ptr].issued_time)<<" ps.\n";
+                   << std::hex << std::setfill('0') << std::setw(8) << ref_output_pool[cur_vec_ptr].inst.val << ". ";
+                ss <<"It is dispatched to vpu at simulation time = "<<std::to_string( ref_output_pool[cur_vec_ptr].issued_time)<<" ps. ";
                 ss <<"ROB index is 0x" << std::hex<< static_cast<unsigned>(ref_output_pool[cur_vec_ptr].robidx) << ", ";
                 ss <<"ROB flag is " <<ref_output_pool[cur_vec_ptr].robIdx_flag << ".\n";
-                ss << "vreg[" << i << "][" << j << "]: expected 0x"
-                   << std::hex << std::setfill('0') << std::setw(8)
-                   << ref_output_pool[cur_vec_ptr].vr[i]._32[j] << ", got 0x" 
-                   << std::hex << std::setfill('0') << std::setw(8)
-                   << dut->vr[i]._32[j] << "\n";
-                /*print register value*/
-                ss <<"REF model [v" << std::to_string(i) <<"]: \n";
-                for(int element = 0; element < VLEN/32;  element++) {
-                    ss << "[" << std::setfill('0') << std::setw(2) << std::to_string(element) << "] " 
-                        << std::hex << std::setfill('0') << std::setw(8) 
-                        << ref_output_pool[cur_vec_ptr].vr[i]._32[element] <<" ";
-                    if (element % 4 == 3)   {
-                        ss <<"\n";
-                    }
+                switch(ele_width) {
+                  case 8: {
+                      ss << "v[" << i << "][" << j << "]: expected 0x"
+                         << std::hex << std::setfill('0') << std::setw(8)
+                         << ref_output_pool[cur_vec_ptr].vr[i]._8[j] << ", got 0x"
+                         << std::hex << std::setfill('0') << std::setw(8)
+                         << dut->vr[i]._8[j] << "\n";
+                         print_vector_register<uint8_t>(ss, i, ref_output_pool[cur_vec_ptr].vr[i], dut->vr[i],16);
+                         break;
+                  }
+                  case 16: {
+                      ss << "v[" << i << "]["  << j << "]: expected 0x"
+                         << std::hex << std::setfill('0') << std::setw(4)
+                         << ref_output_pool[cur_vec_ptr].vr[i]._16[j] << ", got 0x"
+                         << std::hex << std::setfill('0') << std::setw(4)
+                         << dut->vr[i]._16[j] << "\n";
+                         print_vector_register<uint16_t>(ss, i, ref_output_pool[cur_vec_ptr].vr[i], dut->vr[i],8);
+                         break;
+                  } 
+                  case 32: {
+                      ss << "v[" << i << "]["  << j << "]: expected 0x"
+                         << std::hex << std::setfill('0') << std::setw(8)
+                         << ref_output_pool[cur_vec_ptr].vr[i]._32[j] << ", got 0x"
+                         << std::hex << std::setfill('0') << std::setw(8)
+                         << dut->vr[i]._32[j] << "\n";
+                         print_vector_register<uint32_t>(ss, i, ref_output_pool[cur_vec_ptr].vr[i], dut->vr[i],4);
+                         break;
+                  } 
+                  case 64: {
+                      ss << "v[" << i << "][" << j << "]: expected 0x"
+                         << std::hex << std::setfill('0') << std::setw(8)
+                         << ref_output_pool[cur_vec_ptr].vr[i]._64[j] << ", got 0x"
+                         << std::hex << std::setfill('0') << std::setw(8)
+                         << dut->vr[i]._64[j] << "\n";
+                         print_vector_register<uint64_t>(ss, i, ref_output_pool[cur_vec_ptr].vr[i], dut->vr[i],2);
+                         break;
+                  }  
                 }
-                ss <<"DUT [v" << std::to_string(i) <<"]: \n";
-                for(int element = 0; element < VLEN/32;  element++) {
-                    ss << "[" << std::setfill('0') << std::setw(2) << std::to_string(element) << "] " 
-                        << std::hex << std::setfill('0') << std::setw(8) 
-                        << dut->vr[i]._32[element] <<" ";
-                    if (element % 4 == 3)
-                    {
-                        ss << "\n";
-                    }
-                }
+
+
+                // /*print register value*/
+                // ss <<"REF model [v" << std::to_string(i) <<"]: \n";
+                // for(int element = 0; element < VLEN/32;  element++) {
+                //     ss << "[" << std::setfill('0') << std::setw(2) << std::to_string(element) << "] " 
+                //         << std::hex << std::setfill('0') << std::setw(8) 
+                //         << ref_output_pool[cur_vec_ptr].vr[i]._32[element] <<" ";
+                //     if (element % 4 == 3)   {
+                //         ss <<"\n";
+                //     }
+                // }
+                // ss <<"DUT [v" << std::to_string(i) <<"]: \n";
+                // for(int element = 0; element < VLEN/32;  element++) {
+                //     ss << "[" << std::setfill('0') << std::setw(2) << std::to_string(element) << "] " 
+                //         << std::hex << std::setfill('0') << std::setw(8) 
+                //         << dut->vr[i]._32[element] <<" ";
+                //     if (element % 4 == 3)
+                //     {
+                //         ss << "\n";
+                //     }
+                // }
                 log(ss.str());
                 return false;
             }
@@ -509,7 +566,7 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
 }
 
 bool Emulator::is_finished() {
-    return trapCode ==STATE_TRAP || contextp->gotFinish();
+    return trapCode ==STATE_BADTRAP || contextp->gotFinish() || trapCode == STATE_STOPPED;
 }
 
 void Emulator::log(const std::string& message) {
