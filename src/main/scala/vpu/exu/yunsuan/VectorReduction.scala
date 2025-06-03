@@ -109,8 +109,11 @@ class Vfreduction extends Module{
 
   // here need narrow the result to fp16 and bf16
   val fp32_result = Mux(vfred_pipe_fp32.io.vctrl_pipe_out.bits.uop.csr.vlmul === 0.U, vfred_fp32_result, adder_for_lmul.io.vd_pipe_out)
-  val fp16_result = Cat(Fill(16, 0.U), Fill(16, 0.U))
-  val bf16_result = Cat(Fill(16, 0.U), Fill(16, 0.U))
+  // val bf16_result = Cat(Fill(16, 0.U), Fill(16, 0.U))
+
+  //TODO: Dirty code of fp32 -> fp16
+  val fp16_result_exp = (fp32_result(30, 23) - 112.U)(4, 0)
+  val fp16_result = fp32_result(31) ## fp16_result_exp ## fp32_result(22, 13)
 
   io.out.bits.result := Mux(is_res_fp32 && fp_finish, fp32_result,
   Mux(is_res_fp16 && fp_finish, Cat(Fill(16, 0.U), fp16_result), 0.U))
