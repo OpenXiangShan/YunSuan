@@ -56,7 +56,7 @@ class Vfreduction extends Module{
     if (i == 0) {
       vredu_pipes(i).io.vctrl_pipe_in.valid     := Mux(is_fp32, io.in.valid, RegNext(RegNext((io.in.valid && (is_fp16 || is_bf16)))))
       vredu_pipes(i).io.vctrl_pipe_in.bits      := Mux(is_fp32, vctrl_input, vctrl_fp19)
-      vredu_pipes(i).io.vd_pipe_in              := io.in.bits.vs2
+      vredu_pipes(i).io.vd_pipe_in              := Mux(is_fp32, io.in.bits.vs2, fp19tofp32_res.asUInt)
     } else {
       vredu_pipes(i).io.vctrl_pipe_in.bits      := vredu_pipes(i - 1).io.vctrl_pipe_out.bits
       vredu_pipes(i).io.vctrl_pipe_in.valid     := vredu_pipes(i - 1).io.vctrl_pipe_out.valid
@@ -346,7 +346,7 @@ class FloatAdderMixedFP16BF16_Wrapped() extends Module {
 
   fp16_to_fp19_fpa.io.widen_src := io.fp_a
   val fp16_a_as_fp19 = fp16_to_fp19_fpa.io.widen_dst
-  fp16_to_fp19_fpb.io.widen_src := io.fp_a
+  fp16_to_fp19_fpb.io.widen_src := io.fp_b
   val fp16_b_as_fp19 = fp16_to_fp19_fpb.io.widen_dst
   fp16_to_fp19_frs1.io.widen_src := io.fp_a
   val fp16_frs1_as_fp19 = fp16_to_fp19_frs1.io.widen_dst
@@ -356,8 +356,12 @@ class FloatAdderMixedFP16BF16_Wrapped() extends Module {
   val is_bf16 = fp_format_reg === 0.U
   val is_fp16 = fp_format_reg === 1.U
 
-  val bf16_a_as_fp19 = Cat(io.fp_a(15), io.fp_a.tail(1).head(exponentWidthBF16), Cat(io.fp_a(significandWidthBF16-2,0),0.U((significandWidthFP16 - significandWidthBF16).W)))
-  val bf16_b_as_fp19 = Cat(io.fp_b(15), io.fp_b.tail(1).head(exponentWidthBF16), Cat(io.fp_b(significandWidthBF16-2,0),0.U((significandWidthFP16 - significandWidthBF16).W)))
+  val bf16_a_as_fp19 = RegEnable(
+                       Cat(io.fp_a(15), io.fp_a.tail(1).head(exponentWidthBF16), Cat(io.fp_a(significandWidthBF16-2,0),0.U((significandWidthFP16 - significandWidthBF16).W))),
+                       fire)
+  val bf16_b_as_fp19 = RegEnable(
+                       Cat(io.fp_b(15), io.fp_b.tail(1).head(exponentWidthBF16), Cat(io.fp_b(significandWidthBF16-2,0),0.U((significandWidthFP16 - significandWidthBF16).W))),
+                       fire)
   
   val fp19_a = MuxCase(0.U(19.W), Seq(
     is_bf16 -> bf16_a_as_fp19,
@@ -370,22 +374,24 @@ class FloatAdderMixedFP16BF16_Wrapped() extends Module {
 
 
   val hasMinMaxCompare = true
-  val fast_is_sub = io.op_code(0)
+  val fast_is_sub = RegEnable(io.op_code(0), fire)
 
   val Mixed_Adder = Module(new FloatAdderMixedFP19(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
-  Mixed_Adder.io.fire := fire
+  Mixed_Adder.io.fire := RegNext(fire)
   Mixed_Adder.io.fp_a := fp19_a
   Mixed_Adder.io.fp_b := fp19_b
-  Mixed_Adder.io.mask := io.mask
+  Mixed_Adder.io.mask := RegEnable(io.mask, fire)
   Mixed_Adder.io.is_sub := fast_is_sub
-  Mixed_Adder.io.round_mode := io.round_mode
-  Mixed_Adder.io.op_code    := io.op_code
-  Mixed_Adder.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
-  Mixed_Adder.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
+  Mixed_Adder.io.round_mode := RegEnable(io.round_mode, fire)
+  Mixed_Adder.io.op_code    := RegEnable(io.op_code, fire)
+  Mixed_Adder.io.fp_aIsFpCanonicalNAN := RegEnable(io.fp_aIsFpCanonicalNAN, fire)
+  Mixed_Adder.io.fp_bIsFpCanonicalNAN := RegEnable(io.fp_bIsFpCanonicalNAN, fire)
   Mixed_Adder.io.maskForReduction := 0.U
 
-  io.fp_result   := RegNext(Mixed_Adder.io.fp_c ## 0.U(13.W))
-  io.fflags := RegNext(Mixed_Adder.io.fflags)
+  // io.fp_result   := RegNext(Mixed_Adder.io.fp_c ## 0.U(13.W))
+  // io.fflags := RegNext(Mixed_Adder.io.fflags)
+  io.fp_result   := Mixed_Adder.io.fp_c ## 0.U(13.W)
+  io.fflags := Mixed_Adder.io.fflags
 
 }
 
