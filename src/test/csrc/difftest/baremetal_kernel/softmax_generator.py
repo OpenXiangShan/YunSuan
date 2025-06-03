@@ -2,7 +2,7 @@ import numpy as np
 import struct
 
 VLEN=1024
-LMUL=1
+LMUL=4
 VECTOR_LENGTH=VLEN*LMUL//16
 
 def generate_softmax_io():

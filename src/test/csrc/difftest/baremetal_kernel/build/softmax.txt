@@ -6,169 +6,199 @@ Disassembly of section .text:
 
 0000000080000000 <_start>:
     80000000:	00008117          	auipc	sp,0x8
-    80000004:	38810113          	addi	sp,sp,904 # 80008388 <_stack_top>
+    80000004:	70010113          	addi	sp,sp,1792 # 80008700 <_stack_top>
     80000008:	000022b7          	lui	t0,0x2
     8000000c:	3002a073          	csrs	mstatus,t0
     80000010:	20000293          	li	t0,512
     80000014:	3002a073          	csrs	mstatus,t0
-    80000018:	1f8000ef          	jal	80000210 <_trm_init>
+    80000018:	270000ef          	jal	80000288 <_trm_init>
     8000001c:	0000006f          	j	8000001c <_start+0x1c>
 
 0000000080000020 <quick_dirty_vector_expf>:
-    80000020:	0c807857          	vsetvli	a6,zero,e16,m1,ta,ma
-    80000024:	5e0035d7          	vmv.v.i	v11,0
-    80000028:	00000797          	auipc	a5,0x0
-    8000002c:	24879007          	flh	ft0,584(a5) # 80000270 <__am_asm_trap+0x8>
-    80000030:	00000797          	auipc	a5,0x0
-    80000034:	24279507          	flh	fa0,578(a5) # 80000272 <__am_asm_trap+0xa>
-    80000038:	00000797          	auipc	a5,0x0
-    8000003c:	23c79587          	flh	fa1,572(a5) # 80000274 <__am_asm_trap+0xc>
-    80000040:	00000797          	auipc	a5,0x0
-    80000044:	23679607          	flh	fa2,566(a5) # 80000276 <__am_asm_trap+0xe>
-    80000048:	00000797          	auipc	a5,0x0
-    8000004c:	23079687          	flh	fa3,560(a5) # 80000278 <__am_asm_trap+0x10>
-    80000050:	00000797          	auipc	a5,0x0
-    80000054:	22a79707          	flh	fa4,554(a5) # 8000027a <__am_asm_trap+0x12>
-    80000058:	9eb03257          	vmv1r.v	v4,v11
-    8000005c:	f40607d3          	fmv.h.x	fa5,a2
-    80000060:	5e0052d7          	vfmv.v.f	v5,ft0
-    80000064:	5e0553d7          	vfmv.v.f	v7,fa0
-    80000068:	5e05d457          	vfmv.v.f	v8,fa1
-    8000006c:	5e0654d7          	vfmv.v.f	v9,fa2
-    80000070:	5e06d557          	vfmv.v.f	v10,fa3
-    80000074:	5e075357          	vfmv.v.f	v6,fa4
-    80000078:	00205073          	fsrmi	zero,0
-    8000007c:	06068c63          	beqz	a3,800000f4 <quick_dirty_vector_expf+0xd4>
-    80000080:	00000797          	auipc	a5,0x0
-    80000084:	1ee79687          	flh	fa3,494(a5) # 8000026e <__am_asm_trap+0x6>
-    80000088:	00000797          	auipc	a5,0x0
-    8000008c:	1e479707          	flh	fa4,484(a5) # 8000026c <__am_asm_trap+0x4>
-    80000090:	0886f7d7          	vsetvli	a5,a3,e16,m1,tu,ma
-    80000094:	0205d107          	vle16.v	v2,(a1)
-    80000098:	00179713          	slli	a4,a5,0x1
-    8000009c:	40f686b3          	sub	a3,a3,a5
-    800000a0:	00e585b3          	add	a1,a1,a4
-    800000a4:	0a27d157          	vfsub.vf	v2,v2,fa5
-    800000a8:	9226d0d7          	vfmul.vf	v1,v2,fa3
-    800000ac:	4a1090d7          	vfcvt.x.f.v	v1,v1
-    800000b0:	4a1191d7          	vfcvt.f.x.v	v3,v1
-    800000b4:	0217b0d7          	vadd.vi	v1,v1,15
-    800000b8:	be375157          	vfnmsac.vf	v2,fa4,v3
-    800000bc:	961531d7          	vsll.vi	v3,v1,10
-    800000c0:	9e6030d7          	vmv1r.v	v1,v6
-    800000c4:	a2a110d7          	vfmadd.vv	v1,v2,v10
-    800000c8:	a29110d7          	vfmadd.vv	v1,v2,v9
-    800000cc:	a28110d7          	vfmadd.vv	v1,v2,v8
-    800000d0:	a27110d7          	vfmadd.vv	v1,v2,v7
-    800000d4:	a25110d7          	vfmadd.vv	v1,v2,v5
-    800000d8:	a25110d7          	vfmadd.vv	v1,v2,v5
-    800000dc:	921190d7          	vfmul.vv	v1,v1,v3
-    800000e0:	020550a7          	vse16.v	v1,(a0)
-    800000e4:	02409257          	vfadd.vv	v4,v4,v1
-    800000e8:	00e50533          	add	a0,a0,a4
-    800000ec:	fa0692e3          	bnez	a3,80000090 <quick_dirty_vector_expf+0x70>
-    800000f0:	0c807857          	vsetvli	a6,zero,e16,m1,ta,ma
-    800000f4:	06459257          	vfredusum.vs	v4,v4,v11
-    800000f8:	424017d7          	vfmv.f.s	fa5,v4
-    800000fc:	e4078553          	fmv.x.h	a0,fa5
-    80000100:	00008067          	ret
+    80000020:	c22022f3          	csrr	t0,vlenb
+    80000024:	00c00313          	li	t1,12
+    80000028:	02530333          	mul	t1,t1,t0
+    8000002c:	00000797          	auipc	a5,0x0
+    80000030:	2bc79007          	flh	ft0,700(a5) # 800002e8 <__am_asm_trap+0x8>
+    80000034:	00000797          	auipc	a5,0x0
+    80000038:	2b679507          	flh	fa0,694(a5) # 800002ea <__am_asm_trap+0xa>
+    8000003c:	00000797          	auipc	a5,0x0
+    80000040:	2b079587          	flh	fa1,688(a5) # 800002ec <__am_asm_trap+0xc>
+    80000044:	00000797          	auipc	a5,0x0
+    80000048:	2aa79607          	flh	fa2,682(a5) # 800002ee <__am_asm_trap+0xe>
+    8000004c:	00000797          	auipc	a5,0x0
+    80000050:	2a479687          	flh	fa3,676(a5) # 800002f0 <__am_asm_trap+0x10>
+    80000054:	00000797          	auipc	a5,0x0
+    80000058:	29e79707          	flh	fa4,670(a5) # 800002f2 <__am_asm_trap+0x12>
+    8000005c:	c2202773          	csrr	a4,vlenb
+    80000060:	0ca077d7          	vsetvli	a5,zero,e16,m4,ta,ma
+    80000064:	5e055257          	vfmv.v.f	v4,fa0
+    80000068:	40610133          	sub	sp,sp,t1
+    8000006c:	00271713          	slli	a4,a4,0x2
+    80000070:	62810227          	vs4r.v	v4,(sp)
+    80000074:	5e05d257          	vfmv.v.f	v4,fa1
+    80000078:	00270733          	add	a4,a4,sp
+    8000007c:	5e005a57          	vfmv.v.f	v20,ft0
+    80000080:	62870227          	vs4r.v	v4,(a4)
+    80000084:	5e003857          	vmv.v.i	v16,0
+    80000088:	5e065e57          	vfmv.v.f	v28,fa2
+    8000008c:	5e06d057          	vfmv.v.f	v0,fa3
+    80000090:	5e075c57          	vfmv.v.f	v24,fa4
+    80000094:	00205073          	fsrmi	zero,0
+    80000098:	0a068463          	beqz	a3,80000140 <quick_dirty_vector_expf+0x120>
+    8000009c:	00000717          	auipc	a4,0x0
+    800000a0:	24a71687          	flh	fa3,586(a4) # 800002e6 <__am_asm_trap+0x6>
+    800000a4:	00000717          	auipc	a4,0x0
+    800000a8:	24071707          	flh	fa4,576(a4) # 800002e4 <__am_asm_trap+0x4>
+    800000ac:	f40607d3          	fmv.h.x	fa5,a2
+    800000b0:	c2202773          	csrr	a4,vlenb
+    800000b4:	00371713          	slli	a4,a4,0x3
+    800000b8:	00270733          	add	a4,a4,sp
+    800000bc:	62870c27          	vs4r.v	v24,(a4)
+    800000c0:	08a6f657          	vsetvli	a2,a3,e16,m4,tu,ma
+    800000c4:	0205d407          	vle16.v	v8,(a1)
+    800000c8:	c2202873          	csrr	a6,vlenb
+    800000cc:	00381813          	slli	a6,a6,0x3
+    800000d0:	00280833          	add	a6,a6,sp
+    800000d4:	00161713          	slli	a4,a2,0x1
+    800000d8:	40c686b3          	sub	a3,a3,a2
+    800000dc:	0a87d457          	vfsub.vf	v8,v8,fa5
+    800000e0:	00e585b3          	add	a1,a1,a4
+    800000e4:	9286d657          	vfmul.vf	v12,v8,fa3
+    800000e8:	4ac09657          	vfcvt.x.f.v	v12,v12
+    800000ec:	4ac19257          	vfcvt.f.x.v	v4,v12
+    800000f0:	02c7b657          	vadd.vi	v12,v12,15
+    800000f4:	be475457          	vfnmsac.vf	v8,fa4,v4
+    800000f8:	62885207          	vl4re16.v	v4,(a6)
+    800000fc:	c2202873          	csrr	a6,vlenb
+    80000100:	00281813          	slli	a6,a6,0x2
+    80000104:	00280833          	add	a6,a6,sp
+    80000108:	62885c07          	vl4re16.v	v24,(a6)
+    8000010c:	96c53657          	vsll.vi	v12,v12,10
+    80000110:	a2041257          	vfmadd.vv	v4,v8,v0
+    80000114:	a3c41257          	vfmadd.vv	v4,v8,v28
+    80000118:	a3841257          	vfmadd.vv	v4,v8,v24
+    8000011c:	62815c07          	vl4re16.v	v24,(sp)
+    80000120:	a3841257          	vfmadd.vv	v4,v8,v24
+    80000124:	a3441257          	vfmadd.vv	v4,v8,v20
+    80000128:	a3441257          	vfmadd.vv	v4,v8,v20
+    8000012c:	92461257          	vfmul.vv	v4,v4,v12
+    80000130:	02055227          	vse16.v	v4,(a0)
+    80000134:	03021857          	vfadd.vv	v16,v16,v4
+    80000138:	00e50533          	add	a0,a0,a4
+    8000013c:	f80692e3          	bnez	a3,800000c0 <quick_dirty_vector_expf+0xa0>
+    80000140:	0c87f057          	vsetvli	zero,a5,e16,m1,ta,ma
+    80000144:	5e0030d7          	vmv.v.i	v1,0
+    80000148:	c22022f3          	csrr	t0,vlenb
+    8000014c:	0ca077d7          	vsetvli	a5,zero,e16,m4,ta,ma
+    80000150:	00c00313          	li	t1,12
+    80000154:	02530333          	mul	t1,t1,t0
+    80000158:	07009857          	vfredusum.vs	v16,v16,v1
+    8000015c:	430017d7          	vfmv.f.s	fa5,v16
+    80000160:	00610133          	add	sp,sp,t1
+    80000164:	e4078553          	fmv.x.h	a0,fa5
+    80000168:	00008067          	ret
 
-0000000080000104 <softmax_stable_rvv_fp16>:
-    80000104:	00000797          	auipc	a5,0x0
-    80000108:	17879787          	flh	fa5,376(a5) # 8000027c <__am_asm_trap+0x14>
-    8000010c:	0c8078d7          	vsetvli	a7,zero,e16,m1,ta,ma
-    80000110:	5e07d0d7          	vfmv.v.f	v1,fa5
-    80000114:	0a060c63          	beqz	a2,800001cc <softmax_stable_rvv_fp16+0xc8>
-    80000118:	fe010113          	addi	sp,sp,-32
-    8000011c:	00161793          	slli	a5,a2,0x1
-    80000120:	00813823          	sd	s0,16(sp)
-    80000124:	00913423          	sd	s1,8(sp)
-    80000128:	00113c23          	sd	ra,24(sp)
-    8000012c:	00060493          	mv	s1,a2
-    80000130:	40f00833          	neg	a6,a5
-    80000134:	00050413          	mv	s0,a0
-    80000138:	00058693          	mv	a3,a1
-    8000013c:	00060713          	mv	a4,a2
-    80000140:	088777d7          	vsetvli	a5,a4,e16,m1,tu,ma
-    80000144:	0206d107          	vle16.v	v2,(a3)
-    80000148:	00179613          	slli	a2,a5,0x1
-    8000014c:	40f70733          	sub	a4,a4,a5
-    80000150:	00c686b3          	add	a3,a3,a2
-    80000154:	1a2090d7          	vfmax.vv	v1,v2,v1
-    80000158:	fe0714e3          	bnez	a4,80000140 <softmax_stable_rvv_fp16+0x3c>
-    8000015c:	0c8078d7          	vsetvli	a7,zero,e16,m1,ta,ma
-    80000160:	5e07d157          	vfmv.v.f	v2,fa5
-    80000164:	010685b3          	add	a1,a3,a6
-    80000168:	00040513          	mv	a0,s0
-    8000016c:	1e1110d7          	vfredmax.vs	v1,v1,v2
-    80000170:	00048693          	mv	a3,s1
-    80000174:	421017d7          	vfmv.f.s	fa5,v1
-    80000178:	e4078653          	fmv.x.h	a2,fa5
-    8000017c:	ea5ff0ef          	jal	80000020 <quick_dirty_vector_expf>
-    80000180:	f4050753          	fmv.h.x	fa4,a0
-    80000184:	00000797          	auipc	a5,0x0
-    80000188:	0fc7a787          	flw	fa5,252(a5) # 80000280 <__am_asm_trap+0x18>
-    8000018c:	40270753          	fcvt.s.h	fa4,fa4
-    80000190:	18e7f7d3          	fdiv.s	fa5,fa5,fa4
-    80000194:	4407f7d3          	fcvt.h.s	fa5,fa5
-    80000198:	0c84f7d7          	vsetvli	a5,s1,e16,m1,ta,ma
-    8000019c:	02045087          	vle16.v	v1,(s0)
-    800001a0:	00179713          	slli	a4,a5,0x1
-    800001a4:	40f484b3          	sub	s1,s1,a5
-    800001a8:	9217d0d7          	vfmul.vf	v1,v1,fa5
-    800001ac:	020450a7          	vse16.v	v1,(s0)
-    800001b0:	00e40433          	add	s0,s0,a4
-    800001b4:	fe0492e3          	bnez	s1,80000198 <softmax_stable_rvv_fp16+0x94>
-    800001b8:	01813083          	ld	ra,24(sp)
-    800001bc:	01013403          	ld	s0,16(sp)
-    800001c0:	00813483          	ld	s1,8(sp)
-    800001c4:	02010113          	addi	sp,sp,32
-    800001c8:	00008067          	ret
-    800001cc:	1e1090d7          	vfredmax.vs	v1,v1,v1
-    800001d0:	00000693          	li	a3,0
-    800001d4:	421017d7          	vfmv.f.s	fa5,v1
-    800001d8:	e4078653          	fmv.x.h	a2,fa5
-    800001dc:	e45ff06f          	j	80000020 <quick_dirty_vector_expf>
+000000008000016c <softmax_stable_rvv_fp16>:
+    8000016c:	00000797          	auipc	a5,0x0
+    80000170:	18879787          	flh	fa5,392(a5) # 800002f4 <__am_asm_trap+0x14>
+    80000174:	0ca07857          	vsetvli	a6,zero,e16,m4,ta,ma
+    80000178:	5e07d257          	vfmv.v.f	v4,fa5
+    8000017c:	0a060e63          	beqz	a2,80000238 <softmax_stable_rvv_fp16+0xcc>
+    80000180:	fe010113          	addi	sp,sp,-32
+    80000184:	00161793          	slli	a5,a2,0x1
+    80000188:	00813823          	sd	s0,16(sp)
+    8000018c:	00913423          	sd	s1,8(sp)
+    80000190:	00113c23          	sd	ra,24(sp)
+    80000194:	00060493          	mv	s1,a2
+    80000198:	40f008b3          	neg	a7,a5
+    8000019c:	00050413          	mv	s0,a0
+    800001a0:	00058693          	mv	a3,a1
+    800001a4:	00060713          	mv	a4,a2
+    800001a8:	08a777d7          	vsetvli	a5,a4,e16,m4,tu,ma
+    800001ac:	0206d407          	vle16.v	v8,(a3)
+    800001b0:	00179613          	slli	a2,a5,0x1
+    800001b4:	40f70733          	sub	a4,a4,a5
+    800001b8:	00c686b3          	add	a3,a3,a2
+    800001bc:	1a821257          	vfmax.vv	v4,v8,v4
+    800001c0:	fe0714e3          	bnez	a4,800001a8 <softmax_stable_rvv_fp16+0x3c>
+    800001c4:	0c887057          	vsetvli	zero,a6,e16,m1,ta,ma
+    800001c8:	5e07d0d7          	vfmv.v.f	v1,fa5
+    800001cc:	0ca07857          	vsetvli	a6,zero,e16,m4,ta,ma
+    800001d0:	011685b3          	add	a1,a3,a7
+    800001d4:	1e409257          	vfredmax.vs	v4,v4,v1
+    800001d8:	00048693          	mv	a3,s1
+    800001dc:	00040513          	mv	a0,s0
+    800001e0:	424017d7          	vfmv.f.s	fa5,v4
+    800001e4:	e4078653          	fmv.x.h	a2,fa5
+    800001e8:	e39ff0ef          	jal	80000020 <quick_dirty_vector_expf>
+    800001ec:	f4050753          	fmv.h.x	fa4,a0
+    800001f0:	00000797          	auipc	a5,0x0
+    800001f4:	1087a787          	flw	fa5,264(a5) # 800002f8 <__am_asm_trap+0x18>
+    800001f8:	40270753          	fcvt.s.h	fa4,fa4
+    800001fc:	18e7f7d3          	fdiv.s	fa5,fa5,fa4
+    80000200:	4407f7d3          	fcvt.h.s	fa5,fa5
+    80000204:	0ca4f7d7          	vsetvli	a5,s1,e16,m4,ta,ma
+    80000208:	02045207          	vle16.v	v4,(s0)
+    8000020c:	00179713          	slli	a4,a5,0x1
+    80000210:	40f484b3          	sub	s1,s1,a5
+    80000214:	9247d257          	vfmul.vf	v4,v4,fa5
+    80000218:	02045227          	vse16.v	v4,(s0)
+    8000021c:	00e40433          	add	s0,s0,a4
+    80000220:	fe0492e3          	bnez	s1,80000204 <softmax_stable_rvv_fp16+0x98>
+    80000224:	01813083          	ld	ra,24(sp)
+    80000228:	01013403          	ld	s0,16(sp)
+    8000022c:	00813483          	ld	s1,8(sp)
+    80000230:	02010113          	addi	sp,sp,32
+    80000234:	00008067          	ret
+    80000238:	0c887057          	vsetvli	zero,a6,e16,m1,ta,ma
+    8000023c:	5e07d0d7          	vfmv.v.f	v1,fa5
+    80000240:	0ca07857          	vsetvli	a6,zero,e16,m4,ta,ma
+    80000244:	00000693          	li	a3,0
+    80000248:	1e409257          	vfredmax.vs	v4,v4,v1
+    8000024c:	424017d7          	vfmv.f.s	fa5,v4
+    80000250:	e4078653          	fmv.x.h	a2,fa5
+    80000254:	dcdff06f          	j	80000020 <quick_dirty_vector_expf>
 
-00000000800001e0 <memset>:
-    800001e0:	ff010113          	addi	sp,sp,-16
-    800001e4:	00813023          	sd	s0,0(sp)
-    800001e8:	00113423          	sd	ra,8(sp)
-    800001ec:	00050413          	mv	s0,a0
-    800001f0:	00060663          	beqz	a2,800001fc <memset+0x1c>
-    800001f4:	0ff5f593          	zext.b	a1,a1
-    800001f8:	fe9ff0ef          	jal	800001e0 <memset>
-    800001fc:	00813083          	ld	ra,8(sp)
-    80000200:	00040513          	mv	a0,s0
-    80000204:	00013403          	ld	s0,0(sp)
-    80000208:	01010113          	addi	sp,sp,16
-    8000020c:	00008067          	ret
+0000000080000258 <memset>:
+    80000258:	ff010113          	addi	sp,sp,-16
+    8000025c:	00813023          	sd	s0,0(sp)
+    80000260:	00113423          	sd	ra,8(sp)
+    80000264:	00050413          	mv	s0,a0
+    80000268:	00060663          	beqz	a2,80000274 <memset+0x1c>
+    8000026c:	0ff5f593          	zext.b	a1,a1
+    80000270:	fe9ff0ef          	jal	80000258 <memset>
+    80000274:	00813083          	ld	ra,8(sp)
+    80000278:	00040513          	mv	a0,s0
+    8000027c:	00013403          	ld	s0,0(sp)
+    80000280:	01010113          	addi	sp,sp,16
+    80000284:	00008067          	ret
 
-0000000080000210 <_trm_init>:
-    80000210:	ff010113          	addi	sp,sp,-16
-    80000214:	00113423          	sd	ra,8(sp)
-    80000218:	00000797          	auipc	a5,0x0
-    8000021c:	05078793          	addi	a5,a5,80 # 80000268 <__am_asm_trap>
-    80000220:	30579073          	csrw	mtvec,a5
-    80000224:	014000ef          	jal	80000238 <main>
-    80000228:	00000793          	li	a5,0
-    8000022c:	00078513          	mv	a0,a5
-    80000230:	00100073          	ebreak
-    80000234:	0000006f          	j	80000234 <_trm_init+0x24>
+0000000080000288 <_trm_init>:
+    80000288:	ff010113          	addi	sp,sp,-16
+    8000028c:	00113423          	sd	ra,8(sp)
+    80000290:	00000797          	auipc	a5,0x0
+    80000294:	05078793          	addi	a5,a5,80 # 800002e0 <__am_asm_trap>
+    80000298:	30579073          	csrw	mtvec,a5
+    8000029c:	014000ef          	jal	800002b0 <main>
+    800002a0:	00000793          	li	a5,0
+    800002a4:	00078513          	mv	a0,a5
+    800002a8:	00100073          	ebreak
+    800002ac:	0000006f          	j	800002ac <_trm_init+0x24>
 
-0000000080000238 <main>:
-    80000238:	ff010113          	addi	sp,sp,-16
-    8000023c:	00000517          	auipc	a0,0x0
-    80000240:	0cc50513          	addi	a0,a0,204 # 80000308 <dst>
-    80000244:	04000613          	li	a2,64
-    80000248:	00000597          	auipc	a1,0x0
-    8000024c:	04058593          	addi	a1,a1,64 # 80000288 <src>
-    80000250:	00113423          	sd	ra,8(sp)
-    80000254:	eb1ff0ef          	jal	80000104 <softmax_stable_rvv_fp16>
-    80000258:	00813083          	ld	ra,8(sp)
-    8000025c:	00000513          	li	a0,0
-    80000260:	01010113          	addi	sp,sp,16
-    80000264:	00008067          	ret
+00000000800002b0 <main>:
+    800002b0:	ff010113          	addi	sp,sp,-16
+    800002b4:	00000517          	auipc	a0,0x0
+    800002b8:	24c50513          	addi	a0,a0,588 # 80000500 <dst>
+    800002bc:	10000613          	li	a2,256
+    800002c0:	00000597          	auipc	a1,0x0
+    800002c4:	04058593          	addi	a1,a1,64 # 80000300 <src>
+    800002c8:	00113423          	sd	ra,8(sp)
+    800002cc:	ea1ff0ef          	jal	8000016c <softmax_stable_rvv_fp16>
+    800002d0:	00813083          	ld	ra,8(sp)
+    800002d4:	00000513          	li	a0,0
+    800002d8:	01010113          	addi	sp,sp,16
+    800002dc:	00008067          	ret
 
-0000000080000268 <__am_asm_trap>:
-    80000268:	0000006f          	j	80000268 <__am_asm_trap>
+00000000800002e0 <__am_asm_trap>:
+    800002e0:	0000006f          	j	800002e0 <__am_asm_trap>
