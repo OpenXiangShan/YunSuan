@@ -135,11 +135,13 @@ _Float16 quick_dirty_vector_expf(_Float16* dst, _Float16* src, _Float16 max_x, s
         src += vl;
         dst += vl;
     }
+    // size_t vl = __riscv_vsetvlmax_e32m8();
+    vfloat32m1_t vredsum_fp32 = __riscv_vfmv_v_f_f32m1(0.f, vlmax);
+    vfloat32m8_t vsum_fp32 = __riscv_vfwcvt_f_f_v_f32m8(vsum, vlmax);
+    vredsum_fp32 = __riscv_vfredusum_vs_f32m8_f32m1(vsum_fp32, vredsum_fp32, vlmax);
+    vfloat16mf2_t vredsum = __riscv_vfncvt_f_f_w_f16mf2(vredsum_fp32, vlmax);
 
-    vfloat16m1_t vredsum = __riscv_vfmv_v_f_f16m1(0.f, vlmax);
-    vredsum = __riscv_vfredusum_vs_f16m4_f16m1(vsum, vredsum, vlmax);
-
-    return __riscv_vfmv_f_s_f16m1_f16(vredsum);
+    return __riscv_vfmv_f_s_f16mf2_f16(vredsum);
 }
 void *memset(void *s, int c, size_t n) {
     char *schar=s;

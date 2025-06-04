@@ -156,7 +156,6 @@ int Emulator::tick()
         else if (present->is_ebreak == true)
         {
             breakpoint = true;
-            
         }
         else if (present->is_scalar_store == true)
         {
