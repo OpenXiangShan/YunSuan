@@ -348,15 +348,15 @@ class FloatAdderMixedFP16BF16_Wrapped() extends Module {
     dst_exponentWidth = exponentWidthBF16,
     dst_significandWidth = significandWidthFP16
   ))
-
+  
+  val fire = io.fire
   fp16_to_fp19_fpa.io.widen_src := io.fp_a
-  val fp16_a_as_fp19 = fp16_to_fp19_fpa.io.widen_dst
+  val fp16_a_as_fp19 = RegEnable(fp16_to_fp19_fpa.io.widen_dst, fire)
   fp16_to_fp19_fpb.io.widen_src := io.fp_b
-  val fp16_b_as_fp19 = fp16_to_fp19_fpb.io.widen_dst
+  val fp16_b_as_fp19 = RegEnable(fp16_to_fp19_fpb.io.widen_dst, fire)
   fp16_to_fp19_frs1.io.widen_src := io.fp_a
   val fp16_frs1_as_fp19 = fp16_to_fp19_frs1.io.widen_dst
   
-  val fire = io.fire
   val fp_format_reg = RegEnable(io.fp_format, fire)
   val is_bf16 = fp_format_reg === 0.U
   val is_fp16 = fp_format_reg === 1.U
