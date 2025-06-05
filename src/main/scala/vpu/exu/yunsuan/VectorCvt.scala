@@ -89,17 +89,20 @@ class VectorExuCvt extends  Module {
   // // if narrow need one more latency
 
   val widen_or_single = reg_valid_1 && (reg_widen_1 === 1.U || reg_widen_1 === 0.U)
-  val narrow          = reg_valid_1 && (reg_widen_1 === 2.U)
-  // val vd_narrow       = Cat(reg_narrow_vd, vcvt.io.result((LaneWidth/2), 0)).asTypeOf(UInt(LaneWidth.W))
-  // val fflags_narrow   = reg_narrow_fflag | vcvt.io.fflags
+  // val narrow          = reg_valid_1 && (reg_widen_1 === 2.U)
+  val narrow = reg_valid_1 && reg_uop_1.ctrl.narrow && (reg_uop_1.uopEnd || reg_uop_1.uopIdx(0))
 
-  val narrow_result_half = RegEnable(vcvt.io.result((LaneWidth/2)-1, 0), reg_valid_1 && (reg_uop_1.uopIdx === 0.U))
-  val narrow_result      = Cat(vcvt.io.result((LaneWidth/2)-1, 0), narrow_result_half)
+  val narrow_result_half = RegEnable(vcvt.io.result((LaneWidth/2)-1, 0), reg_valid_1 && !reg_uop_1.uopIdx(0))
+  // val narrow_result      = Cat(vcvt.io.result((LaneWidth/2)-1, 0), narrow_result_half)
+  val narrow_result      = Mux(reg_uop_1.uopIdx === 0.U && reg_uop_1.uopEnd, 
+                               Cat(0.U((LaneWidth/2).W), vcvt.io.result((LaneWidth/2)-1, 0)),
+                               Cat(vcvt.io.result((LaneWidth/2)-1, 0), narrow_result_half))
   val fflags_narrow_half = RegEnable(vcvt.io.fflags, io.fire)
   val narrow_fflags = fflags_narrow_half | vcvt.io.fflags
 
   io.out_uop.valid  := Mux(widen_or_single, reg_valid_1,
-                        Mux(narrow && (reg_uop_1.uopIdx === 1.U), true.B, false.B))
+                        Mux(narrow, true.B, false.B))
+                        // Mux(narrow && (reg_uop_1.uopIdx === 1.U), true.B, false.B))
 
   io.out_uop.bits   := reg_uop_1
 
