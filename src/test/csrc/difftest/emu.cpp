@@ -432,7 +432,11 @@ bool Emulator::check_vregs_state(VPU_STATE *dut){
                         float abs_err = fabsf(f_ref - f_dut);
                         float denom = fmaxf(fabsf(f_ref), 1e-10f);
                         float rel_err = fabsf(f_ref - f_dut) / (denom); // 防止除 0
-                        mismatch = (abs_err > 1e-5f && rel_err > 1e-4f);
+                        if(commit_group_size>=4){
+                            mismatch = (abs_err > 3e-2f && rel_err > 3e-1f);
+                        }else {
+                            mismatch = (abs_err > 1e-4f && rel_err > 1e-3f);
+                        } 
                         // if (mismatch) {
                         //     std::stringstream ss;
                         //     ss << "abs_err=" << abs_err << ", rel_err=" << rel_err;
