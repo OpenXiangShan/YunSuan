@@ -68,6 +68,8 @@ PROG ?= $(firstword $(notdir $(basename $(wildcard $(BAREMETAL_DIR)/softmax*.c))
 $(BIN_DIR)/%.bin:
 	$(MAKE) -C $(BAREMETAL_DIR) FILES=$*.c  $@
 
+$(BIN_DIR)/%.txt:
+	$(MAKE) -C $(BAREMETAL_DIR) FILES=$*.c  $@
 # 清理生成的文件
 clean:
 	rm -f  $(TARGET)
@@ -81,7 +83,7 @@ sim: $(TARGET) $(addprefix $(BIN_DIR)/,$(addsuffix .bin,$(PROG)))
 			printf "[%s] $(COLOR_RED)FAIL$(COLOR_NONE)\n" $(PROG) | tee -a $(RESULT); \
 	fi 
 
-sim-all: $(TARGET) $(addprefix $(BIN_DIR)/,$(addsuffix .bin,$(CASES)))
+sim-all: $(TARGET) $(addprefix $(BIN_DIR)/,$(addsuffix .bin,$(CASES))) $(addprefix $(BIN_DIR)/,$(addsuffix .txt,$(CASES)))
 	@echo "==== Softmax Test STARTS ====" > $(RESULT)
 	@for bin in $(addprefix $(BIN_DIR)/,$(addsuffix .bin,$(CASES))); do \
 		name=$$(basename $$bin .bin); \
@@ -94,6 +96,9 @@ sim-all: $(TARGET) $(addprefix $(BIN_DIR)/,$(addsuffix .bin,$(CASES)))
 	done
 	@echo "==== Softmax Test ENDS ====" >> $(RESULT)
 	@rm $(RESULT)
+
+print-cases:
+	@echo "CASES = $(CASES)"
 
 gdb: $(TARGET)
 	gdb --args $(TARGET)

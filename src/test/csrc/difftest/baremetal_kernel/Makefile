@@ -25,7 +25,7 @@ INCLUDE_DIR ?= ../../../../../../difftest/xs-env/opt/riscv-zfh/lib/gcc/riscv64-u
 WORK_DIR := $(shell pwd)
 BUILD_DIR := $(WORK_DIR)/build
 $(shell mkdir -p $(BUILD_DIR))
-FILES ?= softmax_baremetal.c
+FILES ?= softmax_e16_m1.c
 SRCS := $(FILES)  $(wildcard *.S)
 OBJS := $(addprefix $(BUILD_DIR)/, $(addsuffix .o, $(basename $(notdir $(SRCS)))))
 NAMES:= $(basename $(notdir $(FILES)))

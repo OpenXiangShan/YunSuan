@@ -1,6 +1,6 @@
 !build/
 build/* 
-!build/softmax.txt
+!build/*.txt
 !build/*.bin
 !build/softmax_input.txt
 !build/softmax_output.txt

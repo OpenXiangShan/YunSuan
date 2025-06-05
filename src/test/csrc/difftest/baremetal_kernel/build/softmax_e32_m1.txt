@@ -1,0 +1,189 @@
+
+/nfs/home/zhengsihan/YunSuan/src/test/csrc/difftest/baremetal_kernel/build/softmax_e32_m1.elf:     file format elf64-littleriscv
+
+
+Disassembly of section .text:
+
+0000000080000000 <_start>:
+    80000000:	00008117          	auipc	sp,0x8
+    80000004:	4c810113          	addi	sp,sp,1224 # 800084c8 <_stack_top>
+    80000008:	000022b7          	lui	t0,0x2
+    8000000c:	3002a073          	csrs	mstatus,t0
+    80000010:	20000293          	li	t0,512
+    80000014:	3002a073          	csrs	mstatus,t0
+    80000018:	22c000ef          	jal	80000244 <_trm_init>
+    8000001c:	0000006f          	j	8000001c <_start+0x1c>
+
+0000000080000020 <quick_dirty_vector_expf>:
+    80000020:	0d007857          	vsetvli	a6,zero,e32,m1,ta,ma
+    80000024:	5e0035d7          	vmv.v.i	v11,0
+    80000028:	00000797          	auipc	a5,0x0
+    8000002c:	2847a007          	flw	ft0,644(a5) # 800002ac <__am_asm_trap+0xc>
+    80000030:	00000797          	auipc	a5,0x0
+    80000034:	2807a507          	flw	fa0,640(a5) # 800002b0 <__am_asm_trap+0x10>
+    80000038:	00000797          	auipc	a5,0x0
+    8000003c:	27c7a587          	flw	fa1,636(a5) # 800002b4 <__am_asm_trap+0x14>
+    80000040:	00000797          	auipc	a5,0x0
+    80000044:	2787a607          	flw	fa2,632(a5) # 800002b8 <__am_asm_trap+0x18>
+    80000048:	00000797          	auipc	a5,0x0
+    8000004c:	2747a687          	flw	fa3,628(a5) # 800002bc <__am_asm_trap+0x1c>
+    80000050:	00000797          	auipc	a5,0x0
+    80000054:	2707a707          	flw	fa4,624(a5) # 800002c0 <__am_asm_trap+0x20>
+    80000058:	9eb03257          	vmv1r.v	v4,v11
+    8000005c:	f00607d3          	fmv.w.x	fa5,a2
+    80000060:	5e0052d7          	vfmv.v.f	v5,ft0
+    80000064:	5e0553d7          	vfmv.v.f	v7,fa0
+    80000068:	5e05d457          	vfmv.v.f	v8,fa1
+    8000006c:	5e0654d7          	vfmv.v.f	v9,fa2
+    80000070:	5e06d557          	vfmv.v.f	v10,fa3
+    80000074:	5e075357          	vfmv.v.f	v6,fa4
+    80000078:	00205073          	fsrmi	zero,0
+    8000007c:	06068e63          	beqz	a3,800000f8 <quick_dirty_vector_expf+0xd8>
+    80000080:	00000797          	auipc	a5,0x0
+    80000084:	2287a687          	flw	fa3,552(a5) # 800002a8 <__am_asm_trap+0x8>
+    80000088:	00000797          	auipc	a5,0x0
+    8000008c:	21c7a707          	flw	fa4,540(a5) # 800002a4 <__am_asm_trap+0x4>
+    80000090:	07f00613          	li	a2,127
+    80000094:	0906f7d7          	vsetvli	a5,a3,e32,m1,tu,ma
+    80000098:	0205e107          	vle32.v	v2,(a1)
+    8000009c:	00279713          	slli	a4,a5,0x2
+    800000a0:	40f686b3          	sub	a3,a3,a5
+    800000a4:	00e585b3          	add	a1,a1,a4
+    800000a8:	0a27d157          	vfsub.vf	v2,v2,fa5
+    800000ac:	9226d0d7          	vfmul.vf	v1,v2,fa3
+    800000b0:	4a1090d7          	vfcvt.x.f.v	v1,v1
+    800000b4:	4a1191d7          	vfcvt.f.x.v	v3,v1
+    800000b8:	021640d7          	vadd.vx	v1,v1,a2
+    800000bc:	be375157          	vfnmsac.vf	v2,fa4,v3
+    800000c0:	961bb1d7          	vsll.vi	v3,v1,23
+    800000c4:	9e6030d7          	vmv1r.v	v1,v6
+    800000c8:	a2a110d7          	vfmadd.vv	v1,v2,v10
+    800000cc:	a29110d7          	vfmadd.vv	v1,v2,v9
+    800000d0:	a28110d7          	vfmadd.vv	v1,v2,v8
+    800000d4:	a27110d7          	vfmadd.vv	v1,v2,v7
+    800000d8:	a25110d7          	vfmadd.vv	v1,v2,v5
+    800000dc:	a25110d7          	vfmadd.vv	v1,v2,v5
+    800000e0:	921190d7          	vfmul.vv	v1,v1,v3
+    800000e4:	020560a7          	vse32.v	v1,(a0)
+    800000e8:	02409257          	vfadd.vv	v4,v4,v1
+    800000ec:	00e50533          	add	a0,a0,a4
+    800000f0:	fa0692e3          	bnez	a3,80000094 <quick_dirty_vector_expf+0x74>
+    800000f4:	0d007857          	vsetvli	a6,zero,e32,m1,ta,ma
+    800000f8:	06459257          	vfredusum.vs	v4,v4,v11
+    800000fc:	424017d7          	vfmv.f.s	fa5,v4
+    80000100:	e0078553          	fmv.x.w	a0,fa5
+    80000104:	00008067          	ret
+
+0000000080000108 <softmax_stable_rvv_fp32>:
+    80000108:	00000797          	auipc	a5,0x0
+    8000010c:	1bc7a787          	flw	fa5,444(a5) # 800002c4 <__am_asm_trap+0x24>
+    80000110:	0d0078d7          	vsetvli	a7,zero,e32,m1,ta,ma
+    80000114:	5e07d0d7          	vfmv.v.f	v1,fa5
+    80000118:	0e060463          	beqz	a2,80000200 <softmax_stable_rvv_fp32+0xf8>
+    8000011c:	c22022f3          	csrr	t0,vlenb
+    80000120:	fe010113          	addi	sp,sp,-32
+    80000124:	00229313          	slli	t1,t0,0x2
+    80000128:	00261793          	slli	a5,a2,0x2
+    8000012c:	00813823          	sd	s0,16(sp)
+    80000130:	00913423          	sd	s1,8(sp)
+    80000134:	00113c23          	sd	ra,24(sp)
+    80000138:	00060493          	mv	s1,a2
+    8000013c:	40610133          	sub	sp,sp,t1
+    80000140:	40f00833          	neg	a6,a5
+    80000144:	00050413          	mv	s0,a0
+    80000148:	00058693          	mv	a3,a1
+    8000014c:	00060713          	mv	a4,a2
+    80000150:	090777d7          	vsetvli	a5,a4,e32,m1,tu,ma
+    80000154:	0206e107          	vle32.v	v2,(a3)
+    80000158:	00279613          	slli	a2,a5,0x2
+    8000015c:	40f70733          	sub	a4,a4,a5
+    80000160:	00c686b3          	add	a3,a3,a2
+    80000164:	1a2090d7          	vfmax.vv	v1,v2,v1
+    80000168:	fe0714e3          	bnez	a4,80000150 <softmax_stable_rvv_fp32+0x48>
+    8000016c:	0d0078d7          	vsetvli	a7,zero,e32,m1,ta,ma
+    80000170:	5e07d157          	vfmv.v.f	v2,fa5
+    80000174:	010685b3          	add	a1,a3,a6
+    80000178:	00040513          	mv	a0,s0
+    8000017c:	1e1110d7          	vfredmax.vs	v1,v1,v2
+    80000180:	00048693          	mv	a3,s1
+    80000184:	421017d7          	vfmv.f.s	fa5,v1
+    80000188:	e0078653          	fmv.x.w	a2,fa5
+    8000018c:	e95ff0ef          	jal	80000020 <quick_dirty_vector_expf>
+    80000190:	00000797          	auipc	a5,0x0
+    80000194:	11c7a787          	flw	fa5,284(a5) # 800002ac <__am_asm_trap+0xc>
+    80000198:	f0050753          	fmv.w.x	fa4,a0
+    8000019c:	c22026f3          	csrr	a3,vlenb
+    800001a0:	00269793          	slli	a5,a3,0x2
+    800001a4:	18e7f7d3          	fdiv.s	fa5,fa5,fa4
+    800001a8:	002787b3          	add	a5,a5,sp
+    800001ac:	40d786b3          	sub	a3,a5,a3
+    800001b0:	00000617          	auipc	a2,0x0
+    800001b4:	11860613          	addi	a2,a2,280 # 800002c8 <golden>
+    800001b8:	0d04f7d7          	vsetvli	a5,s1,e32,m1,ta,ma
+    800001bc:	02046087          	vle32.v	v1,(s0)
+    800001c0:	02066107          	vle32.v	v2,(a2)
+    800001c4:	00279713          	slli	a4,a5,0x2
+    800001c8:	40f484b3          	sub	s1,s1,a5
+    800001cc:	9217d0d7          	vfmul.vf	v1,v1,fa5
+    800001d0:	02868127          	vs1r.v	v2,(a3)
+    800001d4:	020460a7          	vse32.v	v1,(s0)
+    800001d8:	00e40433          	add	s0,s0,a4
+    800001dc:	fc049ee3          	bnez	s1,800001b8 <softmax_stable_rvv_fp32+0xb0>
+    800001e0:	c22022f3          	csrr	t0,vlenb
+    800001e4:	00229313          	slli	t1,t0,0x2
+    800001e8:	00610133          	add	sp,sp,t1
+    800001ec:	01813083          	ld	ra,24(sp)
+    800001f0:	01013403          	ld	s0,16(sp)
+    800001f4:	00813483          	ld	s1,8(sp)
+    800001f8:	02010113          	addi	sp,sp,32
+    800001fc:	00008067          	ret
+    80000200:	1e1090d7          	vfredmax.vs	v1,v1,v1
+    80000204:	00000693          	li	a3,0
+    80000208:	421017d7          	vfmv.f.s	fa5,v1
+    8000020c:	e0078653          	fmv.x.w	a2,fa5
+    80000210:	e11ff06f          	j	80000020 <quick_dirty_vector_expf>
+
+0000000080000214 <memset>:
+    80000214:	ff010113          	addi	sp,sp,-16
+    80000218:	00813023          	sd	s0,0(sp)
+    8000021c:	00113423          	sd	ra,8(sp)
+    80000220:	00050413          	mv	s0,a0
+    80000224:	00060663          	beqz	a2,80000230 <memset+0x1c>
+    80000228:	0ff5f593          	zext.b	a1,a1
+    8000022c:	fe9ff0ef          	jal	80000214 <memset>
+    80000230:	00813083          	ld	ra,8(sp)
+    80000234:	00040513          	mv	a0,s0
+    80000238:	00013403          	ld	s0,0(sp)
+    8000023c:	01010113          	addi	sp,sp,16
+    80000240:	00008067          	ret
+
+0000000080000244 <_trm_init>:
+    80000244:	ff010113          	addi	sp,sp,-16
+    80000248:	00113423          	sd	ra,8(sp)
+    8000024c:	00000797          	auipc	a5,0x0
+    80000250:	05478793          	addi	a5,a5,84 # 800002a0 <__am_asm_trap>
+    80000254:	30579073          	csrw	mtvec,a5
+    80000258:	014000ef          	jal	8000026c <main>
+    8000025c:	00000793          	li	a5,0
+    80000260:	00078513          	mv	a0,a5
+    80000264:	00100073          	ebreak
+    80000268:	0000006f          	j	80000268 <_trm_init+0x24>
+
+000000008000026c <main>:
+    8000026c:	ff010113          	addi	sp,sp,-16
+    80000270:	00000517          	auipc	a0,0x0
+    80000274:	15850513          	addi	a0,a0,344 # 800003c8 <dst>
+    80000278:	02000613          	li	a2,32
+    8000027c:	00000597          	auipc	a1,0x0
+    80000280:	0cc58593          	addi	a1,a1,204 # 80000348 <src>
+    80000284:	00113423          	sd	ra,8(sp)
+    80000288:	e81ff0ef          	jal	80000108 <softmax_stable_rvv_fp32>
+    8000028c:	00813083          	ld	ra,8(sp)
+    80000290:	00000513          	li	a0,0
+    80000294:	01010113          	addi	sp,sp,16
+    80000298:	00008067          	ret
+    8000029c:	0000                	.insn	2, 0x
+	...
+
+00000000800002a0 <__am_asm_trap>:
+    800002a0:	0000006f          	j	800002a0 <__am_asm_trap>
