@@ -21,20 +21,16 @@ void init_isa(diff_context_t *cpu) {
 }
 
 
-int main(){
+int main(int argc, char *argv[]){
     const char *ref_so_file="./riscv64-spike-so";
-    const char *img_file="./baremetal_kernel/build/softmax.bin";
+    // const char *img_file="./baremetal_kernel/build/softmax.bin";
 
-    auto emu=new Emulator(0,nullptr);
+    auto emu=new Emulator(argc,(const char **)argv);
+    EmuArgs args = emu->get_args();
     
-    long img_size=load_img(img_file);
+    long img_size=load_img(args.img_file);
     init_isa(&ref_cpu_state);
     init_difftest(ref_so_file,img_size, 0);
-    // while(cpu.pc != 0x800001c8){
-      // ref_difftest_exec(1);
-      // ref_difftest_regcpy(&cpu,DIFFTEST_TO_DUT,0);
-    // }
-
     while(!emu->is_finished()){
       emu->tick();
   }

@@ -22,16 +22,9 @@
 #define CLK_PERIOD 10 
 
 struct EmuArgs {
-  uint32_t reset_cycles = 50;
-  uint32_t seed = 0;
-  uint64_t max_cycles = -1;
-  uint64_t fork_interval = 1000;
-  uint64_t max_instr = -1;
-  uint64_t warmup_instr = -1;
-  uint64_t stat_cycles = -1;
-  uint64_t log_begin = 0, log_end = -1;
-  uint64_t overwrite_nbytes = 0xe00;
-  
+  char *log_file_name ;
+  char *waveform_file ;
+  char *img_file ; 
 };
 
 typedef union
@@ -140,6 +133,7 @@ public:
   void clear_flags(Decode &s);
 
   void log(const std::string& message);
+  int parse_args(int argc, const char *argv[]);
 
   template <typename T>
   void print_vector_register(std::stringstream &ss, int vreg_idx,

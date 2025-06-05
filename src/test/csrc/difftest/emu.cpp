@@ -25,12 +25,15 @@ Emulator::Emulator(int argc, const char *argv[])
       robIdx(0){    // 初始化列表顺序与类声明一致
 
     current_instance = this;
+    parse_args(argc, argv);
     // Verilator相关初始化
     contextp->commandArgs(argc, argv);
     contextp->traceEverOn(true);
     dut_ptr->trace(wave, 5);
-    wave->open("build/vpu.fst");
-    wave->set_time_unit("ns");
+    // wave->open("build/vpu.fst");
+    wave->open(args.waveform_file);
+    wave->set_time_unit("ps");
+    
 
     // 硬件复位
     reset_ncycles(3);
@@ -40,7 +43,8 @@ Emulator::Emulator(int argc, const char *argv[])
     dut_ptr->io_dispatch_s2v_bits_robIdx_flag =false;
 
     //initialize log file
-    log_file.open("emu.log",std::ios::out | std::ios::trunc);
+    // log_file.open("emu.log",std::ios::out | std::ios::trunc);
+    log_file.open(args.log_file_name,std::ios::out | std::ios::trunc);
     if (log_file.is_open()) {
         log_initialized = true;
         log_file << "==== Simulation Start ====\n";
@@ -574,6 +578,31 @@ void Emulator::log(const std::string& message) {
         log_file.flush();
     }
     // 同时输出到控制台
-    printf("%s\n", message.c_str()); 
+    // printf("%s\n", message.c_str()); 
 }
-
+int Emulator::parse_args(int argc, const char *argv[])
+{
+  const struct option table[] = {
+      {"log", required_argument, NULL, 'l'},
+      {"waveform", required_argument, NULL, 'w'},
+      {"help", no_argument, NULL, 'h'},
+      {0, 0, NULL, 0},
+  };
+  int o;
+  while ((o = getopt_long(argc, const_cast<char *const *>(argv), "-hl:w:", table, NULL)) != -1)
+  {
+    switch (o)
+    {
+    case 'l':args.log_file_name = optarg;break;
+    case 'w':args.waveform_file = optarg;break;
+    case 1:args.img_file = optarg;return 0;
+    default:
+      printf("Usage: %s [OPTION...] IMAGE [args]\n\n", argv[0]);
+      printf("\t-l,--log=FILE           output log to FILE\n");
+      printf("\t-w,--waveform=waveform file         waveform file name\n");
+      printf("\n");
+      exit(0);
+    }
+  }
+  return 0;
+}

@@ -18,6 +18,11 @@ V_FILES			=$(abspath ../../../../build/verilog_vpu_debug/load_l2_dpic.sv)  \
 				$(abspath ../../../../build/verilog_vpu_debug/get_vreg_dpic.sv)
 DEPS			=$(V_FILES) $(SIM_CSRCS)
 
+#结果输出控制
+RESULT := result.txt
+COLOR_RED    := \033[0;31m
+COLOR_GREEN  := \033[0;32m
+COLOR_NONE   := \033[0m
 
 # 编译选项
 VERILATOR_ROOT := $(shell verilator --getenv VERILATOR_ROOT)
@@ -44,12 +49,6 @@ $(OBJ_DIR)/V$(TOPNAME)__ALL.a: $(V_FILES)
 #调用 obj_dir 下的 Makefile 编译出 .o 和 .a
 	$(MAKE) -C $(OBJ_DIR) -f V$(TOPNAME).mk
 
-#$(VTOP): $(V_FILES)
-#	@$(VERILATOR)  $(VERILATOR_CFLAGS)\
-		--top-module $(TOPNAME) $^ \
-		$(addprefix -CFLAGS , $(CXXFLAGS)) $(addprefix -LDFLAGS , $(LDFLAGS)) \
-		--Mdir $(OBJ_DIR) 
-#$(info HEADER_FILES=$(HEADER_FILES))
 $(TARGET):$(SIM_CSRCS) $(HEADER_FILES) $(OBJ_DIR)/V$(TOPNAME)__ALL.a
 	@$(CXX) $(CXXFLAGS) \
 	-I$(OBJ_DIR)  $(SIM_CSRCS) \
@@ -60,15 +59,41 @@ $(TARGET):$(SIM_CSRCS) $(HEADER_FILES) $(OBJ_DIR)/V$(TOPNAME)__ALL.a
 	$(OBJ_DIR)/V$(TOPNAME).cpp \
 	$(OBJ_DIR)/V$(TOPNAME)__ALL.a  -I$(INCLUDE_DIR) $(LDFLAGS) -o $@  
 
+#测试程序路径设置
+BAREMETAL_DIR := $(abspath ./baremetal_kernel)
+BIN_DIR := $(BAREMETAL_DIR)/build
+CASES := $(notdir $(basename $(wildcard $(BAREMETAL_DIR)/softmax*.c)))
+PROG ?= $(firstword $(notdir $(basename $(wildcard $(BAREMETAL_DIR)/softmax*.c))))
 
+$(BIN_DIR)/%.bin:
+	$(MAKE) -C $(BAREMETAL_DIR) FILES=$*.c  $@
 
 # 清理生成的文件
 clean:
 	rm -f  $(TARGET)
-	rm -rf $(abspath ./vec_ops.o) $(abspath ./vec_ops.bin)
+	rm -rf $(BUILD_DIR)/*.fst  $(BUILD_DIR)/*.log
 
-sim: $(TARGET)
-	@$(TARGET)
+
+sim: $(TARGET) $(addprefix $(BIN_DIR)/,$(addsuffix .bin,$(PROG)))
+	@ if $(TARGET) -w $(BUILD_DIR)/top.fst -l $(BUILD_DIR)/top.log $(addprefix $(BIN_DIR)/,$(addsuffix .bin,$(PROG))) ; then \
+		printf "[%s] $(COLOR_GREEN)PASS$(COLOR_NONE)\n" $(PROG) | tee -a $(RESULT); \
+	else \
+			printf "[%s] $(COLOR_RED)FAIL$(COLOR_NONE)\n" $(PROG) | tee -a $(RESULT); \
+	fi 
+
+sim-all: $(TARGET) $(addprefix $(BIN_DIR)/,$(addsuffix .bin,$(CASES)))
+	@echo "==== Softmax Test STARTS ====" > $(RESULT)
+	@for bin in $(addprefix $(BIN_DIR)/,$(addsuffix .bin,$(CASES))); do \
+		name=$$(basename $$bin .bin); \
+		echo "==> Program: $$bin"; \
+		if $(TARGET) -w $(BUILD_DIR)/$$name.fst -l $(BUILD_DIR)/$$name.log $$bin ; then \
+			printf "[%s] $(COLOR_GREEN)PASS$(COLOR_NONE)\n" $$name | tee -a $(RESULT); \
+		else \
+			printf "[%s] $(COLOR_RED)FAIL$(COLOR_NONE)\n" $$name | tee -a $(RESULT); \
+		fi \
+	done
+	@echo "==== Softmax Test ENDS ====" >> $(RESULT)
+	@rm $(RESULT)
 
 gdb: $(TARGET)
 	gdb --args $(TARGET)

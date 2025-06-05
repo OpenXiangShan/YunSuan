@@ -12,6 +12,7 @@
 #include "VVTopDebug__Dpi.h"
 // #include <verilated_vcd_c.h>
 #include <verilated_fst_c.h>
+#include <getopt.h>
 
 #include "half.hpp"
 
