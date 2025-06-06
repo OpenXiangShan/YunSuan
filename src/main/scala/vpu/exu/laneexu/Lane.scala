@@ -63,8 +63,8 @@ class Lane extends Module {
   vfadd.io.uop_idx := in.uop.uopIdx 
   vfadd.io.round_mode := in.uop.csr.frm 
   vfadd.io.fp_format := in.uop.csr.vsew(1, 0)
-  vfadd.io.opb_widening := in.uop.ctrl.widen2 // TODO: 
-  vfadd.io.res_widening := in.uop.ctrl.widen // TODO: 
+  vfadd.io.opb_widening := in.uop.ctrl.widen2
+  vfadd.io.res_widening := in.uop.ctrl.widen || in.uop.ctrl.widen2
   vfadd.io.op_code := vfadd_op.op
   vfadd.io.is_vec := true.B
   vfadd.io.fp_aIsFpCanonicalNAN := false.B

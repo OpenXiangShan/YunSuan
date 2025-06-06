@@ -104,7 +104,7 @@ class VectorExuFloatAdder() extends Module {
 
 // support fp64, fp32, fp16, bf16
 class VectorFloatAdder_Width64() extends Module {
-  val VLEN = 2048
+  val VLEN = 128
   val exponentWidth = 11
   val significandWidth = 53
   val floatWidth = exponentWidth + significandWidth
@@ -205,24 +205,24 @@ class VectorFloatAdder_Width64() extends Module {
   f16_1_fp_a := Mux(fold(0), io.vs2_fold(95, 80), io.fp_a(31, 16)) // TODO: check here
   f16_3_fp_a := Mux(fold(0), io.vs2_fold(127, 112), io.fp_a(63, 48))
 
-  val U_F64_Widen_0 = Module(new FloatAdderF64WidenPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
-  U_F64_Widen_0.io.fire := fire
-  U_F64_Widen_0.io.fp_a := f64_fp_a
-  U_F64_Widen_0.io.fp_b := Mux(io.is_frs1,io.frs1,io.fp_b)
-  U_F64_Widen_0.io.widen_a := Mux(fold(0), U_Widen_Fotmat_64_fold.io.widen_a_f64, U_Widen_Fotmat.io.widen_a_f64)
-  U_F64_Widen_0.io.widen_b := U_Widen_Fotmat.io.widen_b_f64
-  U_F64_Widen_0.io.mask := io.mask(0)
-  U_F64_Widen_0.io.is_sub := fast_is_sub
-  U_F64_Widen_0.io.round_mode := io.round_mode
-  U_F64_Widen_0.io.res_widening := io.res_widening
-  U_F64_Widen_0.io.opb_widening := io.opb_widening
-  U_F64_Widen_0.io.op_code      := io.op_code
-  U_F64_Widen_0.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
-  U_F64_Widen_0.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
-  U_F64_Widen_0.io.maskForReduction := Cat(io.maskForReduction(4), io.maskForReduction(0))
-  U_F64_Widen_0.io.is_vfwredosum := io.is_vfwredosum
-  val U_F64_Widen_0_result = U_F64_Widen_0.io.fp_c
-  val U_F64_Widen_0_fflags = U_F64_Widen_0.io.fflags
+  // val U_F64_Widen_0 = Module(new FloatAdderF64WidenPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
+  // U_F64_Widen_0.io.fire := fire
+  // U_F64_Widen_0.io.fp_a := f64_fp_a
+  // U_F64_Widen_0.io.fp_b := Mux(io.is_frs1,io.frs1,io.fp_b)
+  // U_F64_Widen_0.io.widen_a := Mux(fold(0), U_Widen_Fotmat_64_fold.io.widen_a_f64, U_Widen_Fotmat.io.widen_a_f64)
+  // U_F64_Widen_0.io.widen_b := U_Widen_Fotmat.io.widen_b_f64
+  // U_F64_Widen_0.io.mask := io.mask(0)
+  // U_F64_Widen_0.io.is_sub := fast_is_sub
+  // U_F64_Widen_0.io.round_mode := io.round_mode
+  // U_F64_Widen_0.io.res_widening := io.res_widening
+  // U_F64_Widen_0.io.opb_widening := io.opb_widening
+  // U_F64_Widen_0.io.op_code      := io.op_code
+  // U_F64_Widen_0.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
+  // U_F64_Widen_0.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
+  // U_F64_Widen_0.io.maskForReduction := Cat(io.maskForReduction(4), io.maskForReduction(0))
+  // U_F64_Widen_0.io.is_vfwredosum := io.is_vfwredosum
+  // val U_F64_Widen_0_result = U_F64_Widen_0.io.fp_c
+  // val U_F64_Widen_0_fflags = U_F64_Widen_0.io.fflags
 
   val U_F32_Mixed_0 = Module(new FloatAdderF32WidenF16MixedPipeline(is_print = false,hasMinMaxCompare = hasMinMaxCompare))
   U_F32_Mixed_0.io.fire := fire
