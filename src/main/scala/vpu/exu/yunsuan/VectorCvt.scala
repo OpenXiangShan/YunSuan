@@ -25,7 +25,7 @@ class VectorCvtIO(width: Int) extends Bundle {
   val fflags = Output(UInt(20.W))
 }
 
-class VectorExuCvt extends  Module {
+class LaneFloatCvt extends  Module {
   val io = IO(new Bundle() {
       val fire              = Input(Bool())
       val vs2               = Input(UInt(LaneWidth.W))

@@ -33,10 +33,10 @@ object VParams {
   // Concrete execution delays
   val aluDelay = 1 + delayBias
   val faddDelay = 2 + delayBias
-  val fmaDelay = 3 + delayBias
+  val fmaDelay = 4 + delayBias
   val fcvtDelay = 2 + delayBias
-  val fredFp16Delay = 2*(log2Up(VLEN/32) + 3) + 1 + delayBias //TODO: recheck
-  val fredFp32Delay = 2*(log2Up(VLEN/32) + 2) + 1 + delayBias //TODO: recheck
+  val fredFp16Delay = 2*(log2Up(VLEN/32) + 3) + 1 + delayBias
+  val fredFp32Delay = 2*(log2Up(VLEN/32) + 2) + 1 + delayBias
   val vrgatherDelay = 1 + delayBias
 
   // Load/Store

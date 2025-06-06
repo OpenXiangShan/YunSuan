@@ -30,22 +30,22 @@ class Lane extends Module {
     val in = Input(ValidIO(new LaneInput))
     val out = ValidIO(new LaneOutput)
   })
-  val in = io.in.bits
-
-  val vfadd_out = Wire(new LaneOutput)
-  val vfma_out = Wire(new LaneOutput)
-  val vcvt_out = Wire(new LaneOutput)
-  val alu_out = Wire(new LaneOutput)
-
+  
   val alu = Module(new LaneALU)
+  val vfadd = Module(new LaneFloatAdder)
+  val vfma = Module(new LaneFloatFMA)
+  val vfcvt = Module(new LaneFloatCvt)
+  
+  val in = io.in.bits
+  val alu_out, vfadd_out, vfma_out, vfcvt_out = Wire(new LaneOutput)
+   
+  //---- ALU ----
   alu.io.in.valid := io.in.valid && io.in.bits.uop.ctrl.alu
   alu.io.in.bits := io.in.bits
-
   alu_out := alu.io.out.bits
 
-  val vfadd = Module(new LaneFloatAdder)
-  val vfadd_op = Wire(new Vfa_setop)
-
+  //---- FADD ----
+  val vfadd_op = Wire(new Vfadd_setop)
   vfadd_op.funct := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
   vfadd_op.vm := in.uop.ctrl.vm
   vfadd_op.vs1 := in.uop.ctrl.lsrc(0)
@@ -56,7 +56,6 @@ class Lane extends Module {
   vfadd.io.in_uop := in.uop
   vfadd.io.vs1  := in.vs1
   vfadd.io.vs2  := in.vs2
-  
   vfadd.io.frs1 := in.rs1
   vfadd.io.is_frs1 := in.uop.ctrl.vx
   vfadd.io.mask := 0.U // TODO: check it
@@ -67,14 +66,13 @@ class Lane extends Module {
   vfadd.io.res_widening := in.uop.ctrl.widen || in.uop.ctrl.widen2
   vfadd.io.op_code := vfadd_op.op
   vfadd.io.is_vm := in.uop.ctrl.vm
+
   vfadd_out.vd := vfadd.io.result
   vfadd_out.fflags := vfadd.io.fflags
   vfadd_out.uop := vfadd.io.out_uop.bits
 
-
-  val vfma = Module(new VectorExuFloatFMA)
+  //---- FMA ----
   val vfma_op = Wire(new Vfma_setop)
-
   vfma_op.funct  := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
   vfma_op.vm     := in.uop.ctrl.vm
   vfma_op.vs1    := in.uop.ctrl.lsrc(0)
@@ -90,7 +88,6 @@ class Lane extends Module {
   vfma.io.round_mode := in.uop.csr.frm
   vfma.io.fp_format := in.uop.csr.vsew(1, 0)
   vfma.io.op_code := vfma_op.op
-
   vfma.io.frs1 := in.rs1
   vfma.io.is_vec := true.B
   vfma.io.is_frs1 := in.uop.ctrl.vx
@@ -100,39 +97,43 @@ class Lane extends Module {
   vfma_out.fflags := vfma.io.fflags
   vfma_out.uop := vfma.io.out_uop.bits
 
-  val vcvt = Module(new VectorExuCvt)
-  val vcvt_setop = Wire(new Vcvt_setop)
+  //---- FCVT ----
+  val vfcvt_setop = Wire(new Vfcvt_setop)
+  vfcvt_setop.funct := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
+  vfcvt_setop.vm := in.uop.ctrl.vm
+  vfcvt_setop.vs1 := in.uop.ctrl.lsrc(0)
+  vfcvt_setop.vs2 := in.uop.ctrl.lsrc(1)
+  vfcvt_setop.op := vfcvt_setop.op_gen
 
-  vcvt_setop.funct := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
-  vcvt_setop.vm := in.uop.ctrl.vm
-  vcvt_setop.vs1 := in.uop.ctrl.lsrc(0)
-  vcvt_setop.vs2 := in.uop.ctrl.lsrc(1)
-  vcvt_setop.op := vcvt_setop.op_gen
-
-  vcvt.io.fire := io.in.valid && in.uop.ctrl.vfcvt 
-  vcvt.io.in_uop := in.uop
-  vcvt.io.vs2  := in.vs2
-  vcvt.io.uop_idx := in.uop.uopIdx 
-  vcvt.io.op_code := vcvt_setop.op
-  vcvt.io.sew := in.uop.csr.vsew(1, 0)
-  vcvt.io.rm := in.uop.csr.frm
-  vcvt.io.isFpToVecInst := false.B
-  vcvt.io.isFround := 0.U
-  vcvt.io.isFcvtmod := false.B
+  vfcvt.io.fire := io.in.valid && in.uop.ctrl.vfcvt 
+  vfcvt.io.in_uop := in.uop
+  vfcvt.io.vs2  := in.vs2
+  vfcvt.io.uop_idx := in.uop.uopIdx 
+  vfcvt.io.op_code := vfcvt_setop.op
+  vfcvt.io.sew := in.uop.csr.vsew(1, 0)
+  vfcvt.io.rm := in.uop.csr.frm
+  vfcvt.io.isFpToVecInst := false.B
+  vfcvt.io.isFround := 0.U
+  vfcvt.io.isFcvtmod := false.B
   
-  vcvt_out.vd     := vcvt.io.result
-  vcvt_out.fflags := vcvt.io.fflags
-  vcvt_out.uop    := vcvt.io.out_uop.bits
+  vfcvt_out.vd     := vfcvt.io.result
+  vfcvt_out.fflags := vfcvt.io.fflags
+  vfcvt_out.uop    := vfcvt.io.out_uop.bits
 
-  io.out.valid := vfadd.io.out_uop.valid | vfma.io.out_uop.valid | vcvt.io.out_uop.valid | alu.io.out.valid  
-            
+  /**
+    *  Put a register on the output of FMA, since the FMA output has some dealy of combinational logic
+    */
+  val valid_vfma_out_reg = RegNext(vfma.io.out_uop.valid)
+  val vfma_out_reg = RegEnable(vfma_out, vfma.io.out_uop.valid)
+
+
+  io.out.valid := alu.io.out.valid || vfadd.io.out_uop.valid || valid_vfma_out_reg || vfcvt.io.out_uop.valid
   io.out.bits := Mux1H(
     Seq(
+      alu.io.out.valid          -> alu_out,
       vfadd.io.out_uop.valid      -> vfadd_out,
-      vfma.io.out_uop.valid      -> vfma_out,
-      vcvt.io.out_uop.valid     -> vcvt_out,
-      alu.io.out.valid          -> alu_out
+      valid_vfma_out_reg      -> vfma_out_reg,
+      vfcvt.io.out_uop.valid     -> vfcvt_out
     )
   )
-
 }

@@ -5,7 +5,7 @@ import chisel3.util._
 import race.vpu._
 import race.vpu.VParams._
 
-class Vfa_setop extends Bundle {
+class Vfadd_setop extends Bundle {
   val funct = UInt(9.W)
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)
@@ -107,7 +107,7 @@ class Vfd_setop extends Bundle {
 
 }
 
-class Vcvt_setop extends Bundle {
+class Vfcvt_setop extends Bundle {
   val funct = UInt(9.W)
   val vm  = UInt(1.W)
   val vs1 = UInt(5.W)

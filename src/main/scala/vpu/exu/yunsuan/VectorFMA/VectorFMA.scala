@@ -9,7 +9,7 @@ import race.vpu.VParams._
 
 import scala.collection.mutable.ListBuffer
 
-class VectorExuFloatFMA() extends Module{
+class LaneFloatFMA() extends Module{
   val io = IO(new Bundle() {
     val fire            = Input (Bool())
     val vs1, vs2, vs3   = Input (UInt(LaneWidth.W)) // fp_a->VS2,fp_b->VS1,fp_c->VD
