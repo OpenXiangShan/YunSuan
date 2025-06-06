@@ -384,16 +384,18 @@ class VectorFloatAdder_Width64() extends Module {
   val fp16_fflags   = Cat(Fill(5, is_vec_reg) & U_F16_3_fflags, Fill(5, is_vec_reg) & U_F16_2_fflags, Fill(5, is_vec_reg) & U_F16_1_fflags, U_F16_0_fflags)
   val bf16_fflags   = Cat(Fill(5, is_vec_reg) & U_BF16_3_fflags, Fill(5, is_vec_reg) & U_BF16_2_fflags, Fill(5, is_vec_reg) & U_BF16_1_fflags, U_BF16_0_fflags)
 
+  //---- Note: BF16 is disabled to reduce area ----
+
   io.fp_result := Mux1H(
     Seq(
       res_is_f32,
       res_is_f16,
-      res_is_bf16
+      // res_is_bf16
     ),
     Seq(
       fp_f32_result,
       fp_f16_result,
-      bf16_result
+      // bf16_result
     )
   )
 
@@ -401,12 +403,12 @@ class VectorFloatAdder_Width64() extends Module {
     Seq(
       res_is_f32,
       res_is_f16,
-      res_is_bf16
+      // res_is_bf16
     ),
     Seq(
       fp32_fflags,
       fp16_fflags,
-      bf16_fflags
+      // bf16_fflags
     )
   )
 }

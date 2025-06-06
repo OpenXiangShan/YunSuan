@@ -128,8 +128,13 @@ class LaneFloatFMA() extends Module{
 
   val bf16_result = Cat(vff_bf16_3.io.fp_result, vff_bf16_2.io.fp_result, vff_bf16_1.io.fp_result, vff_bf16_0.io.fp_result)
   val bf16_fflags = Cat(vff_bf16_3.io.fflags, vff_bf16_2.io.fflags, vff_bf16_1.io.fflags, vff_bf16_0.io.fflags)
-  io.result := Mux(is_bf16_reg2, bf16_result, vff.io.fp_result.asTypeOf(io.result))
-  io.fflags := Mux(is_bf16_reg2, bf16_fflags.asTypeOf(io.fflags), vff.io.fflags.asTypeOf(io.fflags))
+  
+  //---- Note: BF16 is disabled to reduce area ----
+  
+  // io.result := Mux(is_bf16_reg2, bf16_result, vff.io.fp_result.asTypeOf(io.result))
+  // io.fflags := Mux(is_bf16_reg2, bf16_fflags.asTypeOf(io.fflags), vff.io.fflags.asTypeOf(io.fflags))
+  io.result := vff.io.fp_result.asTypeOf(io.result)
+  io.fflags := vff.io.fflags.asTypeOf(io.fflags)
 
   // latency = 3
   val reg_uop_0     = RegEnable(io.in_uop, io.fire)
