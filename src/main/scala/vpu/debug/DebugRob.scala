@@ -69,23 +69,6 @@ class DebugRob extends Module {
   }
 
   val wbExuUop = io.fromCtrl.wbExu.bits.uop
-  // //---- 在当前指令的第一个有效的uop写回时，记录enqOH_wbPort_exu并保持。直到下一条指令的第一个有效uop写回时，再记录新的enqOH_wbPort_exu
-  // val exu_wb_STATE = RegInit(false.B)
-  // val enqOH_wbPort_exu_reg = Reg(chiselTypeOf(enqOH_wbPort_exu))
-  // when (io.fromCtrl.wbExu.valid && wbExuUop.uopEnd) {
-  //   exu_wb_STATE := false.B
-  // }.elsewhen (io.fromCtrl.wbExu.valid && wbExuUop.ldestValUop) {
-  //   exu_wb_STATE := true.B
-  // }
-  // // 当前指令的第一个有效的uop写回
-  // val exu_wb_start = io.fromCtrl.wbExu.valid && wbExuUop.ldestValUop && exu_wb_STATE === false.B
-  // when (exu_wb_start) {
-  //   enqOH_wbPort_exu_reg := enqOH_wbPort_exu
-  // }
-  // val enqOH_wbPort_exu_final = Mux(exu_wb_start, enqOH_wbPort_exu, enqOH_wbPort_exu_reg)
-  // // -------------
-
-  
   // Exu uop写回，查询如果已有相同robIdx的uop写回，则更新已有entry。否则更新enqOH_wbPort_exu所指entry。
   when (io.fromCtrl.wbExu.valid) {
     // 和已有robIdx的所有entry比较
@@ -110,24 +93,7 @@ class DebugRob extends Module {
     }
   }
 
-
   val wbLoadUop = io.fromCtrl.wbLoad.bits.uop
-  // //---- 在当前指令的第一个有效的uop写回时，记录enqOH_wbPort_load并保持。直到下一条指令的第一个有效uop写回时，再记录新的enqOH_wbPort_load
-  // val load_wb_STATE = RegInit(false.B)
-  // val enqOH_wbPort_load_reg = Reg(chiselTypeOf(enqOH_wbPort_load))
-  // when (io.fromCtrl.wbLoad.valid && wbLoadUop.ldestValUop) {
-  //   load_wb_STATE := true.B
-  // }.elsewhen (io.fromCtrl.wbLoad.valid && wbLoadUop.uopEnd) {
-  //   load_wb_STATE := false.B
-  // }
-  // // 当前指令的第一个有效的uop写回
-  // val load_wb_start = io.fromCtrl.wbLoad.valid && wbLoadUop.ldestValUop && load_wb_STATE === false.B
-  // when (load_wb_start) {
-  //   enqOH_wbPort_load_reg := enqOH_wbPort_load
-  // }
-  // val enqOH_wbPort_load_final = Mux(load_wb_start, enqOH_wbPort_load, enqOH_wbPort_load_reg)
-  // // -------------
-
   // Load指令，uop写回，查询如果已有相同robIdx的uop写回，则更新已有entry。否则更新enqOH_wbPort_load所指entry。
   when (io.fromCtrl.wbLoad.valid) {
     // 和已有robIdx的所有entry比较

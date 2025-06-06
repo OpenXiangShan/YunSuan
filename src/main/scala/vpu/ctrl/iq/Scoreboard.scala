@@ -155,9 +155,9 @@ class VScoreboard extends Module {
   /**
     * Clear the busy table
     */
-  // RF-write-read-bypass
-  val rfWriteReadBypass = delay zip table map { case (x, y) => x === 1.U && y }
-  val rfBypass = VecInit(rfWriteReadBypass).asUInt & delayIsFixed.asUInt
+  // RF-write-read-bypass (delay entry == 1) can clear the busy table entry 1 clock cycle earlier than RF-write
+  val wakeupCheck = delay zip table map { case (x, y) => x === 1.U && y }
+  val wakeup = VecInit(wakeupCheck).asUInt & delayIsFixed.asUInt
   // (1) RF writeback ports, or (2) RF-write-read-bypass clear
   // clear(wbAddrs.map(_.valid), wbAddrs.map(_.bits), rfBypass)
 
@@ -167,7 +167,7 @@ class VScoreboard extends Module {
   for (i <- 0 until 32) {
     when (setReqAddr.valid && setReqAddrOH(i)) {
       table(i) := true.B
-    }.elsewhen (wbAddrsHit(i) || rfBypass(i)) {
+    }.elsewhen (wbAddrsHit(i) || wakeup(i)) {
       table(i) := false.B
     }
   }
