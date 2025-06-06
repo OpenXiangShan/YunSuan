@@ -43,7 +43,7 @@ class Lane extends Module {
 
   alu_out := alu.io.out.bits
 
-  val vfadd = Module(new VectorExuFloatAdder)
+  val vfadd = Module(new LaneFloatAdder)
   val vfadd_op = Wire(new Vfa_setop)
 
   vfadd_op.funct := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
@@ -66,12 +66,6 @@ class Lane extends Module {
   vfadd.io.opb_widening := in.uop.ctrl.widen2
   vfadd.io.res_widening := in.uop.ctrl.widen || in.uop.ctrl.widen2
   vfadd.io.op_code := vfadd_op.op
-  vfadd.io.is_vec := true.B
-  vfadd.io.fp_aIsFpCanonicalNAN := false.B
-  vfadd.io.fp_bIsFpCanonicalNAN := false.B
-  vfadd.io.maskForReduction := 0.U
-  vfadd.io.is_vfwredosum := false.B
-  vfadd.io.is_fold := 0.U
   vfadd.io.is_vm := in.uop.ctrl.vm
   vfadd_out.vd := vfadd.io.result
   vfadd_out.fflags := vfadd.io.fflags

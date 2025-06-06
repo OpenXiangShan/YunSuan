@@ -6,7 +6,6 @@ import chisel3.util._
 import race.vpu._
 import race.vpu.yunsuan.util._
 import race.vpu.VParams._
-import race.vpu.yunsuan._
 
 /**
   * f16/f32/bf16, support widen
@@ -28,30 +27,30 @@ import race.vpu.yunsuan._
   *14: Compare, greater than or equal
   *15: Classify
   **/
-class VectorExuFloatAdder() extends Module {
+class LaneFloatAdder() extends Module {
   val io = IO(new Bundle() {
-    val fire                  = Input (Bool())
-    val vs1, vs2              = Input (UInt(XLEN.W)) // fp_a -> vs2, fp_b -> vs1
-    val frs1                  = Input (UInt(XLEN.W)) // VS1(63,0)
-    val is_frs1               = Input (Bool()) // VS1()
-    val is_vm                 = Input (Bool()) // vector mask
-    val mask                  = Input (UInt(XLEN.W))
-    val uop_idx               = Input (Bool())
-    val is_vec                = Input (Bool())
-    val round_mode            = Input (UInt(3.W))
-    val fp_format             = Input (VectorElementFormat()) // result format b01->fp16,b10->fp32,b00->fp32
-    val opb_widening          = Input (Bool())    // true -> opb widening
-    val res_widening          = Input (Bool())    // true -> widening operation
-    val op_code               = Input (UInt(5.W))
-    val fp_aIsFpCanonicalNAN  = Input (Bool())
-    val fp_bIsFpCanonicalNAN  = Input (Bool())
-    val maskForReduction      = Input(UInt((8*XLEN/64).W)) // need to modify
-    val is_vfwredosum         = Input (Bool()) // true -> vfwredosum inst
-    val is_fold               = Input (UInt(3.W))
+    val fire                  = Input(Bool())
+    val vs1, vs2              = Input(UInt(LaneWidth.W)) // fp_a -> vs2, fp_b -> vs1
+    val frs1                  = Input(UInt(LaneWidth.W)) // VS1(63,0)
+    val is_frs1               = Input(Bool()) // VS1()
+    val is_vm                 = Input(Bool()) // vector mask
+    val mask                  = Input(UInt(LaneWidth.W))
+    val uop_idx               = Input(Bool())
+    // val is_vec                = Input (Bool())
+    val round_mode            = Input(UInt(3.W))
+    val fp_format             = Input(VectorElementFormat()) // result format b01->fp16,b10->fp32,b00->fp32
+    val opb_widening          = Input(Bool())    // true -> opb widening
+    val res_widening          = Input(Bool())    // true -> widening operation
+    val op_code               = Input(UInt(5.W))
+    // val fp_aIsFpCanonicalNAN  = Input (Bool())
+    // val fp_bIsFpCanonicalNAN  = Input (Bool())
+    // val maskForReduction      = Input(UInt((8*LaneWidth/64).W)) // need to modify
+    // val is_vfwredosum         = Input (Bool()) // true -> vfwredosum inst
+    // val is_fold               = Input (UInt(3.W))
     val in_uop                = Input(new VUop)
 
-    val result                = Output(UInt(XLEN.W))
-    val fflags                = Output(Vec(XLEN/16, UInt(5.W)))
+    val result                = Output(UInt(LaneWidth.W))
+    val fflags                = Output(Vec(LaneWidth/16, UInt(5.W)))
     val out_uop               = ValidIO(new VUop)
   })
   
@@ -61,46 +60,45 @@ class VectorExuFloatAdder() extends Module {
 
   val mask_fp16 = io.mask(4-1, 0)
   val mask_fp32 = Cat(0.U(2.W), io.mask(2-1, 0))
-  val fp_b = io.vs1(XLEN-1, 0)
-  val fp_a = io.vs2(XLEN-1, 0)
+  val fp_b = io.vs1
+  val fp_a = io.vs2
 
-  val vfa = Module(new VectorFloatAdder_Width64)
-  vfa.io.fire := io.fire
-  vfa.io.fp_a := fp_a
-  vfa.io.fp_b := fp_b
-  vfa.io.widen_a := fp_a
-  vfa.io.widen_b := fp_b
-  vfa.io.frs1 := io.frs1
-  vfa.io.is_frs1 := io.is_frs1  
-  vfa.io.mask := Mux(is_fp32, mask_fp32, Mux(is_fp16 || is_bf16, mask_fp16, 0.U))
-  vfa.io.uop_idx := io.uop_idx
-  vfa.io.is_vec := io.is_vec
-  vfa.io.round_mode := io.round_mode
-  vfa.io.fp_format := io.fp_format  
+  val vfaddW64 = Module(new VectorFloatAdder_Width64)
+  vfaddW64.io.fire := io.fire
+  vfaddW64.io.fp_a := fp_a
+  vfaddW64.io.fp_b := fp_b
+  vfaddW64.io.widen_a := fp_a
+  vfaddW64.io.widen_b := fp_b
+  vfaddW64.io.frs1 := io.frs1
+  vfaddW64.io.is_frs1 := io.is_frs1  
+  vfaddW64.io.mask := Mux(is_fp32, mask_fp32, Mux(is_fp16 || is_bf16, mask_fp16, 0.U))
+  vfaddW64.io.uop_idx := io.uop_idx
+  vfaddW64.io.is_vec := true.B
+  vfaddW64.io.round_mode := io.round_mode
+  vfaddW64.io.fp_format := io.fp_format  
 
 
-  vfa.io.op_code    := io.op_code
-  vfa.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
-  vfa.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
+  vfaddW64.io.op_code    := io.op_code
+  vfaddW64.io.fp_aIsFpCanonicalNAN := false.B
+  vfaddW64.io.fp_bIsFpCanonicalNAN := false.B
   //
-  vfa.io.maskForReduction := io.maskForReduction(8-1, 0)
-  vfa.io.is_vfwredosum := io.is_vfwredosum
-  vfa.io.is_fold := io.is_fold
-  vfa.io.vs2_fold := 0.U
+  vfaddW64.io.maskForReduction := 0.U
+  vfaddW64.io.is_vfwredosum := false.B
+  vfaddW64.io.is_fold := 0.U
+  vfaddW64.io.vs2_fold := 0.U
   //
-  vfa.io.opb_widening := io.opb_widening
-  vfa.io.res_widening := io.res_widening
+  vfaddW64.io.opb_widening := io.opb_widening
+  vfaddW64.io.res_widening := io.res_widening
 
-  io.result := vfa.io.fp_result.asTypeOf(io.result)
-  io.fflags := vfa.io.fflags.asTypeOf(io.fflags)
+  // latency = 2
+  val valid_S1 = RegNext(io.fire)
+  val uop_S1 = RegEnable(io.in_uop, io.fire)
 
-  // latency = 1
-  val reg_valid_0 = RegNext(io.fire)
-  val reg_uop     = RegEnable(io.in_uop, io.fire)
-
-  io.out_uop.valid := reg_valid_0
-  io.out_uop.bits := reg_uop
-}
+  io.out_uop.valid := RegNext(valid_S1)
+  io.out_uop.bits := RegEnable(uop_S1, valid_S1)
+  io.result := RegEnable(vfaddW64.io.fp_result, valid_S1)
+  io.fflags := RegEnable(vfaddW64.io.fflags.asTypeOf(io.fflags), valid_S1)
+}  
 
 // support fp64, fp32, fp16, bf16
 class VectorFloatAdder_Width64() extends Module {

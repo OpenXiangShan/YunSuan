@@ -32,7 +32,7 @@ object VParams {
   require(delayBias >= 1)
   // Concrete execution delays
   val aluDelay = 1 + delayBias
-  val faddDelay = 1 + delayBias
+  val faddDelay = 2 + delayBias
   val fmaDelay = 3 + delayBias
   val fcvtDelay = 2 + delayBias
   val fredFp16Delay = 2*(log2Up(VLEN/32) + 3) + 1 + delayBias //TODO: recheck
