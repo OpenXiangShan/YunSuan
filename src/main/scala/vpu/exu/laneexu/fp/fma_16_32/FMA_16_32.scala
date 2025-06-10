@@ -395,7 +395,7 @@ class FMA_16_32 extends Module {
     shift_ab_high := false.B
   }
   // Select input of shift block, ab or c.
-  val sig_adjust_subnorm_c_whole_48 = sig_adjust_subnorm_32_c(0) ## 0.U(16.W) // 48 bits
+  val sig_adjust_subnorm_c_whole_48 = sig_adjust_subnorm_32_c ## 0.U(23.W) // 48 bits
   val shift_in_whole = Mux(shift_ab_high, sig_resMul_whole_S2, sig_adjust_subnorm_c_whole_48) // 48 bits
   val shift_amount_in_whole = Mux(shift_ab_high, shift_amount_ab_high, shift_amount_c_high) // 6 bits
   val shift_out_whole = shift_right(shift_in_whole, shift_amount_in_whole) // 48 bits
