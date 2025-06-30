@@ -200,3 +200,23 @@ class VL2StoreReq extends Bundle {
 class VL2StoreAck extends Bundle {
   val dummy = Bool()
 }
+
+class SewFpOH extends Bundle {  // 0   1   2   3
+  val oneHot = UInt(4.W) // b0-b3: bf16, fp16, fp32, fp64
+  def isBf16 = oneHot(0)
+  def isFp16 = oneHot(1)
+  def isFp32 = oneHot(2)
+  def isFp64 = oneHot(3)
+  def is16 = isFp16 || isBf16
+}
+
+object SewFpOH {
+  def apply(vsew: UInt): SewFpOH = {
+    val sew = Wire(new SewFpOH)
+    sew.oneHot(0) := vsew === "b101".U
+    sew.oneHot(1) := vsew === "b001".U
+    sew.oneHot(2) := vsew === "b010".U
+    sew.oneHot(3) := vsew === "b011".U
+    sew
+  }
+}
