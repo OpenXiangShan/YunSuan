@@ -610,4 +610,18 @@ package object yunsuan {
     def fnmacc  = "b0010".U(width.W)
     def fnmsac  = "b0100".U(width.W)
   }
+
+  object FcmpOpCode {
+    def width = 3
+
+    def feq = "b000".U(width.W)
+    def flt = "b001".U(width.W)
+    def fle = "b010".U(width.W)
+    def fltq = "b101".U(width.W)
+    def fleq = "b110".U(width.W)
+    def isFeq(opcode:UInt) = opcode === feq
+    def isFlt(opcode:UInt) = opcode(0)
+    def isFle(opcode:UInt) = opcode(1)
+    def isQuiet(opcode:UInt) = opcode(2)
+  }
 }
