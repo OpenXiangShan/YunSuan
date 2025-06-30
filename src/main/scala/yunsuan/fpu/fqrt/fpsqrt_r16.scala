@@ -23,6 +23,8 @@ class fpsqrt_r16(
   val finish_ready_i = IO(Input(Bool()))
   val fpsqrt_res_o = IO(Output(UInt(64.W)))
   val fflags_o = IO(Output(UInt(5.W)))
+  val outValidAhead3Cycle = IO(Output(Bool()))
+  val wakeupSuccess = IO(Input(Bool()))
   val fp_aIsFpCanonicalNAN = IO(Input(Bool()))
 
   val F64_REM_W = 2 + 54
@@ -262,7 +264,6 @@ class fpsqrt_r16(
   val fflags_inexact_0 = Wire(Bool())
   start_ready_o := fsm_q(FSM_PRE_0_BIT)
   start_handshaked := start_valid_i & start_ready_o
-  finish_valid_o := fsm_q(FSM_POST_0_BIT)
   op_sign_0 :=
     fp_format_i === 2.U & op_i(63) | // scalar f64 sign
       fp_format_i === 1.U & op_i(31) | // sclar f32 sign
@@ -719,6 +720,16 @@ class fpsqrt_r16(
   }
   fsm_q := fsm_d
 
+  val wakeupSuccessReg = RegNext(wakeupSuccess, true.B)
+  val outValidBlock = Reg(UInt(2.W))
+  when(start_handshaked && early_finish || outValidAhead3Cycle) {
+    outValidBlock := "b10".U
+  }.elsewhen(!fsm_q(FSM_PRE_0_BIT)) {
+    outValidBlock := outValidBlock >> 1
+  }
+  val isBlock = outValidBlock.orR
+  finish_valid_o := fsm_q(FSM_POST_0_BIT) & !isBlock
+  outValidAhead3Cycle := !wakeupSuccessReg || start_handshaked && early_finish || fsm_q(FSM_ITER_BIT) && (iter_num_q === 2.U)
   when(start_handshaked) {
     fp_fmt_q := fp_fmt_d
     rm_q := rm_d
