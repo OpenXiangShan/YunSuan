@@ -6,6 +6,7 @@ import race.vpu._
 import race.vpu.yunsuan._
 import VParams._
 import race.vpu.exu.laneexu.alu._
+import race.vpu.exu.laneexu.fp._
 
 class LaneInput extends Bundle {
   val uop = new VUop
@@ -33,10 +34,11 @@ class Lane extends Module {
   
   val alu = Module(new LaneALU)
   val vfadd = Module(new LaneFloatAdder)
-  val vfma = Module(new LaneFloatFMA)
+  val vfma = Module(new LaneFMA)
   val vfcvt = Module(new LaneFloatCvt)
   
   val in = io.in.bits
+  val sewFpIn = SewFpOH(in.uop.csr.vsew)
   val alu_out, vfadd_out, vfma_out, vfcvt_out = Wire(new LaneOutput)
    
   //---- ALU ----
@@ -72,30 +74,10 @@ class Lane extends Module {
   vfadd_out.uop := vfadd.io.out_uop.bits
 
   //---- FMA ----
-  val vfma_op = Wire(new Vfma_setop)
-  vfma_op.funct  := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
-  vfma_op.vm     := in.uop.ctrl.vm
-  vfma_op.vs1    := in.uop.ctrl.lsrc(0)
-  vfma_op.vs2    := in.uop.ctrl.lsrc(1)
-  vfma_op.op     := vfma_op.op_gen
-
-  vfma.io.fire := io.in.valid && in.uop.ctrl.vfma 
-  vfma.io.in_uop := in.uop
-  vfma.io.vs1  := in.vs1
-  vfma.io.vs2  := in.vs2
-  vfma.io.vs3  := in.vs3 
-  vfma.io.uop_idx := in.uop.uopIdx 
-  vfma.io.round_mode := in.uop.csr.frm
-  vfma.io.fp_format := in.uop.csr.vsew(1, 0)
-  vfma.io.op_code := vfma_op.op
-  vfma.io.frs1 := in.rs1
-  vfma.io.is_vec := true.B
-  vfma.io.is_frs1 := in.uop.ctrl.vx
-  vfma.io.res_widening := in.uop.ctrl.widen  
-  
-  vfma_out.vd := vfma.io.result
-  vfma_out.fflags := vfma.io.fflags
-  vfma_out.uop := vfma.io.out_uop.bits
+  vfma.io.in.valid := io.in.valid && io.in.bits.uop.ctrl.vfma
+  vfma.io.in.bits := io.in.bits
+  vfma.io.sewIn := sewFpIn
+  vfma_out := vfma.io.out.bits
 
   //---- FCVT ----
   val vfcvt_setop = Wire(new Vfcvt_setop)
@@ -123,8 +105,8 @@ class Lane extends Module {
   /**
     *  Put a register on the output of FMA, since the FMA output has some dealy of combinational logic
     */
-  val valid_vfma_out_reg = RegNext(vfma.io.out_uop.valid)
-  val vfma_out_reg = RegEnable(vfma_out, vfma.io.out_uop.valid)
+  val valid_vfma_out_reg = RegNext(vfma.io.out.valid)
+  val vfma_out_reg = RegEnable(vfma_out, vfma.io.out.valid)
 
 
   io.out.valid := alu.io.out.valid || vfadd.io.out_uop.valid || valid_vfma_out_reg || vfcvt.io.out_uop.valid

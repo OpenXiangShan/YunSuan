@@ -202,7 +202,7 @@ class VL2StoreAck extends Bundle {
 }
 
 class SewFpOH extends Bundle {  // 0   1   2   3
-  val oneHot = UInt(4.W) // b0-b3: bf16, fp16, fp32, fp64
+  val oneHot = Vec(4, Bool()) // b0-b3: bf16, fp16, fp32, fp64
   def isBf16 = oneHot(0)
   def isFp16 = oneHot(1)
   def isFp32 = oneHot(2)

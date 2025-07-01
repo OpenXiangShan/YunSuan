@@ -1,4 +1,5 @@
 /**
+  * FMA supporting bf/fp16 and fp32
   * 13.4 vfmul
   * 13.5
   * 13.6
@@ -12,7 +13,7 @@ import race.vpu._
 import VParams._
 import race.vpu.exu.laneexu._
 
-class VFMAWrapper extends Module {
+class LaneFMA extends Module {
   val io = IO(new Bundle {
     val in = Input(ValidIO(new LaneInput))
     val sewIn = Input(new SewFpOH)
@@ -37,7 +38,7 @@ class VFMAWrapper extends Module {
   //  ----   ----   ----   ----
   //   16     16     16     16
   def widen_sel(vs: UInt): UInt = {  // vs is 64 bits
-    val (fma1_high, fma1_low, fma0_high, fma0_low) = (vs(63, 48), vs(47, 32), vs(31, 16), vs(15, 0))
+    val (fma1_high, fma1_low, fma0_high, fma0_low) = (WireDefault(vs(63, 48)), vs(47, 32), WireDefault(vs(31, 16)), vs(15, 0))
     val vs_32b = Mux(uop.uopIdx(0), vs(63, 32), vs(31, 0))
     when (uop.ctrl.widen) {
       fma0_high := vs_32b(15, 0)

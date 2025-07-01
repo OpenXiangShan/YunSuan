@@ -8,7 +8,8 @@
   *   1) For widen instrn, input bf/fp16 should be the highest half of the 32-bit input !
   *   2) NaN is not supported
   *   3) Rounding mode only supports RNE
-  *   4) wResMul32 is tunable parameter: larger wResMul32 means better precision and higher hardware cost
+  *   4) So far, the fflags output is 0
+  *   5) wResMul32 is tunable parameter: larger wResMul32 means better precision and higher hardware cost
   */
 
 package race.vpu.exu.laneexu.fp
@@ -20,7 +21,7 @@ import VParams._
 import race.vpu.yunsuan.util._
 
 class VFMA_16_32 extends Module {
-  val wResMul32 = 36  // Bits to reserve for the significand of the a*b (range: 28 ~ 48)
+  val wResMul32 = 48  // Bits to reserve for the significand of the a*b (range: 28 ~ 48)
   val wResMul16 = wResMul32 / 2  // Bits (FP/BF16) to reserve for the significand of the a*b
   val io = IO(new Bundle {
     val valid_in = Input(Bool())
