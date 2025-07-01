@@ -10,6 +10,8 @@
   *   3) Rounding mode only supports RNE
   *   4) So far, the fflags output is 0
   *   5) wResMul32 is tunable parameter: larger wResMul32 means better precision and higher hardware cost
+  *      TODO: if wResMul32 < 48 and you care about precision, rounding after a*b result truncation should be added !
+  *   6) Note: the shifting blocks have no sticky-bit logic
   */
 
 package race.vpu.exu.laneexu.fp
@@ -23,6 +25,8 @@ import race.vpu.yunsuan.util._
 class VFMA_16_32 extends Module {
   val wResMul32 = 48  // Bits to reserve for the significand of the a*b (range: 28 ~ 48)
   val wResMul16 = wResMul32 / 2  // Bits (FP/BF16) to reserve for the significand of the a*b
+  //  TODO: if wResMul32 < 48 and you care about precision, rounding after a*b result truncation should be added !
+  //        (so far, there is no such rounding logic)
   val io = IO(new Bundle {
     val valid_in = Input(Bool())
     val is_bf16, is_fp16, is_fp32 = Input(Bool())
