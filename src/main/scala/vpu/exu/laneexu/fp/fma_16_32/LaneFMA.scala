@@ -83,10 +83,18 @@ class LaneFMA extends Module {
   }
 
   // Output
-  io.out.valid := vfma0.io.valid_out
-  io.out.bits.vd := Cat(vfma1.io.res_out, vfma0.io.res_out)
-  io.out.bits.fflags := VecInit(Seq.fill(LaneWidth/16)(0.U(5.W)))
-  io.out.bits.uop := RegEnable(RegEnable(RegEnable(uop, io.in.valid), vfma0.io.valid_S1), vfma1.io.valid_S2)
+  val out_valid = vfma0.io.valid_out
+  val out_bits = Wire(new LaneOutput)
+  out_bits.vd := Cat(vfma1.io.res_out, vfma0.io.res_out)
+  out_bits.fflags := VecInit(Seq.fill(LaneWidth/16)(0.U(5.W)))
+  out_bits.uop := RegEnable(RegEnable(RegEnable(uop, io.in.valid), vfma0.io.valid_S1), vfma1.io.valid_S2)
+
+  /**
+    *  Put a register on the output of FMA_16_32, since the FMA_16_32 output has some dealy of combinational logic
+    */
+  io.out.valid := RegNext(out_valid)
+  io.out.bits := RegEnable(out_bits, out_valid)
+
   
   def inv(fp: UInt, inv_bit: Bool): UInt = {
     Cat(inv_bit ^ fp(fp.getWidth - 1), fp(fp.getWidth - 2, 0))

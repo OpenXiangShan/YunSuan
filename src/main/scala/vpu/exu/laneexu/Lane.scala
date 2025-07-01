@@ -102,20 +102,14 @@ class Lane extends Module {
   vfcvt_out.fflags := vfcvt.io.fflags
   vfcvt_out.uop    := vfcvt.io.out_uop.bits
 
-  /**
-    *  Put a register on the output of FMA, since the FMA output has some dealy of combinational logic
-    */
-  val valid_vfma_out_reg = RegNext(vfma.io.out.valid)
-  val vfma_out_reg = RegEnable(vfma_out, vfma.io.out.valid)
 
-
-  io.out.valid := alu.io.out.valid || vfadd.io.out_uop.valid || valid_vfma_out_reg || vfcvt.io.out_uop.valid
+  io.out.valid := alu.io.out.valid || vfadd.io.out_uop.valid || vfma.io.out.valid || vfcvt.io.out_uop.valid
   io.out.bits := Mux1H(
     Seq(
       alu.io.out.valid          -> alu_out,
-      vfadd.io.out_uop.valid      -> vfadd_out,
-      valid_vfma_out_reg      -> vfma_out_reg,
-      vfcvt.io.out_uop.valid     -> vfcvt_out
+      vfadd.io.out_uop.valid    -> vfadd_out,
+      vfma.io.out.valid         -> vfma_out,
+      vfcvt.io.out_uop.valid    -> vfcvt_out
     )
   )
 }
