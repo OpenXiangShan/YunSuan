@@ -54,13 +54,13 @@ class FloatCompare() extends Module {
   val src0F64IsNan = src0(62, 52).andR && src0(51, 0).orR
   val src0IsFpCanonicalNAN = Mux1H(Seq(isF16, isF32), Seq(!src0.head(48).andR, !src0.head(32).andR))
   val src0IsNan = Mux1H(Seq(isF16, isF32, isF64), Seq(src0F16IsNan, src0F32IsNan, src0F64IsNan)) || src0IsFpCanonicalNAN
-  val src0IsSNan = src0IsNan && Mux1H(Seq(isF16, isF32, isF64), Seq(!src0(9), !src0(22), !src0(51)))
+  val src0IsSNan = src0IsNan && Mux1H(Seq(isF16, isF32, isF64), Seq(!src0(9), !src0(22), !src0(51))) && !src0IsFpCanonicalNAN
   val src1F16IsNan = src1(14, 10).andR && src1(9, 0).orR
   val src1F32IsNan = src1(30, 23).andR && src1(22, 0).orR
   val src1F64IsNan = src1(62, 52).andR && src1(51, 0).orR
   val src1IsFpCanonicalNAN = Mux1H(Seq(isF16, isF32), Seq(!src1.head(48).andR, !src1.head(32).andR))
   val src1IsNan = Mux1H(Seq(isF16, isF32, isF64), Seq(src1F16IsNan, src1F32IsNan, src1F64IsNan)) || src1IsFpCanonicalNAN
-  val src1IsSNan = src1IsNan && Mux1H(Seq(isF16, isF32, isF64), Seq(!src1(9), !src1(22), !src1(51)))
+  val src1IsSNan = src1IsNan && Mux1H(Seq(isF16, isF32, isF64), Seq(!src1(9), !src1(22), !src1(51))) && !src1IsFpCanonicalNAN
   val fflagsNV = Mux(isQuiet || isFeq, src0IsSNan || src1IsSNan, src0IsNan || src1IsNan)
   io.fflags := Cat(fflagsNV, 0.U(4.W))
   val resultNormal = Mux1H(Seq(isFeq, isFlt, isFle), Seq(resultNormalEq, resultNormalLt, resultNormalLe))
