@@ -612,16 +612,18 @@ package object yunsuan {
   }
 
   object FcmpOpCode {
-    def width = 3
+    def width = 4
 
-    def feq = "b000".U(width.W)
-    def flt = "b001".U(width.W)
-    def fle = "b010".U(width.W)
-    def fltq = "b101".U(width.W)
-    def fleq = "b110".U(width.W)
+    def feq = "b0000".U(width.W)
+    def flt = "b0001".U(width.W)
+    def fle = "b0010".U(width.W)
+    def fltq = "b0101".U(width.W)
+    def fleq = "b0110".U(width.W)
+    def fclass = "b1000".U(width.W)
     def isFeq(opcode:UInt) = opcode === feq
     def isFlt(opcode:UInt) = opcode(0)
     def isFle(opcode:UInt) = opcode(1)
     def isQuiet(opcode:UInt) = opcode(2)
+    def isFclass(opcode:UInt) = opcode(3)
   }
 }

@@ -17,6 +17,7 @@ class FloatCompare() extends Module {
   val isFlt = FcmpOpCode.isFlt(io.opCode)
   val isFle = FcmpOpCode.isFle(io.opCode)
   val isQuiet = FcmpOpCode.isQuiet(io.opCode)
+  val isFclass = FcmpOpCode.isFclass(io.opCode)
   val src0 = io.src0
   val src1 = io.src1
   val src0F16Sign = src0(15)
@@ -62,7 +63,49 @@ class FloatCompare() extends Module {
   val src1IsNan = Mux1H(Seq(isF16, isF32, isF64), Seq(src1F16IsNan, src1F32IsNan, src1F64IsNan)) || src1IsFpCanonicalNAN
   val src1IsSNan = src1IsNan && Mux1H(Seq(isF16, isF32, isF64), Seq(!src1(9), !src1(22), !src1(51))) && !src1IsFpCanonicalNAN
   val fflagsNV = Mux(isQuiet || isFeq, src0IsSNan || src1IsSNan, src0IsNan || src1IsNan)
-  io.fflags := Cat(fflagsNV, 0.U(4.W))
+  val fflagsFcmp = Cat(fflagsNV, 0.U(4.W))
   val resultNormal = Mux1H(Seq(isFeq, isFlt, isFle), Seq(resultNormalEq, resultNormalLt, resultNormalLe))
-  io.result := Cat(0.U(63.W), Mux(src0IsNan || src1IsNan, 0.U, resultNormal))
+  val resultFcmp = Cat(0.U(63.W), Mux(src0IsNan || src1IsNan, 0.U, resultNormal))
+
+  // for fclass
+  val src0IsQNan = src0IsNan && Mux1H(Seq(isF16, isF32, isF64), Seq(src0(9), src0(22), src0(51)))
+  val src0IsInf = Mux1H(
+    Seq(isF16, isF32, isF64),
+    Seq(
+      src0(14, 10).andR && !src0(9, 0).orR,
+      src0(30, 23).andR && !src0(22, 0).orR,
+      src0(62, 52).andR && !src0(51, 0).orR
+    )
+  )
+  val src0IsNormalNumber = Mux1H(
+    Seq(isF16, isF32, isF64),
+    Seq(
+      !src0(14, 10).andR && src0(14, 10).orR,
+      !src0(30, 23).andR && src0(30, 23).orR,
+      !src0(62, 52).andR && src0(62, 52).orR
+    )
+  )
+  val src0IsSubnormalNumber = Mux1H(
+    Seq(isF16, isF32, isF64),
+    Seq(
+      !src0(14, 10).orR && src0(9, 0).orR,
+      !src0(30, 23).orR && src0(22, 0).orR,
+      !src0(62, 52).orR && src0(51, 0).orR
+    )
+  )
+  val resultQNan = (1 << 9).U
+  val resultFclass = Mux(src0IsFpCanonicalNAN, resultQNan, Reverse(Cat(
+    src0Sign  && src0IsInf,
+    src0Sign  && src0IsNormalNumber,
+    src0Sign  && src0IsSubnormalNumber,
+    src0Sign  && src0AbsIsZero,
+    !src0Sign && src0AbsIsZero,
+    !src0Sign && src0IsSubnormalNumber,
+    !src0Sign && src0IsNormalNumber,
+    !src0Sign && src0IsInf,
+    src0IsSNan,
+    src0IsQNan
+  )))
+  io.result := Mux(isFclass, resultFclass, resultFcmp)
+  io.fflags := Mux(isFclass, 0.U, fflagsFcmp)
 }
