@@ -4,6 +4,8 @@
   *   (4) bf16 -> fp32   (5) fp16 -> fp32
   * Hardware reuse:
   *   Can handle two fp16*fp16 or one fp32*fp32
+  * Scenario:
+  *   AI, vector processing in LLM, etc.
   * Note: 
   *   1) For widen instrn, input bf/fp16 should be the highest half of the 32-bit input !
   *   2) NaN is not supported
