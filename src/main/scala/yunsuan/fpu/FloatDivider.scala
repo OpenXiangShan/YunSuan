@@ -194,7 +194,12 @@ class FloatDividerR64() extends Module {
   val isBlock = outValidBlock.orR
   io.finish_valid_o := !isBlock & (fsm_q(FSM_POST_1_BIT) | (fsm_q(FSM_POST_0_BIT) & ~res_is_denormal_f64_0))
   val iter_num_q = Reg(UInt(4.W))
-  io.outValidAhead3Cycle := !wakeupSuccessReg || start_handshaked && (early_finish || opb_is_power_of_2_f64_0) || fsm_q(FSM_ITER_BIT) && Mux(res_is_denormal_f64_0, iter_num_q === 1.U, iter_num_q === 2.U)
+  val fp_format_onehot_q = Reg(UInt(3.W))
+  val fp_format_q_is_fp16 = fp_format_onehot_q(0)
+  io.outValidAhead3Cycle := !wakeupSuccessReg ||
+    start_handshaked && (early_finish || opb_is_power_of_2_f64_0) ||
+    fsm_q(FSM_ITER_BIT) && Mux(res_is_denormal_f64_0, iter_num_q === 1.U, iter_num_q === 2.U) ||
+    fsm_q(FSM_PRE_2_BIT) && fp_format_q_is_fp16
 
   val opa_sign_f64_0 = Mux1H(
     Seq(
@@ -347,10 +352,8 @@ class FloatDividerR64() extends Module {
   val opb_is_power_of_2_d = opb_is_power_of_2_f64_0
   val op_invalid_div_d = op_invalid_f64_0
   val divided_by_zero_d = divided_by_zero_f64_0
-  val fp_format_onehot_q = Reg(UInt(3.W))
   val fp_format_q_is_fp64 = fp_format_onehot_q(2)
   val fp_format_q_is_fp32 = fp_format_onehot_q(1)
-  val fp_format_q_is_fp16 = fp_format_onehot_q(0)
   val rm_q = Reg(UInt(3.W))
   val out_sign_q = Reg(Bool())
   val res_is_nan_q = Reg(Bool())
