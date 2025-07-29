@@ -78,7 +78,7 @@ class LaneFMA extends Module {
       vfma.io.c_in := inv(vd_32b(i), minusC)
     }
 
-    vfma.io.b_in := inv(vs1_32b(i), minusAB, io.sewIn.isFp16)
+    vfma.io.b_in := inv(vs1_32b(i), minusAB, io.sewIn.is16)
     vfma.io.a_in := Mux(!funct6(2) && !cIs0, vd_32b(i), vs2_32b(i))
   }
 
@@ -99,8 +99,8 @@ class LaneFMA extends Module {
   def inv(fp: UInt, inv_bit: Bool): UInt = {
     Cat(inv_bit ^ fp(fp.getWidth - 1), fp(fp.getWidth - 2, 0))
   }
-  def inv(fp32: UInt, inv_bit: Bool, is_fp16: Bool): UInt = {
-    Mux(is_fp16, 
+  def inv(fp32: UInt, inv_bit: Bool, is_16: Bool): UInt = {
+    Mux(is_16, 
         Cat(inv(fp32(31, 16), inv_bit), inv(fp32(15, 0), inv_bit)),
         inv(fp32, inv_bit))
   }
