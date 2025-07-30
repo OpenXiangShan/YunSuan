@@ -86,7 +86,7 @@ class VScoreboard extends Module {
   // Resolve the execution delay of this uop if the delay is fixed
   def getDelay(uop: VUop): (Bool, UInt) = {
     val alu = uop.ctrl.alu
-    val fadd = uop.ctrl.vfa
+    val fadd = uop.ctrl.vfadd
     val fma = uop.ctrl.vfma
     val fcvt = uop.ctrl.vfcvt
     val fredFp16 = uop.ctrl.vfred && uop.csr.vsew === 1.U

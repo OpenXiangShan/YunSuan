@@ -33,7 +33,7 @@ class Lane extends Module {
   })
   
   val alu = Module(new LaneALU)
-  val vfadd = Module(new LaneFloatAdder)
+  val vfadd = Module(new LaneFAdd)
   val vfma = Module(new LaneFMA)
   val vfcvt = Module(new LaneFloatCvt)
   
@@ -47,31 +47,10 @@ class Lane extends Module {
   alu_out := alu.io.out.bits
 
   //---- FADD ----
-  val vfadd_op = Wire(new Vfadd_setop)
-  vfadd_op.funct := Cat(in.uop.ctrl.funct6, in.uop.ctrl.funct3)
-  vfadd_op.vm := in.uop.ctrl.vm
-  vfadd_op.vs1 := in.uop.ctrl.lsrc(0)
-  vfadd_op.vs2 := in.uop.ctrl.lsrc(1)
-  vfadd_op.op := vfadd_op.op_gen
-
-  vfadd.io.fire := io.in.valid && in.uop.ctrl.vfa
-  vfadd.io.in_uop := in.uop
-  vfadd.io.vs1  := in.vs1
-  vfadd.io.vs2  := in.vs2
-  vfadd.io.frs1 := in.rs1
-  vfadd.io.is_frs1 := in.uop.ctrl.vx
-  vfadd.io.mask := 0.U // TODO: check it
-  vfadd.io.uop_idx := in.uop.uopIdx 
-  vfadd.io.round_mode := in.uop.csr.frm 
-  vfadd.io.fp_format := in.uop.csr.vsew(1, 0)
-  vfadd.io.opb_widening := in.uop.ctrl.widen2
-  vfadd.io.res_widening := in.uop.ctrl.widen || in.uop.ctrl.widen2
-  vfadd.io.op_code := vfadd_op.op
-  vfadd.io.is_vm := in.uop.ctrl.vm
-
-  vfadd_out.vd := vfadd.io.result
-  vfadd_out.fflags := vfadd.io.fflags
-  vfadd_out.uop := vfadd.io.out_uop.bits
+  vfadd.io.in.valid := io.in.valid && io.in.bits.uop.ctrl.vfadd
+  vfadd.io.in.bits := io.in.bits
+  vfadd.io.sewIn := sewFpIn
+  vfadd_out := vfadd.io.out.bits
 
   //---- FMA ----
   vfma.io.in.valid := io.in.valid && io.in.bits.uop.ctrl.vfma
@@ -103,11 +82,11 @@ class Lane extends Module {
   vfcvt_out.uop    := vfcvt.io.out_uop.bits
 
 
-  io.out.valid := alu.io.out.valid || vfadd.io.out_uop.valid || vfma.io.out.valid || vfcvt.io.out_uop.valid
+  io.out.valid := alu.io.out.valid || vfadd.io.out.valid || vfma.io.out.valid || vfcvt.io.out_uop.valid
   io.out.bits := Mux1H(
     Seq(
       alu.io.out.valid          -> alu_out,
-      vfadd.io.out_uop.valid    -> vfadd_out,
+      vfadd.io.out.valid    -> vfadd_out,
       vfma.io.out.valid         -> vfma_out,
       vfcvt.io.out_uop.valid    -> vfcvt_out
     )

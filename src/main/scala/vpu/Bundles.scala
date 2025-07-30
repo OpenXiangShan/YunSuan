@@ -53,7 +53,7 @@ class VCtrl extends Bundle {
   val redu = Bool()
   val mask = Bool()
   val perm = Bool()
-  val vfa = Bool()
+  val vfadd = Bool()
   val vfma = Bool()
   val vfcvt = Bool()
 
