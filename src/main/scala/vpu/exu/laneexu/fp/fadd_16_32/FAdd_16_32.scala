@@ -113,8 +113,12 @@ class FAdd_16_32(
   val fadd_extSig_fp19 = Module(new FAdd_extSig(ExpWidth = 8, SigWidth = SigWidthFp19, ExtendedWidth = ExtendedWidthFp19, ExtAreZeros = true, UseShiftRightJam = true))
   fadd_extSig_fp19.io.valid_in := io.valid_in
   fadd_extSig_fp19.io.is_fp16 := is_fp16
-  fadd_extSig_fp19.io.a := Cat(sign_low_a, exp_adjust_subnorm(0), sig_adjust_subnorm_16(0), 0.U(ExtendedWidthFp19.W))
-  fadd_extSig_fp19.io.b := Cat(sign_low_b, exp_adjust_subnorm(1), sig_adjust_subnorm_16(1), 0.U(ExtendedWidthFp19.W))
+  fadd_extSig_fp19.io.a.sign := sign_low_a
+  fadd_extSig_fp19.io.a.exp := exp_adjust_subnorm(0)
+  fadd_extSig_fp19.io.a.sig := sig_adjust_subnorm_16(0) ## 0.U(ExtendedWidthFp19.W)
+  fadd_extSig_fp19.io.b.sign := sign_low_b
+  fadd_extSig_fp19.io.b.exp := exp_adjust_subnorm(1)
+  fadd_extSig_fp19.io.b.sig := sig_adjust_subnorm_16(1) ## 0.U(ExtendedWidthFp19.W)
   fadd_extSig_fp19.io.a_is_inf := is_inf_16(0)
   fadd_extSig_fp19.io.b_is_inf := is_inf_16(1)
   fadd_extSig_fp19.io.a_is_nan := is_nan_16(0)
@@ -125,8 +129,12 @@ class FAdd_16_32(
   fadd_extSig_fp32.io.is_fp16 := res_is_fp16
   val sig_adjust_subnorm_high_a = Mux(is_16 && !io.a_already_widen, sig_adjust_subnorm_16(2) ## 0.U(13.W), sig_adjust_subnorm_32(0))
   val sig_adjust_subnorm_high_b = Mux(is_16, sig_adjust_subnorm_16(3) ## 0.U(13.W), sig_adjust_subnorm_32(1))
-  fadd_extSig_fp32.io.a := Cat(sign_high_a, exp_adjust_subnorm(2), sig_adjust_subnorm_high_a, 0.U(ExtendedWidthFp32.W))
-  fadd_extSig_fp32.io.b := Cat(sign_high_b, exp_adjust_subnorm(3), sig_adjust_subnorm_high_b, 0.U(ExtendedWidthFp32.W))
+  fadd_extSig_fp32.io.a.sign := sign_high_a
+  fadd_extSig_fp32.io.a.exp := exp_adjust_subnorm(2)
+  fadd_extSig_fp32.io.a.sig := sig_adjust_subnorm_high_a ## 0.U(ExtendedWidthFp32.W)
+  fadd_extSig_fp32.io.b.sign := sign_high_b
+  fadd_extSig_fp32.io.b.exp := exp_adjust_subnorm(3)
+  fadd_extSig_fp32.io.b.sig := sig_adjust_subnorm_high_b ## 0.U(ExtendedWidthFp32.W)
   fadd_extSig_fp32.io.a_is_inf := Mux(is_16, is_inf_16(2), is_inf_32(0))
   fadd_extSig_fp32.io.b_is_inf := Mux(is_16, is_inf_16(3), is_inf_32(1))
   fadd_extSig_fp32.io.a_is_nan := Mux(is_16, is_nan_16(2), is_nan_32(0))
@@ -167,9 +175,9 @@ class FAdd_16_32(
   val res_is_negInf_low_S2 = RegEnable(res_is_negInf_low_S1, valid_S1)
   val res_is_nan_low_S2 = RegEnable(res_is_nan_low_S1, valid_S1)
 
-  val (sign_res_extSig_fp19, sign_res_extSig_fp32) = (res_extSig_fp19_S2.head(1).asBool, res_extSig_fp32_S2.head(1).asBool)
-  val (exp_res_extSig_fp19, exp_res_extSig_fp32) = (res_extSig_fp19_S2.tail(1).head(8), res_extSig_fp32_S2.tail(1).head(8))
-  val (sig_res_extSig_fp19, sig_res_extSig_fp32) = (res_extSig_fp19_S2.tail(1 + 8), res_extSig_fp32_S2.tail(1 + 8))
+  val (sign_res_extSig_fp19, sign_res_extSig_fp32) = (res_extSig_fp19_S2.sign, res_extSig_fp32_S2.sign)
+  val (exp_res_extSig_fp19, exp_res_extSig_fp32) = (res_extSig_fp19_S2.exp, res_extSig_fp32_S2.exp)
+  val (sig_res_extSig_fp19, sig_res_extSig_fp32) = (res_extSig_fp19_S2.sig, res_extSig_fp32_S2.sig)
 
   //---- Rouding (only RNE) of adder out ----
   //---- (1) Calculate LSB, Guard bit, Sticky bit, and significand

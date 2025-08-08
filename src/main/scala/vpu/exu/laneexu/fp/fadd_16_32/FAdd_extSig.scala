@@ -23,6 +23,12 @@ import race.vpu.yunsuan.util._
   *       ---->|----->
   *        S0  |  S1  
   */
+class FpExtFormat(ExpWidth: Int, SigWidth: Int, ExtendedWidth: Int) extends Bundle {
+  val sign = Bool()
+  val exp = UInt(ExpWidth.W)
+  val sig = UInt((SigWidth + ExtendedWidth).W)
+}
+
 class FAdd_extSig(
     ExpWidth: Int, // fp16: 5   bf16: 8   fp32: 8
     SigWidth: Int, // fp16: 11  bf16: 8   fp32: 24
@@ -34,10 +40,10 @@ class FAdd_extSig(
   val io = IO(new Bundle {
     val valid_in = Input(Bool())
     val is_fp16 = Input(Bool()) // Inf of 8-bit exp: fp16: 00011111, bf16: 11111111
-    val a, b = Input(UInt((1 + ExpWidth + SigWidth + ExtendedWidth).W))
+    val a, b = Input(new FpExtFormat(ExpWidth, SigWidth, ExtendedWidth))
     val a_is_inf, b_is_inf = Input(Bool())
     val a_is_nan, b_is_nan = Input(Bool())
-    val res = Output(UInt((1 + ExpWidth + SigWidth + ExtendedWidth + 1).W))
+    val res = Output(new FpExtFormat(ExpWidth, SigWidth, ExtendedWidth + 1))
     val res_is_posInf, res_is_negInf, res_is_nan = Output(Bool())
     val valid_out = Output(Bool())
   })
@@ -45,12 +51,12 @@ class FAdd_extSig(
   require(ExpWidth == 5 || ExpWidth == 8, "Typical ExpWidth of FAdd_extSig is 5 (fp16) or 8 (fp32/bf16)")
   require(SigWidth == 8 || SigWidth == 11 || SigWidth == 24, "Typical SigWidth of FAdd_extSig is 8 (fp16) or 11 (bf16) or 24 (fp32)")
 
-  val sign_a = io.a.head(1).asBool
-  val sign_b = io.b.head(1).asBool
-  val exp_a = io.a.tail(1).head(ExpWidth)
-  val exp_b = io.b.tail(1).head(ExpWidth)
-  val sig_a = io.a.tail(1 + ExpWidth)
-  val sig_b = io.b.tail(1 + ExpWidth)
+  val sign_a = io.a.sign
+  val sign_b = io.b.sign
+  val exp_a = io.a.exp
+  val exp_b = io.b.exp
+  val sig_a = io.a.sig
+  val sig_b = io.b.sig
 
   val exp_diff_a_minus_b = exp_a -& exp_b // ExpWidth + 1 bits
   val exp_diff_b_minus_a = exp_b -& exp_a // ExpWidth + 1 bits
@@ -196,8 +202,16 @@ class FAdd_extSig(
 
   val exp_adderOut_shifted = exp_adderOut - exp_adderOut_tobe_subtracted
 
-  //                                                           1 + ExpWidth + (SigWidth + ExtendedWidth + 1)
-  io.res := Mux(adderOut_isZero, 0.U, Cat(sign_adderOut, exp_adderOut_shifted, sig_adderOut_shifted))
+  // io.res:  1 + ExpWidth + (SigWidth + ExtendedWidth + 1)
+  when (adderOut_isZero) {
+    io.res.sign := false.B
+    io.res.exp := 0.U
+    io.res.sig := 0.U
+  }.otherwise {
+    io.res.sign := sign_adderOut
+    io.res.exp := exp_adderOut_shifted
+    io.res.sig := sig_adderOut_shifted
+  }
 
   io.res_is_nan := RegEnable(res_is_nan_S0, io.valid_in)
   io.res_is_posInf := RegEnable(res_is_posInf_S0, io.valid_in) || adderOut_is_inf && !sign_adderOut
