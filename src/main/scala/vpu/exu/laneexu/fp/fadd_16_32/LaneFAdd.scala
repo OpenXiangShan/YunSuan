@@ -23,8 +23,8 @@ class LaneFAdd extends Module {
     val out = ValidIO(new LaneOutput)
   })
 
-  val vfadd0 = Module(new FAdd_16_32)
-  val vfadd1 = Module(new FAdd_16_32)
+  val vfadd0 = Module(new FAdd_16_32(3, 3))
+  val vfadd1 = Module(new FAdd_16_32(3, 3))
 
   val uop = io.in.bits.uop
   val (vs1, vs2, vs3) = (io.in.bits.vs1, io.in.bits.vs2, io.in.bits.vs3)

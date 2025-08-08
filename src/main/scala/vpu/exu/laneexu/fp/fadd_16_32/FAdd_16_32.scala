@@ -110,7 +110,7 @@ class FAdd_16_32(
   }
 
   //---- fp19 adder (low) + fp32 adder (low) ----
-  val fadd_extSig_fp19 = Module(new FAdd_extSig(ExpWidth = 8, SigWidth = SigWidthFp19, ExtendedWidth = ExtendedWidthFp19, ExtAreZeros = true))
+  val fadd_extSig_fp19 = Module(new FAdd_extSig(ExpWidth = 8, SigWidth = SigWidthFp19, ExtendedWidth = ExtendedWidthFp19, ExtAreZeros = true, UseShiftRightJam = true))
   fadd_extSig_fp19.io.valid_in := io.valid_in
   fadd_extSig_fp19.io.is_fp16 := is_fp16
   fadd_extSig_fp19.io.a := Cat(sign_low_a, exp_adjust_subnorm(0), sig_adjust_subnorm_16(0), 0.U(ExtendedWidthFp19.W))
@@ -120,7 +120,7 @@ class FAdd_16_32(
   fadd_extSig_fp19.io.a_is_nan := is_nan_16(0)
   fadd_extSig_fp19.io.b_is_nan := is_nan_16(1)
   
-  val fadd_extSig_fp32 = Module(new FAdd_extSig(ExpWidth = 8, SigWidth = SigWidthFp32, ExtendedWidth = ExtendedWidthFp32, ExtAreZeros = true))
+  val fadd_extSig_fp32 = Module(new FAdd_extSig(ExpWidth = 8, SigWidth = SigWidthFp32, ExtendedWidth = ExtendedWidthFp32, ExtAreZeros = true, UseShiftRightJam = true))
   fadd_extSig_fp32.io.valid_in := io.valid_in
   fadd_extSig_fp32.io.is_fp16 := res_is_fp16
   val sig_adjust_subnorm_high_a = Mux(is_16 && !io.a_already_widen, sig_adjust_subnorm_16(2) ## 0.U(13.W), sig_adjust_subnorm_32(0))

@@ -12,6 +12,7 @@ import race.vpu.yunsuan.util._
   *     (2) exponent of submormal is already changed to 1, and the significand's integer part is 0 accordingly
   *     (3) significand is extended to SigWidth + ExtendedWidth
   *     (4) if ExtAreZeros is true, the extended part of a and b are all zeros (which is the case of normal add)
+  *     (5) UseShiftRightJam set to true for the case of normal add and ExtAreZeros is true
   *   Output:
   *     (1) output exponent/significand has same format as input exponent/significand
   *     (2) only support RNE rounding mode
@@ -25,8 +26,10 @@ import race.vpu.yunsuan.util._
 class FAdd_extSig(
     ExpWidth: Int, // fp16: 5   bf16: 8   fp32: 8
     SigWidth: Int, // fp16: 11  bf16: 8   fp32: 24
-    ExtendedWidth: Int, // default: SigWidth + 2,
-    ExtAreZeros: Boolean = false
+    ExtendedWidth: Int, // default: SigWidth + 2 (not necessary)
+    // If you only do fp addition one time and the ExtAreZeros & UseShiftRightJam are true, you can set ExtendedWidth to 3
+    ExtAreZeros: Boolean = false,
+    UseShiftRightJam: Boolean = false
 ) extends Module {
   val io = IO(new Bundle {
     val valid_in = Input(Bool())
@@ -55,7 +58,7 @@ class FAdd_extSig(
   //---- Shifting ----
   val exp_a_gte_b = !exp_diff_a_minus_b(ExpWidth)
   // number of bits of shift amount
-  val bShiftRight = log2Up(SigWidth + ExtendedWidth)
+  val bShiftRight = log2Up(SigWidth + ExtendedWidth + 1)
   val a_dominates = exp_a_gte_b && exp_diff_a_minus_b(ExpWidth, bShiftRight).orR
   val b_dominates = !exp_diff_b_minus_a(ExpWidth) && exp_diff_b_minus_a(ExpWidth, bShiftRight).orR
   val shift_amount_a, shift_amount_b = Wire(UInt(bShiftRight.W))
@@ -75,7 +78,13 @@ class FAdd_extSig(
   // Select input of shift block, a or b.
   val shiftRight_in = Mux(exp_a_gte_b, sig_b, sig_a)
   val shiftRight_amount = Mux(exp_a_gte_b, shift_amount_b, shift_amount_a)
-  val shiftRight_out = shiftRight_in >> shiftRight_amount // SigWidth + ExtendedWidth bits
+  // val shiftRight_out = shiftRight_in >> shiftRight_amount // SigWidth + ExtendedWidth bits
+  val shiftRight_res = ShiftRightJam(shiftRight_in, shiftRight_amount)
+  val (shiftRight_res_main, shiftRight_res_sticky) = (shiftRight_res._1, shiftRight_res._2)
+  require(shiftRight_res_main.getWidth == SigWidth + ExtendedWidth)  //shiftRight_out is SigWidth + ExtendedWidth bits
+  val shiftRight_out = if (ExtAreZeros && UseShiftRightJam) {
+    Cat(shiftRight_res_main(SigWidth + ExtendedWidth - 1, 1), shiftRight_res_main(0) || shiftRight_res_sticky)
+  } else {shiftRight_in >> shiftRight_amount} // else: simply discard the shift-out part (accuracy loss)
 
   //---- Comparison of absolute value of a and b ----
   // Divide the comparison into two parts: SigWidth part and ExtendedWidth part
