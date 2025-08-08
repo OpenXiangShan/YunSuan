@@ -79,12 +79,14 @@ class FAdd_extSig(
   val shiftRight_in = Mux(exp_a_gte_b, sig_b, sig_a)
   val shiftRight_amount = Mux(exp_a_gte_b, shift_amount_b, shift_amount_a)
   // val shiftRight_out = shiftRight_in >> shiftRight_amount // SigWidth + ExtendedWidth bits
-  val shiftRight_res = ShiftRightJam(shiftRight_in, shiftRight_amount)
-  val (shiftRight_res_main, shiftRight_res_sticky) = (shiftRight_res._1, shiftRight_res._2)
-  require(shiftRight_res_main.getWidth == SigWidth + ExtendedWidth)  //shiftRight_out is SigWidth + ExtendedWidth bits
   val shiftRight_out = if (ExtAreZeros && UseShiftRightJam) {
+    val shiftRight_res = ShiftRightJam(shiftRight_in, shiftRight_amount)
+    val (shiftRight_res_main, shiftRight_res_sticky) = (shiftRight_res._1, shiftRight_res._2)
     Cat(shiftRight_res_main(SigWidth + ExtendedWidth - 1, 1), shiftRight_res_main(0) || shiftRight_res_sticky)
-  } else {shiftRight_in >> shiftRight_amount} // else: simply discard the shift-out part (accuracy loss)
+  } else { // else: simply discard the shift-out part (accuracy loss)
+    shiftRight_in >> shiftRight_amount
+  }
+  require(shiftRight_out.getWidth == SigWidth + ExtendedWidth)
 
   //---- Comparison of absolute value of a and b ----
   // Divide the comparison into two parts: SigWidth part and ExtendedWidth part
