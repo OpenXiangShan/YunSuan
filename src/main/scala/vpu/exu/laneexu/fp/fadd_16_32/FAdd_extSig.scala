@@ -41,7 +41,8 @@ class FAdd_extSig(
     val valid_in = Input(Bool())
     val is_fp16 = Input(Bool()) // Inf of 8-bit exp: fp16: 00011111, bf16: 11111111
     val a, b = Input(new FpExtFormat(ExpWidth, SigWidth, ExtendedWidth))
-    val a_is_inf, b_is_inf = Input(Bool())
+    val a_is_posInf, b_is_posInf = Input(Bool())
+    val a_is_negInf, b_is_negInf = Input(Bool())
     val a_is_nan, b_is_nan = Input(Bool())
     val res = Output(new FpExtFormat(ExpWidth, SigWidth, ExtendedWidth + 1))
     val res_is_posInf, res_is_negInf, res_is_nan = Output(Bool())
@@ -118,9 +119,9 @@ class FAdd_extSig(
   val adderIn_b = Mux(!exp_a_gte_b, sig_b, shiftRight_out)
 
   //---- Inf and NaN ----
-  val res_is_nan_S0 = io.a_is_nan || io.b_is_nan || io.a_is_inf && io.b_is_inf && sign_a =/= sign_b
-  val res_is_posInf_S0 = !res_is_nan_S0 && (io.a_is_inf && !sign_a || io.b_is_inf && !sign_b)
-  val res_is_negInf_S0 = !res_is_nan_S0 && (io.a_is_inf && sign_a || io.b_is_inf && sign_b)
+  val res_is_nan_S0 = io.a_is_nan || io.b_is_nan || io.a_is_posInf && io.b_is_negInf || io.a_is_negInf && io.b_is_posInf
+  val res_is_posInf_S0 = !res_is_nan_S0 && (io.a_is_posInf || io.b_is_posInf)
+  val res_is_negInf_S0 = !res_is_nan_S0 && (io.a_is_negInf || io.b_is_negInf)
 
   //----------------------------------------------
   //  Below is the second stage: S1 (pipeline 1)

@@ -119,8 +119,10 @@ class FAdd_16_32(
   fadd_extSig_fp19.io.b.sign := sign_low_b
   fadd_extSig_fp19.io.b.exp := exp_adjust_subnorm(1)
   fadd_extSig_fp19.io.b.sig := sig_adjust_subnorm_16(1) ## 0.U(ExtendedWidthFp19.W)
-  fadd_extSig_fp19.io.a_is_inf := is_inf_16(0)
-  fadd_extSig_fp19.io.b_is_inf := is_inf_16(1)
+  fadd_extSig_fp19.io.a_is_posInf := is_inf_16(0) && !sign_low_a
+  fadd_extSig_fp19.io.a_is_negInf := is_inf_16(0) && sign_low_a
+  fadd_extSig_fp19.io.b_is_posInf := is_inf_16(1) && !sign_low_b
+  fadd_extSig_fp19.io.b_is_negInf := is_inf_16(1) && sign_low_b
   fadd_extSig_fp19.io.a_is_nan := is_nan_16(0)
   fadd_extSig_fp19.io.b_is_nan := is_nan_16(1)
   
@@ -135,8 +137,10 @@ class FAdd_16_32(
   fadd_extSig_fp32.io.b.sign := sign_high_b
   fadd_extSig_fp32.io.b.exp := exp_adjust_subnorm(3)
   fadd_extSig_fp32.io.b.sig := sig_adjust_subnorm_high_b ## 0.U(ExtendedWidthFp32.W)
-  fadd_extSig_fp32.io.a_is_inf := Mux(is_16, is_inf_16(2), is_inf_32(0))
-  fadd_extSig_fp32.io.b_is_inf := Mux(is_16, is_inf_16(3), is_inf_32(1))
+  fadd_extSig_fp32.io.a_is_posInf := Mux(is_16, is_inf_16(2), is_inf_32(0)) && !sign_high_a
+  fadd_extSig_fp32.io.a_is_negInf := Mux(is_16, is_inf_16(2), is_inf_32(0)) && sign_high_a
+  fadd_extSig_fp32.io.b_is_posInf := Mux(is_16, is_inf_16(3), is_inf_32(1)) && !sign_high_b
+  fadd_extSig_fp32.io.b_is_negInf := Mux(is_16, is_inf_16(3), is_inf_32(1)) && sign_high_b
   fadd_extSig_fp32.io.a_is_nan := Mux(is_16, is_nan_16(2), is_nan_32(0))
   fadd_extSig_fp32.io.b_is_nan := Mux(is_16, is_nan_16(3), is_nan_32(1))
 
