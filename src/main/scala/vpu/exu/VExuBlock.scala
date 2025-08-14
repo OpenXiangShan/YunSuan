@@ -58,7 +58,7 @@ class VExuBlock extends Module {
 
   val crosslaneOut = Wire(ValidIO(new VExuOutput))
   val valid_out_crosslane = vfred.io.out.valid || vrgather.io.out.valid
-  crosslaneOut.valid := RegNext(valid_out_crosslane)
+  crosslaneOut.valid := RegNext(valid_out_crosslane, init = false.B)
   crosslaneOut.bits.uop := RegEnable(Mux(vfred.io.out.valid, vfred.io.out.bits.uop, vrgather.io.out.bits.uop), valid_out_crosslane)
   crosslaneOut.bits.fflags := 0.U.asTypeOf(crosslaneOut.bits.fflags)
   crosslaneOut.bits.fflags(0) := RegEnable(vfred.io.out.bits.fflags, vfred.io.out.valid)
