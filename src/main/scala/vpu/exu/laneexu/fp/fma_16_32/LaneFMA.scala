@@ -92,7 +92,7 @@ class LaneFMA extends Module {
   /**
     *  Put a register on the output of FMA_16_32, since the FMA_16_32 output has some dealy of combinational logic
     */
-  io.out.valid := RegNext(out_valid)
+  io.out.valid := RegNext(out_valid, init = false.B)
   io.out.bits := RegEnable(out_bits, out_valid)
 
   

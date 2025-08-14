@@ -4,16 +4,11 @@
   *   (4) bf16 -> fp32   (5) fp16 -> fp32
   * Hardware reuse:
   *   Can handle two fp16*fp16 or one fp32*fp32
-  * Scenario:
-  *   AI, vector processing in LLM, etc.
   * Note: 
   *   1) For widen instrn, input bf/fp16 should be the highest half of the 32-bit input !
   *   2) NaN is not supported
   *   3) Rounding mode only supports RNE
-  *   4) So far, the fflags output is 0
-  *   5) wResMul32 is tunable parameter: larger wResMul32 means better precision and higher hardware cost
-  *      TODO: if wResMul32 < 48 and you care about precision, rounding after a*b result truncation should be added !
-  *   6) Note: the shifting blocks have no sticky-bit logic
+  *   4) wResMul32 is tunable parameter: larger wResMul32 means better precision and higher hardware cost
   */
 
 package race.vpu.exu.laneexu.fp
@@ -27,8 +22,6 @@ import race.vpu.yunsuan.util._
 class VFMA_16_32 extends Module {
   val wResMul32 = 48  // Bits to reserve for the significand of the a*b (range: 28 ~ 48)
   val wResMul16 = wResMul32 / 2  // Bits (FP/BF16) to reserve for the significand of the a*b
-  //  TODO: if wResMul32 < 48 and you care about precision, rounding after a*b result truncation should be added !
-  //        (so far, there is no such rounding logic)
   val io = IO(new Bundle {
     val valid_in = Input(Bool())
     val is_bf16, is_fp16, is_fp32 = Input(Bool())
@@ -283,7 +276,7 @@ class VFMA_16_32 extends Module {
   //-----------------------------------------
   //---- Below is S2 (pipeline 2) stage:
   //-----------------------------------------
-  val valid_S2 = RegNext(valid_S1)
+  val valid_S2 = RegNext(valid_S1, init = false.B)
   val input_is_16_S2 = RegEnable(is_16, valid_S1)
   val res_is_32_S2 = RegEnable(res_is_32, valid_S1)
   val res_is_bf16_S2 = RegEnable(res_is_bf16, valid_S1)
@@ -507,7 +500,7 @@ class VFMA_16_32 extends Module {
   //---- Below is S3 (pipeline 3) stage:
   //       Adder result shifting and rounding
   //--------------------------------------------------
-  val valid_S3 = RegNext(valid_S2)
+  val valid_S3 = RegNext(valid_S2, init = false.B)
   val c_in_S3 = RegEnable(c_in_S2, valid_S2)
   val input_is_16_S3 = RegEnable(input_is_16_S2, valid_S2)
   val res_is_32_S3 = RegEnable(res_is_32_S2, valid_S2)

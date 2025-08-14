@@ -145,6 +145,6 @@ class IntMUL_12_24 extends Module {
                   Cat(wallaceOutReg(1)(47, 24), Mux(is16S1, false.B, lowSum25(24)))
   val highSum24 = highSum25(24, 1)
 
-  io.valid_out := RegNext(io.valid_in)
+  io.valid_out := RegNext(io.valid_in, init = false.B)
   io.res_out := Cat(highSum24, lowSum25(23, 0))
 }
