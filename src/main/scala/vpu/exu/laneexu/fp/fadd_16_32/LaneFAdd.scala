@@ -174,7 +174,7 @@ class LaneFAdd extends Module {
   /**
     *  Put a register on the output of FAdd_16_32, since the FAdd_16_32 output rounding has some dealy of combinational logic
     */
-  io.out.valid := RegNext(out_valid)
+  io.out.valid := RegNext(out_valid, init = false.B)
   io.out.bits := RegEnable(out_bits, out_valid)
   
   def inv(fp: UInt, inv_bit: Bool): UInt = {

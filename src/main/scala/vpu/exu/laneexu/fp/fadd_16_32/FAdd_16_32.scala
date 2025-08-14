@@ -165,7 +165,7 @@ class FAdd_16_32(
   //-----------------------------------------
   //---- Third stage: S2 (pipeline 2)   ----
   //-----------------------------------------
-  val valid_S2 = RegNext(valid_S1)
+  val valid_S2 = RegNext(valid_S1, init = false.B)
   val res_extSig_fp19_S2 = RegEnable(res_extSig_fp19_S1, valid_S1)
   val res_extSig_fp32_S2 = RegEnable(res_extSig_fp32_S1, valid_S1)
   val res_is_32_S2 = RegEnable(res_is_32_S1, valid_S1)

@@ -126,7 +126,7 @@ class FAdd_extSig(
   //----------------------------------------------
   //  Below is the second stage: S1 (pipeline 1)
   //----------------------------------------------
-  io.valid_out := RegNext(io.valid_in)
+  io.valid_out := RegNext(io.valid_in, init = false.B)
   val is_fp16_S1 = RegEnable(io.is_fp16, io.valid_in)
   val a_in_S1 = RegEnable(io.a, io.valid_in)
   val b_in_S1 = RegEnable(io.b, io.valid_in)
