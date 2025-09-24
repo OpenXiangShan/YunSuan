@@ -221,21 +221,23 @@ object Common {
       this.splitToVec(8, width / 8)
     }
 
-    def splitToVec(num: Int, w: Int): Vec[UInt] = {
+    def splitToVec(num: Int, w: Int, name: String = null): Vec[UInt] = {
       require(num * w == uint.getWidth)
       val splitedVec = Wire(Vec(num, UInt(w.W)))
+      if (name != null)
+        splitedVec.suggestName(name)
       splitedVec := uint.asTypeOf(splitedVec)
       splitedVec
     }
 
-    def splitToVecN(num: Int): Vec[UInt] = {
+    def splitToVecN(num: Int, name: String = null): Vec[UInt] = {
       val w = uint.getWidth / num
-      this.splitToVec(num, w)
+      this.splitToVec(num, w, name)
     }
 
-    def splitToVecByWidth(w: Int): Vec[UInt] = {
+    def splitToVecByWidth(w: Int, name: String = null): Vec[UInt] = {
       val num = uint.getWidth / w
-      this.splitToVec(num, w)
+      this.splitToVec(num, w, name)
     }
   }
 
@@ -293,6 +295,11 @@ object Common {
     def this(bits: Bits) = this(bits.asUInt)
 
     val length = uint.getWidth
+
+    def rev8: UInt = {
+      require(isPow2(length) && length >= 8, s"Can not do rev8 on UInt($length.W)")
+      Cat((0 until length / 8).map(i => uint(8 * (i + 1) - 1, 8 * i)))
+    }
 
     def take(n: Int): UInt = {
       require(0 <= n && n <= length, s"Can not take $n bits, since the operand is $length bits width")
@@ -369,4 +376,6 @@ object Common {
       }
     }
   }
+
+  implicit def validAutoUnwrap[T <: Data](valid: Valid[T]): T = valid.bits
 }
