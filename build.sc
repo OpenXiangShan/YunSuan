@@ -11,8 +11,8 @@ import scalalib._
 
 object ivys{
   val sv = "2.13.15"
-  val chisel3 = ivy"org.chipsalliance::chisel:6.6.0"
-  val chisel3Plugin = ivy"org.chipsalliance:::chisel-plugin:6.6.0"
+  val chisel3 = ivy"org.chipsalliance::chisel:6.7.0"
+  val chisel3Plugin = ivy"org.chipsalliance:::chisel-plugin:6.7.0"
   val chiseltest = ivy"edu.berkeley.cs::chiseltest:6.0.0"
   val scalatest = ivy"org.scalatest::scalatest:3.2.19"
 }
