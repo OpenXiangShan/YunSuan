@@ -36,4 +36,25 @@ package object utils{
       Fill(len - x.getWidth, fillBit) ## x.asUInt
     }
   }
+
+  def int32Extend(x:Bits, signed: Bool = true.B): Bits = {
+    if (x.getWidth >= 33)
+      x
+    else {
+      val fillBit = signed
+      Fill(33 - x.getWidth, fillBit) ## x.asUInt
+    }
+  }
+
+  def float32Extend(x:Bits, fp:Int):Bits = {
+    if (fp == 0) return (x ## false.B)
+    val floatFormat: FloatFormat = fp match {
+      case 1 => f16
+      case 2 => f32
+    }
+    val sign = x.head(1)
+    val exp = x.tail(1).head(floatFormat.expWidth)
+    val frac = x.tail(1 + floatFormat.expWidth)
+    sign ## 0.U((f32.expWidth - floatFormat.expWidth).W) ## exp ## frac ## 0.U((f32.fracWidth - floatFormat.fracWidth).W) ## false.B
+  }
 }
