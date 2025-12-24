@@ -690,7 +690,7 @@ class vdNonFixPGenerator extends Module {
 
   io.vdNonFixP := Mux1H(Seq(
     sewIs64 -> Mux(highHalf, sumFinalNonFixP(127,64), sumFinalNonFixP(63,0)),
-    sewIs32 -> Mux(widen, Mux(uopIdx(0), sumFinalNonFixP(140, 77), sumFinalNonFixP(63,0)), Cat(UIntSplit(sumFinalNonFixP, 76).reverse.map(x => Mux(highHalf, x(63,32), x(31,0))))),
+    sewIs32 -> Mux(widen, Mux(uopIdx(0), sumFinalNonFixP(139, 76), sumFinalNonFixP(63,0)), Cat(UIntSplit(sumFinalNonFixP, 76).reverse.map(x => Mux(highHalf, x(63,32), x(31,0))))),
     sewIs16 -> Mux(widen, Cat(UIntSplit(Mux(uopIdx(0), sumFinalNonFixP(151, 76), sumFinalNonFixP(75, 0)), 38).reverse.map(x => x(31,0))), Cat(UIntSplit(sumFinalNonFixP, 38).reverse.map(x => Mux(highHalf, x(31,16), x(15,0))))),
     sewIs8  -> Mux(widen, Cat(UIntSplit(Mux(uopIdx(0), sumFinalNonFixP(151, 76), sumFinalNonFixP(75, 0)), 19).reverse.map(x => x(15,0))), Cat(UIntSplit(sumFinalNonFixP, 19).reverse.map(x => Mux(highHalf, x(15,8),  x(7, 0)))))
   ))
