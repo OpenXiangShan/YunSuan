@@ -1,6 +1,6 @@
 import chisel3._
 import chisel3.util._
-import yunsuan.encoding.Opcode.VimacOpcode
+import yunsuan.encoding.Opcode._
 import yunsuan.util.LiteralCat
 import yunsuan.vector.alu.VAluOpcode
 
@@ -455,6 +455,33 @@ package object yunsuan {
     def fltq      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fltq)
   }
 
+  object VmoveType {
+    def dummy = BitPat.Y(OpTypeWidth)
+
+    def vmerge_vvm = LiteralCat(0.U(5.W), VmoveOpcode.vmerge_vvm)
+    def vfmerge    = LiteralCat(0.U(5.W), VmoveOpcode.vfmerge)
+    def vmv_v_v    = LiteralCat(0.U(5.W), VmoveOpcode.vmv_v_v)
+    def vfmv       = LiteralCat(0.U(5.W), VmoveOpcode.vfmv)
+    def vmv_x_s    = LiteralCat(0.U(5.W), VmoveOpcode.vmv_x_s)
+    def vmv_s_x    = LiteralCat(0.U(5.W), VmoveOpcode.vmv_s_x)
+    def vfmv_f_s   = LiteralCat(0.U(5.W), VmoveOpcode.vfmv_f_s)
+    def vfmv_s_f   = LiteralCat(0.U(5.W), VmoveOpcode.vfmv_s_f)
+    def vmv1r      = LiteralCat(0.U(5.W), VmoveOpcode.vmv1r)
+    def vmv2r      = LiteralCat(0.U(5.W), VmoveOpcode.vmv2r)
+    def vmv4r      = LiteralCat(0.U(5.W), VmoveOpcode.vmv4r)
+    def vmv8r      = LiteralCat(0.U(5.W), VmoveOpcode.vmv8r)
+
+    def isVmvxs(fuOpType: UInt)  = fuOpType(2) & !fuOpType(1) & !fuOpType(0)
+    def isVfmvfs(fuOpType: UInt) = fuOpType(2) &  fuOpType(1) & !fuOpType(0)
+    def isVmvsx(fuOpType: UInt)  = fuOpType(2) & !fuOpType(1) &  fuOpType(0)
+    def isVfmvsf(fuOpType: UInt) = fuOpType(2) &  fuOpType(1) &  fuOpType(0)
+    def needNoMask(fuOpType: UInt) = Seq(vmerge_vvm, vfmerge).map(_ === fuOpType).reduce(_ || _)
+    def vlIsOne(fuOpType: UInt) = fuOpType(2)
+    def vlIsZeroUpdate(fuOptype: UInt) = fuOptype(2) & !fuOptype(0)
+    def isVmvnr(fuOpType: UInt) = fuOpType(3)
+    def getEmulVmvnr(fuOpType: UInt) = Cat(0.U(1.W), fuOpType(1, 0))
+  }
+
   object VfaddOpCode {
     def dummy    = "b11111".U(5.W)
     def fadd     = "b00000".U(5.W)
@@ -609,5 +636,21 @@ package object yunsuan {
     def fmsac   = "b0011".U(width.W)
     def fnmacc  = "b0010".U(width.W)
     def fnmsac  = "b0100".U(width.W)
+  }
+
+  object FcmpOpCode {
+    def width = 4
+
+    def feq = "b0000".U(width.W)
+    def flt = "b0001".U(width.W)
+    def fle = "b0010".U(width.W)
+    def fltq = "b0101".U(width.W)
+    def fleq = "b0110".U(width.W)
+    def fclass = "b1000".U(width.W)
+    def isFeq(opcode:UInt) = opcode === feq
+    def isFlt(opcode:UInt) = opcode(0)
+    def isFle(opcode:UInt) = opcode(1)
+    def isQuiet(opcode:UInt) = opcode(2)
+    def isFclass(opcode:UInt) = opcode(3)
   }
 }
