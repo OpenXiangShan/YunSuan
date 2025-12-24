@@ -6,9 +6,11 @@ import circt.stage._
 import chisel3.util._
 import yunsuan.util._
 import yunsuan.vector.VectorConvert.VectorCvt
+import yunsuan.vector.mac.VIMac
 import yunsuan.vector._
 import yunsuan.scalar.INT2FP
 import yunsuan.scalar.FPCVT
+
 
 trait VSPParameter {
   val VLEN       : Int = 128
@@ -21,6 +23,7 @@ trait VSPParameter {
   val VPERM_latency: Int = 1
   val VID_latency: Int = 99
   val VCVT_latency: Int = 2 // ??
+  val VIMAC_latency: Int = 2
 }
 
 object VPUTestFuType { // only use in test, difftest with xs
@@ -34,9 +37,10 @@ object VPUTestFuType { // only use in test, difftest with xs
   def vcvt= "b0000_0111".U(8.W)
   def fcvtf2x= "b0000_1000".U(8.W)
   def fcvti2f= "b0000_1001".U(8.W)
+  def vimac = "b0000_1010".U(8.W) // not used
 
   def unknown(typ: UInt) = {
-    (typ > 9.U)
+    (typ > 10.U)
   }
 }
 
@@ -111,7 +115,8 @@ class SimTop() extends VPUTestModule {
       VPUTestFuType.vid -> VID_latency.U,
       VPUTestFuType.vcvt -> VCVT_latency.U,
       VPUTestFuType.fcvtf2x -> VCVT_latency.U,
-      VPUTestFuType.fcvti2f -> VCVT_latency.U
+      VPUTestFuType.fcvti2f -> VCVT_latency.U,
+      VPUTestFuType.vimac -> VIMAC_latency.U
     )) // fuType --> latency, spec case for div
     assert(!VPUTestFuType.unknown(io.in.bits.fuType))
   }
@@ -144,6 +149,7 @@ class SimTop() extends VPUTestModule {
   val vcvt_result = Wire(new VSTOutputIO)
   val i2f_result = Wire(new VSTOutputIO)
   val fpcvt_result = Wire(new VSTOutputIO)
+  val vimac_result = Wire(new VSTOutputIO)
   when (io.in.fire || io.out.fire) {
     vfd_result_valid.map(_ := false.B)
   }
@@ -380,6 +386,32 @@ class SimTop() extends VPUTestModule {
   vid_result.fflags(1) := ZeroExt(vid_fflags_1, 20)
   vid_result.vxsat := 0.U
 
+  val vimac = Module(new VIMac)
+  vimac.io.in.valid := true.B
+
+  vimac.io.in.bits.opcode.op := Cat(0.U(3.W), opcode(2,0))
+  vimac.io.in.bits.info.vm := vm
+  vimac.io.in.bits.info.ma := ma
+  vimac.io.in.bits.info.ta := ta
+  vimac.io.in.bits.info.vlmul := vlmul
+  vimac.io.in.bits.info.vl := vl
+  vimac.io.in.bits.info.vstart := vstart
+  vimac.io.in.bits.info.uopIdx := uop_idx
+  vimac.io.in.bits.info.vxrm := in.rm_s
+  vimac.io.in.bits.srcType(0) := Cat(0.U(1.W), opcode(6), sew)  // vs2
+  vimac.io.in.bits.srcType(1) := Cat(0.U(1.W), opcode(5), sew)  // vs1
+  vimac.io.in.bits.vdType := Cat(0.U(1.W), opcode(4), Mux(widen, sew + 1.U(1.W), sew))
+  vimac.io.in.bits.vs1 := Cat(in.src(0)(1), in.src(0)(0))
+  vimac.io.in.bits.vs2 := Cat(in.src(1)(1), in.src(1)(0))
+  vimac.io.in.bits.old_vd := Cat(in.src(2)(1), in.src(2)(0))
+  vimac.io.in.bits.mask := Cat(in.src(3)(1), in.src(3)(0))
+
+  vimac_result.result.zip(UIntSplit(vimac.io.out.bits.vd, XLEN)).foreach { case (vstOut, vimacOut) => vstOut := vimacOut }
+  vimac_result.vxsat := vimac.io.out.bits.vxsat
+  vimac_result.fflags := 0.U.asTypeOf(io.out.bits.fflags.cloneType) // DontCare
+
+  
+
   // arbiter
   io.out.valid := Mux(is_uncertain, finish_uncertain, finish_fixLatency)
   io.out.bits := LookupTreeDefault(in.fuType, 0.U.asTypeOf(new VSTOutputIO), List(
@@ -392,7 +424,8 @@ class SimTop() extends VPUTestModule {
     VPUTestFuType.vid -> vid_result,
     VPUTestFuType.vcvt -> vcvt_result,
     VPUTestFuType.fcvtf2x -> fpcvt_result,
-    VPUTestFuType.fcvti2f -> i2f_result
+    VPUTestFuType.fcvti2f -> i2f_result,
+    VPUTestFuType.vimac -> vimac_result
   ))
 }
 

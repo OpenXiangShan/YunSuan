@@ -11,7 +11,7 @@ extern "C" {
 #include "include/test_driver.h"
 
 TestDriver::TestDriver():
-  issued(false), verbose(false), keepinput(false)
+  issued(false), verbose(true), keepinput(false)
 {
   // aviod random value
   set_test_type();
@@ -27,10 +27,10 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 }
 // fix set_test_type to select fuType
 void TestDriver::set_test_type() {
-  test_type.pick_fuType = false;
+  test_type.pick_fuType = true;
   test_type.pick_fuOpType = false;
-  test_type.fuType = VFloatCvt;
-  test_type.fuOpType = VFREC7;
+  test_type.fuType = VIntegerMAC;
+  test_type.fuOpType = VSMUL;
   printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -66,6 +66,11 @@ uint8_t TestDriver::gen_random_optype() {
       break;
     }
     case VIntegerALU: break;
+    case VIntegerMAC:{
+      uint8_t vmac_all_optype[VIMAC_NUM] = VIMAC_ALL_OPTYPES;
+      return vmac_all_optype[rand() % VIMAC_NUM];
+      break;
+    }
     case VPermutation: { //TODO: add other type
       uint8_t vperm_all_optype[VPERM_NUM-1] = VPERM_ALL_OPTYPES;
       return vperm_all_optype[rand() % (VPERM_NUM-1)];
@@ -136,12 +141,29 @@ uint8_t TestDriver::gen_random_sew() {
     case VFloatCvt: return rand()%4; break;
     case FloatCvtF2X: return (rand()%3)+1 ; break;
     case FloatCvtI2F: return 0 ; break;
+    case VIntegerMAC: {
+      if (input.fuOpType == VWMUL || input.fuOpType == VWMULU || input.fuOpType == VWMULSU ||
+          input.fuOpType == VWMACCU || input.fuOpType == VWMACC || input.fuOpType == VWMACCSU || input.fuOpType == VWMACCUS) {
+        return rand()%3;
+      } else {
+        return rand()%4;
+      }
+      break;
+    }
     default: return (rand()%3)+1; break;
   }
 }
 
 bool TestDriver::gen_random_widen() {
-  if(input.sew > 1){
+  if(input.fuType == VIntegerMAC){
+    if (input.fuOpType == VWMUL || input.fuOpType == VWMULU || input.fuOpType == VWMULSU ||
+        input.fuOpType == VWMACCU || input.fuOpType == VWMACC || input.fuOpType == VWMACCSU || input.fuOpType == VWMACCUS) {
+      return true;
+    }else {
+      return false;
+    }
+  }
+  else if(input.sew > 1){
     switch (input.fuType)
     {
       case VFloatAdder: {
@@ -395,6 +417,22 @@ void TestDriver::get_random_input() {
     input.widen = false;
     if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
     else { input.fuOpType = test_type.fuOpType; }
+  }else if(input.fuType == VIntegerMAC){
+    if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
+    else { input.fuOpType = test_type.fuOpType; }
+    input.sew = gen_random_sew();
+    input.widen = gen_random_widen();
+    input.src_widen = false;
+    input.is_frs1 = false;
+    input.is_frs2 = false;
+    input.vinfo.vlmul = 0;
+    input.vinfo.vl = (VLEN / 8) >> input.sew;
+    input.vinfo.vstart = 0;
+    input.vinfo.vm = true;
+    input.vinfo.ta = false;
+    input.vinfo.ma = false;
+    input.rm_s     = rand()%4;
+    input.uop_idx = 0;
   }else{
     if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
     else { input.fuOpType = test_type.fuOpType; }
@@ -437,6 +475,9 @@ void TestDriver::get_expected_output() {
     case VIntegerALU:
       if (verbose) { printf("FuType:%d, choose VIntegerALU %d\n", input.fuType, VIntegerALU); }
       expect_output = valu.get_expected_output(input); return;
+    case VIntegerMAC:
+      if (verbose) { printf("FuType:%d, choose VIntegerMAC %d\n", input.fuType, VIntegerMAC); }
+      expect_output = vimac.get_expected_output(input); return;
     case VFloatAdder:
       if (verbose) { printf("FuType:%d, choose VFloatAdder %d\n", input.fuType, VFloatAdder); }
       expect_output = vfa.get_expected_output(input); return;
@@ -503,6 +544,7 @@ bool TestDriver::assign_input_raising(VSimTop *dut_ptr) {
   dut_ptr->io_in_bits_is_frs1 = input.is_frs1;
   dut_ptr->io_in_bits_is_frs2 = input.is_frs2;
   dut_ptr->io_in_bits_rm      = input.rm;
+  dut_ptr->io_in_bits_rm_s    = input.rm_s;
   dut_ptr->io_in_bits_vinfo_vstart = input.vinfo.vstart;
   dut_ptr->io_in_bits_vinfo_vl     = input.vinfo.vl;
   dut_ptr->io_in_bits_vinfo_vlmul  = input.vinfo.vlmul;
@@ -544,7 +586,7 @@ int TestDriver::diff_output_falling(VSimTop *dut_ptr) {
 void TestDriver::display_ref_input() {
   printf("REF Input:\n");
   printf("  src1 %016lx_%016lx src2 %016lx_%016lx src3 %016lx_%016lx src4 %016lx_%016lx\n", input.src1[1], input.src1[0], input.src2[1], input.src2[0], input.src3[1], input.src3[0], input.src4[1], input.src4[0]);
-  printf("  fuType %x fuOpType %x sew %x uop_idx %d src_widen %d widen %d is_frs1 %d rm %d\n", input.fuType, input.fuOpType, input.sew, input.uop_idx, input.src_widen, input.widen, input.is_frs1, input.rm);
+  printf("  fuType %x fuOpType %x sew %x uop_idx %d src_widen %d widen %d is_frs1 %d rm %d rm_s %d\n", input.fuType, input.fuOpType, input.sew, input.uop_idx, input.src_widen, input.widen, input.is_frs1, input.rm, input.rm_s);
   printf("  vstart %d vl %d vlmul %x vm %d ta %d ma %d\n", input.vinfo.vstart, input.vinfo.vl, input.vinfo.vlmul, input.vinfo.vm, input.vinfo.ta, input.vinfo.ma);
 }
 

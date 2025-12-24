@@ -185,6 +185,28 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
         }
       }
     }
+  }else if (input.fuType == VIntegerMAC) {
+    int index = 0;
+    if (input.widen == 1)
+      index = number/2;
+    else
+      index = number;
+    for(int i = 0; i < index; i++) {
+      ElementInput element = select_element(input, i);
+      switch (sew) {
+        case 0: output_part[i] = calculation_e8(element);  mask = input.widen ? 0xFFFF : 0xFF; break;
+        case 1: output_part[i] = calculation_e16(element); mask = input.widen ? 0xFFFFFFFF : 0xFFFF; break;
+        case 2: output_part[i] = calculation_e32(element); mask = input.widen ? 0xFFFFFFFFFFFFFFFF : 0xFFFFFFFF; break;
+        case 3: output_part[i] = calculation_e64(element); mask = 0xFFFFFFFFFFFFFFFF; break;
+        default:
+          printf("VPU Golden Modle, bad sew %d\n", input.sew);
+          exit(1);
+      }
+      if (output_part[i].fflags > 0x1f) {
+        printf("Bad fflags of %x, check golden model e8 %d\n", output_part[i].fflags, i);
+        exit(1);
+      }
+    }
   }
   else{
     for(int i = 0; i < number; i++) {
@@ -271,6 +293,16 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
           output.result[i] = ((uint64_t)output_part[i*half_number].result|mask);
           output.fflags[i] = (uint32_t)output_part[i*half_number].fflags;
         }
+      }else if(input.fuType == VIntegerMAC) {
+        if(input.widen){
+          if(j < (half_number >> 1)) {
+            output.result[i] += (uint64_t)(output_part[i*(half_number>>1)+j].result&mask) << (j*(result_shift_len<<1));
+            output.vxsat |= output_part[i*(half_number>>1)+j].vxsat;
+          }
+        }else{
+          output.result[i] += ((uint64_t)output_part[i*half_number+j].result&mask) << (j*result_shift_len);
+          output.vxsat |= output_part[i*half_number+j].vxsat;
+        }     
       }else {
         output.result[i] += ((uint64_t)output_part[i*half_number+j].result) << (j*result_shift_len);
         output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << (j*5);
@@ -283,7 +315,6 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
       printf("Bad fflags %d: result %lx fflags %x\n", i, output.result[i], output.fflags[i]);
       exit(1);
     }
-
   }
   return output;
 }
@@ -334,9 +365,28 @@ ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
           exit(1);
       }
     }
-    else{
-      printf("VPU Golden Modle, not support widen fuType %d\n", input.fuType);
-      exit(1);
+    else if(input.fuType == VIntegerMAC) {
+      switch (sew) {
+        case 0:
+          element.src1 = (uint64_t)input8->src1[idx];
+          element.src2 = (uint64_t)input8->src2[idx];
+          element.src3 = (uint64_t)input16->src3[idx];
+          break;
+        case 1:
+          element.src1 = (uint64_t)input16->src1[idx];
+          element.src2 = (uint64_t)input16->src2[idx];
+          element.src3 = (uint64_t)input32->src3[idx];
+          break;
+        case 2:
+          element.src1 = (uint64_t)input32->src1[idx];
+          element.src2 = (uint64_t)input32->src2[idx];
+          element.src3 = (uint64_t)input64->src3[idx];
+          break;
+        default:
+          printf("VPU Golden Modle, bad widen sew %d\n", input.sew);
+          exit(1);
+          break;
+      }
     }
   }else if((input.fuType == VFloatCvt) && (((input.fuOpType >>3) & 0X3) == 2) ){  //cvt norrow select 2sew
     switch (sew) {
@@ -427,6 +477,7 @@ ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
   element.src_widen = input.src_widen;
   element.widen = input.widen;
   element.rm = input.rm;
+  element.rm_s = input.rm_s;
   element.uop_idx = input.uop_idx;
   return element;
 }

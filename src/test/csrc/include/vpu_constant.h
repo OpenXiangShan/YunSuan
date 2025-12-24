@@ -24,11 +24,12 @@ extern "C"{
 #define VFloatCvt (7)
 #define FloatCvtF2X (8) //f->i/ui/f
 #define FloatCvtI2F (9) //i/ui->f
+#define VIntegerMAC (10)
 // #define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt}
 
 //will be delated
-#define FU_NUM 8 
-#define ALL_FUTYPES {VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerDivider,VFloatCvt,FloatCvtF2X,FloatCvtI2F}
+#define FU_NUM 9 
+#define ALL_FUTYPES {VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerDivider,VFloatCvt,FloatCvtF2X,FloatCvtI2F,VIntegerMAC}
 
 #define INT_ROUNDING(result, xrm, gb) \
   do { \
@@ -360,6 +361,27 @@ extern "C"{
   //I2F
   #define I2FCVT_64_NUM  12
   #define I2FCVT_64_OPTYPES {FCVT_H_WU,FCVT_H_W,FCVT_H_LU,FCVT_H_L,FCVT_S_WU,FCVT_S_W,FCVT_S_LU,FCVT_S_L,FCVT_D_WU,FCVT_D_W,FCVT_D_LU,FCVT_D_L}
+
+  //VIMAC
+  #define VIMAC_NUM 16
+  #define VMUL             (binstoi("01100000"))
+  #define VWMUL            (binstoi("01101000"))
+  #define VWMULU           (binstoi("00001000"))
+  #define VWMULSU          (binstoi("01001000"))
+  #define VMULH            (binstoi("01100001"))
+  #define VMULHU           (binstoi("00000001"))
+  #define VMULHSU          (binstoi("01000001"))
+  #define VMACC            (binstoi("01110010"))
+  #define VWMACCU          (binstoi("00001010"))
+  #define VWMACC           (binstoi("01111010"))
+  #define VWMACCSU         (binstoi("00111010"))
+  #define VWMACCUS         (binstoi("01011010"))
+  #define VNMSAC           (binstoi("01110011"))
+  #define VMADD            (binstoi("01110100"))
+  #define VNMSUB           (binstoi("01110101"))
+  #define VSMUL            (binstoi("01100110"))
+
+  #define VIMAC_ALL_OPTYPES {VMUL,VWMUL,VWMULU,VWMULSU,VMULH,VMULHU,VMULHSU,VMACC,VWMACCU,VWMACC,VWMACCSU,VWMACCUS,VNMSAC,VMADD,VNMSUB,VSMUL}
 
 // pre-compile stoi
 constexpr uint8_t binstoi(const char str[]) {

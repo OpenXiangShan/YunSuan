@@ -42,6 +42,7 @@ private:
   VGMPermutation vperm;
   VGMIntegerALUF vialuF;
   VGMIntegerDividier vid;
+  VGMIntegerMAC vimac;
   VGMFloatCvt vcvt;
   SGMFloatCvt scvt;
 
