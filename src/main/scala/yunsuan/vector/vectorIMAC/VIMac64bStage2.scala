@@ -5,46 +5,53 @@ import chisel3.util._
 import yunsuan.vector._
 import yunsuan.util._
 
+class VIMac64bStage2Input extends Bundle {
+  val compStage1ResultsS1    = Vec(7, UInt(152.W))
+  val wallaceLine34NonFixPS1 = UInt(152.W)
+  val wallaceLine34FixPS1    = UInt(152.W)
+  val highHalfS1             = Bool()
+  val uopIdxS1               = UInt(6.W)
+  val widenS1                = Bool()
+  val vxrmS1                 = UInt(2.W)
+  val isFixPS1               = Bool()
+  val sewIs8S1               = Bool()
+  val sewIs16S1              = Bool()
+  val sewIs32S1              = Bool()
+  val sewIs64S1              = Bool()
+}
+
+class VIMac64bStage2Output extends Bundle {
+  val sumFinalNonFixPS2  = UInt(152.W)
+  val sumFinalFixPS2     = UInt(152.W)
+  val highHalfS2         = Bool()
+  val uopIdxS2           = UInt(6.W)
+  val widenS2            = Bool()
+  val vxrmS2             = UInt(2.W)
+  val isFixPS2           = Bool()
+  val sewIs8S2           = Bool()
+  val sewIs16S2          = Bool()
+  val sewIs32S2          = Bool()
+  val sewIs64S2          = Bool()
+}
+
 class VIMac64bStage2 extends Module {
   val io = IO(new Bundle {
-    val compStage1ResultsS1    = Input(Vec(7, UInt(152.W)))
-    val wallaceLine34NonFixPS1 = Input(UInt(152.W))
-    val wallaceLine34FixPS1    = Input(UInt(152.W))
-    val highHalfS1             = Input(Bool())
-    val uopIdxS1               = Input(UInt(6.W))
-    val widenS1                = Input(Bool())
-    val vxrmS1                 = Input(UInt(2.W))
-    val isFixPS1               = Input(Bool())
-    val sewIs8S1               = Input(Bool())
-    val sewIs16S1              = Input(Bool())
-    val sewIs32S1              = Input(Bool())
-    val sewIs64S1              = Input(Bool())
-
-    val sumFinalNonFixPS2  = Output(UInt(152.W))
-    val sumFinalFixPS2     = Output(UInt(152.W))
-    val highHalfS2         = Output(Bool())
-    val uopIdxS2           = Output(UInt(6.W))
-    val widenS2            = Output(Bool())
-    val vxrmS2             = Output(UInt(2.W))
-    val isFixPS2           = Output(Bool())
-    val sewIs8S2           = Output(Bool())
-    val sewIs16S2          = Output(Bool())
-    val sewIs32S2          = Output(Bool())
-    val sewIs64S2          = Output(Bool())
+    val in  = Input(new VIMac64bStage2Input)
+    val out = Output(new VIMac64bStage2Output)
   })
-  
-  val compStage1ResultsS1    = io.compStage1ResultsS1
-  val wallaceLine34NonFixPS1 = io.wallaceLine34NonFixPS1
-  val wallaceLine34FixPS1    = io.wallaceLine34FixPS1
-  val highHalfS1             = io.highHalfS1
-  val uopIdxS1               = io.uopIdxS1
-  val widenS1                = io.widenS1
-  val vxrmS1                 = io.vxrmS1
-  val isFixPS1               = io.isFixPS1
-  val sewIs8S1               = io.sewIs8S1
-  val sewIs16S1              = io.sewIs16S1
-  val sewIs32S1              = io.sewIs32S1
-  val sewIs64S1              = io.sewIs64S1
+
+  val compStage1ResultsS1    = io.in.compStage1ResultsS1
+  val wallaceLine34NonFixPS1 = io.in.wallaceLine34NonFixPS1
+  val wallaceLine34FixPS1    = io.in.wallaceLine34FixPS1
+  val highHalfS1             = io.in.highHalfS1
+  val uopIdxS1               = io.in.uopIdxS1
+  val widenS1                = io.in.widenS1
+  val vxrmS1                 = io.in.vxrmS1
+  val isFixPS1               = io.in.isFixPS1
+  val sewIs8S1               = io.in.sewIs8S1
+  val sewIs16S1              = io.in.sewIs16S1
+  val sewIs32S1              = io.in.sewIs32S1
+  val sewIs64S1              = io.in.sewIs64S1
 
   // Process 7 and 8 produce 2 sets of sums and couts and use 2 152-bit full adders for 
   // 1) non fixed-point operations and fixed-point operation without rounding increment
@@ -82,17 +89,17 @@ class VIMac64bStage2 extends Module {
   finalSumAdderFixP.io.cout34to2 := cout34to2FixP
   sumFinalFixP                   := finalSumAdderFixP.io.sumFinal
 
-  io.sumFinalFixPS2     := sumFinalFixP
-  io.sumFinalNonFixPS2  := sumFinalNonFixP
-  io.highHalfS2         := highHalfS1
-  io.uopIdxS2           := uopIdxS1
-  io.widenS2            := widenS1
-  io.vxrmS2             := vxrmS1
-  io.isFixPS2           := isFixPS1
-  io.sewIs8S2           := sewIs8S1
-  io.sewIs16S2          := sewIs16S1
-  io.sewIs32S2          := sewIs32S1
-  io.sewIs64S2          := sewIs64S1
+  io.out.sumFinalFixPS2     := sumFinalFixP
+  io.out.sumFinalNonFixPS2  := sumFinalNonFixP
+  io.out.highHalfS2         := highHalfS1
+  io.out.uopIdxS2           := uopIdxS1
+  io.out.widenS2            := widenS1
+  io.out.vxrmS2             := vxrmS1
+  io.out.isFixPS2           := isFixPS1
+  io.out.sewIs8S2           := sewIs8S1
+  io.out.sewIs16S2          := sewIs16S1
+  io.out.sewIs32S2          := sewIs32S1
+  io.out.sewIs64S2          := sewIs64S1
 }
 
 class wallace3to2CompressorStage2 extends Module with wallace3to2Compressor {

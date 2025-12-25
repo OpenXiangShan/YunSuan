@@ -47,73 +47,29 @@ class VIMac64b extends Module {
   val isFixP   = io.isFixP
   val info     = io.info
 
+  val fireS1    = GatedValidRegNext(fire)
+
   val stage1 = Module(new VIMac64bStage1())
+  stage1.io.in.info      := info
+  stage1.io.in.srcType   := io.srcType
+  stage1.io.in.vdType    := io.vdType
+  stage1.io.in.vs1       := vs1
+  stage1.io.in.vs2       := vs2
+  stage1.io.in.oldVd     := oldVd
+  stage1.io.in.highHalf  := highHalf
+  stage1.io.in.isMacc    := isMacc
+  stage1.io.in.isSub     := isSub
+  stage1.io.in.widen     := widen
+  stage1.io.in.isFixP    := isFixP
+  val stage1Out = RegEnable(stage1.io.out, fire)
+
   val stage2 = Module(new VIMac64bStage2())
+  stage2.io.in := stage1Out
+  val stage2Out = RegEnable(stage2.io.out, fireS1)
+
   val stage3 = Module(new VIMac64bStage3())
+  stage3.io.in := stage2Out
 
-  stage1.io.info      := info
-  stage1.io.srcType   := io.srcType
-  stage1.io.vdType    := io.vdType
-  stage1.io.vs1       := vs1
-  stage1.io.vs2       := vs2
-  stage1.io.oldVd     := oldVd
-  stage1.io.highHalf  := highHalf
-  stage1.io.isMacc    := isMacc
-  stage1.io.isSub     := isSub
-  stage1.io.widen     := widen
-  stage1.io.isFixP    := isFixP
-
-  val fireS1                 = GatedValidRegNext(fire)
-  val compStage1ResultsS1    = RegEnable(stage1.io.compStage1ResultsS1, fire)
-  val wallaceLine34NonFixPS1 = RegEnable(stage1.io.wallaceLine34NonFixPS1, fire)
-  val wallaceLine34FixPS1    = RegEnable(stage1.io.wallaceLine34FixPS1, fire)
-  val highHalfS1             = RegEnable(stage1.io.highHalfS1, fire)
-  val uopIdxS1               = RegEnable(stage1.io.uopIdxS1, fire)
-  val widenS1                = RegEnable(stage1.io.widenS1, fire)
-  val vxrmS1                 = RegEnable(stage1.io.vxrmS1, fire)
-  val isFixPS1               = RegEnable(stage1.io.isFixPS1, fire)
-  val sewIs8S1               = RegEnable(stage1.io.sewIs8S1, fire)
-  val sewIs16S1              = RegEnable(stage1.io.sewIs16S1, fire)
-  val sewIs32S1              = RegEnable(stage1.io.sewIs32S1, fire)
-  val sewIs64S1              = RegEnable(stage1.io.sewIs64S1, fire)
-
-  stage2.io.compStage1ResultsS1    := compStage1ResultsS1
-  stage2.io.wallaceLine34NonFixPS1 := wallaceLine34NonFixPS1
-  stage2.io.wallaceLine34FixPS1    := wallaceLine34FixPS1
-  stage2.io.highHalfS1             := highHalfS1
-  stage2.io.uopIdxS1               := uopIdxS1
-  stage2.io.widenS1                := widenS1
-  stage2.io.vxrmS1                 := vxrmS1
-  stage2.io.isFixPS1               := isFixPS1
-  stage2.io.sewIs8S1               := sewIs8S1
-  stage2.io.sewIs16S1              := sewIs16S1
-  stage2.io.sewIs32S1              := sewIs32S1
-  stage2.io.sewIs64S1              := sewIs64S1
-
-  val sumFinalNonFixPS2 = RegEnable(stage2.io.sumFinalNonFixPS2, fireS1)
-  val sumFinalFixPS2    = RegEnable(stage2.io.sumFinalFixPS2, fireS1)
-  val highHalfS2        = RegEnable(stage2.io.highHalfS2, fireS1)
-  val uopIdxS2          = RegEnable(stage2.io.uopIdxS2, fireS1)
-  val widenS2           = RegEnable(stage2.io.widenS2, fireS1)
-  val vxrmS2            = RegEnable(stage2.io.vxrmS2, fireS1)
-  val isFixPS2          = RegEnable(stage2.io.isFixPS2, fireS1)
-  val sewIs8S2          = RegEnable(stage2.io.sewIs8S2, fireS1)
-  val sewIs16S2         = RegEnable(stage2.io.sewIs16S2, fireS1)
-  val sewIs32S2         = RegEnable(stage2.io.sewIs32S2, fireS1)
-  val sewIs64S2         = RegEnable(stage2.io.sewIs64S2, fireS1)
-
-  stage3.io.sumFinalNonFixPS2 := sumFinalNonFixPS2
-  stage3.io.sumFinalFixPS2    := sumFinalFixPS2
-  stage3.io.highHalfS2        := highHalfS2
-  stage3.io.uopIdxS2          := uopIdxS2
-  stage3.io.widenS2           := widenS2
-  stage3.io.vxrmS2            := vxrmS2
-  stage3.io.isFixPS2          := isFixPS2
-  stage3.io.sewIs8S2          := sewIs8S2
-  stage3.io.sewIs16S2         := sewIs16S2
-  stage3.io.sewIs32S2         := sewIs32S2
-  stage3.io.sewIs64S2         := sewIs64S2
-
-  io.vd    := stage3.io.vd
-  io.vxsat := stage3.io.vxsat
+  io.vd    := stage3.io.out.vd
+  io.vxsat := stage3.io.out.vxsat
 }

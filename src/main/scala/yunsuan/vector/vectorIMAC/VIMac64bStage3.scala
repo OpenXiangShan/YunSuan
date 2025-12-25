@@ -5,36 +5,43 @@ import chisel3.util._
 import yunsuan.vector._
 import yunsuan.util._
 
+class VIMac64bStage3Input extends Bundle {
+  val sumFinalNonFixPS2 = UInt(152.W)
+  val sumFinalFixPS2    = UInt(152.W)
+  val highHalfS2        = Bool()
+  val uopIdxS2          = UInt(6.W)
+  val widenS2           = Bool()
+  val vxrmS2            = UInt(2.W)
+  val isFixPS2          = Bool()
+  val sewIs8S2          = Bool()
+  val sewIs16S2         = Bool()
+  val sewIs32S2         = Bool()
+  val sewIs64S2         = Bool()
+}
+
+class VIMac64bStage3Output extends Bundle {
+  val vd    = UInt(64.W)
+  val vxsat = UInt(8.W)
+}
+
 class VIMac64bStage3 extends Module {
   val io = IO(new Bundle {
-    val sumFinalNonFixPS2 = Input(UInt(152.W))
-    val sumFinalFixPS2    = Input(UInt(152.W))
-    val highHalfS2        = Input(Bool())
-    val uopIdxS2          = Input(UInt(6.W))
-    val widenS2           = Input(Bool())
-    val vxrmS2            = Input(UInt(2.W))
-    val isFixPS2          = Input(Bool())
-    val sewIs8S2          = Input(Bool())
-    val sewIs16S2         = Input(Bool())
-    val sewIs32S2         = Input(Bool())
-    val sewIs64S2         = Input(Bool())
-
-    val vd    = Output(UInt(64.W))
-    val vxsat = Output(UInt(8.W))
+    val in  = Input(new VIMac64bStage3Input)
+    val out = Output(new VIMac64bStage3Output)
   })
 
-  val sumFinalNonFixPS2 = io.sumFinalNonFixPS2
-  val sumFinalFixPS2    = io.sumFinalFixPS2
-  val highHalfS2        = io.highHalfS2
-  val uopIdxS2          = io.uopIdxS2
-  val widenS2           = io.widenS2
-  val vxrmS2            = io.vxrmS2
-  val isFixPS2          = io.isFixPS2
-  val sewIs8S2          = io.sewIs8S2
-  val sewIs16S2         = io.sewIs16S2
-  val sewIs32S2         = io.sewIs32S2
-  val sewIs64S2         = io.sewIs64S2
-  
+  val sumFinalNonFixPS2 = io.in.sumFinalNonFixPS2
+  val sumFinalFixPS2    = io.in.sumFinalFixPS2
+  val highHalfS2        = io.in.highHalfS2
+  val uopIdxS2          = io.in.uopIdxS2
+  val widenS2           = io.in.widenS2
+  val vxrmS2            = io.in.vxrmS2
+  val isFixPS2          = io.in.isFixPS2
+  val sewIs8S2          = io.in.sewIs8S2
+  val sewIs16S2         = io.in.sewIs16S2
+  val sewIs32S2         = io.in.sewIs32S2
+  val sewIs64S2         = io.in.sewIs64S2
+
   // 9.get non fixed-point vd
   val vdNonFixP = Wire(UInt(64.W))
 
@@ -107,8 +114,8 @@ class VIMac64bStage3 extends Module {
   outputMux.io.isFixP    := isFixPS2
   
   // Connect Output
-  io.vd    := outputMux.io.vdOut
-  io.vxsat := outputMux.io.vxsatOut
+  io.out.vd    := outputMux.io.vdOut
+  io.out.vxsat := outputMux.io.vxsatOut
 }
 
 class vdNonFixPGenerator extends Module {

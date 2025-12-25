@@ -5,58 +5,63 @@ import chisel3.util._
 import yunsuan.vector._
 import yunsuan.util._
 
+class VIMac64bStage1Input extends Bundle {
+  val info     = new VIFuInfo
+  val srcType  = Vec(2, UInt(4.W))
+  val vdType   = UInt(4.W)
+  val vs1      = UInt(64.W)
+  val vs2      = UInt(64.W)
+  val oldVd    = UInt(64.W) 
+  val highHalf = Bool()
+  val isMacc   = Bool() // (w)macc(nmsac)/madd(nmsub)
+  val isSub    = Bool()
+  val widen    = Bool()
+  val isFixP   = Bool()
+}
+
+class VIMac64bStage1Output extends Bundle {
+  val compStage1ResultsS1    = Vec(7, UInt(152.W))
+  val wallaceLine34NonFixPS1 = UInt(152.W)
+  val wallaceLine34FixPS1    = UInt(152.W)
+  val highHalfS1             = Bool()
+  val uopIdxS1               = UInt(6.W)
+  val widenS1                = Bool()
+  val vxrmS1                 = UInt(2.W)
+  val isFixPS1               = Bool()
+  val sewIs8S1               = Bool()
+  val sewIs16S1              = Bool()
+  val sewIs32S1              = Bool()
+  val sewIs64S1              = Bool()
+}
+
 class VIMac64bStage1 extends Module {
   val io = IO(new Bundle {
-    // val opcode = Input(new VIMacOpcode)
-    val info = Input(new VIFuInfo)
-    val srcType = Input(Vec(2, UInt(4.W)))
-    val vdType  = Input(UInt(4.W))
-    val vs1 = Input(UInt(64.W))
-    val vs2 = Input(UInt(64.W))
-    val oldVd = Input(UInt(64.W)) 
-    val highHalf = Input(Bool())
-    val isMacc = Input(Bool()) // (w)macc(nmsac)/madd(nmsub)
-    val isSub = Input(Bool())
-    val widen = Input(Bool())
-    val isFixP = Input(Bool())
-
-    val compStage1ResultsS1    = Output(Vec(7, UInt(152.W)))
-    val wallaceLine34NonFixPS1 = Output(UInt(152.W))
-    val wallaceLine34FixPS1    = Output(UInt(152.W))
-    val highHalfS1             = Output(Bool())
-    val uopIdxS1               = Output(UInt(6.W))
-    val widenS1                = Output(Bool())
-    val vxrmS1                 = Output(UInt(2.W))
-    val isFixPS1               = Output(Bool())
-    val sewIs8S1               = Output(Bool())
-    val sewIs16S1              = Output(Bool())
-    val sewIs32S1              = Output(Bool())
-    val sewIs64S1             = Output(Bool())
+    val in  = Input(new VIMac64bStage1Input)
+    val out = Output(new VIMac64bStage1Output)
   })
 
-  val vs2 = io.vs2
-  val vs1 = io.vs1
-  val oldVd = io.oldVd
-  val vs2_is_signed = io.srcType(0)(2) // vs2 & vd should be signed numbers for vmadd/vnmsub
-  val vs1_is_signed = io.srcType(1)(2)
-  val vd_is_signed  = io.vdType(2)
-  val eewVs2 = SewOH(io.srcType(0)(1, 0))
-  
+  val vs2 = io.in.vs2
+  val vs1 = io.in.vs1
+  val oldVd = io.in.oldVd
+  val vs2_is_signed = io.in.srcType(0)(2) // vs2 & vd should be signed numbers for vmadd/vnmsub
+  val vs1_is_signed = io.in.srcType(1)(2)
+  val vd_is_signed  = io.in.vdType(2)
+  val eewVs2 = SewOH(io.in.srcType(0)(1, 0))
+
   val sew = eewVs2
   val sewIs64 = sew.is64
   val sewIs32 = sew.is32
   val sewIs16 = sew.is16
   val sewIs8 = sew.is8
 
-  val isSub    = io.isSub
-  val highHalf = io.highHalf
-  val widen    = io.widen
-  val isFixP   = io.isFixP
-  val uopIdx   = io.info.uopIdx
-  val vxrm     = io.info.vxrm
-  
-  // Start of First Pipeline Stage
-  //-----------------------------------------------------------------------------
+  val isSub    = io.in.isSub
+  val highHalf = io.in.highHalf
+  val isMacc   = io.in.isMacc
+  val widen    = io.in.widen
+  val isFixP   = io.in.isFixP
+  val uopIdx   = io.in.info.uopIdx
+  val vxrm     = io.in.info.vxrm
+
   // 1.vs1 booth encoding
   val vs1BoothPos  = Wire(Vec(32, Bool()))
   val vs1BoothNeg  = Wire(Vec(32, Bool()))
@@ -135,7 +140,7 @@ class VIMac64bStage1 extends Module {
   wallaceTreeGen.io.vs2_is_signed := vs2_is_signed
   wallaceTreeGen.io.vd_is_signed  := vd_is_signed
   wallaceTreeGen.io.widen         := widen
-  wallaceTreeGen.io.isMacc        := io.isMacc
+  wallaceTreeGen.io.isMacc        := isMacc
   wallaceTreeGen.io.sewIs8        := sewIs8
   wallaceTreeGen.io.sewIs16       := sewIs16
   wallaceTreeGen.io.sewIs32       := sewIs32
@@ -151,18 +156,18 @@ class VIMac64bStage1 extends Module {
   wallace3to2CompStage1.io.wallaceTree := wallaceTree
   compStage1Results := wallace3to2CompStage1.io.compStage1Results
 
-  io.compStage1ResultsS1    := compStage1Results
-  io.wallaceLine34NonFixPS1 := wallaceLine34NonFixP
-  io.wallaceLine34FixPS1    := wallaceLine34FixP
-  io.highHalfS1          := highHalf
-  io.uopIdxS1            := uopIdx
-  io.widenS1             := widen
-  io.vxrmS1              := vxrm
-  io.isFixPS1            := isFixP
-  io.sewIs8S1            := sewIs8
-  io.sewIs16S1           := sewIs16
-  io.sewIs32S1           := sewIs32
-  io.sewIs64S1           := sewIs64
+  io.out.compStage1ResultsS1    := compStage1Results
+  io.out.wallaceLine34NonFixPS1 := wallaceLine34NonFixP
+  io.out.wallaceLine34FixPS1    := wallaceLine34FixP
+  io.out.highHalfS1          := highHalf
+  io.out.uopIdxS1            := uopIdx
+  io.out.widenS1             := widen
+  io.out.vxrmS1              := vxrm
+  io.out.isFixPS1            := isFixP
+  io.out.sewIs8S1            := sewIs8
+  io.out.sewIs16S1           := sewIs16
+  io.out.sewIs32S1           := sewIs32
+  io.out.sewIs64S1           := sewIs64
 }
 
 class vs1Booth extends Module {
