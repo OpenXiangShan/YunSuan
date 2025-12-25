@@ -410,8 +410,6 @@ class SimTop() extends VPUTestModule {
   vimac_result.vxsat := vimac.io.out.bits.vxsat
   vimac_result.fflags := 0.U.asTypeOf(io.out.bits.fflags.cloneType) // DontCare
 
-  
-
   // arbiter
   io.out.valid := Mux(is_uncertain, finish_uncertain, finish_fixLatency)
   io.out.bits := LookupTreeDefault(in.fuType, 0.U.asTypeOf(new VSTOutputIO), List(
