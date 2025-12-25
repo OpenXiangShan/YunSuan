@@ -1,14 +1,9 @@
 package yunsuan.vector.mac
 
 import chisel3._
-import chisel3.stage.ChiselGeneratorAnnotation
-import circt.stage._
 import chisel3.util._
 import yunsuan.vector._
 import yunsuan.util._
-import yunsuan.encoding.Opcode.VimacOpcode.isMacc
-import yunsuan.VidivType.vdiv
-import yunsuan.encoding.Opcode.VimacOpcode.isFixP
 
 class VIMac64b extends Module {
   val io = IO(new Bundle {

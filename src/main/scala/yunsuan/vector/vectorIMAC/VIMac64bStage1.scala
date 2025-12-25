@@ -1,8 +1,6 @@
 package yunsuan.vector.mac
 
 import chisel3._
-import chisel3.stage.ChiselGeneratorAnnotation
-import circt.stage._
 import chisel3.util._
 import yunsuan.vector._
 import yunsuan.util._
