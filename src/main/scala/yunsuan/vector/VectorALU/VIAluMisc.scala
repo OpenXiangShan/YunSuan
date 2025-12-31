@@ -3,11 +3,11 @@ package yunsuan.vector.VectorALU
 import chisel3._
 import chisel3.util._
 import yunsuan.encoding.Opcode.FixedPointRoundingMode._
-import yunsuan.encoding.Opcode.VIAluOpcode
-import yunsuan.vector.{SewOH, UIntSplit}
+import yunsuan.encoding.Opcode.Opcodes.VIAluOpcode
 import yunsuan.util._
+import yunsuan.vector.UIntSplit
 
-import math.pow
+import scala.math.pow
 
 class VIAluMiscCtrl extends Bundle {
   val sel8 = Bool()
@@ -52,7 +52,7 @@ class VIAluMiscToS1(xlen: Int) extends Bundle {
 
 
 class VIAluMiscInput(xlen: Int) extends Bundle {
-  val opcode = new VIAluOpcode
+  val opcode = VIAluOpcode()
   val ctrl = new VIAluMiscCtrl
   val data = new VIAluMiscData(xlen)
 }
@@ -62,6 +62,8 @@ class VIAluMiscOutput(xlen: Int) extends Bundle {
 }
 
 class VIAluMisc(xlen: Int = 64) extends Module {
+  import VIAluOpcode._
+
   val io = IO(new Bundle {
     val in = Input(new VIAluMiscInput(xlen))
     val out = Output(new VIAluMiscOutput(xlen))
@@ -69,7 +71,7 @@ class VIAluMisc(xlen: Int = 64) extends Module {
 
   private val isVector: Boolean = true
 
-  private val opcode = io.in.opcode
+  private implicit val opcode: UInt = io.in.opcode
   private val sel8  = io.in.ctrl.sel8
   private val sel16 = io.in.ctrl.sel16
   private val sel32 = io.in.ctrl.sel32
@@ -87,28 +89,6 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   private val vs2Widen = io.in.data.vs2Widen
   private val vs1Widen = io.in.data.vs1Widen
   private val rm = io.in.data.vxrm
-
-  private val isVand  = opcode.isVand
-  private val isVnand = opcode.isVnand
-  private val isVandn = opcode.isVandn
-  private val isVor  = opcode.isVor
-  private val isVxor = opcode.isVxor
-  private val isVnor = opcode.isVnor
-  private val isVorn = opcode.isVorn
-  private val isVxnor = opcode.isVxnor
-  private val isShift = opcode.isShiftLogic
-  private val isLeftShiftLogic = opcode.isLeftShiftLogic
-  private val isScalVro = opcode.isScalVro
-  private val isNotVro = opcode.isNotVro
-  private val isScal = isShift & isScalVro & isNotVro
-  private val isNClip = isNarrow & isScal
-  private val isZvbbOthers = opcode.isZvbbOthers
-  private val isVcpop = opcode.isVcpop
-  private val isVbrev = opcode.isVbrev
-  private val isVbrev8 = opcode.isVbrev8
-  private val isVrev8 = opcode.isVrev8
-  private val isCountZero = opcode.isCountZero
-  private val isCtz = opcode.isCtz
 
   private val ext = Wire(Vec(8, UInt(8.W)))
   ext(0) := vs2Widen(7, 0)
@@ -604,13 +584,10 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   dontTouch(vroShift32)
   dontTouch(vroShift64)
   dontTouch(vroShiftResult)
-  dontTouch(isNClip)
   dontTouch(nClipSatSel8)
   dontTouch(nClipSatSel16)
   dontTouch(nClipSatSel32)
   dontTouch(nClipSat)
-  dontTouch(isNotVro)
-  dontTouch(isScalVro)
   dontTouch(scalResultSel8)
   dontTouch(scalResultSel16)
   dontTouch(scalResultSel32)

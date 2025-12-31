@@ -3,7 +3,7 @@ package yunsuan.vector.VectorALU
 import chisel3._
 import chisel3.util._
 import yunsuan.encoding.Opcode.FixedPointRoundingMode._
-import yunsuan.encoding.Opcode.VIAluOpcode
+import yunsuan.encoding.Opcode.Opcodes.VIAluOpcode
 
 class VIAluAdderCtrl extends Bundle {
   val sel8 = Bool()
@@ -42,7 +42,7 @@ class VIAluAdderToS1(xlen: Int) extends Bundle {
 }
 
 class VIAluAdderInput(xlen: Int) extends Bundle {
-  val opcode = new VIAluOpcode
+  val opcode = VIAluOpcode()
   val ctrl = new VIAluAdderCtrl
   val data = new VIAluAdderData(xlen)
 }
@@ -57,7 +57,9 @@ class VIAluAdder(xlen: Int = 64) extends Module {
     val out = Output(new VIAluAdderOutput(xlen))
   })
 
-  private val opcode = io.in.opcode
+  import VIAluOpcode._
+
+  private implicit val opcode = io.in.opcode
   private val sel8 = io.in.ctrl.sel8
   private val sel16 = io.in.ctrl.sel16
   private val sel32 = io.in.ctrl.sel32
@@ -74,21 +76,6 @@ class VIAluAdder(xlen: Int = 64) extends Module {
   private val vm = io.in.data.vm
   private val rm = io.in.data.vxrm
   private val mask = io.in.data.mask
-
-  private val isSub = opcode.isSub
-  private val isVmsbc = opcode.isVmsbc
-
-  private val isCmpEq = opcode.isCmpEq
-  private val isCmpLt = opcode.isCmpLt
-  private val isCmpNe = opcode.isCmpNe
-  private val isCmpLe = opcode.isCmpLe
-  private val isCmpGt = opcode.isCmpGt
-
-  private val isMaxMin = opcode.isMaxMinLogic
-  private val isMax = opcode.isMax
-
-  private val isSat = opcode.isSatLogic
-  private val isAvg = opcode.isAvgLogic
 
   private val vs2Vec = Wire(Vec(8, UInt(8.W)))
   private val vs1Vec = Wire(Vec(8, UInt(8.W)))
