@@ -61,6 +61,8 @@ abstract class Opcodes {
 
   def all: Seq[Type] = records.toSeq
 
+  def allBitPats: Seq[BitPat] = records.map(_.encode).toSeq
+
   def getWidth: Int = width
 
   private def updateWidth(w: Int): Unit = {
@@ -518,6 +520,10 @@ object Opcodes {
     def isZext4(implicit op: UInt): Bool = getOpClass === MOVE && getOp === ZEXT && getDataType === S2F4DV
     def isZext8(implicit op: UInt): Bool = getOpClass === MOVE && getOp === ZEXT && getDataType === S2F8DV
 
+    def isExt2(implicit op: UInt): Bool = getDataType === S2F2DV
+    def isExt4(implicit op: UInt): Bool = getDataType === S2F4DV
+    def isExt8(implicit op: UInt): Bool = getDataType === S2F8DV
+
     // May be encoded in
     def isUnsigned(implicit op: UInt): Bool = dataWidthAndTypeIsOneOf(
       ADDER -> Seq(MINU, MAXU),
@@ -568,6 +574,7 @@ object Opcodes {
     def isVrev8(implicit op: UInt): Bool = false.B // not supported yet
     def isCountZero(implicit op: UInt): Bool = false.B // not supported yet
     def isCtz(implicit op: UInt): Bool = false.B // not supported yet
+    def isPredicateAlwaysTrue(implicit op: UInt): Bool = getOpClass === ADDER && getOp.isOneOf(ADC, SBC)
   }
 
   object VIAluOpcode extends VIAluOpcode
@@ -832,6 +839,54 @@ object Opcodes {
 
   object VIPermOpcode extends VIPermOpcode
 
+  trait VMoveOpcode extends Opcodes with DataType {
+    // uop of vmv.v.v and vmerge.vvm
+    private val MERGE_VV = bb"000"
+    // uop of vmv.v.x, vmv.v.i, vfmv.v.f, vmerge.vxm, vmerge.vim, vfmerge.vfm
+    private val MERGE_VX = bb"001"
+    // uop of vmv1r, vmv2r, vmv4r, vmv8r
+    private val MV_NR = bb"010"
+    // uop of vmv.s.x, vfmv.s.f
+    private val MV_X2VS = bb"101"
+    // uop of vmv.x.s, vfmv.f.s
+    private val MV_VS2X = bb"110"
+
+    val vmerge_vv_e8  = Value(MERGE_VV, E8 )
+    val vmerge_vv_e16 = Value(MERGE_VV, E16)
+    val vmerge_vv_e32 = Value(MERGE_VV, E32)
+    val vmerge_vv_e64 = Value(MERGE_VV, E64)
+    val vmerge_vx_e8  = Value(MERGE_VX, E8 )
+    val vmerge_vx_e16 = Value(MERGE_VX, E16)
+    val vmerge_vx_e32 = Value(MERGE_VX, E32)
+    val vmerge_vx_e64 = Value(MERGE_VX, E64)
+    val vmvnr         = Value(MV_NR   , EX )
+    val vmv_x2vs_e8   = Value(MV_X2VS , E8 )
+    val vmv_x2vs_e16  = Value(MV_X2VS , E16)
+    val vmv_x2vs_e32  = Value(MV_X2VS , E32)
+    val vmv_x2vs_e64  = Value(MV_X2VS , E64)
+    val vmv_vs2x_e8   = Value(MV_VS2X , E8 )
+    val vmv_vs2x_e16  = Value(MV_VS2X , E16)
+    val vmv_vs2x_e32  = Value(MV_VS2X , E32)
+    val vmv_vs2x_e64  = Value(MV_VS2X , E64)
+
+    protected def getSubOp(implicit op: UInt): UInt = op(4, 2)
+    protected def getSubOp(op: BitPat): BitPat = op(4, 2)
+
+    def isVS2X(implicit op: UInt): Bool = getSubOp.isOneOf(MV_VS2X)
+    def isX2VS(implicit op: UInt): Bool = getSubOp.isOneOf(MV_X2VS)
+    def isNR(implicit op: UInt): Bool = getSubOp.isOneOf(MV_NR)
+    def isVmerge(implicit op: UInt): Bool = getSubOp.isOneOf(MERGE_VV, MERGE_VX)
+
+    def needMask(implicit op: UInt) = getSubOp.isOneOf(MERGE_VV, MERGE_VX)
+    def needNoMask(implicit op: UInt) = getSubOp.isOneOf(MV_NR, MV_X2VS)
+    def vlIsOne(implicit op: UInt) = getSubOp.isOneOf(MV_X2VS)
+    def vlIsZeroUpdate(implicit op: UInt) = getSubOp.isOneOf(MV_VS2X, MV_NR)
+
+    def isLegal(implicit op: UInt) = getSubOp.isOneOf(this.allBitPats.map(getSubOp))
+  }
+
+  object VMoveOpcode extends VMoveOpcode
+
   trait DataType {
     protected val F = bb"0"
     protected val V = bb"1"
@@ -866,6 +921,6 @@ object Opcodes {
     protected val E16 = bb"01"
     protected val E32 = bb"10"
     protected val E64 = bb"11"
-    protected val EX  = bb"00"
+    protected val EX  = bb"??"
   }
 }
