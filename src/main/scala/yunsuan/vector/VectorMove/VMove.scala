@@ -2,9 +2,10 @@ package yunsuan.vector.VectorMove
 
 import chisel3._
 import chisel3.util._
-import yunsuan.VmoveType
-import yunsuan.vector.{BitsExtend, SewOH}
+import yunsuan.VMoveOpcode
+import yunsuan.VMoveOpcode._
 import yunsuan.vector.alu.VSew._
+import yunsuan.vector.{BitsExtend, SewOH}
 
 class VMoveInfo extends Bundle {
   val vm = Bool()
@@ -12,7 +13,7 @@ class VMoveInfo extends Bundle {
 }
 
 class VectorMoveInputBundle(vlen: Int) extends Bundle {
-  val opcode = UInt(4.W)
+  val opcode = VMoveOpcode()
   val info = new VMoveInfo
   val vs2 = UInt(vlen.W)
   val vs1 = UInt(vlen.W)
@@ -31,18 +32,13 @@ class VectorMove extends Module {
     val out = ValidIO(new VectorMoveOutputBundle(VLEN))
   })
   val valid = io.in.valid
-  val opcode = io.in.bits.opcode
   val vsew = io.in.bits.info.vsew
   val vm = io.in.bits.info.vm
   val vs2 = io.in.bits.vs2
   val vs1 = io.in.bits.vs1
   val mask = io.in.bits.mask
+  implicit val opcode = io.in.bits.opcode
 
-  val isVmvxs  = VmoveType.isVmvxs(opcode)
-  val isVfmvfs = VmoveType.isVfmvfs(opcode)
-  val isVmvsx  = VmoveType.isVmvsx(opcode)
-  val isVfmvsf = VmoveType.isVfmvsf(opcode)
-  val isvmvnr  = VmoveType.isVmvnr(opcode)
   val eewVd = SewOH(vsew)
 
   // Integer Merge/Move, vmv.s.x
@@ -55,8 +51,7 @@ class VectorMove extends Module {
     vmergeTmp(i) := Mux(vmaskAdjust(i), vs1(8*i+7, 8*i), vs2(8*i+7, 8*i))
   }
   val vmergeResult = Wire(UInt(VLEN.W))
-  vmergeResult := Mux(vm || isVmvsx || isVfmvsf, vs1, vmergeTmp.asUInt)
-
+  vmergeResult := Mux(vm || isX2VS, vs1, vmergeTmp.asUInt)
 
   // vmv.x.s, vfmv.f.s
   val vmvResult = Wire(UInt(64.W))
@@ -72,7 +67,7 @@ class VectorMove extends Module {
   vmvnrResult := vs2
 
   val vd = Wire(UInt(VLEN.W))
-  vd := Mux(isVmvxs || isVfmvfs, vmvResult, Mux(isvmvnr, vmvnrResult, vmergeResult))
+  vd := Mux(isVS2X, vmvResult, Mux(isNR, vmvnrResult, vmergeResult))
 
   io.out.valid := valid
   io.out.bits.vd := vd

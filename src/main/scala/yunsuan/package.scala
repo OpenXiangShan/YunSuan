@@ -416,32 +416,7 @@ package object yunsuan {
     def fltq      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fltq)
   }
 
-  object VmoveType {
-    def dummy = BitPat.Y(OpTypeWidth)
-
-    def vmerge_vvm = LiteralCat(0.U(5.W), VmoveOpcode.vmerge_vvm)
-    def vfmerge    = LiteralCat(0.U(5.W), VmoveOpcode.vfmerge)
-    def vmv_v_v    = LiteralCat(0.U(5.W), VmoveOpcode.vmv_v_v)
-    def vfmv       = LiteralCat(0.U(5.W), VmoveOpcode.vfmv)
-    def vmv_x_s    = LiteralCat(0.U(5.W), VmoveOpcode.vmv_x_s)
-    def vmv_s_x    = LiteralCat(0.U(5.W), VmoveOpcode.vmv_s_x)
-    def vfmv_f_s   = LiteralCat(0.U(5.W), VmoveOpcode.vfmv_f_s)
-    def vfmv_s_f   = LiteralCat(0.U(5.W), VmoveOpcode.vfmv_s_f)
-    def vmv1r      = LiteralCat(0.U(5.W), VmoveOpcode.vmv1r)
-    def vmv2r      = LiteralCat(0.U(5.W), VmoveOpcode.vmv2r)
-    def vmv4r      = LiteralCat(0.U(5.W), VmoveOpcode.vmv4r)
-    def vmv8r      = LiteralCat(0.U(5.W), VmoveOpcode.vmv8r)
-
-    def isVmvxs(fuOpType: UInt)  = fuOpType(2) & !fuOpType(1) & !fuOpType(0)
-    def isVfmvfs(fuOpType: UInt) = fuOpType(2) &  fuOpType(1) & !fuOpType(0)
-    def isVmvsx(fuOpType: UInt)  = fuOpType(2) & !fuOpType(1) &  fuOpType(0)
-    def isVfmvsf(fuOpType: UInt) = fuOpType(2) &  fuOpType(1) &  fuOpType(0)
-    def needNoMask(fuOpType: UInt) = Seq(vmerge_vvm, vfmerge).map(_ === fuOpType).reduce(_ || _)
-    def vlIsOne(fuOpType: UInt) = fuOpType(2)
-    def vlIsZeroUpdate(fuOptype: UInt) = fuOptype(2) & !fuOptype(0)
-    def isVmvnr(fuOpType: UInt) = fuOpType(3)
-    def getEmulVmvnr(fuOpType: UInt) = Cat(0.U(1.W), fuOpType(1, 0))
-  }
+  val VMoveOpcode = Opcodes.VMoveOpcode
 
   object VfaddOpCode {
     def dummy    = "b11111".U(5.W)
