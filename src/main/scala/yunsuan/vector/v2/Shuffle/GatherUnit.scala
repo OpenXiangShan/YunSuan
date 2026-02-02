@@ -1,6 +1,6 @@
 package yunsuan.vector.v2.Shuffle
 
-import _root_.circt.stage.FirtoolOption
+import _root_.circt.stage._
 import chisel3._
 import chisel3.util._
 import yunsuan.vector.Common._
@@ -483,14 +483,14 @@ object MaskSelectAndDupModuleMain extends App {
   )
   val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
 
-  (new chisel3.stage.ChiselStage).execute(
+  (new ChiselStage).execute(
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage.ChiselGeneratorAnnotation(
       () => new MaskSelectAndDupModule(vlen = 128, dlen = 128, useEI16 = false)
     ) +: firtoolAnno
   )
 
-  (new chisel3.stage.ChiselStage).execute(
+  (new ChiselStage).execute(
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage.ChiselGeneratorAnnotation(
       () => new MaskSelectAndDupModule(vlen = 128, dlen = 128, useEI16 = true)
@@ -510,7 +510,7 @@ object GatherMaskGenModuleMain extends App {
   )
   val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
 
-  (new chisel3.stage.ChiselStage).execute(
+  (new ChiselStage).execute(
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage.ChiselGeneratorAnnotation(
       () => new GatherMaskGenModule(vlen = 128, dlen = 128, MinDataWidth = 8)
@@ -531,14 +531,14 @@ object VlCompareBitVecModuleMain extends App {
   )
   val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
 
-  (new chisel3.stage.ChiselStage).execute(
+  (new ChiselStage).execute(
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage.ChiselGeneratorAnnotation(
       () => new VlCompareBitVecModule(vlen = 128, dlen = 128, MinDataWidth = 8, (i, vl) => i < vl, "LessThanVl")
     ) +: firtoolAnno
   )
 
-  (new chisel3.stage.ChiselStage).execute(
+  (new ChiselStage).execute(
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage.ChiselGeneratorAnnotation(
       () => new VlCompareBitVecModule(vlen = 128, dlen = 128, MinDataWidth = 8, (i, vl) => i === (vl - 1.U), "EqualVlM1")
@@ -559,7 +559,7 @@ object GatherUnitMain extends App {
   )
   val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
 
-  (new chisel3.stage.ChiselStage).execute(
+  (new ChiselStage).execute(
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage.ChiselGeneratorAnnotation(() => new GatherUnit(vlen = 128, dlen = 128, maxTableNum = 8)) +: firtoolAnno
   )

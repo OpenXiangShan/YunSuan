@@ -3,7 +3,7 @@ package yunsuan.vector.v2.Shuffle
 import chisel3._
 import chisel3.util._
 import yunsuan.vector.Common._
-import _root_.circt.stage.FirtoolOption
+import _root_.circt.stage._
 
 import scala.language.reflectiveCalls
 
@@ -195,7 +195,7 @@ object GatherArrayMain extends App {
   )
   val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
 
-  (new chisel3.stage.ChiselStage).execute(
+  (new ChiselStage).execute(
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage.ChiselGeneratorAnnotation(() => new GatherArray(vlen = 128, dlen = 128, xlen = 64)) +: firtoolAnno
   )

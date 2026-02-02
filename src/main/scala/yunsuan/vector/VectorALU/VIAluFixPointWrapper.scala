@@ -6,7 +6,7 @@ import chisel3.util._
 
 import yunsuan.util.VecDataSplitModule
 import yunsuan.util.{DstMgu, Mgu, Mgtu}
-import yunsuan.vector.SewOH
+import yunsuan.vector.Common.SewOH
 import yunsuan.vector.VectorALU.VIAluFixPoint
 import yunsuan.util.Utils.{SplitMask, VecDataToMaskDataVec}
 import yunsuan.VialuFixType

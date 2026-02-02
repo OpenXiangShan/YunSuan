@@ -1,6 +1,6 @@
 package yunsuan.vector.v2.Crypto
 
-import _root_.circt.stage.FirtoolOption
+import _root_.circt.stage._
 import chisel3._
 import chisel3.util._
 import yunsuan.vector.Common._
@@ -396,7 +396,7 @@ object CryptoIterationCtrl {
     )
     val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
 
-    (new chisel3.stage.ChiselStage).execute(
+    (new ChiselStage).execute(
       Array("--target-dir", "build/vector") ++ args,
       chisel3.stage.ChiselGeneratorAnnotation(() => new CryptoIterationCtrl()) +: firtoolAnno
     )
