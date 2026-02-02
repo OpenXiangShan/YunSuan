@@ -104,20 +104,28 @@ class VSha256msInner extends Module {
   val out = IO(Output(new Out))
 
   val isVSha2ms0 = in.isVSha2ms0
-  val w0 :: w1 :: _   :: w2  :: w9  :: Nil = in.srcs.toList
-  val t0 :: t1 :: w14 :: w15 :: w10 :: Nil = in.srcs.toList
+  val w0 :: w1 :: _   :: w2  :: w9  :: Nil = in.srcs.toList.map(WireInit(_))
+  val t0 :: t1 :: w14 :: w15 :: w10 :: Nil = in.srcs.toList.map(WireInit(_))
 
   val add2operands: experimental.HWTuple2[UInt, UInt] = Mux(isVSha2ms0, (w1, w2), (t0, w14))
   val add3operands: experimental.HWTuple3[UInt, UInt, UInt] = Mux(isVSha2ms0, (w0, w1, w9), (t1, w15, w10))
 
-  val add2res = add2operands._1 + SHA256.sig0(add2operands._2)
-  val add3res = add3operands._1 + SHA256.sig1(add3operands._2) + add3operands._3
+  val sig0 = dontTouch(SHA256.sig0(add2operands._2))
+  val sig1 = dontTouch(SHA256.sig1(add3operands._2))
+
+  val add2res = add2operands._1 + sig0
+  val add3res = add3operands._1 + sig1 + add3operands._3
 
   (out.res0, out.res1) := Mux(
     isVSha2ms0,
     (add3res, add2res),
     (add2res, add3res),
   )
+
+  Seq(
+    w0, w1, w2, w9,
+    t0, t1, w14, w15, w10
+  ).map(dontTouch(_))
 }
 
 object VSha256msInner {
