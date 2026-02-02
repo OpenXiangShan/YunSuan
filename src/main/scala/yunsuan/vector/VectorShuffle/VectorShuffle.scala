@@ -262,7 +262,7 @@ abstract class VectorShuffleBaseModule(val vlen: Int) extends Module with Vector
 object VectorShuffleGen extends App {
   println("Generating the VectorShuffle hardware")
 
-  (new chisel3.stage.ChiselStage).execute(
+  (new ChiselStage).execute(
     Array("--target-dir", "build/vector") ++ args,
     Seq(
       chisel3.stage.ChiselGeneratorAnnotation(() => new VectorShuffle(128))

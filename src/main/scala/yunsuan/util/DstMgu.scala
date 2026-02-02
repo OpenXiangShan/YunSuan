@@ -2,7 +2,7 @@ package yunsuan.util
 
 import chisel3._
 import chisel3.util._
-import yunsuan.vector.SewOH
+import yunsuan.vector.Common.SewOH
 
 class DstMgu(vlen: Int) extends Module {
   val io = IO(new DstMguIO(vlen))

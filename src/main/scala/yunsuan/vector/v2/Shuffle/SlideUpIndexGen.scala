@@ -3,7 +3,7 @@ package yunsuan.vector.v2.Shuffle
 import chisel3._
 import chisel3.util._
 import yunsuan.vector.Common._
-import _root_.circt.stage.FirtoolOption
+import _root_.circt.stage._
 
 /**
  * This module is used to generate the indices for slideup instruction.
@@ -98,7 +98,7 @@ object SlideUpIndexGenMain extends App {
   )
   val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
 
-  (new chisel3.stage.ChiselStage).execute(
+  (new ChiselStage).execute(
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage.ChiselGeneratorAnnotation(() => new SlideUpIndexGen(dlen = 128, vlen = 128)) +: firtoolAnno
   )

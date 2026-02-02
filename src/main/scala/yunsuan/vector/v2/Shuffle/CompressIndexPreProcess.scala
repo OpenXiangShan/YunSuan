@@ -3,7 +3,7 @@ package yunsuan.vector.v2.Shuffle
 import chisel3._
 import chisel3.util._
 import yunsuan.vector.Common._
-import _root_.circt.stage.FirtoolOption
+import _root_.circt.stage._
 import yunsuan.vector.VectorShuffle.RotateUp
 
 class CompressIndexGen(vlen: Int, dlen: Int) extends Module {
@@ -249,7 +249,7 @@ object CompressIndexGenMain extends App {
   )
   val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
 
-  (new chisel3.stage.ChiselStage).execute(
+  (new ChiselStage).execute(
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage.ChiselGeneratorAnnotation(() => new CompressIndexGen(vlen = 128, dlen = 128)) +: firtoolAnno
   )
@@ -268,7 +268,7 @@ object CompressPreProcessMain extends App {
   )
   val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
 
-  (new chisel3.stage.ChiselStage).execute(
+  (new ChiselStage).execute(
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage.ChiselGeneratorAnnotation(() => new CompressIndexPreProcess(vlen = 128, dlen = 128)) +: firtoolAnno
   )
@@ -287,12 +287,12 @@ object CompressDataPreProcessMain extends App {
   )
   val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
 
-  (new chisel3.stage.ChiselStage).execute(
+  (new ChiselStage).execute(
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage.ChiselGeneratorAnnotation(() => new CompressDataPreProcess(vlen = 128, dlen = 128)) +: firtoolAnno
   )
 
-  (new chisel3.stage.ChiselStage).execute(
+  (new ChiselStage).execute(
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage.ChiselGeneratorAnnotation(() => new CompressDataPreProcess2(vlen = 128, dlen = 128)) +: firtoolAnno
   )

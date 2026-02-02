@@ -3,10 +3,11 @@ package yunsuan.vector.alu
 
 import chisel3._
 import chisel3.util._
+import yunsuan.vector.Common.SewOH
+
 import scala.language.postfixOps
 import yunsuan.vector._
 import yunsuan.vector.alu.VAluOpcode._
-import yunsuan.vector.Common._
 
 class Reduction extends Module {
   val VLEN = 128
