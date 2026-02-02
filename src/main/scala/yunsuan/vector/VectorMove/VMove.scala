@@ -68,8 +68,16 @@ class VectorMove extends Module {
   vmvnrResult := vs2
 
   val vd = Wire(UInt(VLEN.W))
-  vd := Mux(isVS2X, vmvResult, Mux(isNR, vmvnrResult, vmergeResult))
+  vd := Mux1H(Seq(
+    isVS2X -> vmvResult,
+    isNR -> vmvnrResult,
+    isVmerge -> vmergeResult,
+  ))
 
   io.out.valid := valid
   io.out.bits.vd := vd
+
+  dontTouch(vmergeResult)
+  dontTouch(vmvResult)
+  dontTouch(vmvnrResult)
 }
