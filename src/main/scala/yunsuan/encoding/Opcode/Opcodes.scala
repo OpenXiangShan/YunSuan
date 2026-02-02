@@ -887,6 +887,30 @@ object Opcodes {
 
   object VMoveOpcode extends VMoveOpcode
 
+  trait VSha256msOpcode extends Opcodes {
+    private val sha256ms = bb"1"
+
+    val vsha256ms = Value(sha256ms)
+
+    def isMS(implicit op: UInt): Bool = op === sha256ms
+  }
+
+  object VSha256msOpcode extends VSha256msOpcode
+
+  trait VSha256cOpcode extends Opcodes {
+    private val sha256cl = bb"10"
+    private val sha256ch = bb"11"
+
+    val vsha256cl = Value(sha256cl)
+    val vsha256ch = Value(sha256ch)
+
+    def isCL(implicit op: UInt): Bool = op === sha256cl
+    def isCH(implicit op: UInt): Bool = op === sha256ch
+    def isLegal(implicit op: UInt): Bool = op.isOneOf(sha256cl, sha256ch)
+  }
+
+  object VSha256cOpcode extends VSha256cOpcode
+
   trait DataType {
     protected val F = bb"0"
     protected val V = bb"1"
