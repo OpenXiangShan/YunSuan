@@ -221,6 +221,7 @@ object Opcodes {
     private val MSIF   = bb"0101"
     private val MSOF   = bb"0110"
     private val IOTA   = bb"0111"
+    private val REV8   = bb"000"
 
     /**
      * sub opcode of [[SHIFT]] and [[CSHIFT]]
@@ -467,6 +468,11 @@ object Opcodes {
     val vnclip_e16  = Value(CLIP , CSHIFT, S2WDV, E16)
     val vnclip_e32  = Value(CLIP , CSHIFT, S2WDV, E32)
 
+    val vrev8_e8  = Value(REV8, BITOP, S2VDV, E8 )
+    val vrev8_e16 = Value(REV8, BITOP, S2VDV, E16)
+    val vrev8_e32 = Value(REV8, BITOP, S2VDV, E32)
+    val vrev8_e64 = Value(REV8, BITOP, S2VDV, E64)
+
     def getOp(implicit op: UInt): UInt = op(10, 8)
     def getOpClass(implicit op: UInt): UInt = op(7, 5)
     def getDataType(implicit op: UInt): UInt = op(4, 2)
@@ -534,6 +540,37 @@ object Opcodes {
       CSHIFT -> Seq(SRL, CLIPU),
     )
 
+//    def vext   = "b111111".U(width.W)
+//    def vand   = "b100001".U(width.W)
+//    def vnand  = "b100010".U(width.W)
+//    def vandn  = "b100011".U(width.W)
+//
+//    def vxor   = "b100100".U(width.W)
+//    def vor    = "b100101".U(width.W)
+//    def vnor   = "b100110".U(width.W)
+//    def vorn   = "b100111".U(width.W)
+//    def vxnor  = "b100000".U(width.W)
+//
+//    def vsll   = "b101000".U(width.W)
+//    def vrol   = "b101001".U(width.W)
+//
+//    def vsrl   = "b101010".U(width.W)
+//    def vssrl  = "b101011".U(width.W)
+//    def vsra   = "b101100".U(width.W)
+//    def vssra  = "b101101".U(width.W)
+//    def vror   = "b101111".U(width.W)
+//
+//    // Zvbb
+//    def vcpop  = "b110000".U(width.W)
+//    def vbrev  = "b110001".U(width.W)
+//    def vbrev8 = "b110010".U(width.W)
+//    def vrev8  = "b110011".U(width.W)
+//
+//    def vclz   = "b110100".U(width.W)
+//    def vctz   = "b110101".U(width.W)
+
+    def isMisc(implicit op: UInt): Bool = isVrev8
+
     def isAddCarry(implicit op: UInt): Bool = getOpClass === ADDER && getOp.isOneOf(ADC, SBC)
     def isShift(implicit op: UInt): Bool = getOpClass.isOneOf(SHIFT, CSHIFT)
 
@@ -567,11 +604,11 @@ object Opcodes {
 
     def isScalVro(implicit op: UInt): Bool = getOpClass === CSHIFT || getOpClass === SHIFT && getOp.isOneOf(ROR, ROL)
     def isNotVro(implicit op: UInt): Bool = getOpClass === CSHIFT
-    def isZvbbOthers(implicit op: UInt): Bool = false.B // not supported yet
+    def isZvbbOthers(implicit op: UInt): Bool = isVrev8 // not supported yet
     def isVcpop(implicit op: UInt): Bool = false.B // not supported yet
     def isVbrev(implicit op: UInt): Bool = false.B // not supported yet
     def isVbrev8(implicit op: UInt): Bool = false.B // not supported yet
-    def isVrev8(implicit op: UInt): Bool = false.B // not supported yet
+    def isVrev8(implicit op: UInt): Bool = getOpClass === BITOP && getOp === REV8 // not supported yet
     def isCountZero(implicit op: UInt): Bool = false.B // not supported yet
     def isCtz(implicit op: UInt): Bool = false.B // not supported yet
     def isPredicateAlwaysTrue(implicit op: UInt): Bool = getOpClass === ADDER && getOp.isOneOf(ADC, SBC)
