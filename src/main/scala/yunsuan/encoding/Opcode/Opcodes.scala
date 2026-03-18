@@ -608,7 +608,7 @@ object Opcodes {
 
     def isSigned(implicit op: UInt): Bool = getOp.apply(2)
 
-    def isMisc(implicit op: UInt): Bool = isVrev8
+    def isMisc(implicit op: UInt): Bool = isVcpop || isShift || isZvbbOthers ||  isExt2 || isExt4 || isExt8 || isBitLogic
 
     def isAddCarry(implicit op: UInt): Bool = getOpClass === ADDER && getOp.isOneOf(ADC, SBC)
     def isShift(implicit op: UInt): Bool = getOpClass.isOneOf(SHIFT, CSHIFT)
