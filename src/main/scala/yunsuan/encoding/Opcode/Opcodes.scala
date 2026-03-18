@@ -799,6 +799,10 @@ object Opcodes {
     val vrem_e16  = DvSvlS2vS1(REM , E16)
     val vrem_e32  = DvSvlS2vS1(REM , E32)
     val vrem_e64  = DvSvlS2vS1(REM , E64)
+
+    def getOp(implicit op: UInt): UInt = op(3, 2)
+    def isSigned(implicit op: UInt): Bool = getOp.isOneOf(DIV, REM)
+    def isDiv(implicit op: UInt): Bool = getOp.isOneOf(DIVU, DIV)
   }
 
   object VIDivOpcode extends VIDivOpcode
