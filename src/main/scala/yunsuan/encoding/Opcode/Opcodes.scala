@@ -554,7 +554,7 @@ object Opcodes {
     def getDataType(implicit op: UInt): UInt = op(4, 2)
     def getDataWidth(implicit op: UInt): UInt = op(1, 0)
 
-    def isWidenVs2(implicit op: UInt): Bool = getDataType.isOneOf(S2WDV, S2WDW)
+    def isWidenVs2(implicit op: UInt): Bool = getDataType.isOneOf(S2VDW)
     def isWiden(implicit op: UInt): Bool = getDataType.isOneOf(S2VDW, S2WDW)
     def isNarrow(implicit op: UInt): Bool = getDataType.isOneOf(S2WDV)
     def isSourceE8(implicit op: UInt): Bool = getDataWidth === E8
@@ -619,7 +619,7 @@ object Opcodes {
     def isLeftShiftLogic(implicit op: UInt): Bool = isShift && getOp.isOneOf(SLL, ROL)
     def isMaxMin(implicit op: UInt): Bool = getOpClass.isOneOf(ADDER) && getOp.isOneOf(MINU, MIN, MAXU, MAX)
     def isSat(implicit op: UInt): Bool = getOpClass.isOneOf(CADDER) && getOp.isOneOf(SADDU, SADD, SSUBU, SSUB)
-    def isAvg(implicit op: UInt): Bool = getOpClass.isOneOf(CADDER) && getOp.isOneOf(AADDU, AADD, ASUBU, ASUB)
+    def isAvg(implicit op: UInt): Bool = getOpClass.isOneOf(CADDER) && getOp.isOneOf(AADDU, AADD, ASUBU, ASUB) && getDataType === S2VDV
 
     def isNClip(implicit op: UInt): Bool = getOpClass.isOneOf(SHIFT) && getOp.isOneOf(CLIPU, CLIP)
 
