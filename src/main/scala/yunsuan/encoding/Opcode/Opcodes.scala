@@ -756,23 +756,55 @@ object Opcodes {
     val vwmul_e16   = DvSvlS2vS1(S2S, S1S, MUL, OP2, DW, E16)
     val vwmul_e32   = DvSvlS2vS1(S2S, S1S, MUL, OP2, DW, E32)
 
-    val vwmaccu_e8   = DvSvlS2vS1(S2U, S1U, MACC, OP2, DW, E8 )
-    val vwmaccu_e16  = DvSvlS2vS1(S2U, S1U, MACC, OP2, DW, E16)
-    val vwmaccu_e32  = DvSvlS2vS1(S2U, S1U, MACC, OP2, DW, E32)
-    val vwmacc_e8    = DvSvlS2vS1(S2S, S1S, MACC, OP2, DW, E8 )
-    val vwmacc_e16   = DvSvlS2vS1(S2S, S1S, MACC, OP2, DW, E16)
-    val vwmacc_e32   = DvSvlS2vS1(S2S, S1S, MACC, OP2, DW, E32)
-    val vwmaccus_e8  = DvSvlS2vS1(S2S, S1U, MACC, OP2, DW, E8 )
-    val vwmaccus_e16 = DvSvlS2vS1(S2S, S1U, MACC, OP2, DW, E16)
-    val vwmaccus_e32 = DvSvlS2vS1(S2S, S1U, MACC, OP2, DW, E32)
-    val vwmaccsu_e8  = DvSvlS2vS1(S2U, S1S, MACC, OP2, DW, E8 )
-    val vwmaccsu_e16 = DvSvlS2vS1(S2U, S1S, MACC, OP2, DW, E16)
-    val vwmaccsu_e32 = DvSvlS2vS1(S2U, S1S, MACC, OP2, DW, E32)
+    val vwmaccu_e8   = DvSvlS2vS1(S2U, S1U, MACC, OP3, DW, E8 )
+    val vwmaccu_e16  = DvSvlS2vS1(S2U, S1U, MACC, OP3, DW, E16)
+    val vwmaccu_e32  = DvSvlS2vS1(S2U, S1U, MACC, OP3, DW, E32)
+    val vwmacc_e8    = DvSvlS2vS1(S2S, S1S, MACC, OP3, DW, E8 )
+    val vwmacc_e16   = DvSvlS2vS1(S2S, S1S, MACC, OP3, DW, E16)
+    val vwmacc_e32   = DvSvlS2vS1(S2S, S1S, MACC, OP3, DW, E32)
+    val vwmaccus_e8  = DvSvlS2vS1(S2S, S1U, MACC, OP3, DW, E8 )
+    val vwmaccus_e16 = DvSvlS2vS1(S2S, S1U, MACC, OP3, DW, E16)
+    val vwmaccus_e32 = DvSvlS2vS1(S2S, S1U, MACC, OP3, DW, E32)
+    val vwmaccsu_e8  = DvSvlS2vS1(S2U, S1S, MACC, OP3, DW, E8 )
+    val vwmaccsu_e16 = DvSvlS2vS1(S2U, S1S, MACC, OP3, DW, E16)
+    val vwmaccsu_e32 = DvSvlS2vS1(S2U, S1S, MACC, OP3, DW, E32)
 
     val vsmul_e8  = DvSvlS2vS1(S2S, S1S, SMUL, OP2, DV, E8 ) + VxsatWen + VxrmRen
     val vsmul_e16 = DvSvlS2vS1(S2S, S1S, SMUL, OP2, DV, E16) + VxsatWen + VxrmRen
     val vsmul_e32 = DvSvlS2vS1(S2S, S1S, SMUL, OP2, DV, E32) + VxsatWen + VxrmRen
     val vsmul_e64 = DvSvlS2vS1(S2S, S1S, SMUL, OP2, DV, E64) + VxsatWen + VxrmRen
+
+    def getOp(implicit op: UInt): UInt = op(6, 4)
+    def getOpMode(implicit op: UInt): UInt = op(3)
+    def getDestMode(implicit op: UInt): UInt = op(2)
+    def getDataWidth(implicit op: UInt): UInt = op(1, 0)
+
+    def vs2Sign(implicit op: UInt): UInt = op(8)
+    def vs1Sign(implicit op: UInt): UInt = op(7)
+    def vdSign(implicit op: UInt): UInt = vs2Sign | vs1Sign
+    def isWiden(implicit op: UInt): Bool = getDestMode === DW
+
+    def vs2Type(implicit op: UInt): UInt = 0.U(1.W) ## vs2Sign ## getDataWidth
+    def vs1Type(implicit op: UInt): UInt = 0.U(1.W) ## vs1Sign ## getDataWidth
+    def vdType(implicit op: UInt): UInt = 0.U(1.W) ## vdSign ## (getDataWidth + isWiden.asUInt)
+    def getFormat(implicit op: UInt): UInt = vs2Type ## vs1Type ## vdType
+
+    def getVs2Sign(implicit op: UInt): UInt = vs2Sign
+    def getVs1Sign(implicit op: UInt): UInt = vs1Sign
+
+    def isMUL(implicit op: UInt): Bool = getOp === MUL && getOpMode === OP2
+    def isMULH(implicit op: UInt): Bool = getOp === MULH && getOpMode === OP2
+    def isVmulh(implicit op: UInt): Bool = isMULH && vs2Sign === S2S && vs1Sign === S1S && getDestMode === DV
+    def isVmacc(implicit op: UInt): Bool = getOp === MACC && getOpMode === OP3
+    def isVnmsac(implicit op: UInt): Bool = getOp === NMSAC && getOpMode === OP3
+    def isVmadd(implicit op: UInt): Bool = getOp === MADD && getOpMode === OP3
+    def isVnmsub(implicit op: UInt): Bool = getOp === NMSUB && getOpMode === OP3
+    def isVsmul(implicit op: UInt): Bool = getOp === SMUL && getOpMode === OP2
+
+    def ishighHalf(implicit op: UInt): Bool = isMULH
+    def isVmaccType(implicit op: UInt): Bool = isVmacc || isVnmsac || isVmadd || isVnmsub 
+    def isSub(implicit op: UInt): Bool = isVnmsub || isVnmsac
+    def overWriteMultiplicand(implicit op: UInt): Bool = isVmadd || isVnmsub
   }
 
   object VIMacOpcode extends VIMacOpcode

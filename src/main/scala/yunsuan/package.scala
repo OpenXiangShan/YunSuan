@@ -322,63 +322,6 @@ package object yunsuan {
     def notNeedSew(fuOpType: UInt) = fuOpType(7)
   }
 
-  object VimacType {
-
-    object INT {
-      def width = 1
-
-      def S = "b1".U(width.W)
-      def U = "b0".U(width.W)
-      def X = "b0".U(width.W)
-    }
-
-    object FMT {
-      def width = 1
-
-      def VVV = 0.U(width.W)
-      def VVW = 1.U(width.W)
-    }
-
-    // sign:3bits(vs2,vs1,vd) isWiden:1bit opcode:3bits
-    def dummy              = BitPat.Y(OpTypeWidth) // exu not implemented
-    //                                  pad       vs2   vs1  vd_old format   opcode
-    def vmul               = LiteralCat(0.U(2.W), INT.S, INT.S, INT.X, FMT.VVV, VimacOpcode.vmul)   // "b00_110_0_000".U(OpTypeWidth.W) // vmul    vmul.vv/vmul.vx
-    def vwmul              = LiteralCat(0.U(2.W), INT.S, INT.S, INT.X, FMT.VVW, VimacOpcode.vmul)   // "b00_110_1_000".U(OpTypeWidth.W) // vmul    vwmul.vv/vwmul.vx
-    def vwmulu             = LiteralCat(0.U(2.W), INT.U, INT.U, INT.X, FMT.VVW, VimacOpcode.vmul)   // "b00_000_1_000".U(OpTypeWidth.W) // vmul    vwmulu.vv/vwmulu.vx
-    def vwmulsu            = LiteralCat(0.U(2.W), INT.S, INT.U, INT.X, FMT.VVW, VimacOpcode.vmul)   // "b00_100_1_000".U(OpTypeWidth.W) // vmul    vwmulsu.vv/vwmulsu.vx
-    def vmulh              = LiteralCat(0.U(2.W), INT.S, INT.S, INT.X, FMT.VVV, VimacOpcode.vmulh)  // "b00_110_0_001".U(OpTypeWidth.W) // vmulh   vmulh.vv/vmulh.vx
-    def vmulhu             = LiteralCat(0.U(2.W), INT.U, INT.U, INT.X, FMT.VVV, VimacOpcode.vmulh)  // "b00_000_0_001".U(OpTypeWidth.W) // vmulh   vmulhu.vv/vmulhu.vx
-    def vmulhsu            = LiteralCat(0.U(2.W), INT.S, INT.U, INT.X, FMT.VVV, VimacOpcode.vmulh)  // "b00_100_0_001".U(OpTypeWidth.W) // vmulh   vmulhsu.vv/vmulhsu.vx
-    def vmacc              = LiteralCat(0.U(2.W), INT.S, INT.S, INT.S, FMT.VVV, VimacOpcode.vmacc)  // "b00_111_0_010".U(OpTypeWidth.W) // vmacc   vmacc.vv/vmacc.vx
-    def vwmaccu            = LiteralCat(0.U(2.W), INT.U, INT.U, INT.U, FMT.VVW, VimacOpcode.vmacc)  // "b00_000_1_010".U(OpTypeWidth.W) // vmacc   vwmaccu.vv/vwmaccu.vx
-    def vwmacc             = LiteralCat(0.U(2.W), INT.S, INT.S, INT.S, FMT.VVW, VimacOpcode.vmacc)  // "b00_111_1_010".U(OpTypeWidth.W) // vmacc   vwmacc.vv/vwmacc.vx
-    def vwmaccsu           = LiteralCat(0.U(2.W), INT.U, INT.S, INT.S, FMT.VVW, VimacOpcode.vmacc)  // "b00_011_1_010".U(OpTypeWidth.W) // vmacc   vwmaccsu.vv/vwmaccsu.vx
-    def vwmaccus           = LiteralCat(0.U(2.W), INT.S, INT.U, INT.S, FMT.VVW, VimacOpcode.vmacc)  // "b00_101_1_010".U(OpTypeWidth.W) // vmacc   vwmaccus.vx
-    def vnmsac             = LiteralCat(0.U(2.W), INT.S, INT.S, INT.S, FMT.VVV, VimacOpcode.vnmsac) // "b00_111_0_011".U(OpTypeWidth.W) // vnmsac  vnmsac.vv/vnmsac.vx
-    def vmadd              = LiteralCat(0.U(2.W), INT.S, INT.S, INT.S, FMT.VVV, VimacOpcode.vmadd)  // "b00_111_0_100".U(OpTypeWidth.W) // vmadd   vmadd.vv/vmadd.vx
-    def vnmsub             = LiteralCat(0.U(2.W), INT.S, INT.S, INT.S, FMT.VVV, VimacOpcode.vnmsub) // "b00_111_0_101".U(OpTypeWidth.W) // vnmsub  vnmsub.vv/vnmsub.vx
-    def vsmul              = LiteralCat(0.U(2.W), INT.S, INT.S, INT.X, FMT.VVV, VimacOpcode.vsmul)  // "b00_110_0_110".U(OpTypeWidth.W) // vsmul   vsmul.vv/vsmul.vx
-
-    def getOpcode(fuOpType: UInt) : UInt = fuOpType(2, 0)
-    def getFormat(fuOpType: UInt) : UInt = fuOpType(3)
-
-    def vs2Sign(fuOpType: UInt) = fuOpType(6)
-    def vs1Sign(fuOpType: UInt) = fuOpType(5)
-    def vdSign (fuOpType: UInt) = fuOpType(4)
-
-    def getSrcVdType(fuOpType: UInt, sew: UInt) = {
-      val isWiden = fuOpType(3)
-      val vs2Sign = fuOpType(6)
-      val vs1Sign = fuOpType(5)
-      val vdSign  = fuOpType(4)
-      val vs2Type = Cat(0.U(1.W), vs2Sign, sew(1,0))
-      val vs1Type = Cat(0.U(1.W), vs1Sign, sew(1,0))
-      val vdType  = Cat(0.U(1.W), vdSign , sew(1,0) + isWiden)
-      val format  = Cat(vs2Type, vs1Type, vdType)
-      format
-    }
-  }
-
   object VfaluType {
     // isWiden:1bit opcode:5bits
     def dummy = BitPat.Y(OpTypeWidth) // exu not implemented
