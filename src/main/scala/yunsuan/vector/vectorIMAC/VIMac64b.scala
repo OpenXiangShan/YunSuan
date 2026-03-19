@@ -30,9 +30,6 @@ class VIMac64b extends Module {
   val vs2 = io.vs2
   val vs1 = io.vs1
   val oldVd = io.oldVd
-  val vs2_is_signed = io.srcType(0)(2) // vs2 & vd should be signed numbers for vmadd/vnmsub
-  val vs1_is_signed = io.srcType(1)(2)
-  val vd_is_signed  = io.vdType(2)
   val eewVs2 = SewOH(io.srcType(0)(1, 0))
   
   val sew = eewVs2
