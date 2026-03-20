@@ -8,8 +8,10 @@ import yunsuan.util._
 
 class VIMac64bStage1Input extends Bundle {
   val info     = new VIFuInfo
-  val srcType  = Vec(2, UInt(4.W))
-  val vdType   = UInt(4.W)
+  val vs1Sign  = Bool()
+  val vs2Sign  = Bool()
+  val vdSign   = Bool()
+  val sew      = UInt(2.W)
   val vs1      = UInt(64.W)
   val vs2      = UInt(64.W)
   val oldVd    = UInt(64.W) 
@@ -44,10 +46,10 @@ class VIMac64bStage1 extends Module {
   val vs2 = io.in.vs2
   val vs1 = io.in.vs1
   val oldVd = io.in.oldVd
-  val vs2_is_signed = io.in.srcType(0)(3)
-  val vs1_is_signed = io.in.srcType(1)(3)
-  val vd_is_signed  = io.in.vdType(3)
-  val eewVs2 = SewOH(io.in.srcType(0)(1, 0))
+  val vs2Sign = io.in.vs2Sign
+  val vs1Sign = io.in.vs1Sign
+  val vdSign  = io.in.vdSign
+  val eewVs2 = SewOH(io.in.sew)
 
   val sew = eewVs2
   val sewIs64 = sew.is64
@@ -85,7 +87,7 @@ class VIMac64bStage1 extends Module {
   
   val vs2SignGen = Module(new vs2SgnGenerator())
   vs2SignGen.io.vs2            := vs2
-  vs2SignGen.io.vs2_is_signed  := vs2_is_signed
+  vs2SignGen.io.vs2Sign        := vs2Sign
   vs2SignGen.io.sewIs8         := sewIs8
   vs2SignGen.io.sewIs16        := sewIs16
   vs2SignGen.io.sewIs32        := sewIs32
@@ -98,7 +100,7 @@ class VIMac64bStage1 extends Module {
 
   val ppSgnAndCBGen = Module(new partProdSgnAndCarryBitGen())
   ppSgnAndCBGen.io.isSub            := isSub
-  ppSgnAndCBGen.io.vs2_is_signed    := vs2_is_signed
+  ppSgnAndCBGen.io.vs2Sign          := vs2Sign
   ppSgnAndCBGen.io.sewIs8           := sewIs8
   ppSgnAndCBGen.io.sewIs16          := sewIs16
   ppSgnAndCBGen.io.sewIs32          := sewIs32
@@ -137,9 +139,9 @@ class VIMac64bStage1 extends Module {
   wallaceTreeGen.io.vs2           := vs2
   wallaceTreeGen.io.oldVd         := oldVd
   wallaceTreeGen.io.partProdCin   := partProdCin
-  wallaceTreeGen.io.vs1_is_signed := vs1_is_signed
-  wallaceTreeGen.io.vs2_is_signed := vs2_is_signed
-  wallaceTreeGen.io.vd_is_signed  := vd_is_signed
+  wallaceTreeGen.io.vs1Sign       := vs1Sign
+  wallaceTreeGen.io.vs2Sign       := vs2Sign
+  wallaceTreeGen.io.vdSign        := vdSign
   wallaceTreeGen.io.widen         := widen
   wallaceTreeGen.io.isMacc        := isMacc
   wallaceTreeGen.io.sewIs8        := sewIs8
@@ -222,7 +224,7 @@ class boothEncode(d: UInt) {
 
 class vs2SgnGenerator extends Module {
   val io = IO(new Bundle {
-    val vs2_is_signed = Input(Bool())
+    val vs2Sign       = Input(Bool())
     val sewIs8        = Input(Bool())
     val sewIs16       = Input(Bool())
     val sewIs32       = Input(Bool())
@@ -232,7 +234,7 @@ class vs2SgnGenerator extends Module {
     val sgnVs2  = Output(Vec(8, UInt(1.W)))
   })
   
-  val vs2_is_signed = io.vs2_is_signed
+  val vs2Sign = io.vs2Sign
   val vs2     = io.vs2
   val sewIs64 = io.sewIs64
   val sewIs32 = io.sewIs32
@@ -244,14 +246,14 @@ class vs2SgnGenerator extends Module {
     val sgnSew32 = 32*(i/4)+31
     val sgnSew16 = 16*(i/2)+15
     val sgnSew8  = 8*i+7
-    io.sgnVs2(i) := (vs2_is_signed) & (sewIs64 & vs2(sgnSew64) | sewIs32 & vs2(sgnSew32) | sewIs16 & vs2(sgnSew16) | sewIs8 & vs2(sgnSew8))
+    io.sgnVs2(i) := (vs2Sign) & (sewIs64 & vs2(sgnSew64) | sewIs32 & vs2(sgnSew32) | sewIs16 & vs2(sgnSew16) | sewIs8 & vs2(sgnSew8))
   }
 }
 
 class partProdSgnAndCarryBitGen extends Module {
   val io = IO(new Bundle {
     val isSub         = Input(Bool())
-    val vs2_is_signed = Input(Bool())
+    val vs2Sign       = Input(Bool())
     val sewIs8        = Input(Bool())
     val sewIs16       = Input(Bool())
     val sewIs32       = Input(Bool())
@@ -266,7 +268,7 @@ class partProdSgnAndCarryBitGen extends Module {
   })
 
   val isSub         = io.isSub
-  val vs2_is_signed = io.vs2_is_signed
+  val vs2Sign       = io.vs2Sign
   val sewIs64       = io.sewIs64
   val sewIs32       = io.sewIs32
   val sewIs16       = io.sewIs16
@@ -368,9 +370,9 @@ class wallaceTreeGenerator extends Module {
     val vs2           = Input(UInt(64.W))
     val oldVd         = Input(UInt(64.W))
     val partProdCin   = Input(Vec(32, UInt(1.W)))
-    val vs1_is_signed = Input(Bool())
-    val vs2_is_signed = Input(Bool())
-    val vd_is_signed  = Input(Bool())
+    val vs1Sign       = Input(Bool())
+    val vs2Sign       = Input(Bool())
+    val vdSign        = Input(Bool())
     val widen         = Input(Bool())
     val isMacc        = Input(Bool())
     val sewIs8        = Input(Bool())
@@ -429,9 +431,9 @@ class wallaceTreeGenerator extends Module {
   val vs2           = io.vs2
   val oldVd         = io.oldVd
   val partProdCin   = io.partProdCin
-  val vs1_is_signed = io.vs1_is_signed
-  val vs2_is_signed = io.vs2_is_signed
-  val vd_is_signed  = io.vd_is_signed
+  val vs1Sign       = io.vs1Sign
+  val vs2Sign       = io.vs2Sign
+  val vdSign        = io.vdSign
   val widen         = io.widen
   val isMacc        = io.isMacc
   val sewIs8        = io.sewIs8
@@ -448,24 +450,24 @@ class wallaceTreeGenerator extends Module {
   }
 
   wallaceTree(32) := Mux(io.isMacc, Mux1H(Seq(
-    sewIs8  -> Mux(io.widen, Cat(UIntSplit(Cat(oldVd, oldVd), 16).reverse.map(x => Cat(0.U(2.W),  BitsExtend(x, 17, vd_is_signed)))), Cat(UIntSplit(oldVd, 8 ).map(x => Cat(0.U(2.W),  BitsExtend(x, 17, vd_is_signed))).reverse)),
-    sewIs16 -> Mux(io.widen, Cat(UIntSplit(Cat(oldVd, oldVd), 32).reverse.map(x => Cat(0.U(5.W),  BitsExtend(x, 33, vd_is_signed)))), Cat(UIntSplit(oldVd, 16).map(x => Cat(0.U(5.W),  BitsExtend(x, 33, vd_is_signed))).reverse)),
-    sewIs32 -> Mux(io.widen, Cat(UIntSplit(Cat(oldVd, oldVd), 64).reverse.map(x => Cat(0.U(11.W), BitsExtend(x, 65, vd_is_signed)))), Cat(UIntSplit(oldVd, 32).map(x => Cat(0.U(11.W), BitsExtend(x, 65, vd_is_signed))).reverse)),
-    sewIs64 -> Cat(0.U(23.W), BitsExtend(oldVd, 129, vd_is_signed))
+    sewIs8  -> Mux(io.widen, Cat(UIntSplit(Cat(oldVd, oldVd), 16).reverse.map(x => Cat(0.U(2.W),  BitsExtend(x, 17, vdSign)))), Cat(UIntSplit(oldVd, 8 ).map(x => Cat(0.U(2.W),  BitsExtend(x, 17, vdSign))).reverse)),
+    sewIs16 -> Mux(io.widen, Cat(UIntSplit(Cat(oldVd, oldVd), 32).reverse.map(x => Cat(0.U(5.W),  BitsExtend(x, 33, vdSign)))), Cat(UIntSplit(oldVd, 16).map(x => Cat(0.U(5.W),  BitsExtend(x, 33, vdSign))).reverse)),
+    sewIs32 -> Mux(io.widen, Cat(UIntSplit(Cat(oldVd, oldVd), 64).reverse.map(x => Cat(0.U(11.W), BitsExtend(x, 65, vdSign)))), Cat(UIntSplit(oldVd, 32).map(x => Cat(0.U(11.W), BitsExtend(x, 65, vdSign))).reverse)),
+    sewIs64 -> Cat(0.U(23.W), BitsExtend(oldVd, 129, vdSign))
   )), 0.U)
 
   wallaceLine34NonFixP := Mux1H(Seq(
-    sewIs8  -> Cat(UIntSplit(vs2, 8 ).reverse.zipWithIndex.map{ case(x, index) => Cat(0.U(2.W),  Mux(~vs1_is_signed & vs1(63 - 8*index),  BitsExtend(x,   9 , vs2_is_signed), 0.U(9.W)) , 0.U(1.W), partProdCin(31 - 4*index),  0.U(6.W))}),
-    sewIs16 -> Cat(UIntSplit(vs2, 16).reverse.zipWithIndex.map{ case(x, index) => Cat(0.U(5.W),  Mux(~vs1_is_signed & vs1(63 - 16*index), BitsExtend(x,   17, vs2_is_signed), 0.U(17.W)), 0.U(1.W), partProdCin(31 - 8*index),  0.U(14.W))}),
-    sewIs32 -> Cat(UIntSplit(vs2, 32).reverse.zipWithIndex.map{ case(x, index) => Cat(0.U(11.W), Mux(~vs1_is_signed & vs1(63 - 32*index), BitsExtend(x,   33, vs2_is_signed), 0.U(33.W)), 0.U(1.W), partProdCin(31 - 16*index), 0.U(30.W))}),
-    sewIs64 ->                                                                    Cat(0.U(23.W), Mux(~vs1_is_signed & vs1(63),            BitsExtend(vs2, 65, vs2_is_signed), 0.U(35.W)), 0.U(1.W), partProdCin(31)           , 0.U(62.W))
+    sewIs8  -> Cat(UIntSplit(vs2, 8 ).reverse.zipWithIndex.map{ case(x, index) => Cat(0.U(2.W),  Mux(~vs1Sign & vs1(63 - 8*index),  BitsExtend(x,   9 , vs2Sign), 0.U(9.W)) , 0.U(1.W), partProdCin(31 - 4*index),  0.U(6.W))}),
+    sewIs16 -> Cat(UIntSplit(vs2, 16).reverse.zipWithIndex.map{ case(x, index) => Cat(0.U(5.W),  Mux(~vs1Sign & vs1(63 - 16*index), BitsExtend(x,   17, vs2Sign), 0.U(17.W)), 0.U(1.W), partProdCin(31 - 8*index),  0.U(14.W))}),
+    sewIs32 -> Cat(UIntSplit(vs2, 32).reverse.zipWithIndex.map{ case(x, index) => Cat(0.U(11.W), Mux(~vs1Sign & vs1(63 - 32*index), BitsExtend(x,   33, vs2Sign), 0.U(33.W)), 0.U(1.W), partProdCin(31 - 16*index), 0.U(30.W))}),
+    sewIs64 ->                                                                    Cat(0.U(23.W), Mux(~vs1Sign & vs1(63),            BitsExtend(vs2, 65, vs2Sign), 0.U(35.W)), 0.U(1.W), partProdCin(31)           , 0.U(62.W))
   ))
 
   wallaceLine34FixP := Mux1H(Seq(
-    sewIs8  -> Cat(UIntSplit(vs2, 8 ).reverse.zipWithIndex.map{ case(x, index) => Cat(0.U(2.W),  Mux(~vs1_is_signed & vs1(63 - 8*index),  BitsExtend(x,   9 , vs2_is_signed), 0.U(9.W)) , 1.U(1.W), partProdCin(31 - 4*index),  0.U(6.W))}),
-    sewIs16 -> Cat(UIntSplit(vs2, 16).reverse.zipWithIndex.map{ case(x, index) => Cat(0.U(5.W),  Mux(~vs1_is_signed & vs1(63 - 16*index), BitsExtend(x,   17, vs2_is_signed), 0.U(17.W)), 1.U(1.W), partProdCin(31 - 8*index),  0.U(14.W))}),
-    sewIs32 -> Cat(UIntSplit(vs2, 32).reverse.zipWithIndex.map{ case(x, index) => Cat(0.U(11.W), Mux(~vs1_is_signed & vs1(63 - 32*index), BitsExtend(x,   33, vs2_is_signed), 0.U(33.W)), 1.U(1.W), partProdCin(31 - 16*index), 0.U(30.W))}),
-    sewIs64 ->                                                                    Cat(0.U(23.W), Mux(~vs1_is_signed & vs1(63),            BitsExtend(vs2, 65, vs2_is_signed), 0.U(35.W)), 1.U(1.W), partProdCin(31)           , 0.U(62.W))
+    sewIs8  -> Cat(UIntSplit(vs2, 8 ).reverse.zipWithIndex.map{ case(x, index) => Cat(0.U(2.W),  Mux(~vs1Sign & vs1(63 - 8*index),  BitsExtend(x,   9 , vs2Sign), 0.U(9.W)) , 1.U(1.W), partProdCin(31 - 4*index),  0.U(6.W))}),
+    sewIs16 -> Cat(UIntSplit(vs2, 16).reverse.zipWithIndex.map{ case(x, index) => Cat(0.U(5.W),  Mux(~vs1Sign & vs1(63 - 16*index), BitsExtend(x,   17, vs2Sign), 0.U(17.W)), 1.U(1.W), partProdCin(31 - 8*index),  0.U(14.W))}),
+    sewIs32 -> Cat(UIntSplit(vs2, 32).reverse.zipWithIndex.map{ case(x, index) => Cat(0.U(11.W), Mux(~vs1Sign & vs1(63 - 32*index), BitsExtend(x,   33, vs2Sign), 0.U(33.W)), 1.U(1.W), partProdCin(31 - 16*index), 0.U(30.W))}),
+    sewIs64 ->                                                                    Cat(0.U(23.W), Mux(~vs1Sign & vs1(63),            BitsExtend(vs2, 65, vs2Sign), 0.U(35.W)), 1.U(1.W), partProdCin(31)           , 0.U(62.W))
   ))
 
   io.wallaceTree := wallaceTree

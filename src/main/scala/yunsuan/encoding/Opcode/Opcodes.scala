@@ -781,20 +781,12 @@ object Opcodes {
     def getOp(implicit op: UInt): UInt = op(6, 4)
     def getOpMode(implicit op: UInt): UInt = op(3)
     def getDestMode(implicit op: UInt): UInt = op(2)
-    def getDataWidth(implicit op: UInt): UInt = op(1, 0)
+    def getSew(implicit op: UInt): UInt = op(1, 0)
 
     def vs2Sign(implicit op: UInt): UInt = op(8)
     def vs1Sign(implicit op: UInt): UInt = op(7)
     def vdSign(implicit op: UInt): UInt = vs2Sign | vs1Sign
     def isWiden(implicit op: UInt): Bool = getDestMode === DW
-
-    def vs2Type(implicit op: UInt): UInt = 0.U(1.W) ## vs2Sign ## getDataWidth
-    def vs1Type(implicit op: UInt): UInt = 0.U(1.W) ## vs1Sign ## getDataWidth
-    def vdType(implicit op: UInt): UInt = 0.U(1.W) ## vdSign ## (getDataWidth + isWiden.asUInt)
-    def getFormat(implicit op: UInt): UInt = vs2Type ## vs1Type ## vdType
-
-    def getVs2Sign(implicit op: UInt): UInt = vs2Sign
-    def getVs1Sign(implicit op: UInt): UInt = vs1Sign
 
     def isMUL(implicit op: UInt): Bool = getOp === MUL && getOpMode === OP2
     def isMULH(implicit op: UInt): Bool = getOp === MULH && getOpMode === OP2

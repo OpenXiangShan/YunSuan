@@ -9,10 +9,12 @@ import yunsuan.vector.Common._
 class VIMac64b extends Module {
   val io = IO(new Bundle {
     val fire = Input(Bool())
-    // val opcode = Input(new VIMacOpcode)
     val info = Input(new VIFuInfo)
-    val srcType = Input(Vec(2, UInt(4.W)))
-    val vdType  = Input(UInt(4.W))
+    //In VImMacType instructions, vs1 and vs2 share the same SEW
+    val sew = Input(UInt(2.W))
+    val vs1Sign = Input(Bool())
+    val vs2Sign = Input(Bool())
+    val vdSign = Input(Bool())
     val vs1 = Input(UInt(64.W))
     val vs2 = Input(UInt(64.W))
     val oldVd = Input(UInt(64.W)) 
@@ -27,38 +29,22 @@ class VIMac64b extends Module {
   })
 
   val fire = io.fire
-  val vs2 = io.vs2
-  val vs1 = io.vs1
-  val oldVd = io.oldVd
-  val eewVs2 = SewOH(io.srcType(0)(1, 0))
-  
-  val sew = eewVs2
-  val sewIs64 = sew.is64
-  val sewIs32 = sew.is32
-  val sewIs16 = sew.is16
-  val sewIs8 = sew.is8
-
-  val isSub    = io.isSub
-  val highHalf = io.highHalf
-  val isMacc   = io.isMacc
-  val widen    = io.widen
-  val isFixP   = io.isFixP
-  val info     = io.info
-
   val fireS1    = GatedValidRegNext(fire)
 
   val stage1 = Module(new VIMac64bStage1())
-  stage1.io.in.info      := info
-  stage1.io.in.srcType   := io.srcType
-  stage1.io.in.vdType    := io.vdType
-  stage1.io.in.vs1       := vs1
-  stage1.io.in.vs2       := vs2
-  stage1.io.in.oldVd     := oldVd
-  stage1.io.in.highHalf  := highHalf
-  stage1.io.in.isMacc    := isMacc
-  stage1.io.in.isSub     := isSub
-  stage1.io.in.widen     := widen
-  stage1.io.in.isFixP    := isFixP
+  stage1.io.in.info      := io.info
+  stage1.io.in.vs1Sign   := io.vs1Sign
+  stage1.io.in.vs2Sign   := io.vs2Sign
+  stage1.io.in.vdSign    := io.vdSign
+  stage1.io.in.sew       := io.sew
+  stage1.io.in.vs1       := io.vs1
+  stage1.io.in.vs2       := io.vs2
+  stage1.io.in.oldVd     := io.oldVd
+  stage1.io.in.highHalf  := io.highHalf
+  stage1.io.in.isMacc    := io.isMacc
+  stage1.io.in.isSub     := io.isSub
+  stage1.io.in.widen     := io.widen
+  stage1.io.in.isFixP    := io.isFixP
   val stage1Out = RegEnable(stage1.io.out, fire)
 
   val stage2 = Module(new VIMac64bStage2())
