@@ -143,6 +143,10 @@ abstract class Opcodes {
     Value(bp1, bp2: _*)(name) + VpWen + VlRen + Src2Vp + Src1En
   }
 
+  def DvSvlS2vS1v(bp1: BitPat, bp2: BitPat*)(implicit name: SourceName): Type = {
+    Value(bp1, bp2: _*)(name) + VpWen + VlRen + Src2Vp + Src1Vp
+  }
+
   def DvSvlS2vS1S3v(bp1: BitPat, bp2: BitPat*)(implicit name: SourceName): Type = {
     Value(bp1, bp2: _*)(name) + VpWen + VlRen + Src2Vp + Src1En + Src3Vp
   }
@@ -411,14 +415,14 @@ object Opcodes {
     val vxor_e32  = DvSvlS2vS1(XOR , LOGIC, S2VDV, E32)
     val vxor_e64  = DvSvlS2vS1(XOR , LOGIC, S2VDV, E64)
 
-    val vmandn = DvSvlS2vS1(ANDN, LOGIC, S2VDM, EX)
-    val vmand  = DvSvlS2vS1(AND , LOGIC, S2VDM, EX)
-    val vmor   = DvSvlS2vS1(OR  , LOGIC, S2VDM, EX)
-    val vmxor  = DvSvlS2vS1(XOR , LOGIC, S2VDM, EX)
-    val vmorn  = DvSvlS2vS1(ORN , LOGIC, S2VDM, EX)
-    val vmnand = DvSvlS2vS1(NAND, LOGIC, S2VDM, EX)
-    val vmnor  = DvSvlS2vS1(NOR , LOGIC, S2VDM, EX)
-    val vmxnor = DvSvlS2vS1(XNOR, LOGIC, S2VDM, EX)
+    val vmandn = DvSvlS2vS1v(ANDN, LOGIC, S2VDM, EX)
+    val vmand  = DvSvlS2vS1v(AND , LOGIC, S2VDM, EX)
+    val vmor   = DvSvlS2vS1v(OR  , LOGIC, S2VDM, EX)
+    val vmxor  = DvSvlS2vS1v(XOR , LOGIC, S2VDM, EX)
+    val vmorn  = DvSvlS2vS1v(ORN , LOGIC, S2VDM, EX)
+    val vmnand = DvSvlS2vS1v(NAND, LOGIC, S2VDM, EX)
+    val vmnor  = DvSvlS2vS1v(NOR , LOGIC, S2VDM, EX)
+    val vmxnor = DvSvlS2vS1v(XNOR, LOGIC, S2VDM, EX)
 
     val vzext2_e8  = DvSvlS2v(ZEXT, MOVE, S2F2DV, E8 ) // vzext.vf2 when sew=e16
     val vzext2_e16 = DvSvlS2v(ZEXT, MOVE, S2F2DV, E16)
