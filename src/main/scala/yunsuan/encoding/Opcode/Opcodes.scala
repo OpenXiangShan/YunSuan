@@ -598,6 +598,7 @@ object Opcodes {
     )
 
     def isDestM(implicit op: UInt): Bool = getDataType.isOneOf(S2VDM)
+    def isOpMask(implicit op: UInt): Bool = getDataType.isOneOf(S2VDM) && getOpClass === LOGIC
 
     def isSext2(implicit op: UInt): Bool = getOpClass === MOVE && getOp === SEXT && getDataType === S2F2DV
     def isSext4(implicit op: UInt): Bool = getOpClass === MOVE && getOp === SEXT && getDataType === S2F4DV
@@ -637,10 +638,10 @@ object Opcodes {
     def isVxnor(implicit op: UInt): Bool = getOp === XNOR
 
     def isCmpEq(implicit op: UInt): Bool = getOp === EQ
-    def isCmpLt(implicit op: UInt): Bool = getOp === LT
+    def isCmpLt(implicit op: UInt): Bool = getOp === LT || getOp === LTU
     def isCmpNe(implicit op: UInt): Bool = getOp === NE
-    def isCmpLe(implicit op: UInt): Bool = getOp === LE
-    def isCmpGt(implicit op: UInt): Bool = getOp === GT
+    def isCmpLe(implicit op: UInt): Bool = getOp === LE || getOp === LEU
+    def isCmpGt(implicit op: UInt): Bool = getOp === GT || getOp === GTU
 
     def isMax(implicit op: UInt): Bool = getOp.isOneOf(MAX, MAXU)
 
