@@ -2,514 +2,506 @@ package yunsuan.vector.VectorConvert
 
 import chisel3._
 import chisel3.util._
-import yunsuan.vector.VectorConvert.util._
-import yunsuan.vector.VectorConvert.RoundingModle._
 import yunsuan.util._
+import yunsuan.encoding.Opcode.Opcodes.FCvtOpcode
+import yunsuan.vector.Common._
+import yunsuan.vector.VectorConvert.Bundles._
+import yunsuan.vector.VectorConvert.RoundingModle._
+import yunsuan.vector.VectorConvert.util._
+import yunsuan.vector.VectorConvert.utils._
 
-
-class CVT16(width: Int = 16) extends CVT(width){
+class CVT16(width: Int = f16.width) extends CVT(width) {
   /** cycle0                                                              | cycle1                  |   cycle2
    * fp2int   in(16) raw_in(17)  left,right    ShiftRightJam(37)          | RoundingUnit(11)  adder |
    * int2fp   in(16) in_abs(16)  lzc in_shift  exp_raw                    | RoundingUnit(10)  adder |  -> result & fflags
    * vfr      in(16)             lzc exp_nor   sig_nor  clz out_exp adder | Table                   |
    *
    */
-  // control path
-  val fire = io.fire
-  val fireReg = GatedValidRegNext(io.fire)
-  val is_sew_8 = io.sew === "b00".U
-  val is_sew_16 = io.sew === "b01".U
-  val is_single = io.opType.tail(3).head(2) === "b00".U
-  val is_widen = io.opType.tail(3).head(2) === "b01".U
-  val is_narrow = io.opType.tail(3).head(2) === "b10".U
-  val is_single_reg0 = RegEnable(is_single, false.B, fire)
-  val is_widen_reg0 = RegEnable(is_widen, false.B, fire)
-  val is_narrow_reg0 = RegEnable(is_narrow, false.B, fire)
-
-  val is_vfr = io.opType(5).asBool && is_sew_16
-  val is_fp2int = io.opType.head(2) === "b10".U && (is_sew_16 && is_single || is_sew_8 && is_narrow)
-  val is_int2fp = io.opType.head(2) === "b01".U && (is_sew_8 && is_widen || is_sew_16 && is_single)
-  val is_vfr_reg0 = RegEnable(is_vfr, false.B, fire)
-  val is_fp2int_reg0 = RegEnable(is_fp2int, false.B, fire)
-  val is_int2fp_reg0 = RegEnable(is_int2fp, false.B, fire)
-
-  val is_vfrsqrt7 = is_vfr && !io.opType(0).asBool
-  val is_vfrec7 = is_vfr && io.opType(0).asBool
-  val is_vfrsqrt7_reg0 = RegEnable(is_vfrsqrt7, false.B, fire)
-  val is_vfrec7_reg0 = RegEnable(is_vfrec7, false.B, fire)
-
-  val is_signed_int = io.opType(0)
-  val is_signed_int_reg0 = RegEnable(is_signed_int, false.B, fire)
-
-  val result = Wire(UInt(16.W))
-  val NV, DZ, OF, UF, NX = WireInit(false.B)
-  val fflags = WireInit(Cat(NV, DZ, OF, UF, NX))
-
-  val result0 = Wire(UInt(16.W))
-  val result0_reg1 = RegEnable(result0, 0.U(16.W), fireReg)
-  val fflags0 = WireInit(Cat(NV, DZ, OF, UF, NX))
-  val fflags0_reg1 = RegEnable(fflags0, fireReg)
-
-  val round_in = Wire(UInt(11.W))
-  val round_roundIn = Wire(Bool())
-  val round_stickyIn = Wire(Bool())
-  val round_signIn = Wire(Bool())
-  val round_in_reg0 = RegEnable(round_in, 0.U(11.W), fire)
-  val round_roundIn_reg0 = RegEnable(round_roundIn, false.B, fire)
-  val round_stickyIn_reg0 = RegEnable(round_stickyIn, false.B, fire)
-  val round_signIn_reg0 = RegEnable(round_signIn, false.B, fire)
-  val rm_reg0 = RegEnable(io.rm, fire)
-
-  val is_normal = Wire(Bool())
-  val is_inf = Wire(Bool())
-  val is_nan = Wire(Bool())
-  val is_neginf = Wire(Bool())
-  val is_neginf_negzero = Wire(Bool())
-  val is_negzero = Wire(Bool())
-  val is_poszero = Wire(Bool())
-  val is_snan = Wire(Bool())
-  val is_neg2_bplus1_b = Wire(Bool())
-  val is_neg2_b_bminus1 = Wire(Bool())
-  val is_neg2_negbminus1_negzero = Wire(Bool())
-  val is_pos2_poszero_negbminus1 = Wire(Bool())
-  val is_pos2_bminus1_b = Wire(Bool())
-  val is_pos2_b_bplus1 = Wire(Bool())
-
-  val is_normal_reg0 = RegEnable(is_normal, false.B, fire)
-  val is_inf_reg0 = RegEnable(is_inf, false.B, fire)
-  val is_nan_reg0 = RegEnable(is_nan, false.B, fire)
-  val is_neginf_reg0 = RegEnable(is_neginf, false.B, fire)
-  val is_neginf_negzero_reg0 = RegEnable(is_neginf_negzero, false.B, fire)
-  val is_negzero_reg0 = RegEnable(is_negzero, false.B, fire)
-  val is_poszero_reg0 = RegEnable(is_poszero, false.B, fire)
-  val is_snan_reg0 = RegEnable(is_snan, false.B, fire)
-  val is_neg2_bplus1_b_reg0 = RegEnable(is_neg2_bplus1_b, false.B, fire)
-  val is_neg2_b_bminus1_reg0 = RegEnable(is_neg2_b_bminus1, false.B, fire)
-  val is_neg2_negbminus1_negzero_reg0 = RegEnable(is_neg2_negbminus1_negzero, false.B, fire)
-  val is_pos2_poszero_negbminus1_reg0 = RegEnable(is_pos2_poszero_negbminus1, false.B, fire)
-  val is_pos2_bminus1_b_reg0 = RegEnable(is_pos2_bminus1_b, false.B, fire)
-  val is_pos2_b_bplus1_reg0 = RegEnable(is_pos2_b_bplus1, false.B, fire)
-
-  // cycle 0
-  // in
-  val in_sext = Wire(UInt(17.W))
-  in_sext := Mux1H(
-    Seq(is_int2fp && !is_signed_int && is_widen,
-      is_int2fp && is_signed_int && is_widen,
-      is_int2fp && !is_signed_int && is_single,
-      is_int2fp && is_signed_int && is_single),
-    Seq(Cat(Fill(9, 0.U), io.src(7,0)),
-      Cat(Fill(9, io.src(7)), io.src(7,0)),
-      Cat(0.U, io.src),
-      Cat(io.src(15), io.src))
+  val (fire, src, opType, rm, inSew1H, outSew1H) = (
+    io.fire, io.src, io.opType, io.rm, io.inSew1H, io.outSew1H
   )
-  val in_orR = Wire(Bool())
-  val in_orR_reg0 = RegEnable(in_orR, false.B, fire)
-  in_orR := in_sext.orR
+  val fireS1 = GatedValidRegNext(fire)
+  val cvt16ModuleS0 = Module(new CVT16ModuleS0(width))
+  cvt16ModuleS0.io.s0In.src := src
+  cvt16ModuleS0.io.s0In.opType := opType
+  cvt16ModuleS0.io.s0In.rm := rm
+  cvt16ModuleS0.io.s0In.inSew1H := inSew1H
+  cvt16ModuleS0.io.s0In.outSew1H := outSew1H
+  val cvt16ModuleS1 = Module(new CVT16ModuleS1(width))
+  CommonConnect(cvt16ModuleS1.io.s1In, cvt16ModuleS0.io.s0Out, fire)
+  val cvt16ModuleS2 = Module(new CVT16ModuleS2(width))
+  CommonConnect(cvt16ModuleS2.io.s2In, cvt16ModuleS1.io.s1Out, fireS1)
+  io.result := cvt16ModuleS2.io.s2Out.result
+  io.fflags := cvt16ModuleS2.io.s2Out.fflags
+}
 
-  val fp_in = VectorFloat.fromUInt(io.src, f16.expWidth, f16.precision)
-  val fp2int_in = Wire(UInt(17.W))
-  fp2int_in := RawVectorFloat.fromVFP(fp_in, Some(fp_in.decode.expNotZero)).asUInt
+class CVT16BundleInputS0(width: Int) extends Bundle {
+  val src      = UInt(width.W)
+  val opType   = FCvtOpcode()
+  val inSew1H  = Sew()
+  val outSew1H = Sew()
+  val rm       = Frm()
+}
 
-  val in = Wire(UInt(17.W))
-  val in_reg0 = RegEnable(in, 0.U(17.W), fire)
-  in := Mux1H(
-    Seq(is_fp2int,
-      is_int2fp,
-      is_vfr),
-    Seq(fp2int_in,
-      in_sext,
-      Cat(0.U, io.src))
-  )
+class CVT16BundleOutputS0(width: Int) extends Bundle {
+  val exp            = UInt(f16.expAdderWidth.W)
+  val expPlus1Enable = Bool()
+  val shiftLeft      = UInt(width.W)
+  val fracSrcLeft    = UInt(width.W)
+  val inRounder      = UInt((width + 1).W)
+  val sticky         = Bool()
+  val special        = new Special
+  val isFp2Int       = Bool()
+  val isInt2Fp       = Bool()
+  val isEstimate7    = Bool()
+  val isRec          = Bool()
+  val outSew1H       = Sew()
+  val signSrc        = Bool()
+  val rm             = Frm()
+  val hasSignInt     = Bool()
+  // int2fp
+  val intSignSrc     = Bool()
+  val isZeroIntSrc   = Bool()
+  val intExp         = UInt(f16.expAdderWidth.W)
+  val absIntSrc      = UInt(width.W)
+  val intLeadZeros   = UInt(log2Up(width).W)
+  // est
+  val isSubnormalRec0 = Bool()
+  val isSubnormalRec1 = Bool()
+  val isSubnormalRec2 = Bool()
+  val isNormalRec0    = Bool()
+  val isNormalRec1    = Bool()
+  val isNormalRec2    = Bool()
+  val estExp          = UInt(f16.expAdderWidth.W)
+  val estExpNormaled0 = Bool()
 
-  val sign = Wire(Bool())
-  val sign_reg0 = RegEnable(sign, false.B, fire)
-  sign := Mux1H(
-    Seq(is_fp2int || is_int2fp,
-      is_vfr),
-    Seq(in.head(1).asBool,
-      in.tail(1).head(1).asBool)
-  )
+}
 
+class CVT16BundleS0(width: Int) extends Bundle {
+  val s0In = Input(new CVT16BundleInputS0(width))
+  val s0Out = Output(new CVT16BundleOutputS0(width))
+}
 
-  val exp = Mux1H(
-    Seq(is_fp2int,
-      is_vfr),
-    Seq(in.tail(1).head(f16.expWidth),
-      in.tail(2).head(f16.expWidth))
-  )
-  val sig = Mux1H(
-    Seq(is_fp2int,
-      is_vfr),
-    Seq(in.tail(6),
-      in.tail(7))
-  )
+class CVT16ModuleS0(width: Int = 16) extends Module {
+  val io = IO(new CVT16BundleS0(width))
+  val s0In = io.s0In
+  val s0Out = io.s0Out
+  val (src, opType, rm, inSew1H, outSew1H) = (s0In.src, s0In.opType, s0In.rm, s0In.inSew1H, s0In.outSew1H)
 
-  // fp2int
-  // left
-  val max_int_exp = Mux1H(
-    Seq(is_fp2int && is_single,
-      is_fp2int && is_narrow),
-    Seq(30.U,
-      22.U)
-  )
+  val outIsFp = FCvtOpcode.outIsFp(opType)
+  val isEstimate7 = FCvtOpcode.isEstimate7(opType)
+  val isRec = FCvtOpcode.isRec(opType)
+  val hasSignInt = FCvtOpcode.isSignInt(opType)
 
-  val exp_of = Wire(Bool())
-  val exp_of_reg0 = RegEnable(exp_of, false.B, fire)
-  exp_of := is_fp2int && (exp > max_int_exp)
-  
-  val lpath_shamt = Mux(is_fp2int && is_single, exp - 25.U, 0.U)
-  val lpath_sig_shifted = Wire(UInt(16.W))
-  val lpath_sig_shifted_reg0 = RegEnable(lpath_sig_shifted, 0.U(16.W), fire)
-  lpath_sig_shifted := Mux(is_fp2int && is_single, (sig << lpath_shamt(4, 0))(15, 0), 0.U)
+  val fpSignSrc = src(f16.width - 1)
+  val expSrc    = src(f16.width - 2, f16.fracWidth)
+  val fracSrc   = src(f16.fracWidth - 1, 0)
 
-  val lpath_iv = Wire(Bool())
-  val lpath_iv_reg0 = RegEnable(lpath_iv, false.B, fire)
-  lpath_iv := is_fp2int && is_single && !is_signed_int && sign
+  val (expNotZeroSrc, expIsOnes, fracNotZero) = (expSrc.orR, expSrc.andR, fracSrc.orR)
+  val isnormalSrc     = !expIsOnes && expNotZeroSrc
+  val isSubnormalSrc  = !expNotZeroSrc && fracNotZero
+  val isNaNSrc        = expIsOnes && fracNotZero
+  val isZeroSrc       = !expNotZeroSrc && !fracNotZero
+  val isInfSrc        = expIsOnes && !fracNotZero
+  val isSNaNSrc       = isNaNSrc && !fracSrc.head(1)
+  val isQNaNSrc       = isNaNSrc && fracSrc.head(1).asBool
+  val isSubnormalRec2 = isSubnormalSrc && !fracSrc.head(2).orR
 
+  val isFp2Int   = FCvtOpcode.isF2I(opType)
+  val isInt2Fp   = FCvtOpcode.isI2F(opType)
 
-  val lpath_of = Wire(Bool())
-  val lpath_of_reg0 = RegEnable(lpath_of, fire)
-  lpath_of := is_fp2int && is_single && is_signed_int && (exp === max_int_exp) && (!sign || (sign && in.tail(7).orR))
+  // exp
+  val expAdderIn0 = Wire(UInt(f16.expAdderWidth.W))
+  val expAdderIn1 = Wire(UInt(f16.expAdderWidth.W))
+  val exp = Wire(UInt(f16.expAdderWidth.W))
 
+  val leadZeros = Lzc((fracSrc << (f16.width - f16.fracWidth)).asUInt).data
+  val bias = f16.bias.U
+  val minusExp = extend((~(false.B ## bias)), f16.expAdderWidth).asUInt
+  expAdderIn0 := Mux(isSubnormalSrc, false.B ## 1.U, false.B ## expSrc)
+  val expPlus1Enable = isFp2Int
+  expAdderIn1 := Mux(expPlus1Enable, minusExp, expSrc)
+  exp := expAdderIn0 + expAdderIn1
+  s0Out.exp := exp
+  s0Out.expPlus1Enable := expPlus1Enable
 
-  // right
-  val rpath_shamt = Mux1H(
-    Seq(is_fp2int && is_single,
-      is_fp2int && is_narrow),
-    Seq(25.U - exp,
-    22.U - exp)
-  )
+  // frac
+  val fracSrcLeft = Wire(UInt(width.W))
+  fracSrcLeft := fracSrc << (f16.width - f16.fracWidth)
+  val shiftLeft = (fracSrcLeft.asUInt << 1) << leadZeros
+  s0Out.fracSrcLeft := fracSrcLeft
+  s0Out.shiftLeft := shiftLeft
 
-  val rpath_sig_shifted0 = Wire(UInt(12.W))
-  val rpath_sig_shifted_reg0 = RegEnable(rpath_sig_shifted0, 0.U(12.W), fire)
-  val (rpath_sig_shifted, rpath_sticky) = ShiftRightJam(Cat(sig, 0.U), rpath_shamt)
-  rpath_sig_shifted0 := rpath_sig_shifted
+  val fracImplict1Src = (expNotZeroSrc && !expIsOnes) ## fracSrc
+  val shamtIn = fracImplict1Src ## 0.U((f16.width - 1 - f16.fracWidth).W) ## false.B
+  val shamtWidth = (f16.width - 1 + f16.bias).U + (~expSrc).asUInt
+  val shamtWidthPlus1 = shamtWidth + 1.U
+  val shamt = Mux(shamtWidth.andR, 0.U, Mux(shamtWidth(4), (f16.width+1).U, shamtWidthPlus1))
 
+  val (inRounder, sticky) = ShiftRightJam(shamtIn, shamt)
+  s0Out.inRounder := inRounder
+  s0Out.sticky := sticky
+
+  s0Out.special.expNotZero := expNotZeroSrc
+  s0Out.special.expIsOnes := expIsOnes
+  s0Out.special.fracNotZero := fracNotZero
+  s0Out.special.isInf := isInfSrc
+  s0Out.special.isZero := isZeroSrc
+  s0Out.special.isSubnormal := isSubnormalSrc
+  s0Out.special.isnormal := isnormalSrc
+  s0Out.special.isNaN := isNaNSrc
+  s0Out.special.isSNaN := isSNaNSrc
+  s0Out.isFp2Int := isFp2Int
+  s0Out.isInt2Fp := isInt2Fp
+  s0Out.outSew1H := outSew1H
+  s0Out.signSrc := fpSignSrc
+  s0Out.rm := rm
+  s0Out.hasSignInt := hasSignInt
 
   // int2fp
-  val in_abs = Mux1H(
-    Seq(is_int2fp && sign,
-      is_int2fp && !sign),
-    Seq((~in).asUInt + 1.U,
-      in)
+  val int1HSrc = inSew1H(1, 0)
+  val intIn = int16Extend(src, hasSignInt && src(f16.width-1))
+  val intSignSrc = intIn(f16.width)
+  val intDataSrc = intIn(f16.width - 1, 0)
+  val absIntSrc = Mux(intSignSrc, (~intDataSrc).asUInt + 1.U, intDataSrc)
+  val isZeroIntSrc = !absIntSrc.orR
+  // clz
+  val intLeadZeros = Lzc(absIntSrc).data
+  // exp
+  val intExpAdderIn0 = Wire(UInt(f16.expAdderWidth.W))
+  val intExpAdderIn1 = Wire(UInt(f16.expAdderWidth.W))
+  val intMinuxExp = extend((~(false.B ## intLeadZeros)).asUInt, f16.expAdderWidth).asUInt
+  intExpAdderIn0 := (f16.bias + f16.width - 1).U
+  intExpAdderIn1 := intMinuxExp
+  val intExp = Wire(UInt(f16.expAdderWidth.W))
+  intExp := intExpAdderIn0 + intExpAdderIn1
+
+  s0Out.intSignSrc := intSignSrc
+  s0Out.isZeroIntSrc := isZeroIntSrc
+  s0Out.intExp := intExp
+  s0Out.absIntSrc := absIntSrc
+  s0Out.intLeadZeros := intLeadZeros
+
+  // est
+  val isNormalRec0 = expSrc(f16.expWidth - 1, 1).andR && !expSrc(0)
+  val isNormalRec1 = expSrc(f16.expWidth - 1, 2).andR && !expSrc(1) && expSrc(0)
+  val isNormalRec2 = expNotZeroSrc && !expIsOnes && !isNormalRec0 && !isNormalRec1
+  val isSubnormalRec0 = isSubnormalSrc && fracSrc(f16.fracWidth - 1)
+  val isSubnormalRec1 = isSubnormalSrc && !fracSrc(f16.fracWidth - 1) && fracSrc(f16.fracWidth - 2)
+
+  val estExpAdderIn0 = Wire(UInt(f16.expAdderWidth.W))
+  val estExpAdderIn1 = Wire(UInt(f16.expAdderWidth.W))
+  val estMinusExp = extend((~(false.B ## expSrc)).asUInt, f16.expAdderWidth).asUInt
+  estExpAdderIn0 := Mux(isRec, (2 * f16.bias - 1).U, (3 * f16.bias - 1).U)
+  estExpAdderIn1 := Mux(isSubnormalSrc, leadZeros, estMinusExp)
+  val estExp = Wire(UInt(f16.expAdderWidth.W))
+  estExp := estExpAdderIn0 + estExpAdderIn1
+
+  val estExpNormaled = Mux(isSubnormalSrc, leadZeros(0), expSrc(0)) // only the last bit is needed
+
+  s0Out.isEstimate7 := isEstimate7
+  s0Out.isRec := isRec
+  s0Out.special.isQNaN := isQNaNSrc
+  s0Out.isNormalRec0 := isNormalRec0
+  s0Out.isNormalRec1 := isNormalRec1
+  s0Out.isNormalRec2 := isNormalRec2
+  s0Out.isSubnormalRec0 := isSubnormalRec0
+  s0Out.isSubnormalRec1 := isSubnormalRec1
+  s0Out.isSubnormalRec2 := isSubnormalRec2
+  s0Out.estExp := estExp
+  s0Out.estExpNormaled0 := estExpNormaled
+}
+
+class CVT16BundleInputS1(width: Int) extends CVT16BundleOutputS0(width)
+
+class CVT16BundleOutputS1(width: Int = 16) extends Bundle {
+  val result = UInt(width.W)
+  val fflags = Fflags()
+}
+
+class CVT16BundleS1(width: Int) extends Bundle {
+  val s1In = Input(new CVT16BundleInputS1(width))
+  val s1Out = Output(new CVT16BundleOutputS1(width))
+}
+
+class CVT16ModuleS1(width: Int = 16) extends Module {
+  val io = IO(new CVT16BundleS1(width))
+  val s1In = io.s1In
+  val s1Out = io.s1Out
+  val special = io.s1In.special
+  val expIsOnes =  special.expIsOnes
+  val fracNotZero = special.fracNotZero
+  val isZero = special.isZero
+  val isInf = special.isInf
+  val isnormal = special.isnormal
+  val isSubnormal = special.isSubnormal
+  val isSNaN = special.isSNaN
+  val isQNaN = special.isQNaN
+  val isNaN = special.isNaN
+  val expInS0 = s1In.exp
+  val expPlus1Enable = s1In.expPlus1Enable
+  val isFp2Int  = s1In.isFp2Int
+  val isInt2Fp = s1In.isInt2Fp
+  val isEstimate7 = s1In.isEstimate7
+  val isRec = s1In.isRec
+  val outSew1H = s1In.outSew1H
+  val shiftLeft = s1In.shiftLeft
+  val fracSrcLeft = s1In.fracSrcLeft
+  val signSrc = s1In.signSrc
+  val rm = s1In.rm
+  val hasSignInt = s1In.hasSignInt
+
+  val intSignSrc = s1In.intSignSrc
+  val isZeroIntSrc = s1In.isZeroIntSrc
+  val intExpInS0 = s1In.intExp
+  val absIntSrc = s1In.absIntSrc
+  val intLeadZeros = s1In.intLeadZeros
+
+  val estExpInS0 = s1In.estExp
+  val expNormaled0 = s1In.estExpNormaled0
+  val isNormalRec0 = s1In.isNormalRec0
+  val isNormalRec1 = s1In.isNormalRec1
+  val isNormalRec2 = s1In.isNormalRec2
+  val isSubnormalRec0 = s1In.isSubnormalRec0
+  val isSubnormalRec1 = s1In.isSubnormalRec1
+  val isSubnormalRec2 = s1In.isSubnormalRec2
+
+  // output
+  val nv, dz, of, uf, nx = Wire(Bool())
+  val result = Wire(UInt(width.W))
+  val fflags = Wire(Fflags())
+
+  val intParamMap = (0 to 1).map(i => (1 << i) * 8)
+
+  val float1HOut = outSew1H(1)
+
+  val fracNormaled = Wire(UInt(width.W))
+  fracNormaled := Mux(isSubnormal, shiftLeft, fracSrcLeft)
+
+  val inRounder = s1In.inRounder
+  val sticky = s1In.sticky
+
+  val rounderMapIn = Wire(UInt(width.W))
+  rounderMapIn := shiftLeft
+
+  val isOnesRounderInput = shiftLeft.head(f16.fracWidth).andR
+
+  val selectInRounder = isFp2Int
+  val rounderInput = Mux(selectInRounder, inRounder.head(f16.width), shiftLeft(f16.width - 1, f16.width - f16.fracWidth))
+  val rounderRoundIn = Mux(selectInRounder, inRounder(0), shiftLeft(f16.width - f16.fracWidth - 1))
+  val rounderStickyIn = Mux(selectInRounder, sticky, shiftLeft(f16.width - f16.fracWidth - 2, 0).orR)
+
+  val rounder = Module(new RoundingUnit(width))
+  rounder.io.in := rounderInput
+  rounder.io.roundIn := rounderRoundIn
+  rounder.io.stickyIn := rounderStickyIn
+  rounder.io.signIn := signSrc
+  rounder.io.rm := rm
+
+  val nxRounded = rounder.io.inexact
+  val upRounded = rounder.io.r_up
+  val exp = expInS0 + Mux(expPlus1Enable, 1.U, 0.U)
+  val expIncrease = expInS0 + Mux(expPlus1Enable, 2.U, 1.U)
+  val rounderInputIncrease = rounderInput + 1.U
+
+  // for fp2int
+  // 4bit => u16, i16, u8, i8
+  val int1HOut = outSew1H(1, 0)
+  val hasSignInt1HOut = int1HOut.asBools.map(oh => Seq(oh && !hasSignInt, oh && hasSignInt)).flatten
+  val isOnesRounderInputMapFp2Int =
+    intParamMap.map(intType => Seq(intType, intType - 1)).flatten.map(intType => rounderInput.tail(f16.width - intType).andR)
+  val cout = upRounded && Mux(isFp2Int,
+    Mux1H(hasSignInt1HOut, isOnesRounderInputMapFp2Int),
+    isOnesRounderInput
+  ).asBool
+  val expRounded = Wire(UInt(f16.expWidth.W))
+  expRounded := Mux(cout, expIncrease, exp)
+  val fracRounded = Mux(upRounded, rounderInputIncrease, rounderInput)
+  val rmin = rm === RTZ || (signSrc && rm === RUP) || (!signSrc && rm === RDN)
+  val signNonNan = signSrc && !isNaN
+
+  // for int2fp
+  val intShiftLeft = Wire(UInt(width.W))
+  intShiftLeft := (absIntSrc << 1) << intLeadZeros
+
+  val intRounderInput = intShiftLeft.head(f16.fracWidth)
+  val intRoundIn      = intShiftLeft.tail(f16.fracWidth).head(1)
+  val intStickyIn     = intShiftLeft.tail(f16.fracWidth + 1).orR
+  val intRounder = Module(new RoundingUnit(width))
+  intRounder.io.in       := intRounderInput
+  intRounder.io.roundIn  := intRoundIn
+  intRounder.io.stickyIn := intStickyIn
+  intRounder.io.signIn   := intSignSrc
+  intRounder.io.rm       := rm
+  val intExp = intExpInS0 + 1.U
+  val intExpIncrease = intExpInS0 + 2.U
+  val intRounderInputIncrease = intRounderInput + 1.U
+
+  val intNxRounded = intRounder.io.inexact
+  val intUpRounded = intRounder.io.r_up
+  val intCout = intUpRounded && intShiftLeft.head(f16.fracWidth).andR
+  val intExpRounded = Wire(UInt(f16.expWidth.W))
+  intExpRounded := Mux(intCout, intExpIncrease, intExp)
+  val intFracRounded = Mux(intUpRounded, intRounderInputIncrease, intRounderInput)
+  val intRmin =
+    rm === RTZ || (intSignSrc && rm === RUP) || (!intSignSrc && rm === RDN)
+
+  /**
+   * int->fp   any int/uint -> any fp
+    */
+  // Mux(cout, exp > FP.maxExp - 1, exp > FP.maxExp)
+  val intOfRounded = !intExp.head(1).asBool && Mux(intCout,
+    intExp(f16.expWidth - 1, 1).andR || intExp(intExp.getWidth - 2, f16.expWidth).orR,
+    intExp(f16.expWidth - 1, 0).andR || intExp(intExp.getWidth - 2, f16.expWidth).orR
   )
 
-  val int2fp_clz = Mux(is_int2fp, CLZ(in_abs(15,0)), 0.U)
+  // for est
+  val estExpPlus1 = estExpInS0 + 1.U
+  val estExp = Mux(isSubnormal, estExpInS0, estExpPlus1)
+  val rsqrt7Table = Module(new Rsqrt7Table)
+  rsqrt7Table.src := expNormaled0 ## fracNormaled.head(6)
+  val rec7Table = Module(new Rec7Table)
+  rec7Table.src := fracNormaled.head(7)
+  val fracEstimate = Mux(isRec, rec7Table.out, rsqrt7Table.out)
 
-  val in_shift = Mux(is_int2fp, (in_abs << int2fp_clz)(14, 0), 0.U)
+  when (isInt2Fp) {
+    nv := false.B
+    dz := false.B
+    of := intOfRounded
+    uf := false.B
+    nx := intOfRounded || intNxRounded
 
-  val exp_raw = Wire(UInt(5.W))
-  val exp_raw_reg0 = RegEnable(exp_raw, 0.U(5.W), fire)
-  exp_raw := Mux(is_int2fp, 30.U - int2fp_clz, 0.U)
+    val result1H = Seq(
+      intOfRounded && intRmin,
+      intOfRounded && !intRmin,
+      isZeroIntSrc,
+      !intOfRounded && !isZeroIntSrc
+    )
 
+    def int2FpResultGen(fp: FloatFormat): Seq[UInt] = {
+      VecInit((0 to 3).map {
+        case 0 => intSignSrc ## fp.maxExp.U(fp.expWidth.W) ## ~0.U(fp.fracWidth.W) // GNF
+        case 1 => intSignSrc ## ~0.U(fp.expWidth.W) ## 0.U(fp.fracWidth.W) // INF
+        case 2 => intSignSrc ## 0.U((fp.width - 1).W) // 0
+        case 3 => intSignSrc ## intExpRounded(fp.expWidth - 1, 0) ## intFracRounded(fp.fracWidth - 1, 0) // normal
+      })
+    }
 
+    val int2FpResult = Mux1H(result1H, int2FpResultGen(f16))
+    result := int2FpResult
+  }.elsewhen(isEstimate7) {
+    nv := Mux(isRec, isSNaN, (signSrc && !isZero && !isQNaN) | isSNaN)
+    dz := isZero
+    of := isRec && isSubnormalRec2
+    uf := false.B
+    nx := of
 
-  // share RoundingUnit
-  round_in := Mux1H(
-    Seq(is_fp2int && is_single,
-      is_fp2int && is_narrow,
-      is_int2fp && is_widen,
-      is_int2fp && is_single),
-    Seq(rpath_sig_shifted.head(f16.precision),
-      rpath_sig_shifted.head(8),
-      in_shift.head(8),
-      in_shift.head(10))
-  )
-  round_roundIn := Mux1H(
-    Seq(is_fp2int && is_single,
-      is_fp2int && is_narrow,
-      is_int2fp && is_widen,
-      is_int2fp && is_single),
-    Seq(rpath_sig_shifted.tail(f16.precision),
-      rpath_sig_shifted.tail(8).head(1),
-      in_shift.tail(8).head(1),
-      in_shift.tail(10).head(1))
-  )
-  round_stickyIn := Mux1H(
-    Seq(is_fp2int && is_single,
-      is_fp2int && is_narrow,
-      is_int2fp && is_widen,
-      is_int2fp && is_single),
-    Seq(rpath_sticky,
-      rpath_sticky || rpath_sig_shifted.tail(9).orR,
-      in_shift.tail(9).orR,
-      in_shift.tail(f16.precision).orR)
-  )
-  round_signIn := sign
+    val recResult1H = Seq(
+      isNaN,
+      isInf,
+      isZero || isSubnormalRec2 && !rmin,
+      isNormalRec0,
+      isNormalRec1,
+      isNormalRec2 || isSubnormalRec0 || isSubnormalRec1,
+      isSubnormalRec2 && rmin
+    )
+    def recResultMapGen(fp: FloatFormat): Seq[UInt] = {
+      VecInit((0 to 6).map {
+        case 0 => false.B ## ~0.U(fp.expWidth.W) ## true.B ## 0.U((fp.fracWidth - 1).W) // can
+        case 1 => signSrc ## 0.U((fp.width - 1).W) // 0
+        case 2 => signSrc ## ~0.U(fp.expWidth.W) ## 0.U(fp.fracWidth.W) // INF
+        case 3 => signSrc ## 0.U(fp.expWidth.W) ## 1.U(2.W) ## fracEstimate ## 0.U((fp.fracWidth - 2 - 7).W)
+        case 4 => signSrc ## 0.U(fp.expWidth.W) ## 1.U(1.W) ## fracEstimate ## 0.U((fp.fracWidth - 1 - 7).W)
+        case 5 => signSrc ## estExp(fp.expWidth - 1, 0) ## fracEstimate ## 0.U((fp.fracWidth - 7).W)
+        case 6 => signSrc ## fp.maxExp.U(fp.expWidth.W) ## ~0.U(fp.fracWidth.W) // GNF
+      })
+    }
+    val recReult = Mux1H(recResult1H, recResultMapGen(f16))
 
-  val sel_lpath = Wire(Bool())
-  val sel_lpath_reg0 = RegEnable(sel_lpath, fire)
-  sel_lpath := exp >= 25.U
+    val sqrtResult1H = Seq(
+      signSrc & !isZero | isNaN,
+      isZero,
+      !signSrc & !isZero & !expIsOnes,
+      !signSrc & isInf
+    )
+    def sqrtResultMapGen(fp: FloatFormat): Seq[UInt] = {
+      VecInit((0 to 3).map {
+        case 0 => false.B ## ~0.U(fp.expWidth.W) ## true.B ## 0.U((fp.fracWidth - 1).W)
+        case 1 => signSrc ## ~0.U(fp.expWidth.W) ## 0.U(fp.fracWidth.W)
+        case 2 => signSrc ## estExp(fp.expWidth, 1) ## fracEstimate ## 0.U((fp.fracWidth - 7).W) // exp/2 => >>1
+        case 3 => 0.U(fp.width.W)
+      })
+    }
+    val sqrtResult = Mux1H(sqrtResult1H, sqrtResultMapGen(f16))
 
+    result := Mux(isRec, recReult, sqrtResult)
+  }.otherwise {
+    /**
+     * out is int, any fp->any int/uint
+     * drop the shift left!
+     */
+    val resultRounded = fracRounded
+    val isNotZeroRounded = resultRounded.orR
+    val isZeroRounded = !isNotZeroRounded
+    val normalResult = Mux(signSrc && isNotZeroRounded, (~resultRounded).asUInt + 1.U, resultRounded) // exclude 0
+    // i = log2(intType)
+    val ofExpRounded = !exp.head(1) && Mux1H(int1HOut,
+      (3 to 4).map(i =>
+        Mux1H(UIntToOH(hasSignInt ## cout), VecInit((0 to 3).map {
+          case 0 => exp(exp.getWidth - 2, i).orR                        // >= intType   unsign & non cout
+          case 1 => exp(exp.getWidth - 2, i).orR || exp(i-1, 0).andR    // >= intType-1 unsign & cout
+          case 2 => exp(exp.getWidth - 2, i).orR || exp(i-1, 0).andR    // >= intType-1 sign   & non cout
+          case 3 => exp(exp.getWidth - 2, i).orR || exp(i-1, 1).andR    // >= intType-2 sign   & cout
+        }))
+      )
+    )
+    val excludeFrac = Mux1H(int1HOut,
+      intParamMap.map(intType => resultRounded(intType - 1) && !resultRounded(intType - 2, 0).orR)) // 1000***000
+    // i=log2(intType)
+    val excludeExp = Mux1H(int1HOut,
+      (3 to 4).map(i => !exp.head(exp.getWidth - i).orR &&
+        Mux(cout,
+          exp(i-1, 1).andR && !exp(0), // == intType-2
+          exp(i-1, 0).andR             // == intType-1
+        )
+      )
+    )
+    val toUnv = ofExpRounded || expIsOnes ||
+      signSrc && !(isZero || isZeroRounded && !ofExpRounded) // exclude 0 & -0 after rounding
+    val toUnx = !toUnv && nxRounded
+    val toInv = ofExpRounded && !(signSrc && excludeExp && excludeFrac) || expIsOnes // nv has included inf & nan
+    val toInx = !toInv && nxRounded
 
-  val max_int = Mux1H(
-    Seq(is_fp2int && is_single,
-      is_fp2int && is_narrow),
-    Seq(Cat(!is_signed_int, ~0.U(15.W)),
-      Cat(!is_signed_int,   ~0.U(7.W)))
-  )
-  val min_int = Mux1H(
-    Seq(is_fp2int && is_single,
-      is_fp2int && is_narrow),
-    Seq(Cat(is_signed_int, 0.U(15.W)),
-      Cat(is_signed_int,   0.U(7.W)))
-  )
-  val max_min_int = Wire(UInt(16.W))
-  val max_min_int_reg0 = RegEnable(max_min_int, 0.U(16.W), fire)
-  max_min_int := Mux(exp.andR && sig.tail(1).orR || !sign, max_int, min_int)
+    nv := Mux(hasSignInt, toInv, toUnv)
+    dz := false.B
+    of := false.B
+    uf := false.B
+    nx := Mux(hasSignInt, toInx, toUnx)
 
+    val result1H = Seq(
+      (!hasSignInt && !toUnv) || (hasSignInt && !toInv), // toUnv include nan & inf
+      !hasSignInt && toUnv && (isNaN || !signSrc && (isInf || ofExpRounded)),
+      !hasSignInt && toUnv && signSrc && !isNaN,
+      hasSignInt && toInv,
+    )
+    result := Mux1H(result1H, Seq(
+      normalResult,
+      (~0.U(16.W)).asUInt,
+      0.U(16.W),
+      Mux1H(int1HOut, intParamMap.map(intType => signNonNan ## Fill(intType - 1, !signNonNan)))
+    ))
+  }
+  fflags := Cat(nv, dz, of, uf, nx)
+  s1Out.result := result
+  s1Out.fflags := fflags
+}
 
-  // vfr
-  is_normal := exp.orR & !exp.andR
-  val is_subnormal = !exp.orR
-  is_inf := exp.andR & !sig.tail(1).orR
-  is_nan := exp.andR & sig.tail(1).orR
-  is_neginf := sign & is_inf
-  is_neginf_negzero := sign & (is_normal | is_subnormal & sig.tail(1).orR)
-  is_negzero := sign & is_subnormal & !sig.tail(1).orR
-  is_poszero := !sign & is_subnormal & !sig.tail(1).orR
-  val is_poszero_posinf = !sign & (is_normal | is_subnormal & sig.tail(1).orR)
-  is_snan := !sig.tail(1).head(1).asBool & is_nan
-  is_neg2_bplus1_b := sign & (exp === 30.U)
-  is_neg2_b_bminus1 := sign & (exp === 29.U)
-  is_neg2_negbminus1_negzero := sign & (sig.tail(1).head(2) === "b00".U) & is_subnormal & sig.tail(1).orR
-  is_pos2_poszero_negbminus1 := !sign & (sig.tail(1).head(2) === "b00".U) & is_subnormal & sig.tail(1).orR
-  is_pos2_bminus1_b := !sign & (exp === 29.U)
-  is_pos2_b_bplus1 := !sign & (exp === 30.U)
+class CVT16BundleS2(width: Int = 16) extends Bundle {
+  val s2In = Input(new CVT16BundleOutputS1(width))
+  val s2Out = Output(new CVT16BundleOutputS1(width))
+}
 
-  val zero_minus_lzc = Mux(is_vfr, 0.U - CLZ(sig.tail(1)), 0.U)
-
-  val exp_normalized = Wire(UInt(5.W))
-  val exp_normalized_reg0 = RegEnable(exp_normalized, fire)
-  exp_normalized := Mux1H(
-    Seq(is_vfrsqrt7 && is_poszero_posinf && is_normal || (is_vfrec7 && is_normal),
-      is_vfrsqrt7 && is_poszero_posinf && is_subnormal || (is_vfrec7 && is_subnormal)),
-    Seq(exp,
-      Cat(Fill(f16.expWidth - zero_minus_lzc.getWidth, zero_minus_lzc.head(1)), zero_minus_lzc))
-  )
-
-
-  val sig_normalized = Wire(UInt(11.W))
-  val sig_normalized_reg0 = RegEnable(sig_normalized, fire)
-  sig_normalized := Mux1H(
-    Seq(is_vfrsqrt7 && is_poszero_posinf && is_normal || (is_vfrec7 && is_normal),
-      is_vfrsqrt7 && is_poszero_posinf && is_subnormal || (is_vfrec7 && is_subnormal)),
-    Seq(Cat(0.U, sig.tail(1)),
-      (sig.tail(1) << 1.U).asUInt)
-  )
-
-
-  val clz_sig = Wire(UInt(4.W))
-  val clz_sig_reg0 = RegEnable(clz_sig, fire)
-  clz_sig := CLZ(sig_normalized)
-
-
-  val out_exp_normalized = Mux(is_vfrec7, 29.U - exp_normalized, 0.U)
-
-  val out_exp_zero_negone = Wire(Bool())
-  val out_exp_zero_negone_reg0 = RegEnable(out_exp_zero_negone, fire)
-  out_exp_zero_negone := is_vfrec7 && !out_exp_normalized.orR || out_exp_normalized.andR
-
-
-  val out_exp = Wire(UInt(5.W))
-  val out_exp_reg0 = RegEnable(out_exp, 0.U(5.W), fire)
-  out_exp := Mux1H(
-    Seq(is_vfrsqrt7 && is_normal,
-      is_vfrsqrt7 && is_subnormal,
-      is_vfrec7 && out_exp_zero_negone,
-      is_vfrec7 && !out_exp_zero_negone
-    ),
-    Seq((44.U - exp) >> 1,
-      (44.U + CLZ(sig.tail(1))) >> 1,
-      0.U,
-      out_exp_normalized)
-  )
-
-
-  val out_sign = Wire(Bool())
-  val out_sign_reg0 = RegEnable(out_sign, fire)
-  out_sign := is_vfrsqrt7 && is_poszero_posinf && sign
-
-
-  // cycle1
-  val rounder = Module(new RoundingUnit(f16.precision))
-  rounder.io.in := round_in_reg0
-  rounder.io.roundIn := round_roundIn_reg0
-  rounder.io.stickyIn := round_stickyIn_reg0
-  rounder.io.signIn := round_signIn_reg0
-  rounder.io.rm := rm_reg0
-
-  val out_reg0 = Mux(rounder.io.r_up, rounder.io.in + 1.U, rounder.io.in)
-  val cout_reg0 = rounder.io.r_up && Mux1H(
-    Seq(is_fp2int_reg0 && is_narrow_reg0,
-      is_fp2int_reg0 && is_single_reg0,
-      is_int2fp_reg0),
-    Seq(rounder.io.in.tail(4).andR,
-      rounder.io.in.andR,
-      rounder.io.in.tail(1).andR)
-  )
-  val exp_reg0 = Mux1H(
-    Seq(is_int2fp_reg0 && in_orR_reg0,
-      is_int2fp_reg0 && !in_orR_reg0),
-    Seq(exp_raw_reg0 + cout_reg0,
-      0.U)
-  )
-  val sig_reg0 = Mux1H(
-    Seq(is_fp2int_reg0 && is_single_reg0,
-      is_fp2int_reg0 && is_narrow_reg0,
-      is_int2fp_reg0),
-    Seq(Cat(0.U(4.W), cout_reg0, out_reg0),
-      Cat(0.U(5.W), out_reg0),
-      out_reg0)
-  )
-  val rpath_ix_reg0 = Mux1H(
-    Seq(is_fp2int_reg0 && is_single_reg0,
-      is_fp2int_reg0 && is_narrow_reg0),
-    Seq(rounder.io.inexact,
-      rounder.io.inexact || rpath_sig_shifted_reg0.tail(8).orR)
-  )
-  val rpath_iv_reg0 = is_fp2int_reg0 && !is_signed_int_reg0 && in_reg0.head(1).asBool && sig_reg0.orR
-
-  val rpath_pos_of_reg0 = Mux1H(
-    Seq(is_fp2int_reg0 && !in_reg0.head(1).asBool && is_signed_int_reg0,
-      is_fp2int_reg0 && !in_reg0.head(1).asBool && !is_signed_int_reg0),
-    Seq((in_reg0.tail(1).head(5) === 22.U) || ((in_reg0.tail(1).head(5) === 21.U) && cout_reg0),
-      (in_reg0.tail(1).head(5) === 22.U) && cout_reg0)
-  )
-  val rpath_neg_of_reg0 = is_fp2int_reg0 && in_reg0.head(1).asBool && (in_reg0.tail(1).head(5) === 22.U) && (rounder.io.in.tail(4).orR || rounder.io.r_up)
-
-  val rpath_of_reg0 = Mux1H(
-    Seq(is_fp2int_reg0 && is_narrow_reg0,
-      is_fp2int_reg0 && is_single_reg0),
-    Seq(rpath_pos_of_reg0 || rpath_neg_of_reg0,
-      cout_reg0)
-  )
-
-
-  val vfrsqrt7Table = Module(new Rsqrt7Table)
-  val vfrec7Table = Module(new Rec7Table)
-
-  val sig_in7 = Mux1H(
-    Seq(is_vfr_reg0 && is_vfrsqrt7_reg0,
-      is_vfr_reg0 && is_vfrec7_reg0),
-    Seq(Cat(exp_normalized_reg0(0), (sig_normalized_reg0 << Mux(is_normal_reg0, 0.U, clz_sig_reg0))(9, 4)),
-      (sig_normalized_reg0 << Mux(is_normal_reg0, 0.U, clz_sig_reg0))(9, 3))
-  )
-  vfrsqrt7Table.src := sig_in7
-  vfrec7Table.src := sig_in7
-
-  val sig_out7_reg0 = Wire(UInt(7.W))
-  sig_out7_reg0 := Mux1H(
-    Seq(is_vfr_reg0 && is_vfrsqrt7_reg0,
-      is_vfr_reg0 && is_vfrec7_reg0),
-    Seq(vfrsqrt7Table.out,
-      vfrec7Table.out)
-  )
-
-  val out_sig_reg0 = Mux1H(
-    Seq(is_vfrec7_reg0 && out_exp_zero_negone_reg0 && (is_neg2_bplus1_b_reg0 || is_pos2_b_bplus1_reg0),
-      is_vfrec7_reg0 && out_exp_zero_negone_reg0 && (is_neg2_b_bminus1_reg0 || is_pos2_bminus1_b_reg0),
-      is_vfrec7_reg0 && out_exp_zero_negone_reg0 && !(is_neg2_bplus1_b_reg0 || is_pos2_b_bplus1_reg0 || is_neg2_b_bminus1_reg0 || is_pos2_bminus1_b_reg0),
-      is_vfrec7_reg0 && !out_exp_zero_negone_reg0),
-    Seq(Cat(0.U, 1.U, sig_out7_reg0, 0.U),
-      Cat(1.U, sig_out7_reg0, 0.U(2.W)),
-      Cat(1.U, sig_out7_reg0, 0.U(2.W)) >> 1,
-      Cat(sig_out7_reg0, 0.U(3.W)))
-  )
-
-  val fp_result = Wire(UInt(16.W))
-  fp_result := Mux1H(
-    Seq(is_vfrsqrt7_reg0,
-      is_vfrec7_reg0),
-    Seq(Cat(out_sign_reg0, out_exp_reg0, sig_out7_reg0, 0.U(3.W)),
-      Cat(sign_reg0, out_exp_reg0, out_sig_reg0))
-  )
-
-  val result_nan = Cat(0.U(1.W), Fill(6, 1.U), 0.U(9.W))
-  val result_inf = Cat(Fill(5, 1.U), 0.U(10.W))
-  val result_greatest_fin = Cat(Fill(4, 1.U), 0.U, Fill(10, 1.U))
-
-
-  val of_reg0 = Mux1H(
-    Seq(is_fp2int_reg0,
-      is_int2fp_reg0),
-    Seq(exp_of_reg0 || sel_lpath_reg0 && lpath_of_reg0 || !sel_lpath_reg0 && rpath_of_reg0,
-      exp_reg0 === 31.U)
-  )
-  val iv_reg0 = is_fp2int_reg0 && (of_reg0 || sel_lpath_reg0 && lpath_iv_reg0 || !sel_lpath_reg0 && rpath_iv_reg0)
-
-  val ix_reg0 = Mux1H(
-    Seq(is_fp2int_reg0,
-      is_int2fp_reg0),
-    Seq(!iv_reg0 && !sel_lpath_reg0 && rpath_ix_reg0,
-      rounder.io.inexact)
-  )
-
-  val int_abs_reg0 = Mux1H(
-    Seq(is_fp2int_reg0 && sel_lpath_reg0,
-      is_fp2int_reg0 && !sel_lpath_reg0),
-    Seq(lpath_sig_shifted_reg0,
-      sig_reg0)
-  )
-  val int_reg0 = Mux1H(
-    Seq(is_fp2int_reg0 && is_narrow_reg0,
-      is_fp2int_reg0 && is_single_reg0),
-    Seq(Mux(in_reg0.head(1).asBool && is_signed_int_reg0, -int_abs_reg0.tail(8), int_abs_reg0.tail(8)),
-      Mux(in_reg0.head(1).asBool && is_signed_int_reg0, -int_abs_reg0, int_abs_reg0))
-  )
-
-  result0 := Mux1H(
-    Seq(is_fp2int_reg0,
-      is_int2fp_reg0,
-      is_vfrsqrt7_reg0 && (is_nan_reg0 || is_neginf_negzero_reg0) || is_vfrec7_reg0 && is_nan_reg0,
-      is_vfrsqrt7_reg0 && is_inf_reg0,
-      is_vfrsqrt7_reg0 && (is_negzero_reg0 || is_poszero_reg0),
-      is_vfrsqrt7_reg0 && !(is_nan_reg0 || is_neginf_negzero_reg0 || is_inf_reg0 || is_negzero_reg0 || is_poszero_reg0) ||
-        is_vfrec7_reg0 && !(is_nan_reg0 || is_inf_reg0 || is_negzero_reg0 || is_poszero_reg0 || is_neg2_negbminus1_negzero_reg0 || is_pos2_poszero_negbminus1_reg0),
-      is_vfrec7_reg0 && is_inf_reg0,
-      is_vfrec7_reg0 && (is_negzero_reg0 || is_poszero_reg0),
-      is_vfrec7_reg0 && is_neg2_negbminus1_negzero_reg0,
-      is_vfrec7_reg0 && is_pos2_poszero_negbminus1_reg0
-    ),
-    Seq(Mux(iv_reg0, max_min_int_reg0, int_reg0),
-      Cat(is_signed_int_reg0 && sign_reg0, exp_reg0, Mux(is_widen_reg0, Cat(sig_reg0(7,0), 0.U(2.W)), sig_reg0(9,0))),
-      result_nan,
-      Mux(is_neginf_reg0, result_nan, 0.U),
-      Mux(is_negzero_reg0, Cat(1.U, result_inf), Cat(0.U, result_inf)),
-      fp_result,
-      Mux(is_neginf_reg0, Cat(1.U, 0.U(15.W)), 0.U),
-      Mux(is_negzero_reg0, Cat(Fill(6, 1.U), 0.U(10.W)), Cat(0.U(1.W), Fill(5, 1.U), 0.U(10.W))),
-      Mux(rm_reg0 === RUP || rm_reg0 === RTZ, Cat(1.U, result_greatest_fin), Cat(1.U, result_inf)),
-      Mux(rm_reg0 === RDN || rm_reg0 === RTZ, Cat(0.U, result_greatest_fin), Cat(0.U, result_inf)))
-  )
-
-  fflags0 := Mux1H(
-    Seq(is_fp2int_reg0,
-      is_int2fp_reg0,
-      is_vfrsqrt7_reg0 && (is_nan_reg0 || is_neginf_negzero_reg0),
-      is_vfrsqrt7_reg0 && is_inf_reg0,
-      is_vfrsqrt7_reg0 && (is_negzero_reg0 || is_poszero_reg0) || is_vfrec7_reg0 && (is_negzero_reg0 || is_poszero_reg0),
-      is_vfrsqrt7_reg0 && !(is_nan_reg0 || is_neginf_negzero_reg0 || is_inf_reg0 || is_negzero_reg0 || is_poszero_reg0) ||
-        is_vfrec7_reg0 && !(is_nan_reg0 || is_inf_reg0 || is_negzero_reg0 || is_poszero_reg0 || is_neg2_negbminus1_negzero_reg0 || is_pos2_poszero_negbminus1_reg0),
-      is_vfrec7_reg0 && is_nan_reg0,
-      is_vfrec7_reg0 && is_inf_reg0,
-      is_vfrec7_reg0 && (is_neg2_negbminus1_negzero_reg0 || is_pos2_poszero_negbminus1_reg0)),
-    Seq(Cat(iv_reg0, false.B, false.B, false.B, ix_reg0),
-      Cat(false.B, false.B, of_reg0, false.B, ix_reg0),
-      Mux(is_snan_reg0 || is_neginf_negzero_reg0, "b10000".U, "b00000".U),
-      Mux(is_neginf_reg0, "b10000".U, "b00000".U),
-      "b01000".U,
-      0.U,
-      Mux(is_snan_reg0, "b10000".U, "b00000".U),
-      Mux(is_neginf_reg0, Cat(1.U, 0.U(15.W)), 0.U),
-      "b00101".U)
-  )
-
-  // cycle2
-  result := result0_reg1
-  fflags := fflags0_reg1
-
-  io.result := result
-  io.fflags := fflags
+class CVT16ModuleS2(width: Int = 16) extends Module {
+  val io = IO(new CVT16BundleS2(width))
+  io.s2Out := io.s2In
 }

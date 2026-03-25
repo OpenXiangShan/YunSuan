@@ -3,17 +3,17 @@ package yunsuan.vector.VectorConvert.util
 import chisel3._
 import chisel3.util._
 import yunsuan.vector.VectorConvert.RoundingModle._
+import yunsuan.vector.Common._
 
 class RoundingUnit(val width: Int) extends Module {
   val io = IO(new Bundle() {
-    val in = Input(UInt(width.W))
-    val roundIn = Input(Bool())
+    val in       = Input(UInt(width.W))
+    val roundIn  = Input(Bool())
     val stickyIn = Input(Bool())
-    val signIn = Input(Bool())
-    val rm = Input(UInt(3.W))
-
-    val inexact = Output(Bool())
-    val r_up = Output(Bool())
+    val signIn   = Input(Bool())
+    val rm       = Input(Frm())
+    val inexact  = Output(Bool())
+    val r_up     = Output(Bool())
   })
 
   val (g, r, s) = (io.in(0).asBool, io.roundIn, io.stickyIn)

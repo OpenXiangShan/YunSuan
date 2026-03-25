@@ -161,6 +161,19 @@ object Common {
     }
   }
 
+
+  object Sew extends NamedUInt(4)
+  object Frm extends NamedUInt(3) {
+    def rne: UInt = "b000".U(width.W)
+    def rtz: UInt = "b001".U(width.W)
+    def rdn: UInt = "b010".U(width.W)
+    def rup: UInt = "b011".U(width.W)
+    def rmm: UInt = "b100".U(width.W)
+    def rto: UInt = "b110".U(width.W)
+  }
+
+  object Fflags extends NamedUInt(5)
+
   class Vxrm extends Bundle {
     val bits = UInt(2.W)
 

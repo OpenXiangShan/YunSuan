@@ -1,23 +1,26 @@
 package yunsuan.fpu
 import chisel3._
 import chisel3.util._
-import yunsuan.{FcmpOpCode, VectorElementFormat}
-class FloatCompare() extends Module {
+import yunsuan.VectorElementFormat
+import yunsuan.encoding.Opcode.Opcodes.FMiscOpcode
+import yunsuan.vector.Common.Fflags
+import yunsuan.vector.VectorConvert._
+
+class FloatCompare extends Module {
   val io = IO(new Bundle() {
-    val src0, src1 = Input(UInt(64.W))
-    val fpFormat   = Input(VectorElementFormat()) // result format b01->fp16,b10->fp32,b11->fp64
-    val opCode    = Input(UInt(FcmpOpCode.width.W))
-    val result     = Output(UInt(64.W))
-    val fflags     = Output(UInt(5.W))
+    val src0, src1 = Input(UInt(f64.width.W))
+    val opCode     = Input(FMiscOpcode())
+    val result     = Output(UInt(f64.width.W))
+    val fflags     = Output(Fflags())
   })
-  val isF16 = io.fpFormat === VectorElementFormat.h
-  val isF32 = io.fpFormat === VectorElementFormat.w
-  val isF64 = io.fpFormat === VectorElementFormat.d
-  val isFeq = FcmpOpCode.isFeq(io.opCode)
-  val isFlt = FcmpOpCode.isFlt(io.opCode)
-  val isFle = FcmpOpCode.isFle(io.opCode)
-  val isQuiet = FcmpOpCode.isQuiet(io.opCode)
-  val isFclass = FcmpOpCode.isFclass(io.opCode)
+  val isF16 = FMiscOpcode.getFormat(io.opCode) === VectorElementFormat.h
+  val isF32 = FMiscOpcode.getFormat(io.opCode) === VectorElementFormat.w
+  val isF64 = FMiscOpcode.getFormat(io.opCode) === VectorElementFormat.d
+  val isFeq = FMiscOpcode.isFeq(io.opCode)
+  val isFlt = FMiscOpcode.isFlt(io.opCode)
+  val isFle = FMiscOpcode.isFle(io.opCode)
+  val isQuiet = FMiscOpcode.isQuiet(io.opCode)
+  val isFclass = FMiscOpcode.isFclass(io.opCode)
   val src0 = io.src0
   val src1 = io.src1
   val src0F16Sign = src0(15)

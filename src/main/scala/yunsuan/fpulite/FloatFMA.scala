@@ -1,7 +1,6 @@
 package yunsuan.fpulite
 import chisel3._
 import chisel3.util._
-import yunsuan.FmaOpCode
 import yunsuan.util.GatedValidRegNext
 import yunsuan.VfmaOpCode
 import yunsuan.vector._
