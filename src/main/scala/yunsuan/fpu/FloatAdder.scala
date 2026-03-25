@@ -2,26 +2,29 @@ package yunsuan.fpu
 import chisel3._
 import chisel3.util._
 import yunsuan.vector._
-import yunsuan.{FaddOpCode, VectorElementFormat}
+import yunsuan.VectorElementFormat
+import yunsuan.encoding.Opcode.Opcodes.FAluOpcode
+import yunsuan.vector.Common._
+import yunsuan.vector.VectorConvert._
+
 class FloatAdder() extends Module  {
-  val exponentWidth = 11
-  val significandWidth = 53
+  val exponentWidth = f64.expWidth
+  val significandWidth = f64.precision
   val floatWidth = exponentWidth + significandWidth
   val io = IO(new Bundle() {
     val fire          = Input (Bool())
     val fp_a, fp_b    = Input (UInt(floatWidth.W)) // fp_a -> vs2, fp_b -> vs1
-    val round_mode    = Input (UInt(3.W))
-    val fp_format     = Input (VectorElementFormat()) // result format b01->fp16,b10->fp32,b11->fp64
-    val op_code       = Input (UInt(5.W))
+    val rm            = Input (Frm())
+    val op_code       = Input (FAluOpcode())
     val fp_aIsFpCanonicalNAN = Input (Bool())
     val fp_bIsFpCanonicalNAN = Input (Bool())
     val fp_result     = Output(UInt(floatWidth.W))
-    val fflags        = Output(UInt(5.W))
+    val fflags        = Output(Fflags())
   })
-  val fp_format = io.fp_format-1.U //Cat(io.fp_format===3.U,io.fp_format(1))
+  val fp_format = FAluOpcode.getFormat(io.op_code) - 1.U //Cat(io.fp_format===3.U,io.fp_format(1))
   val fire = io.fire
   val hasMinMaxCompare = true
-  val fast_is_sub = io.op_code(0)
+  val fast_is_sub = FAluOpcode.isSub(io.op_code)
 
   val f64_fp_a = Wire(UInt(floatWidth.W))
   val f32_fp_a = Wire(UInt(floatWidth.W))
@@ -44,7 +47,7 @@ class FloatAdder() extends Module  {
   F64Adder.io.fp_a := f64_fp_a
   F64Adder.io.fp_b := f64_fp_b
   F64Adder.io.is_sub := fast_is_sub
-  F64Adder.io.round_mode := io.round_mode
+  F64Adder.io.round_mode := io.rm
   F64Adder.io.op_code := io.op_code
   F64Adder.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
   F64Adder.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
@@ -57,7 +60,7 @@ class FloatAdder() extends Module  {
   F32Adder.io.fp_a := f32_fp_a
   F32Adder.io.fp_b := f32_fp_b
   F32Adder.io.is_sub := fast_is_sub
-  F32Adder.io.round_mode := io.round_mode
+  F32Adder.io.round_mode := io.rm
   F32Adder.io.op_code := io.op_code
   F32Adder.io.fp_format := fp_format
   F32Adder.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
@@ -68,23 +71,19 @@ class FloatAdder() extends Module  {
   val F16_result = F32Adder.io.fp_c(15,0)
   val F16_fflags = F32Adder.io.fflags
 
-  val fp_format_reg = RegEnable(io.fp_format, fire)
+  val fp_format_reg = RegEnable(FAluOpcode.getFormat(io.op_code), fire)
   val res_is_f16 = fp_format_reg === 1.U
   val res_is_f32 = fp_format_reg === 2.U
   val res_is_f64 = fp_format_reg === 3.U
-  val is_add    = io.op_code === FaddOpCode.fadd
-  val is_sub    = io.op_code === FaddOpCode.fsub
-  val is_min    = io.op_code === FaddOpCode.fmin
-  val is_max    = io.op_code === FaddOpCode.fmax
-  val is_fsgnj  = io.op_code === FaddOpCode.fsgnj
-  val is_fsgnjn = io.op_code === FaddOpCode.fsgnjn
-  val is_fsgnjx = io.op_code === FaddOpCode.fsgnjx
-  val is_feq    = io.op_code === FaddOpCode.feq
-  val is_flt    = io.op_code === FaddOpCode.flt
-  val is_fle    = io.op_code === FaddOpCode.fle
-  val is_fclass = io.op_code === FaddOpCode.fclass
-  val is_fminm  = io.op_code === FaddOpCode.fminm
-  val is_fmaxm  = io.op_code === FaddOpCode.fmaxm
+  val is_add    = FAluOpcode.isFadd(io.op_code)
+  val is_sub    = FAluOpcode.isFsub(io.op_code)
+  val is_min    = FAluOpcode.isFmin(io.op_code)
+  val is_max    = FAluOpcode.isFmax(io.op_code)
+  val is_fsgnj  = FAluOpcode.isFsgnj(io.op_code)
+  val is_fsgnjn = FAluOpcode.isFsgnjn(io.op_code)
+  val is_fsgnjx = FAluOpcode.isFsgnjx(io.op_code)
+  val is_fminm  = FAluOpcode.isFminm(io.op_code)
+  val is_fmaxm  = FAluOpcode.isFmaxm(io.op_code)
   val resultNeedBox = RegEnable(is_add || is_sub || is_min || is_max || is_fsgnj || is_fsgnjn || is_fsgnjx || is_fminm || is_fmaxm, fire)
   val fp_f64_result = F64_result
   val fp_f32_result = Cat(Fill(32, resultNeedBox), F32_result)
@@ -125,10 +124,10 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
     val fp_a, fp_b   = Input (UInt(floatWidth.W))
     val fp_c         = Output(UInt(floatWidth.W))
     val is_sub       = Input (Bool())
-    val round_mode   = Input (UInt(3.W))
-    val fflags       = Output(UInt(5.W))
+    val round_mode   = Input (Frm())
+    val fflags       = Output(Fflags())
     val fp_format    = Input (UInt(2.W))
-    val op_code = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
+    val op_code = if (hasMinMaxCompare) Input(FAluOpcode()) else Input(UInt(0.W))
     val fp_aIsFpCanonicalNAN = Input (Bool())
     val fp_bIsFpCanonicalNAN = Input (Bool())
   })
@@ -203,7 +202,7 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
   val round_to_negative = io.round_mode==="b010".U & EOP
   val res_negative = fp_a_to32.head(1).asBool & !EOP
   val res_is_f32_reg = RegEnable(res_is_f32, fire)
-  val fadd0_result0 = Mux(res_is_f32_reg,Cat(RegEnable(Mux(round_to_negative | res_negative,1.U,0.U), fire),0.U(31.W)),Cat(RegEnable(Mux(round_to_negative | res_negative,Fill(17,1.U),0.U(17.W)), fire),0.U(15.W))) 
+  val fadd0_result0 = Mux(res_is_f32_reg,Cat(RegEnable(Mux(round_to_negative | res_negative,1.U,0.U), fire),0.U(31.W)),Cat(RegEnable(Mux(round_to_negative | res_negative,Fill(17,1.U),0.U(17.W)), fire),0.U(15.W)))
   val fadd0_result1 = Mux(res_is_f32_reg,RegEnable(Cat(io.is_sub ^ io.fp_b(31),io.fp_b(30,0)), fire),RegEnable(Cat(0.U(16.W),Cat(io.is_sub ^ io.fp_b(15),io.fp_b(14,0))), fire))
   val out_NAN_reg = Mux(res_is_f32_reg, Cat(0.U,Fill(8,1.U),1.U,0.U(22.W)), Cat(0.U(17.W),Fill(5,1.U),1.U,0.U(9.W)))
   val out_infinite_sign = Mux(fp_a_is_infinite,fp_a_to32.head(1),io.is_sub^fp_b_to32.head(1))
@@ -225,21 +224,15 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
     float_adder_result := out_fp32_to_fp16_or_fp32_reg
   }
   if (hasMinMaxCompare) {
-    val is_add = io.op_code === FaddOpCode.fadd
-    val is_sub = io.op_code === FaddOpCode.fsub
-    val is_min = io.op_code === FaddOpCode.fmin
-    val is_max = io.op_code === FaddOpCode.fmax
-    val is_feq = io.op_code === FaddOpCode.feq
-    val is_flt = io.op_code === FaddOpCode.flt
-    val is_fle = io.op_code === FaddOpCode.fle
-    val is_fsgnj  = io.op_code === FaddOpCode.fsgnj
-    val is_fsgnjn = io.op_code === FaddOpCode.fsgnjn
-    val is_fsgnjx = io.op_code === FaddOpCode.fsgnjx
-    val is_fclass = io.op_code === FaddOpCode.fclass
-    val is_fminm  = io.op_code === FaddOpCode.fminm
-    val is_fmaxm  = io.op_code === FaddOpCode.fmaxm
-    val is_fleq   = io.op_code === FaddOpCode.fleq
-    val is_fltq   = io.op_code === FaddOpCode.fltq
+    val is_add = FAluOpcode.isFadd(io.op_code)
+    val is_sub = FAluOpcode.isFsub(io.op_code)
+    val is_min = FAluOpcode.isFmin(io.op_code)
+    val is_max = FAluOpcode.isFmax(io.op_code)
+    val is_fsgnj  = FAluOpcode.isFsgnj(io.op_code)
+    val is_fsgnjn = FAluOpcode.isFsgnjn(io.op_code)
+    val is_fsgnjx = FAluOpcode.isFsgnjx(io.op_code)
+    val is_fminm  = FAluOpcode.isFminm(io.op_code)
+    val is_fmaxm  = FAluOpcode.isFmaxm(io.op_code)
 
     val fp_a_sign = fp_a_to32.head(1)
     val fp_b_sign = fp_b_to32.head(1)
@@ -258,10 +251,6 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
     val fp_b_is_less = !fp_b_is_greater & !fp_b_is_equal
     val result_min = Wire(UInt(floatWidth.W))
     val result_max = Wire(UInt(floatWidth.W))
-    val result_feq = Wire(UInt(floatWidth.W))
-    val result_flt = Wire(UInt(floatWidth.W))
-    val result_fle = Wire(UInt(floatWidth.W))
-    val result_fclass = Wire(UInt(floatWidth.W))
     val result_fminm = Wire(UInt(floatWidth.W))
     val result_fmaxm = Wire(UInt(floatWidth.W))
     val in_NAN = Mux(res_is_f32, Cat(0.U(1.W),Fill(9, 1.U(1.W)),0.U(22.W)), Cat(0.U(17.W),Fill(6, 1.U(1.W)),0.U(9.W)))
@@ -307,21 +296,6 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
         out_NAN
       )
     )
-    result_feq := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_equal)
-    result_flt := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_greater)
-    result_fle := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_greater | fp_b_is_equal)
-    result_fclass := Mux(io.fp_aIsFpCanonicalNAN, (1 << 9).U, Reverse(Cat(
-      fp_a_sign & fp_a_is_infinite,
-      fp_a_sign & !Efp_a_is_zero & !Efp_a_is_all_one,
-      fp_a_sign & Efp_a_is_zero & fp_a_mantissa_isnot_zero,
-      fp_a_sign & Efp_a_is_zero & !fp_a_mantissa_isnot_zero,
-      ~fp_a_sign & Efp_a_is_zero & !fp_a_mantissa_isnot_zero,
-      ~fp_a_sign & Efp_a_is_zero & fp_a_mantissa_isnot_zero,
-      ~fp_a_sign & !Efp_a_is_zero & !Efp_a_is_all_one,
-      ~fp_a_sign & fp_a_is_infinite,
-      fp_a_is_SNAN,
-      fp_a_is_NAN & !fp_a_is_SNAN
-    )))
     result_fminm := Mux(!fp_a_is_NAN & !fp_b_is_NAN,
       Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),
         fp_b_16_or_32,
@@ -339,35 +313,23 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
       Seq(
         is_min,
         is_max,
-        is_feq,
-        is_flt | is_fltq,
-        is_fle | is_fleq,
         is_fsgnj,
         is_fsgnjn,
         is_fsgnjx,
-        is_fclass,
         is_fminm,
         is_fmaxm,
       ),
       Seq(
         result_min,
         result_max,
-        result_feq,
-        result_flt,
-        result_fle,
         result_fsgnj,
         result_fsgnjn,
         result_fsgnjx,
-        result_fclass,
         result_fminm,
         result_fmaxm,
       )
     )
-    val fflags_NV_stage0 = ((is_min | is_max) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
-      ((is_feq ) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
-      ((is_flt | is_fle ) & (fp_a_is_NAN | fp_b_is_NAN)) |
-      ((is_fminm | is_fmaxm) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
-      ((is_fltq | is_fleq) & (fp_a_is_SNAN | fp_b_is_SNAN))
+    val fflags_NV_stage0 = (is_min | is_max | is_fminm | is_fmaxm) & (fp_a_is_SNAN | fp_b_is_SNAN)
     val fflags_stage0 = Cat(fflags_NV_stage0,0.U(4.W))
     io.fp_c := Mux(RegEnable(is_add | is_sub , fire),float_adder_result,RegEnable(result_stage0, fire))
     io.fflags := Mux(RegEnable(is_add | is_sub , fire),float_adder_fflags,RegEnable(fflags_stage0, fire))
@@ -386,9 +348,9 @@ private[fpu] class FloatAdderF64Pipeline(val is_print:Boolean = false,val hasMin
     val fp_a, fp_b  = Input (UInt(floatWidth.W))
     val fp_c        = Output(UInt(floatWidth.W))
     val is_sub      = Input (Bool())
-    val round_mode  = Input (UInt(3.W))
-    val fflags      = Output(UInt(5.W))
-    val op_code = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
+    val round_mode  = Input (Frm())
+    val fflags      = Output(Fflags())
+    val op_code = if (hasMinMaxCompare) Input(FAluOpcode()) else Input(UInt(0.W))
     val fp_aIsFpCanonicalNAN = Input(Bool())
     val fp_bIsFpCanonicalNAN = Input(Bool())
   })
@@ -458,21 +420,15 @@ private[fpu] class FloatAdderF64Pipeline(val is_print:Boolean = false,val hasMin
     float_adder_result := Mux(is_far_path_reg,U_far_path.io.fp_c,U_close_path.io.fp_c)
   }
   if (hasMinMaxCompare) {
-    val is_add = io.op_code === FaddOpCode.fadd
-    val is_sub = io.op_code === FaddOpCode.fsub
-    val is_min = io.op_code === FaddOpCode.fmin
-    val is_max = io.op_code === FaddOpCode.fmax
-    val is_feq = io.op_code === FaddOpCode.feq
-    val is_flt = io.op_code === FaddOpCode.flt
-    val is_fle = io.op_code === FaddOpCode.fle
-    val is_fsgnj  = io.op_code === FaddOpCode.fsgnj
-    val is_fsgnjn = io.op_code === FaddOpCode.fsgnjn
-    val is_fsgnjx = io.op_code === FaddOpCode.fsgnjx
-    val is_fclass = io.op_code === FaddOpCode.fclass
-    val is_fminm = io.op_code === FaddOpCode.fminm
-    val is_fmaxm = io.op_code === FaddOpCode.fmaxm
-    val is_fleq = io.op_code === FaddOpCode.fleq
-    val is_fltq = io.op_code === FaddOpCode.fltq
+    val is_add = FAluOpcode.isFadd(io.op_code)
+    val is_sub = FAluOpcode.isFsub(io.op_code)
+    val is_min = FAluOpcode.isFmin(io.op_code)
+    val is_max = FAluOpcode.isFmax(io.op_code)
+    val is_fsgnj  = FAluOpcode.isFsgnj(io.op_code)
+    val is_fsgnjn = FAluOpcode.isFsgnjn(io.op_code)
+    val is_fsgnjx = FAluOpcode.isFsgnjx(io.op_code)
+    val is_fminm = FAluOpcode.isFminm(io.op_code)
+    val is_fmaxm = FAluOpcode.isFmaxm(io.op_code)
     val fp_a_sign = io.fp_a.head(1)
     val fp_b_sign = io.fp_b.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -490,9 +446,6 @@ private[fpu] class FloatAdderF64Pipeline(val is_print:Boolean = false,val hasMin
     val fp_b_is_less = !fp_b_is_greater & !fp_b_is_equal
     val result_min = Wire(UInt(floatWidth.W))
     val result_max = Wire(UInt(floatWidth.W))
-    val result_feq = Wire(UInt(floatWidth.W))
-    val result_flt = Wire(UInt(floatWidth.W))
-    val result_fle = Wire(UInt(floatWidth.W))
     val result_fminm = Wire(UInt(floatWidth.W))
     val result_fmaxm = Wire(UInt(floatWidth.W))
     val in_NAN = Cat(0.U, Fill(exponentWidth, 1.U), 1.U, Fill(significandWidth - 2, 0.U))
@@ -501,7 +454,6 @@ private[fpu] class FloatAdderF64Pipeline(val is_print:Boolean = false,val hasMin
     val result_fsgnj = Cat(fp_bFix.head(1), fp_aFix.tail(1))
     val result_fsgnjn = Cat(~fp_bFix.head(1), fp_aFix.tail(1))
     val result_fsgnjx = Cat(fp_bFix.head(1) ^ fp_aFix.head(1), fp_aFix.tail(1))
-    val result_fclass = Wire(UInt(floatWidth.W))
     val out_NAN = Cat(0.U, Fill(exponentWidth, 1.U), 1.U, Fill(significandWidth - 2, 0.U))
     result_min := Mux1H(
       Seq(
@@ -531,21 +483,6 @@ private[fpu] class FloatAdderF64Pipeline(val is_print:Boolean = false,val hasMin
         out_NAN
       )
     )
-    result_feq := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_equal)
-    result_flt := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_greater)
-    result_fle := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_greater | fp_b_is_equal)
-    result_fclass := Mux(io.fp_aIsFpCanonicalNAN, (1 << 9).U, Reverse(Cat(
-      fp_a_sign & fp_a_is_infinite,
-      fp_a_sign & !Efp_a_is_zero & !Efp_a_is_all_one,
-      fp_a_sign & Efp_a_is_zero & fp_a_mantissa_isnot_zero,
-      fp_a_sign & Efp_a_is_zero & !fp_a_mantissa_isnot_zero,
-      ~fp_a_sign & Efp_a_is_zero & !fp_a_mantissa_isnot_zero,
-      ~fp_a_sign & Efp_a_is_zero & fp_a_mantissa_isnot_zero,
-      ~fp_a_sign & !Efp_a_is_zero & !Efp_a_is_all_one,
-      ~fp_a_sign & fp_a_is_infinite,
-      fp_a_is_SNAN,
-      fp_a_is_NAN & !fp_a_is_SNAN
-    )))
     result_fminm := Mux(!fp_a_is_NAN & !fp_b_is_NAN,
       Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),
         io.fp_b,
@@ -563,35 +500,23 @@ private[fpu] class FloatAdderF64Pipeline(val is_print:Boolean = false,val hasMin
       Seq(
         is_min,
         is_max,
-        is_feq,
-        is_flt | is_fltq,
-        is_fle | is_fleq,
         is_fsgnj,
         is_fsgnjn,
         is_fsgnjx,
-        is_fclass,
         is_fminm,
         is_fmaxm,
       ),
       Seq(
         result_min,
         result_max,
-        result_feq,
-        result_flt,
-        result_fle,
         result_fsgnj,
         result_fsgnjn,
         result_fsgnjx,
-        result_fclass,
         result_fminm,
         result_fmaxm,
       )
     )
-    val fflags_NV_stage0 = ((is_min | is_max) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
-      (is_feq  & (fp_a_is_SNAN | fp_b_is_SNAN)) |
-      ((is_flt | is_fle ) & (fp_a_is_NAN | fp_b_is_NAN)) |
-      ((is_fminm | is_fmaxm) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
-      ((is_fltq | is_fleq) & (fp_a_is_SNAN | fp_b_is_SNAN))
+    val fflags_NV_stage0 = (is_min | is_max | is_fminm | is_fmaxm) & (fp_a_is_SNAN | fp_b_is_SNAN)
     val fflags_stage0 = Cat(fflags_NV_stage0, 0.U(4.W))
     io.fp_c := Mux(RegEnable(is_add | is_sub, fire), float_adder_result, RegEnable(result_stage0, fire))
     io.fflags := Mux(RegEnable(is_add | is_sub, fire), float_adder_fflags, RegEnable(fflags_stage0, fire))

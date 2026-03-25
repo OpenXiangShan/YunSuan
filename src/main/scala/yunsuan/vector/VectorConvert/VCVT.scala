@@ -2,20 +2,20 @@ package yunsuan.vector.VectorConvert
 
 import chisel3._
 import chisel3.util._
+import yunsuan.encoding.Opcode.Opcodes.FCvtOpcode
+import yunsuan.vector.Common._
+import yunsuan.vector.VectorConvert.Bundles._
 
 class CVTIO(width: Int) extends Bundle {
-  val fire = Input(Bool())
-  val src = Input(UInt(width.W))
-  val opType = Input(UInt(8.W))
-  val sew = Input(UInt(2.W))
-  val rm = Input(UInt(3.W))
-  val input1H = Input(UInt(4.W))
-  val output1H = Input(UInt(4.W))
-  val isFpToVecInst = Input(Bool())
-  val isFround = Input(UInt(2.W))
-  val isFcvtmod = Input(Bool())
-  val result = Output(UInt(width.W))
-  val fflags = Output(UInt(5.W))
+  val fire     = Input(Bool())
+  val src      = Input(UInt(width.W))
+  val opType   = Input(FCvtOpcode())
+  val rm       = Input(Frm())
+  val inSew1H  = Input(Sew())
+  val outSew1H = Input(Sew())
+  val isScalarFpInst = Input(Bool())
+  val result   = Output(UInt(width.W))
+  val fflags   = Output(Fflags())
 }
 
 abstract class CVT(width: Int) extends Module{
@@ -37,25 +37,19 @@ object VCVT {
            )(fire:    Bool,
              input:   UInt,
              opType:  UInt,
-             sew:     UInt,
              rm:      UInt,
-             input1H:      UInt,
-             output1H:      UInt,
-             isFpToVecInst: Bool,
-             isFround: UInt,
-             isFcvtmod: Bool
+             inSew1H:      UInt,
+             outSew1H:      UInt,
+             isScalarFpInst: Bool
            ): (UInt, UInt) = {
     val vcvtWraper = Module(new VCVT(width))
     vcvtWraper.io.fire := fire
     vcvtWraper.io.src := input
     vcvtWraper.io.opType := opType
-    vcvtWraper.io.sew := sew
     vcvtWraper.io.rm := rm
-    vcvtWraper.io.input1H := input1H
-    vcvtWraper.io.output1H := output1H
-    vcvtWraper.io.isFpToVecInst := isFpToVecInst
-    vcvtWraper.io.isFround := isFround
-    vcvtWraper.io.isFcvtmod := isFcvtmod
+    vcvtWraper.io.inSew1H := inSew1H
+    vcvtWraper.io.outSew1H := outSew1H
+    vcvtWraper.io.isScalarFpInst := isScalarFpInst
     (vcvtWraper.io.result, vcvtWraper.io.fflags)
   }
 }

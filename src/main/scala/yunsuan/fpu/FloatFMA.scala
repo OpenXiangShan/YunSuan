@@ -1,9 +1,10 @@
 package yunsuan.fpu
 import chisel3._
 import chisel3.util._
-import yunsuan.FmaOpCode
+import yunsuan.encoding.Opcode.Opcodes.FMacOpcode
 import yunsuan.util.GatedValidRegNext
 import yunsuan.vector._
+import yunsuan.vector.Common._
 
 import scala.collection.mutable.ListBuffer
 
@@ -14,11 +15,10 @@ class FloatFMA() extends Module{
   val io = IO(new Bundle() {
     val fire                 = Input (Bool())
     val fp_a, fp_b, fp_c     = Input (UInt(floatWidth.W))  // fp_a->VS2,fp_b->VS1,fp_c->VD
-    val round_mode           = Input (UInt(3.W))
-    val fp_format            = Input (UInt(2.W)) // result format b01->fp16,b10->fp32,b11->fp64
-    val op_code              = Input (UInt(4.W))
+    val rm                   = Input (Frm())
+    val op_code              = Input (FMacOpcode())
     val fp_result            = Output(UInt(floatWidth.W))
-    val fflags               = Output(UInt(5.W))
+    val fflags               = Output(Fflags())
     val fp_aIsFpCanonicalNAN = Input(Bool())
     val fp_bIsFpCanonicalNAN = Input(Bool())
     val fp_cIsFpCanonicalNAN = Input(Bool())
@@ -48,16 +48,16 @@ class FloatFMA() extends Module{
   val fire = io.fire
   val fire_reg0 = GatedValidRegNext(fire)
   val fire_reg1 = GatedValidRegNext(fire_reg0)
-  val is_fmul   = io.op_code === FmaOpCode.fmul
-  val is_fmacc  = io.op_code === FmaOpCode.fmacc
-  val is_fnmacc = io.op_code === FmaOpCode.fnmacc
-  val is_fmsac  = io.op_code === FmaOpCode.fmsac
-  val is_fnmsac = io.op_code === FmaOpCode.fnmsac
-  val is_fp64                 = io.fp_format === 3.U(2.W)
+  val is_fmul   = FMacOpcode.isFmul(io.op_code)
+  val is_fmadd  = FMacOpcode.isFmadd(io.op_code)
+  val is_fnmadd = FMacOpcode.isFnmadd(io.op_code)
+  val is_fmsub  = FMacOpcode.isFmsub(io.op_code)
+  val is_fnmsub = FMacOpcode.isFnmsub(io.op_code)
+  val is_fp64                 = FMacOpcode.getFormat(io.op_code) === 3.U(2.W)
   val is_fp64_reg0            = RegEnable(is_fp64, fire)
   val is_fp64_reg1            = RegEnable(is_fp64_reg0, fire_reg0)
   val is_fp64_reg2            = RegEnable(is_fp64_reg1, fire_reg1)
-  val is_fp32                 = io.fp_format === 2.U(2.W)
+  val is_fp32                 = FMacOpcode.getFormat(io.op_code) === 2.U(2.W)
   val is_fp32_reg0            = RegEnable(is_fp32, fire)
   val is_fp32_reg1            = RegEnable(is_fp32_reg0, fire_reg0)
   val is_fp32_reg2            = RegEnable(is_fp32_reg1, fire_reg1)
@@ -78,8 +78,8 @@ class FloatFMA() extends Module{
   def sign_inv(src: UInt,sel:Bool): UInt = {
     Cat(Mux(sel,~src.head(1),src.head(1)),src.tail(1))
   }
-  val fp_a_is_sign_inv = is_fnmacc || is_fnmsac
-  val fp_c_is_sign_inv = is_fnmacc || is_fmsac
+  val fp_a_is_sign_inv = is_fnmadd || is_fnmsub
+  val fp_c_is_sign_inv = is_fnmadd || is_fmsub
   // fp src
   val fp_a_f64              = sign_inv(io.fp_a(63,0),fp_a_is_sign_inv)
   val fp_b_f64              = io.fp_b(63,0)
@@ -489,11 +489,11 @@ class FloatFMA() extends Module{
   val sign_result_temp_f32_reg2 = RegEnable(RegEnable(Mux(adder_is_negative_f32, RegEnable(sign_c_f32, fire), RegEnable(sign_a_b_f32, fire)), fire_reg0), fire_reg1)
   val sign_result_temp_f16_reg2 = RegEnable(RegEnable(Mux(adder_is_negative_f16, RegEnable(sign_c_f16, fire), RegEnable(sign_a_b_f16, fire)), fire_reg0), fire_reg1)
 
-  val RNE = io.round_mode === "b000".U
-  val RTZ = io.round_mode === "b001".U
-  val RDN = io.round_mode === "b010".U
-  val RUP = io.round_mode === "b011".U
-  val RMM = io.round_mode === "b100".U
+  val RNE = io.rm === "b000".U
+  val RTZ = io.rm === "b001".U
+  val RDN = io.rm === "b010".U
+  val RUP = io.rm === "b011".U
+  val RMM = io.rm === "b100".U
   val RNE_reg2 = RegEnable(RegEnable(RegEnable(RNE, fire), fire_reg0), fire_reg1)
   val RTZ_reg2 = RegEnable(RegEnable(RegEnable(RTZ, fire), fire_reg0), fire_reg1)
   val RDN_reg2 = RegEnable(RegEnable(RegEnable(RDN, fire), fire_reg0), fire_reg1)
@@ -689,7 +689,7 @@ class FloatFMA() extends Module{
   val fp_c_is_snan_f64 =  !io.fp_cIsFpCanonicalNAN & Ec_f64.andR & !fp_c_significand_f64.tail(1).head(1) & fp_c_significand_f64.tail(2).orR
   val fp_c_is_snan_f32 =  !io.fp_cIsFpCanonicalNAN & Ec_f32.andR & !fp_c_significand_f32.tail(1).head(1) & fp_c_significand_f32.tail(2).orR
   val fp_c_is_snan_f16 =  !io.fp_cIsFpCanonicalNAN & Ec_f16.andR & !fp_c_significand_f16.tail(1).head(1) & fp_c_significand_f16.tail(2).orR
-  
+
   val has_snan_f64 = fp_a_is_snan_f64 | fp_b_is_snan_f64 | fp_c_is_snan_f64
   val has_snan_f32 = fp_a_is_snan_f32 | fp_b_is_snan_f32 | fp_c_is_snan_f32
   val has_snan_f16 = fp_a_is_snan_f16 | fp_b_is_snan_f16 | fp_c_is_snan_f16

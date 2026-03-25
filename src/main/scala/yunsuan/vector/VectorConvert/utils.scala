@@ -46,6 +46,13 @@ package object utils{
     }
   }
 
+  def int16Extend(x: Bits, signed: Bool = true.B): Bits = {
+    if (x.getWidth >= 17)
+      x
+    else
+      Fill(17 - x.getWidth, signed) ## x.asUInt
+  }
+
   def float32Extend(x:Bits, fp:Int):Bits = {
     if (fp == 0) return (x ## false.B)
     val floatFormat: FloatFormat = fp match {

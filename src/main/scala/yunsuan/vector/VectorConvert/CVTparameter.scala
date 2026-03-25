@@ -23,6 +23,7 @@ trait FloatFormat{
   def minExp = 1
   def froundMaxExp = fracWidth + bias
   def froundShiftMask = bias + f64.fracWidth
+  def expAdderWidth : Int
 }
 
 object f16 extends FloatFormat {
@@ -30,6 +31,7 @@ object f16 extends FloatFormat {
   def expWidth = 5
   def fracWidth = 10
   def bias = 15
+  def expAdderWidth = 7
 }
 
 object f32 extends FloatFormat{
@@ -37,6 +39,7 @@ object f32 extends FloatFormat{
   def expWidth = 8
   def fracWidth = 23
   def bias = 127
+  def expAdderWidth = 10
 }
 
 object f64 extends FloatFormat{
@@ -44,6 +47,7 @@ object f64 extends FloatFormat{
   def expWidth = 11
   def fracWidth = 52
   def bias = 1023
+  def expAdderWidth = 13
 }
 
 //object f128 extends FloatFormat{
