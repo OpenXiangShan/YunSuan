@@ -46,6 +46,7 @@ private:
   VGMFloatCvt vcvt;
   SGMFloatCvt scvt;
   SGMIntegerMul smul;
+  SGMFloatCompare fcmp;
 
 public:
   TestDriver();
@@ -88,6 +89,7 @@ public:
     verbose = true;
     vfd.verbose_exec(); valu.verbose_exec();
     vperm.verbose_exec();vid.verbose_exec();
+    fcmp.verbose_exec();
   }
   void keep_input() { keepinput = true; }
 };

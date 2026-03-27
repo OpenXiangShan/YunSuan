@@ -1,4 +1,7 @@
 package yunsuan.fpu
+
+import chisel3.stage.ChiselGeneratorAnnotation
+import circt.stage._
 import chisel3._
 import chisel3.util._
 import yunsuan.VectorElementFormat
@@ -19,10 +22,23 @@ class FloatCompare extends Module {
   val isFeq = FMiscOpcode.isFeq(io.opCode)
   val isFlt = FMiscOpcode.isFlt(io.opCode)
   val isFle = FMiscOpcode.isFle(io.opCode)
-  val isQuiet = FMiscOpcode.isQuiet(io.opCode)
+  val isFltq = FMiscOpcode.isFltq(io.opCode)
+  val isFleq = FMiscOpcode.isFleq(io.opCode)
+  val isCmp = isFeq || isFlt || isFle || isFltq || isFleq
+  val isCmpNQ = isFlt || isFle
+  val isFmax = FMiscOpcode.isFmax(io.opCode) || FMiscOpcode.isFmaxm(io.opCode)
+  val isFmin = FMiscOpcode.isFmin(io.opCode) || FMiscOpcode.isFminm(io.opCode)
+  val isMaxMin = isFmax || isFmin
+  val isMaxMinM = FMiscOpcode.isFmaxm(io.opCode) || FMiscOpcode.isFminm(io.opCode)
+  val isFsgnj = FMiscOpcode.isFsgnj(io.opCode)
+  val isFsgnjx = FMiscOpcode.isFsgnjx(io.opCode)
+  val isFsgnjn = FMiscOpcode.isFsgnjn(io.opCode)
+  val isFsgn = isFsgnj || isFsgnjx || isFsgnjn
   val isFclass = FMiscOpcode.isFclass(io.opCode)
   val src0 = io.src0
   val src1 = io.src1
+  
+  // fcmp: flt/fle/feq/fltq/fleq
   val src0F16Sign = src0(15)
   val src0F32Sign = src0(31)
   val src0F64Sign = src0(63)
@@ -65,12 +81,44 @@ class FloatCompare extends Module {
   val src1IsFpCanonicalNAN = Mux1H(Seq(isF16, isF32), Seq(!src1.head(48).andR, !src1.head(32).andR))
   val src1IsNan = Mux1H(Seq(isF16, isF32, isF64), Seq(src1F16IsNan, src1F32IsNan, src1F64IsNan)) || src1IsFpCanonicalNAN
   val src1IsSNan = src1IsNan && Mux1H(Seq(isF16, isF32, isF64), Seq(!src1(9), !src1(22), !src1(51))) && !src1IsFpCanonicalNAN
-  val fflagsNV = Mux(isQuiet || isFeq, src0IsSNan || src1IsSNan, src0IsNan || src1IsNan)
-  val fflagsFcmp = Cat(fflagsNV, 0.U(4.W))
-  val resultNormal = Mux1H(Seq(isFeq, isFlt, isFle), Seq(resultNormalEq, resultNormalLt, resultNormalLe))
-  val resultFcmp = Cat(0.U(63.W), Mux(src0IsNan || src1IsNan, 0.U, resultNormal))
+  val resultCmpNormal = Mux1H(Seq(isFeq, isFlt || isFltq, isFle || isFleq), Seq(resultNormalEq, resultNormalLt, resultNormalLe))
+  val resultCmp = Cat(0.U(63.W), Mux(src0IsNan || src1IsNan, 0.U, resultCmpNormal))
+  
+  // fmaxmin: fmax/fmin/fmaxm/fminm
+  val selSrc0ForMin = Mux1H(
+    Seq(
+    !src0Sign && !src1Sign,
+    !src0Sign && src1Sign,
+    src0Sign && !src1Sign,
+    src0Sign && src1Sign,
+    ),
+    Seq(
+      src0AbsLt || src0AbsEq,
+      false.B,
+      true.B,
+      !src0AbsLt
+    )
+  )
+  val bothSrcNan    =  src0IsNan &&  src1IsNan
+  val anySrcNan     =  src0IsNan ||  src1IsNan
+  val nonSrcNan     = ~src0IsNan && ~src1IsNan
+  val onlySrc0IsNan =  src0IsNan && !src1IsNan
+  val onlySrc1IsNan = !src0IsNan &&  src1IsNan
+  val resultIsCanonicalNAN = (isMaxMinM && anySrcNan) || (!isMaxMinM && bothSrcNan)
+  val resultIsSrc0 = (nonSrcNan && ((isFmax && !selSrc0ForMin) || (isFmin && selSrc0ForMin)))  || !isMaxMinM && onlySrc1IsNan
+  val resultIsSrc1 = (nonSrcNan && ((isFmax &&  selSrc0ForMin) || (isFmin && !selSrc0ForMin))) || !isMaxMinM && onlySrc0IsNan
+  val resultCanonicalNAN = Mux1H(Seq(isF16, isF32, isF64), Seq(Cat(Fill(48, 1.U(1.W)), 0.U(1.W), Fill(6, 1.U(1.W)), 0.U(9.W)), Cat(Fill(32, 1.U(1.W)), 0.U(1.W), Fill(9, 1.U(1.W)), 0.U(22.W)), Cat(0.U(1.W), Fill(12, 1.U(1.W)), 0.U(51.W))))
+  val resultMaxMin = Mux1H(Seq(
+    resultIsCanonicalNAN -> resultCanonicalNAN,
+    resultIsSrc0         -> src0,
+    resultIsSrc1         -> src1
+  ))
 
-  // for fclass
+  // fcmp & fmaxmin: fflags
+  val fflagsNV = Mux(isCmpNQ, src0IsNan || src1IsNan, src0IsSNan || src1IsSNan)
+  val fflagsCmpMaxMin = Cat(fflagsNV, 0.U(4.W))
+
+  // fclass
   val src0IsQNan = src0IsNan && Mux1H(Seq(isF16, isF32, isF64), Seq(src0(9), src0(22), src0(51)))
   val src0IsInf = Mux1H(
     Seq(isF16, isF32, isF64),
@@ -109,6 +157,49 @@ class FloatCompare extends Module {
     src0IsSNan,
     src0IsQNan
   )))
-  io.result := Mux(isFclass, resultFclass, resultFcmp)
-  io.fflags := Mux(isFclass, 0.U, fflagsFcmp)
+
+  // fsgnj/fsgnjn/fsgnjx
+  val fsgnSrc0     = Mux(src0IsFpCanonicalNAN, resultCanonicalNAN, src0)
+  val fsgnSrc0Sign = Mux(src0IsFpCanonicalNAN, 0.U(1.W), src0Sign)
+  val fsgnSrc1Sign = Mux(src1IsFpCanonicalNAN, 0.U(1.W), src1Sign)
+  val resultSignNegate = !fsgnSrc1Sign
+  val resultSignXor    =  fsgnSrc0Sign ^ fsgnSrc1Sign
+  val resultFsgnj = Mux1H(Seq(
+    isF16 -> Cat(Fill(48, 1.U(1.W)), fsgnSrc1Sign, fsgnSrc0(14, 0)),
+    isF32 -> Cat(Fill(32, 1.U(1.W)), fsgnSrc1Sign, fsgnSrc0(30, 0)),
+    isF64 -> Cat(                    fsgnSrc1Sign, fsgnSrc0(62, 0))
+  ))
+  val resultFsgnjn = Mux1H(Seq(
+    isF16 -> Cat(Fill(48, 1.U(1.W)), resultSignNegate, fsgnSrc0(14, 0)),
+    isF32 -> Cat(Fill(32, 1.U(1.W)), resultSignNegate, fsgnSrc0(30, 0)),
+    isF64 -> Cat(                    resultSignNegate, fsgnSrc0(62, 0))
+  ))
+  val resultFsgnjx = Mux1H(Seq(
+    isF16 -> Cat(Fill(48, 1.U(1.W)), resultSignXor, fsgnSrc0(14, 0)),
+    isF32 -> Cat(Fill(32, 1.U(1.W)), resultSignXor, fsgnSrc0(30, 0)),
+    isF64 -> Cat(                    resultSignXor, fsgnSrc0(62, 0))
+  ))
+  val resultFsgn = Mux1H(Seq(
+    isFsgnj  -> resultFsgnj,
+    isFsgnjn -> resultFsgnjn,
+    isFsgnjx -> resultFsgnjx
+  ))
+
+  io.result := Mux1H(Seq(
+    isCmp    -> resultCmp,
+    isMaxMin -> resultMaxMin,
+    isFclass -> resultFclass,
+    isFsgn   -> resultFsgn
+  ))
+  io.fflags := Mux(isFclass || isFsgn, 0.U, fflagsCmpMaxMin)
+}
+
+object GenFloatCompare extends App {
+  (new ChiselStage).execute(
+    args,
+    Seq(
+      ChiselGeneratorAnnotation(() => new FloatCompare),
+      FirtoolOption("--disable-all-randomization")
+    )
+  )
 }
