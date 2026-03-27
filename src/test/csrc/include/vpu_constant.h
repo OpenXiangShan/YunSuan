@@ -26,11 +26,12 @@ extern "C"{
 #define FloatCvtI2F (9) //i/ui->f
 #define VIntegerMAC (10)
 #define IntegerMul (11)
+#define FloatCompare (12)
 // #define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt}
 
 //will be delated
-#define FU_NUM 11
-#define ALL_FUTYPES {VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt,FloatCvtF2X,FloatCvtI2F,VIntegerMAC,IntegerMul}
+#define FU_NUM 12
+#define ALL_FUTYPES {VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt,FloatCvtF2X,FloatCvtI2F,VIntegerMAC,IntegerMul,FloatCompare}
 
 #define INT_ROUNDING(result, xrm, gb) \
   do { \
@@ -230,6 +231,22 @@ extern "C"{
 #define VFA_ALL_OPTYPES {VFADD,VFSUB,VFMIN,VFMAX,VFSGNJ,VFSGNJN,VFSGNJX,VFEQ,VFNE,VFLT,VFLE,VFGT,VFGE,VFCLASS}
 #define VFA_MUST_FRS1_OPTYPES {VFGT,VFGE}
 #define VFA_NEED_FRS1_OPTYPES {VFADD,VFSUB,VFMIN,VFMAX,VFSGNJ,VFSGNJN,VFSGNJX,VFEQ,VFNE,VFLT,VFLE}
+
+#define FCMP_NUM 13
+#define FCMP_FEQ    (binstoi("0000"))
+#define FCMP_FLT    (binstoi("0001"))
+#define FCMP_FLE    (binstoi("0010"))
+#define FCMP_FMIN   (binstoi("0011"))
+#define FCMP_FMAX   (binstoi("0100"))
+#define FCMP_FSGNJ  (binstoi("0101"))
+#define FCMP_FSGNJX (binstoi("0110"))
+#define FCMP_FSGNJN (binstoi("0111"))
+#define FCMP_FMINM  (binstoi("1000"))
+#define FCMP_FMAXM  (binstoi("1001"))
+#define FCMP_FLTQ   (binstoi("1010"))
+#define FCMP_FLEQ   (binstoi("1011"))
+#define FCMP_FCLASS (binstoi("1100"))
+#define FCMP_ALL_OPTYPES {FCMP_FEQ,FCMP_FLT,FCMP_FLE,FCMP_FMIN,FCMP_FMAX,FCMP_FSGNJ,FCMP_FSGNJX,FCMP_FSGNJN,FCMP_FMINM,FCMP_FMAXM,FCMP_FLTQ,FCMP_FLEQ,FCMP_FCLASS}
 // vff funcop type
 #define VFF_NUM 9
 #define VFMUL   (binstoi("0000"))

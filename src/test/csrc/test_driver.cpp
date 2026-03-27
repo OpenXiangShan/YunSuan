@@ -29,8 +29,8 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 void TestDriver::set_test_type() {
   test_type.pick_fuType = false;
   test_type.pick_fuOpType = false;
-  test_type.fuType = VIntegerMAC;
-  test_type.fuOpType = VSMUL;
+  test_type.fuType = FloatCompare;
+  test_type.fuOpType = FCMP_FEQ;
   printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
 
@@ -130,6 +130,11 @@ uint16_t TestDriver::gen_random_optype() {
       return imul_optype[rand() % IMUL_NUM];
       break;
     }
+    case FloatCompare: {
+      uint8_t fcmp_all_optype[FCMP_NUM] = FCMP_ALL_OPTYPES;
+      return fcmp_all_optype[rand() % FCMP_NUM];
+      break;
+    }
     default:
       printf("Unsupported FuType %d\n", input.fuType);
       exit(1);
@@ -146,6 +151,7 @@ uint8_t TestDriver::gen_random_sew() {
     case VFloatCvt: return rand()%4; break;
     case FloatCvtF2X: return (rand()%3)+1 ; break;
     case FloatCvtI2F: return 0 ; break;
+    case FloatCompare: return (rand()%3)+1; break;
     case VIntegerMAC: {
       if (input.fuOpType == VWMUL || input.fuOpType == VWMULU || input.fuOpType == VWMULSU ||
           input.fuOpType == VWMACCU || input.fuOpType == VWMACC || input.fuOpType == VWMACCSU || input.fuOpType == VWMACCUS) {
@@ -481,14 +487,7 @@ void TestDriver::get_random_input() {
     input.widen = false;
     if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
     else { input.fuOpType = test_type.fuOpType; }
-  }else if(input.fuType == FloatCvtF2X){
-    input.sew = gen_random_sew();
-    input.is_frs1 = false;
-    input.is_frs2 = false;
-    input.widen = false;
-    if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
-    else { input.fuOpType = test_type.fuOpType; }
-  }else if(input.fuType == FloatCvtI2F){
+  }else if(input.fuType == FloatCvtF2X || input.fuType == FloatCvtI2F || input.fuType == FloatCompare){
     input.sew = gen_random_sew();
     input.is_frs1 = false;
     input.is_frs2 = false;
@@ -551,7 +550,9 @@ void TestDriver::get_random_input() {
     input.rm = rand() % 5;
   }
 
-  if (input.fuType == VIntegerDivider) {
+  if (input.fuType == FloatCompare) {
+    input.rm = 0;
+  } else if (input.fuType == VIntegerDivider) {
     gen_random_idiv_input();
   }
   // input.is_frs1 = false;
@@ -596,6 +597,12 @@ void TestDriver::get_expected_output() {
     case FloatCvtI2F:
       if (verbose) { printf("FuType:%d, choose FloatCvtI2F %d\n", input.fuType, FloatCvtI2F); }
       expect_output = scvt.get_expected_output(input); return; 
+    case IntegerMul:
+      if (verbose) { printf("FuType:%d, choose IntegerMul %d\n", input.fuType, IntegerMul); }
+      expect_output = smul.get_expected_output(input); return;
+    case FloatCompare:
+      if (verbose) { printf("FuType:%d, choose FloatCompare %d\n", input.fuType, FloatCompare); }
+      expect_output = fcmp.get_expected_output(input); return;
     case IntegerMul:
       if (verbose) { printf("FuType:%d, choose IntegerMul %d\n", input.fuType, IntegerMul); }
       expect_output = smul.get_expected_output(input); return;

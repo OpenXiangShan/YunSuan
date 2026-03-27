@@ -186,6 +186,24 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
         }
       }
     }
+  }else if(input.fuType == FloatCompare){
+    half_number = 1;
+    result_shift_len = 64;
+    for(int i = 0; i < 2; i++) {
+      ElementInput element = select_element(input, i);
+      switch (sew) {
+        case 1: output_part[i] = calculation_e16(element); mask = 0xFFFFFFFFFFFFFFFF; break;
+        case 2: output_part[i] = calculation_e32(element); mask = 0xFFFFFFFFFFFFFFFF; break;
+        case 3: output_part[i] = calculation_e64(element); mask = 0xFFFFFFFFFFFFFFFF; break;
+        default:
+          printf("VPU Golden Modle, bad sew %d\n", input.sew);
+          exit(1);
+      }
+      if (output_part[i].fflags > 0x1f) {
+        printf("Bad fflags of %x, check golden model e8 %d\n", output_part[i].fflags, i);
+        exit(1);
+      }
+    }
   }else if (input.fuType == VIntegerMAC) {
     int index = 0;
     if (input.widen == 1)
@@ -304,6 +322,9 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
           output.result[i] = ((uint64_t)output_part[i*half_number].result|mask);
           output.fflags[i] = (uint32_t)output_part[i*half_number].fflags;
         }
+      }else if(input.fuType == FloatCompare){
+        output.result[i] = (uint64_t)output_part[i*half_number].result;
+        output.fflags[i] = (uint32_t)output_part[i*half_number].fflags;
       }else if(input.fuType == VIntegerMAC) {
         if(input.widen){
           if(j < (half_number >> 1)) {
@@ -458,6 +479,10 @@ ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
       element.src2 = input.is_frs1 ? (uint64_t)input64->src2[0] : (uint64_t)input32->src2[idx];
       element.src3 = (uint64_t)input32->src3[idx];
     }
+  }else if(input.fuType == FloatCompare){
+    element.src1 = (uint64_t)input64->src1[idx];
+    element.src2 = (uint64_t)input64->src2[idx];
+    element.src3 = (uint64_t)input64->src3[idx];
   }
   else {
     switch (sew) {

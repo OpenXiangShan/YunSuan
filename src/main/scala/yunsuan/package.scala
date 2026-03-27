@@ -354,4 +354,50 @@ package object yunsuan {
     def getOp(op: UInt) = Cat(op(3), op(1, 0))
     def isMulw7(op: UInt) = op(3)
   }
+
+  object FmaOpCode {
+    def width = 4
+
+    def fmul    = "b0000".U(width.W)
+    def fmacc   = "b0001".U(width.W)
+    def fmsac   = "b0011".U(width.W)
+    def fnmacc  = "b0010".U(width.W)
+    def fnmsac  = "b0100".U(width.W)
+  }
+
+  object FcmpOpCode {
+    def width = 4
+
+    def feq    = "b0000".U(width.W)
+    def flt    = "b0001".U(width.W)
+    def fle    = "b0010".U(width.W)
+    def fmin   = "b0011".U(width.W)
+    def fmax   = "b0100".U(width.W)
+    def fsgnj  = "b0101".U(width.W)
+    def fsgnjx = "b0110".U(width.W)
+    def fsgnjn = "b0111".U(width.W)
+    def fminm  = "b1000".U(width.W)
+    def fmaxm  = "b1001".U(width.W)
+    def fltq   = "b1010".U(width.W)
+    def fleq   = "b1011".U(width.W)
+    def fclass = "b1100".U(width.W)
+
+    def isCmp(opcode: UInt) = opcode === feq || opcode === flt || opcode === fltq || opcode === fle || opcode === fleq
+    def isFeq(opcode: UInt) = opcode === feq
+    def isFlt(opcode: UInt) = opcode === flt || opcode === fltq
+    def isFle(opcode: UInt) = opcode === fle || opcode === fleq
+    def isCmpNQ(opcode: UInt) = opcode === flt || opcode === fle
+    
+    def isMaxMin(opcode: UInt) = opcode === fmax || opcode === fmaxm || opcode === fmin || opcode === fminm
+    def isFmax(opcode: UInt) = opcode === fmax || opcode === fmaxm
+    def isFmin(opcode: UInt) = opcode === fmin || opcode === fminm
+    def isMaxMinM(opcode: UInt) = opcode === fmaxm || opcode === fminm
+
+    def isFsgn(opcode: UInt) = opcode === fsgnj || opcode === fsgnjx || opcode === fsgnjn
+    def isFsgnj(opcode: UInt) = opcode === fsgnj
+    def isFsgnjx(opcode: UInt) = opcode === fsgnjx
+    def isFsgnjn(opcode: UInt) = opcode === fsgnjn
+    
+    def isFclass(opcode: UInt) = opcode === fclass
+  }
 }

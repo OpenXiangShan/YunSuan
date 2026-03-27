@@ -11,6 +11,8 @@ import yunsuan.vector._
 import yunsuan.scalar.INT2FP
 import yunsuan.scalar.FPCVT
 import yunsuan.scalar.Mul
+import yunsuan.fpu.FloatCompare
+import yunsuan.encoding.Opcode.Opcodes.FMiscOpcode
 
 trait VSPParameter {
   val VLEN       : Int = 128
@@ -25,6 +27,7 @@ trait VSPParameter {
   val VCVT_latency: Int = 2 // ??
   val VIMAC_latency: Int = 2
   val IMUL_latency: Int = 2
+  val FCMP_latency: Int = 0
 }
 
 object VPUTestFuType { // only use in test, difftest with xs
@@ -33,16 +36,17 @@ object VPUTestFuType { // only use in test, difftest with xs
   def vfd = "b0000_0010".U(8.W)
   def via = "b0000_0011".U(8.W)
   def vperm = "b0000_0100".U(8.W)
-  def viaf = "b0000_0101".U(8.W)
   def vid = "b0000_0110".U(8.W)
   def vcvt= "b0000_0111".U(8.W)
-  def fcvtf2x= "b0000_1000".U(8.W)
-  def fcvti2f= "b0000_1001".U(8.W)
-  def vimac = "b0000_1010".U(8.W) // not used
   def imul = "b0000_1011".U(8.W)
+  def fcmp = "b0000_1100".U(8.W)
+=======
+  def fcmp = "b0000_1011".U(8.W)
+  def imul = "b0000_1100".U(8.W)
+>>>>>>> efe018d (feat(FCMP): support maximum/minimum and sign-injection instructions)
 
   def unknown(typ: UInt) = {
-    (typ > 11.U)
+    (typ > 12.U)
   }
 }
 
@@ -119,7 +123,8 @@ class SimTop() extends VPUTestModule {
       VPUTestFuType.fcvtf2x -> VCVT_latency.U,
       VPUTestFuType.fcvti2f -> VCVT_latency.U,
       VPUTestFuType.vimac -> VIMAC_latency.U,
-      VPUTestFuType.imul -> IMUL_latency.U
+      VPUTestFuType.imul -> IMUL_latency.U,
+      VPUTestFuType.fcmp -> FCMP_latency.U
     )) // fuType --> latency, spec case for div
     assert(!VPUTestFuType.unknown(io.in.bits.fuType))
   }
@@ -140,6 +145,57 @@ class SimTop() extends VPUTestModule {
     in.vinfo.vstart, in.vinfo.vl, in.vinfo.vlmul, in.vinfo.vm, in.vinfo.ta, in.vinfo.ma
   )
 
+  val fcmpOpcodeFp16 = LookupTreeDefault(opcode(3, 0), FMiscOpcode.feq_fp16, List(
+    "b0000".U(4.W) -> FMiscOpcode.feq_fp16,
+    "b0001".U(4.W) -> FMiscOpcode.flt_fp16,
+    "b0010".U(4.W) -> FMiscOpcode.fle_fp16,
+    "b0011".U(4.W) -> FMiscOpcode.fmin_fp16,
+    "b0100".U(4.W) -> FMiscOpcode.fmax_fp16,
+    "b0101".U(4.W) -> FMiscOpcode.fsgnj_fp16,
+    "b0110".U(4.W) -> FMiscOpcode.fsgnjx_fp16,
+    "b0111".U(4.W) -> FMiscOpcode.fsgnjn_fp16,
+    "b1000".U(4.W) -> FMiscOpcode.fminm_fp16,
+    "b1001".U(4.W) -> FMiscOpcode.fmaxm_fp16,
+    "b1010".U(4.W) -> FMiscOpcode.fltq_fp16,
+    "b1011".U(4.W) -> FMiscOpcode.fleq_fp16,
+    "b1100".U(4.W) -> FMiscOpcode.fclass_fp16
+  ))
+  val fcmpOpcodeFp32 = LookupTreeDefault(opcode(3, 0), FMiscOpcode.feq_fp32, List(
+    "b0000".U(4.W) -> FMiscOpcode.feq_fp32,
+    "b0001".U(4.W) -> FMiscOpcode.flt_fp32,
+    "b0010".U(4.W) -> FMiscOpcode.fle_fp32,
+    "b0011".U(4.W) -> FMiscOpcode.fmin_fp32,
+    "b0100".U(4.W) -> FMiscOpcode.fmax_fp32,
+    "b0101".U(4.W) -> FMiscOpcode.fsgnj_fp32,
+    "b0110".U(4.W) -> FMiscOpcode.fsgnjx_fp32,
+    "b0111".U(4.W) -> FMiscOpcode.fsgnjn_fp32,
+    "b1000".U(4.W) -> FMiscOpcode.fminm_fp32,
+    "b1001".U(4.W) -> FMiscOpcode.fmaxm_fp32,
+    "b1010".U(4.W) -> FMiscOpcode.fltq_fp32,
+    "b1011".U(4.W) -> FMiscOpcode.fleq_fp32,
+    "b1100".U(4.W) -> FMiscOpcode.fclass_fp32
+  ))
+  val fcmpOpcodeFp64 = LookupTreeDefault(opcode(3, 0), FMiscOpcode.feq_fp64, List(
+    "b0000".U(4.W) -> FMiscOpcode.feq_fp64,
+    "b0001".U(4.W) -> FMiscOpcode.flt_fp64,
+    "b0010".U(4.W) -> FMiscOpcode.fle_fp64,
+    "b0011".U(4.W) -> FMiscOpcode.fmin_fp64,
+    "b0100".U(4.W) -> FMiscOpcode.fmax_fp64,
+    "b0101".U(4.W) -> FMiscOpcode.fsgnj_fp64,
+    "b0110".U(4.W) -> FMiscOpcode.fsgnjx_fp64,
+    "b0111".U(4.W) -> FMiscOpcode.fsgnjn_fp64,
+    "b1000".U(4.W) -> FMiscOpcode.fminm_fp64,
+    "b1001".U(4.W) -> FMiscOpcode.fmaxm_fp64,
+    "b1010".U(4.W) -> FMiscOpcode.fltq_fp64,
+    "b1011".U(4.W) -> FMiscOpcode.fleq_fp64,
+    "b1100".U(4.W) -> FMiscOpcode.fclass_fp64
+  ))
+  val fcmpOpCode = LookupTreeDefault(sew, FMiscOpcode.feq_fp16, List(
+    1.U -> fcmpOpcodeFp16,
+    2.U -> fcmpOpcodeFp32,
+    3.U -> fcmpOpcodeFp64
+  ))
+
   val vfa_result = Wire(new VSTOutputIO)
   val vff_result = Wire(new VSTOutputIO)
   val vfd_result = Reg(new VSTOutputIO)
@@ -154,6 +210,7 @@ class SimTop() extends VPUTestModule {
   val fpcvt_result = Wire(new VSTOutputIO)
   val vimac_result = Wire(new VSTOutputIO)
   val imul_result = Wire(new VSTOutputIO)
+  val fcmp_result = Wire(new VSTOutputIO)
   when (io.in.fire || io.out.fire) {
     vfd_result_valid.map(_ := false.B)
   }
@@ -170,6 +227,9 @@ class SimTop() extends VPUTestModule {
     val i2fcvt = Module(new INT2FP(2, XLEN))
     val fpcvt = Module(new FPCVT(XLEN))
     val imul = Module(new Mul(XLEN))
+    val fcmp = Module(new FloatCompare)
+    val imul = Module(new Mul(XLEN))
+    val fcmp = Module(new FloatCompare)
 
     require(vfa.io.fp_a.getWidth == XLEN)
     vfa.io.fire := busy
@@ -324,6 +384,14 @@ class SimTop() extends VPUTestModule {
     imul_result.result(i) := imul.io.out
     imul_result.fflags(i) := 0.U
     imul_result.vxsat := 0.U
+
+    // fcmp
+    fcmp.io.src0 := src1
+    fcmp.io.src1 := src2
+    fcmp.io.opCode := fcmpOpCode
+    fcmp_result.vxsat := 0.U
+    fcmp_result.result(i) := fcmp.io.result
+    fcmp_result.fflags(i) := ZeroExt(fcmp.io.fflags, 20)
   }
 
   val vperm = Module(new VPermTop)
@@ -436,7 +504,8 @@ class SimTop() extends VPUTestModule {
     VPUTestFuType.fcvtf2x -> fpcvt_result,
     VPUTestFuType.fcvti2f -> i2f_result,
     VPUTestFuType.vimac -> vimac_result,
-    VPUTestFuType.imul -> imul_result
+    VPUTestFuType.imul -> imul_result,
+    VPUTestFuType.fcmp -> fcmp_result
   ))
 }
 
