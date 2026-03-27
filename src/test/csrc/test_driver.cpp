@@ -11,7 +11,7 @@ extern "C" {
 #include "include/test_driver.h"
 
 TestDriver::TestDriver():
-  issued(false), verbose(true), keepinput(false)
+  issued(false), verbose(false), keepinput(false)
 {
   // aviod random value
   set_test_type();
@@ -29,7 +29,7 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
 void TestDriver::set_test_type() {
   test_type.pick_fuType = true;
   test_type.pick_fuOpType = false;
-  test_type.fuType = FloatCompare;
+  test_type.fuType = VIntegerALUV2;
   test_type.fuOpType = FCMP_FEQ;
   printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
 }
@@ -47,21 +47,21 @@ uint8_t TestDriver::gen_random_futype(std::initializer_list<uint8_t> futype_list
   return *(futype_list.begin() + (rand() % futype_list.size()));
 }
 
-uint8_t TestDriver::gen_random_optype() {
+uint16_t TestDriver::gen_random_optype() {
   switch (input.fuType)
   {
     case VFloatAdder: {
-      uint8_t vfadd_all_optype[VFA_NUM] = VFA_ALL_OPTYPES;
+      uint16_t vfadd_all_optype[VFA_NUM] = VFA_ALL_OPTYPES;
       return vfadd_all_optype[rand() % VFA_NUM];
       break;
     }
     case VFloatFMA: {
-      uint8_t vffma_all_optype[VFF_NUM] = VFF_ALL_OPTYPES;
+      uint16_t vffma_all_optype[VFF_NUM] = VFF_ALL_OPTYPES;
       return vffma_all_optype[rand() % VFF_NUM];
       break;
       }
     case VFloatDivider: {
-      uint8_t vfd_all_optype[VFD_NUM] = VFD_ALL_OPTYPES;
+      uint16_t vfd_all_optype[VFD_NUM] = VFD_ALL_OPTYPES;
       return vfd_all_optype[rand() % VFD_NUM];
       break;
     }
@@ -72,62 +72,67 @@ uint8_t TestDriver::gen_random_optype() {
       break;
     }
     case VPermutation: { //TODO: add other type
-      uint8_t vperm_all_optype[VPERM_NUM-1] = VPERM_ALL_OPTYPES;
+      uint16_t vperm_all_optype[VPERM_NUM-1] = VPERM_ALL_OPTYPES;
       return vperm_all_optype[rand() % (VPERM_NUM-1)];
       break;
     }
     case VIntegerALUV2: {
-      uint8_t viaf_all_optype[VIAF_NUM] = VIAF_ALL_OPTYPES;
+      uint16_t viaf_all_optype[VIAF_NUM] = VIAF_ALL_OPTYPES;
       return viaf_all_optype[rand() % VIAF_NUM];
       break;
     }
     case VIntegerDivider:{
-      uint8_t vid_all_optype[VID_NUM] = VID_ALL_OPTYPES;
+      uint16_t vid_all_optype[VID_NUM] = VID_ALL_OPTYPES;
       return vid_all_optype[rand() % VID_NUM];
       break;
     }
     case VFloatCvt:{
       if (input.sew == 0) {
-        uint8_t vfcvt_8_optype[VFCVT_8_NUM] = VFCVT_8_OPTYPES;
+        uint16_t vfcvt_8_optype[VFCVT_8_NUM] = VFCVT_8_OPTYPES;
         return vfcvt_8_optype[rand() % VFCVT_8_NUM];
         break;
       } else if (input.sew == 1) {
-        uint8_t vfcvt_16_optype[VFCVT_16_NUM] = VFCVT_16_OPTYPES;
+        uint16_t vfcvt_16_optype[VFCVT_16_NUM] = VFCVT_16_OPTYPES;
         return vfcvt_16_optype[rand() % VFCVT_16_NUM];
         break;
       } else if (input.sew == 2) {
-        uint8_t vfcvt_32_optype[VFCVT_32_NUM] = VFCVT_32_OPTYPES;
+        uint16_t vfcvt_32_optype[VFCVT_32_NUM] = VFCVT_32_OPTYPES;
         return vfcvt_32_optype[rand() % VFCVT_32_NUM];
         break;
       } else {
-        uint8_t vfcvt_64_optype[VFCVT_64_NUM] = VFCVT_64_OPTYPES;
+        uint16_t vfcvt_64_optype[VFCVT_64_NUM] = VFCVT_64_OPTYPES;
         return vfcvt_64_optype[rand() % VFCVT_64_NUM];
         break;
       }
     }
     case FloatCvtF2X:{
       if(input.sew == 1){
-        uint8_t fcvt_16_optype[FCVT_16_NUM] = FCVT_16_OPTYPES;
+        uint16_t fcvt_16_optype[FCVT_16_NUM] = FCVT_16_OPTYPES;
         return fcvt_16_optype[rand() % FCVT_16_NUM];
         break;
       }else if(input.sew == 2){
-        uint8_t fcvt_32_optype[FCVT_32_NUM] = FCVT_32_OPTYPES;
+        uint16_t fcvt_32_optype[FCVT_32_NUM] = FCVT_32_OPTYPES;
         return fcvt_32_optype[rand() % FCVT_32_NUM];
         break;
       }else if(input.sew == 3){
-        uint8_t fcvt_64_optype[FCVT_64_NUM] = FCVT_64_OPTYPES;
+        uint16_t fcvt_64_optype[FCVT_64_NUM] = FCVT_64_OPTYPES;
         return fcvt_64_optype[rand() % FCVT_64_NUM];
         break;
       }
     }
     case FloatCvtI2F:{
-        uint8_t i2fcvt_64_optype[I2FCVT_64_NUM] = I2FCVT_64_OPTYPES;
+        uint16_t i2fcvt_64_optype[I2FCVT_64_NUM] = I2FCVT_64_OPTYPES;
         return i2fcvt_64_optype[rand() % I2FCVT_64_NUM];
         break;
     }
     case FloatCompare: {
       uint8_t fcmp_all_optype[FCMP_NUM] = FCMP_ALL_OPTYPES;
       return fcmp_all_optype[rand() % FCMP_NUM];
+      break;
+    }
+    case IntegerMul: {
+      uint8_t imul_optype[IMUL_NUM] = IMUL_OPTYPES;
+      return imul_optype[rand() % IMUL_NUM];
       break;
     }
     default:
@@ -156,6 +161,29 @@ uint8_t TestDriver::gen_random_sew() {
       }
       break;
     }
+    case VIntegerALUV2:
+      if ((input.fuOpType == VZEXT_VF2) || (input.fuOpType == VSEXT_VF2)) {
+        return rand()%3+1;
+        break;
+      } else if ((input.fuOpType == VZEXT_VF4) || (input.fuOpType == VSEXT_VF4)) {
+        return rand()%2+2;
+        break;
+      } else if ((input.fuOpType == VZEXT_VF8) || (input.fuOpType == VSEXT_VF8)) {
+        return 3;
+        break;
+      } else if ((input.fuOpType == VWADDU_VV) || (input.fuOpType == VWSUBU_VV) ||
+          (input.fuOpType == VWADD_VV)  || (input.fuOpType == VWSUB_VV)  ||
+          (input.fuOpType == VWADDU_WV) || (input.fuOpType == VWSUBU_WV) ||
+          (input.fuOpType == VWADD_WV)  || (input.fuOpType == VWSUB_WV)  ||
+          (input.fuOpType == VNSRL_WV)  || (input.fuOpType == VNSRA_WV) || 
+          (input.fuOpType == VNCLIPU_WV) || (input.fuOpType == VNCLIP_WV) ||
+          (input.fuOpType == VWSLL_VV)) {
+            return rand()%3;
+            break;
+      } else {
+        return rand()%4;
+        break;
+      }
     default: return (rand()%3)+1; break;
   }
 }
@@ -252,11 +280,50 @@ void TestDriver::gen_random_vecinfo() {
     }
     default: input.vinfo.vstart = 0; break;
   } // The vstart of an arithmetic instruction is generally equal to 0
-  input.vinfo.vl = rand() % vlmax + 1; // TODO: vl == 0 may be illegal
 
-  input.vinfo.vm = rand() % 2;
+  switch (input.fuType) {
+    case VIntegerALUV2: {
+      if ((input.fuOpType == VNSRL_WV)   || (input.fuOpType == VNSRA_WV) ||
+          (input.fuOpType == VNCLIPU_WV) || (input.fuOpType == VNCLIP_WV)) {
+            if (input.sew == 2) {
+              input.vinfo.vl = rand() % 3;
+            } else {
+              input.vinfo.vl = rand() % 4;
+            }
+      } else {
+        input.vinfo.vl = rand() % vlmax + 1;
+      }
+      break;
+    }
+    default: input.vinfo.vl = rand() % vlmax + 1; break;
+  }
+
+  switch (input.fuType) {
+    case VIntegerALUV2: {
+      if ((input.fuOpType == VMADC_VV) || (input.fuOpType == VMSBC_VV)) {
+        input.vinfo.vm = 1;
+      } else if ((input.fuOpType == VMADC_VVM) || (input.fuOpType == VMSBC_VVM) || (input.fuOpType == VADC_VVM) || (input.fuOpType == VSBC_VVM)) {
+        input.vinfo.vm = 0;
+      } else {
+        input.vinfo.vm = rand() % 2;
+      }
+      break;
+    }
+    default: input.vinfo.vm = rand() % 2; break;
+  }
   input.vinfo.ta = rand() % 2;
   input.vinfo.ma = rand() % 2;
+}
+
+uint8_t TestDriver::gen_random_rm_s() {
+  switch (input.fuType) {
+    case VIntegerALUV2:
+      return rand()%4;
+      break;
+    default:
+      return 0;
+      break;
+  }
 }
 
 void TestDriver::gen_random_uopidx() {
@@ -402,7 +469,18 @@ void TestDriver::get_random_input() {
 
   if (!test_type.pick_fuType) { input.fuType = gen_random_futype(ALL_FUTYPES); }
   else { input.fuType = test_type.fuType; }
-  if(input.fuType == VFloatCvt){
+  if(input.fuType == VIntegerALUV2) {
+    if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
+    else { input.fuOpType = test_type.fuOpType; }
+    input.sew = gen_random_sew();
+    input.is_frs1 = false;
+    input.is_frs2 = false;
+    input.widen = false;
+    input.src_widen = false;
+    input.rm_s = gen_random_rm_s();
+    gen_random_vecinfo();
+    gen_random_uopidx();
+  }else if(input.fuType == VFloatCvt){
     input.sew = gen_random_sew();
     input.is_frs1 = false;
     input.is_frs2 = false;
@@ -432,6 +510,17 @@ void TestDriver::get_random_input() {
     input.vinfo.ma = false;
     input.rm_s     = rand()%4;
     input.uop_idx = 0;
+  }else if (input.fuType == IntegerMul) {
+    if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
+    else { input.fuOpType = test_type.fuOpType; }
+    if (input.fuOpType == IMUL_MULW7) {
+      input.src1[0] &= 0x7f;
+      input.src1[1] &= 0x7f;
+    }
+    input.sew = 3;
+    input.is_frs1 = false;
+    input.is_frs2 = false;
+    input.widen = false;
   }else{
     if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
     else { input.fuOpType = test_type.fuOpType; }
@@ -455,6 +544,8 @@ void TestDriver::get_random_input() {
            (input.fuType == VFloatCvt && input.fuOpType == VFNCVT_RTZ_XFW)
   ){
     input.rm = 1;
+  } else if (input.fuType == IntegerMul) {
+    input.rm = 0;
   }else{
     input.rm = rand() % 5;
   }
@@ -509,6 +600,9 @@ void TestDriver::get_expected_output() {
     case FloatCompare:
       if (verbose) { printf("FuType:%d, choose FloatCompare %d\n", input.fuType, FloatCompare); }
       expect_output = fcmp.get_expected_output(input); return;
+    case IntegerMul:
+      if (verbose) { printf("FuType:%d, choose IntegerMul %d\n", input.fuType, IntegerMul); }
+      expect_output = smul.get_expected_output(input); return;
     default:
       printf("Unsupported FuType %d\n", input.fuType);
       exit(1);

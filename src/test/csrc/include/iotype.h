@@ -16,7 +16,7 @@ struct VecInput {
   uint64_t src3[2];
   uint64_t src4[2];
   uint8_t fuType; // only 5bits(or 2bits?)
-  uint8_t fuOpType;
+  uint16_t fuOpType;
   uint8_t uop_idx; // only 6 bits
   uint8_t sew; // only 2 bits
   bool src_widen;
@@ -40,7 +40,7 @@ struct VecInputE8 {
   uint8_t src3[16];
   uint8_t src4[16];
   uint8_t fuType; // only 5bits(or 2bits?)
-  uint8_t fuOpType;
+  uint16_t fuOpType;
   uint8_t uop_idx; // only 6 bits
   uint8_t sew; // only 2 bits
   bool src_widen;
@@ -56,7 +56,7 @@ struct VecInputE16 {
   uint16_t src3[8];
   uint16_t src4[8];
   uint8_t fuType; // only 5bits(or 2bits?)
-  uint8_t fuOpType;
+  uint16_t fuOpType;
   uint8_t uop_idx; // only 6 bits
   uint8_t sew; // only 2 bits
   bool src_widen;
@@ -72,7 +72,7 @@ struct VecInputE32 {
   uint32_t src3[4];
   uint32_t src4[4];
   uint8_t fuType; // only 5bits(or 2bits?)
-  uint8_t fuOpType;
+  uint16_t fuOpType;
   uint8_t uop_idx; // only 6 bits
   uint8_t sew; // only 2 bits
   bool src_widen;
@@ -113,7 +113,7 @@ struct ElementInput {
   uint64_t src2;
   uint64_t src3;
   uint64_t src4;
-  uint8_t fuOpType;
+  uint16_t fuOpType;
   bool src_widen;
   bool widen;
   uint8_t uop_idx;

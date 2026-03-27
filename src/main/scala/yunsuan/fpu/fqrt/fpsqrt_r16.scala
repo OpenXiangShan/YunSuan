@@ -4,6 +4,7 @@ package yunsuan.fpu.fqrt
 import chisel3._
 import chisel3.util._
 import yunsuan.vector.vfsqrt._
+import yunsuan.util._
 
 class fpsqrt_r16(
                          S0_CSA_SPECULATIVE: Int = 1,
@@ -296,12 +297,9 @@ class fpsqrt_r16(
     (Fill(F64_FRAC_W, fp_format_i === 0.U(2.W)) & Cat("b0".U(1.W), op_i(0 + F16_FRAC_W - 1 - 1, 0), Fill(F64_FRAC_W - F16_FRAC_W, "b0".U(1.W)))) |
       (Fill(F64_FRAC_W, fp_format_i === 1.U(2.W)) & Cat("b0".U(1.W), op_i(0 + F32_FRAC_W - 1 - 1, 0), Fill(F64_FRAC_W - F32_FRAC_W, "b0".U(1.W)))) |
       (Fill(F64_FRAC_W, fp_format_i === 2.U(2.W)) & Cat("b0".U(1.W), op_i(0 + F64_FRAC_W - 1 - 1, 0)))
-  val u_lzc_0 = Module(new lzc(
-    WIDTH = F64_FRAC_W,
-    MODE = 1.U))
-  u_lzc_0.in_i <> op_frac_pre_shifted_0
-  u_lzc_0.cnt_o <> op_l_shift_num_pre_0
-  u_lzc_0.empty_o <> op_frac_is_zero_0
+  val u_lzc_0 = Lzc(op_frac_pre_shifted_0)
+  op_frac_is_zero_0    := u_lzc_0.isZero
+  op_l_shift_num_pre_0 := Mux(u_lzc_0.isZero, 0.U, u_lzc_0.data)
 
   op_l_shift_num_0 := Fill(log2Ceil(F64_FRAC_W), op_exp_is_zero_0) & op_l_shift_num_pre_0
   op_frac_l_shifted_s5_to_s2 := op_frac_pre_shifted_0(0 + F64_FRAC_W - 1 - 1, 0) << Cat(op_l_shift_num_0(5, 2), "b0".U(2.W))

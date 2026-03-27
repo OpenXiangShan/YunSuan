@@ -147,7 +147,7 @@ class CVT32ModuleS0(width: Int = 32) extends Module {
   val expAdderIn1 = Wire(UInt(widthExpAdder.W))
   val exp = Wire(UInt(widthExpAdder.W))
 
-  val leadZeros = Lzc((fracSrc << (32 - f32.fracWidth)).asUInt)
+  val leadZeros = Lzc((fracSrc << (32 - f32.fracWidth)).asUInt).data
   val biasDelta = (f32.bias - f16.bias).U
   val bias = Mux1H(float1HSrc, fpParam.fpMap.take(2).map(fp => fp.bias.U))
   val minusExp = extend((~(false.B ## Mux1H(
@@ -213,7 +213,7 @@ class CVT32ModuleS0(width: Int = 32) extends Module {
   val absIntSrc = Mux(intSignSrc, (~intIn.tail(1)).asUInt + 1.U, intIn.tail(1))
   val isZeroIntSrc = !absIntSrc.orR
   // clz
-  val intLeadZeros = Lzc(absIntSrc)
+  val intLeadZeros = Lzc(absIntSrc).data
   // exp
   val intExpAdderIn0 = Wire(UInt(widthExpAdder.W))
   val intExpAdderIn1 = Wire(UInt(widthExpAdder.W))

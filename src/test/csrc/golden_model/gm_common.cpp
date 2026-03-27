@@ -17,6 +17,7 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
   int i2f_number = (128 / 8) >> (i2f_inputType+2);
   int i2f_half_number = i2f_number >> 1;
   int i2f_outputType = (input.fuOpType >> 1) & 0X3;
+  int imul_number = 2;
   softfloat_detectTininess = softfloat_tininess_afterRounding;
   uint64_t mask = 0;
   VecOutput output;
@@ -225,6 +226,16 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
         exit(1);
       }
     }
+  }else if(input.fuType == IntegerMul) {
+    for(int i = 0; i < imul_number; i++) {
+      ElementInput element = select_element(input, i);
+      switch (sew) {
+      case 3: output_part[i] = calculation_e64(element); mask = 0xFFFFFFFFFFFFFFFF; break;
+      default:
+        printf("Integer MUL Golden Modle, bad fuOptype %d\n", input.sew);
+        exit(1);
+      }
+    }
   }
   else{
     for(int i = 0; i < number; i++) {
@@ -324,6 +335,9 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
           output.result[i] += ((uint64_t)output_part[i*half_number+j].result&mask) << (j*result_shift_len);
           output.vxsat |= output_part[i*half_number+j].vxsat;
         }     
+      }else if (input.fuType == IntegerMul) {
+        output.result[i] += ((uint64_t)output_part[i].result);
+        output.fflags[i] += 0;
       }else {
         output.result[i] += ((uint64_t)output_part[i*half_number+j].result) << (j*result_shift_len);
         output.fflags[i] += (uint32_t)output_part[i*half_number+j].fflags << (j*5);

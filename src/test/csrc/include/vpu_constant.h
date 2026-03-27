@@ -26,11 +26,12 @@ extern "C"{
 #define FloatCvtI2F (9) //i/ui->f
 #define VIntegerMAC (10)
 #define FloatCompare (11)
+#define IntegerMul (12)
 // #define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt}
 
 //will be delated
-#define FU_NUM 9 
-#define ALL_FUTYPES {VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerDivider,VFloatCvt,FloatCvtF2X,FloatCvtI2F,VIntegerMAC}
+#define FU_NUM 12
+#define ALL_FUTYPES {VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt,FloatCvtF2X,FloatCvtI2F,VIntegerMAC,FloatCompare,IntegerMul}
 
 #define INT_ROUNDING(result, xrm, gb) \
   do { \
@@ -49,86 +50,98 @@ extern "C"{
       case RM_S_ROD: \
         if (result & (lsb - 1)) \
           result |= lsb; \
+        break; \
+      default: \
+        break; \
     } \
   } while (0)
 
 // NOTE: The string should has the length of 8!
 
 // vialuF funcop type
-#define VIAF_NUM 65 
-#define VADD_VV      (binstoi("00000000"))
-#define VSUB_VV      (binstoi("00000001"))
-#define VRSUB_VV     (binstoi("11000001"))
-#define VWADDU_VV    (binstoi("01000000"))
-#define VWSUBU_VV    (binstoi("01000001"))
-#define VWADD_VV     (binstoi("01100000"))
-#define VWSUB_VV     (binstoi("01100001"))
-#define VWADDU_WV    (binstoi("10000000"))
-#define VWSUBU_WV    (binstoi("10000001"))
-#define VWADD_WV     (binstoi("10100000"))
-#define VWSUB_WV     (binstoi("10100001"))
-#define VZEXT_VF2    (binstoi("00000010"))
-#define VSEXT_VF2    (binstoi("00100010"))
-#define VZEXT_VF4    (binstoi("01000010"))
-#define VSEXT_VF4    (binstoi("01100010"))
-#define VZEXT_VF8    (binstoi("10000010"))
-#define VSEXT_VF8    (binstoi("10100010"))
-#define VADC_VVM     (binstoi("00000011"))
-#define VMADC_VVM    (binstoi("01100100"))
-#define VMADC_VV     (binstoi("01000100"))
-#define VSBC_VVM     (binstoi("00000101"))
-#define VMSBC_VVM    (binstoi("01100110"))
-#define VMSBC_VV     (binstoi("01000110"))
-#define VAND_VV      (binstoi("00000111"))
-#define VOR_VV       (binstoi("00001011"))
-#define VXOR_VV      (binstoi("00001010"))
-#define VSLL_VV      (binstoi("00001111"))
-#define VSRL_VV      (binstoi("00010000"))
-#define VSRA_VV      (binstoi("00010001"))
-#define VNSRL_WV     (binstoi("11010000"))
-#define VNSRA_WV     (binstoi("11010001"))
-#define VMSEQ_VV     (binstoi("01010010"))
-#define VMSNE_VV     (binstoi("01010011"))
-#define VMSLTU_VV    (binstoi("01010100"))
-#define VMSLT_VV     (binstoi("01110100"))
-#define VMSLEU_VV    (binstoi("01010101"))
-#define VMSLE_VV     (binstoi("01110101"))
-#define VMSGTU_VV    (binstoi("01010110"))
-#define VMSGT_VV     (binstoi("01110110"))
-#define VMINU_VV     (binstoi("00010111"))
-#define VMIN_VV      (binstoi("00110111"))
-#define VMAXU_VV     (binstoi("00011000"))
-#define VMAX_VV      (binstoi("00111000"))
-#define VMERGE_VVM   (binstoi("00011001"))
-#define VMV_V_V      (binstoi("00011010"))
-#define VSADDU_VV    (binstoi("00011011"))
-#define VSADD_VV     (binstoi("00111011"))
-#define VSSUBU_VV    (binstoi("00011100"))
-#define VSSUB_VV     (binstoi("00111100"))
-#define VAADDU_VV    (binstoi("00011101"))
-#define VAADD_VV     (binstoi("00111101"))
-#define VASUBU_VV    (binstoi("00011110"))
-#define VASUB_VV     (binstoi("00111110"))
-#define VSSRL_VV     (binstoi("00011111"))
-#define VSSRA_VV     (binstoi("00111111"))
-#define VNCLIPU_WV   (binstoi("11011111"))
-#define VNCLIP_WV    (binstoi("11111111"))
-#define VMAND_MM     (binstoi("10000111"))
-#define VMNAND_MM    (binstoi("10001000"))
-#define VMANDN_MM    (binstoi("10001001"))
-#define VMXOR_MM     (binstoi("10001010"))
-#define VMOR_MM      (binstoi("10001011"))
-#define VMNOR_MM     (binstoi("10001100"))
-#define VMORN_MM     (binstoi("10001101"))
-#define VMXNOR_MM    (binstoi("10001110"))
+#define VIAF_NUM 72
+#define VADD_VV      (binstoi("001000000"))
+#define VSUB_VV      (binstoi("001010000"))
+// #define VRSUB_VV     // same as VSUB in fu
+#define VWADDU_VV    (binstoi("010000000"))
+#define VWSUBU_VV    (binstoi("010010000"))
+#define VWADD_VV     (binstoi("011000000"))
+#define VWSUB_VV     (binstoi("011010000"))
+#define VWADDU_WV    (binstoi("100000000"))
+#define VWSUBU_WV    (binstoi("100010000"))
+#define VWADD_WV     (binstoi("101000000"))
+#define VWSUB_WV     (binstoi("101010000"))
+#define VZEXT_VF2    (binstoi("000111111"))
+#define VSEXT_VF2    (binstoi("001111111"))
+#define VZEXT_VF4    (binstoi("010111111"))
+#define VSEXT_VF4    (binstoi("011111111"))
+#define VZEXT_VF8    (binstoi("100111111"))
+#define VSEXT_VF8    (binstoi("101111111"))
+#define VADC_VVM     (binstoi("000000001"))
+#define VMADC_VVM    (binstoi("100000100"))
+#define VMADC_VV     (binstoi("010000100"))
+#define VSBC_VVM     (binstoi("000010001"))
+#define VMSBC_VVM    (binstoi("100010100"))
+#define VMSBC_VV     (binstoi("010010100"))
+#define VAND_VV      (binstoi("000100001"))
+#define VOR_VV       (binstoi("000100101"))
+#define VXOR_VV      (binstoi("000100100"))
+#define VSLL_VV      (binstoi("000101000"))
+#define VSRL_VV      (binstoi("000101010"))
+#define VSRA_VV      (binstoi("001101100"))
+#define VNSRL_WV     (binstoi("110101010"))
+#define VNSRA_WV     (binstoi("111101100"))
+#define VMSEQ_VV     (binstoi("010000101"))
+#define VMSNE_VV     (binstoi("010000110"))
+#define VMSLTU_VV    (binstoi("010010101"))
+#define VMSLT_VV     (binstoi("011010101"))
+#define VMSLEU_VV    (binstoi("010010110"))
+#define VMSLE_VV     (binstoi("011010110"))
+#define VMSGTU_VV    (binstoi("010010111"))
+#define VMSGT_VV     (binstoi("011010111"))
+#define VMINU_VV     (binstoi("000011000"))
+#define VMIN_VV      (binstoi("001011000"))
+#define VMAXU_VV     (binstoi("000011001"))
+#define VMAX_VV      (binstoi("001011001"))
+#define VSADDU_VV    (binstoi("000000010"))
+#define VSADD_VV     (binstoi("001000010"))
+#define VSSUBU_VV    (binstoi("000010010"))
+#define VSSUB_VV     (binstoi("001010010"))
+#define VAADDU_VV    (binstoi("000000011"))
+#define VAADD_VV     (binstoi("001000011"))
+#define VASUBU_VV    (binstoi("000010011"))
+#define VASUB_VV     (binstoi("001010011"))
+#define VSSRL_VV     (binstoi("000101011"))
+#define VSSRA_VV     (binstoi("001101101"))
+#define VNCLIPU_WV   (binstoi("110101011"))
+#define VNCLIP_WV    (binstoi("111101101"))
+#define VMAND_MM     (binstoi("110100001"))
+#define VMNAND_MM    (binstoi("110100010"))
+#define VMANDN_MM    (binstoi("110100011"))
+#define VMXOR_MM     (binstoi("110100100"))
+#define VMOR_MM      (binstoi("110100101"))
+#define VMNOR_MM     (binstoi("110100110"))
+#define VMORN_MM     (binstoi("110100111"))
+#define VMXNOR_MM    (binstoi("110100000"))
+#define VANDN_VV     (binstoi("000100011"))
+#define VBREV_V      (binstoi("000110001"))
+#define VBREV8_V     (binstoi("000110010"))
+#define VREV8_V      (binstoi("000110011"))
+#define VCLZ_V       (binstoi("000110100"))
+#define VCTZ_V       (binstoi("000110101"))
+#define VCPOP_V      (binstoi("000110000"))
+#define VROL_VV      (binstoi("000101001"))
+#define VROR_VV      (binstoi("000101111"))
+#define VWSLL_VV     (binstoi("010101000"))
 
 #define VIAF_ALL_OPTYPES { \
-  VADD_VV   ,VSUB_VV   ,VRSUB_VV  ,VWADDU_VV ,VWSUBU_VV ,VWADD_VV  ,VWSUB_VV  ,VWADDU_WV ,VWSUBU_WV ,VWADD_WV  ,VWSUB_WV  ,VZEXT_VF2 , \
+  VADD_VV   ,VSUB_VV   ,VWADDU_VV ,VWSUBU_VV ,VWADD_VV  ,VWSUB_VV  ,VWADDU_WV ,VWSUBU_WV ,VWADD_WV  ,VWSUB_WV  ,VZEXT_VF2 , \
   VSEXT_VF2 ,VZEXT_VF4 ,VSEXT_VF4 ,VZEXT_VF8 ,VSEXT_VF8 ,VADC_VVM  ,VMADC_VVM ,VMADC_VV  ,VSBC_VVM  ,VMSBC_VVM ,VMSBC_VV  ,VAND_VV   , \
   VOR_VV    ,VXOR_VV   ,VSLL_VV   ,VSRL_VV   ,VSRA_VV   ,VNSRL_WV  ,VNSRA_WV  ,VMSEQ_VV  ,VMSNE_VV  ,VMSLTU_VV ,VMSLT_VV  ,VMSLEU_VV , \
-  VMSLE_VV  ,VMSGTU_VV ,VMSGT_VV  ,VMINU_VV  ,VMIN_VV   ,VMAXU_VV  ,VMAX_VV   ,VMERGE_VVM,VMV_V_V   ,VSADDU_VV ,VSADD_VV  ,VSSUBU_VV , \
-  VSSUB_VV  ,VAADDU_VV ,VAADD_VV  ,VASUBU_VV ,VASUB_VV  ,VSSRL_VV  ,VSSRA_VV  ,VNCLIPU_WV,VNCLIP_WV ,VMAND_MM  ,VMNAND_MM ,VMANDN_MM , \
-  VMXOR_MM  ,VMOR_MM   ,VMNOR_MM  ,VMORN_MM  ,VMXNOR_MM } \
+  VMSLE_VV  ,VMSGTU_VV ,VMSGT_VV  ,VMINU_VV  ,VMIN_VV   ,VMAXU_VV  ,VMAX_VV   ,VSADDU_VV ,VSADD_VV  ,VSSUBU_VV ,VSSUB_VV  ,VAADDU_VV , \
+  VAADD_VV  ,VASUBU_VV ,VASUB_VV  ,VSSRL_VV  ,VSSRA_VV  ,VNCLIPU_WV,VNCLIP_WV ,VMAND_MM  ,VMNAND_MM ,VMANDN_MM ,VMXOR_MM  ,VMOR_MM   , \
+  VMNOR_MM  ,VMORN_MM  ,VMXNOR_MM ,VANDN_VV  ,VBREV_V   ,VBREV8_V  ,VREV8_V   ,VCLZ_V    ,VCTZ_V    ,VCPOP_V   ,VROL_VV   ,VROR_VV   , \
+  VWSLL_VV} \
 
 // TODO: add other type
 #define VIALU_NUM 42 // todo
@@ -347,6 +360,13 @@ extern "C"{
   #define FCVT_D_LU        (binstoi("00001100"))
   #define FCVT_D_L         (binstoi("00001101"))
 
+  // scalar integer mul
+  #define IMUL_MUL    (binstoi("00000"))
+  #define IMUL_MULH   (binstoi("00001"))
+  #define IMUL_MULHSU (binstoi("00010"))
+  #define IMUL_MULHU  (binstoi("00011"))
+  #define IMUL_MULW   (binstoi("00100"))
+  #define IMUL_MULW7  (binstoi("01100"))
 
   #define VFCVT_ALL_OPTYPES {VFCVT_XUFV, VFCVT_XFV, VFCVT_FXUV, VFCVT_FXV, VFCVT_RTZ_XUFV, VFCVT_RTZ_XFV, \
   VFWCVT_XUFV, VFWCVT_XFV, VFWCVT_FXUV, VFWCVT_FXV, VFWCVT_FFV, VFWCVT_RTZ_XUFV, VFWCVT_RTZ_XFV, \
@@ -400,10 +420,14 @@ extern "C"{
 
   #define VIMAC_ALL_OPTYPES {VMUL,VWMUL,VWMULU,VWMULSU,VMULH,VMULHU,VMULHSU,VMACC,VWMACCU,VWMACC,VWMACCSU,VWMACCUS,VNMSAC,VMADD,VNMSUB,VSMUL}
 
+  //scalar Mul
+  #define IMUL_NUM 6
+  #define IMUL_OPTYPES {IMUL_MUL,IMUL_MULH,IMUL_MULHSU,IMUL_MULHU,IMUL_MULW,IMUL_MULW7}
+
 // pre-compile stoi
-constexpr uint8_t binstoi(const char str[]) {
-  uint8_t num = 0;
-  for (int i = 0; str[i] != '\0' && i < 8; i++) {
+constexpr uint16_t binstoi(const char str[]) {
+  uint16_t num = 0;
+  for (int i = 0; str[i] != '\0' && i < 16; i++) {
     if (str[i] != '1' || str[i] != '0') {
       // Error
     }

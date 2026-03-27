@@ -24,7 +24,7 @@ struct TestType {
   bool pick_fuType;
   uint8_t fuType;
   bool pick_fuOpType;
-  uint8_t fuOpType;
+  uint16_t fuOpType;
 };
 
 class TestDriver {
@@ -46,6 +46,7 @@ private:
   VGMFloatCvt vcvt;
   SGMFloatCvt scvt;
   SGMFloatCompare fcmp;
+  SGMIntegerMul smul;
 
 public:
   TestDriver();
@@ -56,8 +57,9 @@ public:
   void gen_next_test_case(/*type wanted*/);
   
   uint8_t gen_random_futype(std::initializer_list<uint8_t> futype_list);
-  uint8_t gen_random_optype();
+  uint16_t gen_random_optype();
   uint8_t gen_random_sew();
+  uint8_t gen_random_rm_s();
   bool gen_random_widen();
   bool gen_random_src_widen();
   bool gen_random_is_frs1();

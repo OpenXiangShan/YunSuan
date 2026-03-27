@@ -7,7 +7,7 @@ import yunsuan.vector.VectorConvert.utils._
 import yunsuan.vector.VectorConvert.RoundingModle._
 import yunsuan.util._
 
-class CVT64(width: Int = 64, isVectorCvt: Boolean) extends CVT(width){
+class CVT64(width: Int = 64, isVectorCvt: Boolean, isI2F: Boolean = false) extends CVT(width){
   val (fire, src, sew, opType, rm, input1H, output1H, isFpToVecInst, isFround, isFcvtmod) =
     (io.fire, io.src, io.sew, io.opType, io.rm, io.input1H, io.output1H, io.isFpToVecInst, io.isFround, io.isFcvtmod)
   val fireReg = GatedValidRegNext(fire)
@@ -65,17 +65,6 @@ class CVT64(width: Int = 64, isVectorCvt: Boolean) extends CVT(width){
   val s2_isEstimate7 = RegEnable(s1_isEstimate7, fireReg)
   val s2_isFPsrc = RegEnable(s1_isFPsrc, fireReg)
   val s2_isFround = RegEnable(isFroundReg, fireReg)
-  //inst FPTOINT and FPTOFP module
-  val fpcvt = Module(new FP_INCVT(width))
-  fpcvt.io.fire := fire
-  fpcvt.io.src := src
-  fpcvt.io.rm := rm
-  fpcvt.io.opType := opType
-  fpcvt.io.input1H := input1H
-  fpcvt.io.output1H := output1H
-  fpcvt.io.isFpToVecInst := isFpToVecInst
-  fpcvt.io.isFround := isFround
-  fpcvt.io.isFcvtmod := isFcvtmod
 
   val s1_resultForfpCanonicalNAN = Mux1H(
     Seq(s1_outIsF64, s1_outIsF32, s1_outIsF16, s1_outIsU32 || s1_outIsU64, s1_outIsS32, s1_outIsS64),
@@ -87,7 +76,19 @@ class CVT64(width: Int = 64, isVectorCvt: Boolean) extends CVT(width){
       ~0.U(63.W))
   )
   val s2_resultForfpCanonicalNAN = RegEnable(s1_resultForfpCanonicalNAN, fireReg)
-  if(isVectorCvt){//inst INTTOFP and ESTMATE module
+  if(isVectorCvt){ // vector
+    //inst FPTOINT and FPTOFP module
+    val fpcvt = Module(new FP_INCVT(width))
+    fpcvt.io.fire := fire
+    fpcvt.io.src := src
+    fpcvt.io.rm := rm
+    fpcvt.io.opType := opType
+    fpcvt.io.input1H := input1H
+    fpcvt.io.output1H := output1H
+    fpcvt.io.isFpToVecInst := isFpToVecInst
+    fpcvt.io.isFround := isFround
+    fpcvt.io.isFcvtmod := isFcvtmod
+    //inst INTTOFP and ESTMATE module
     val int2fp = Module(new INT2FP(width))
     int2fp.io.fire := fire
     int2fp.io.src := src
@@ -115,11 +116,34 @@ class CVT64(width: Int = 64, isVectorCvt: Boolean) extends CVT(width){
     ))
     io.result := Mux(s2_fpCanonicalNAN, s2_resultForfpCanonicalNAN, result)
     io.fflags := Mux(s2_fpCanonicalNAN && !s2_outIsFP, "b10000".U, fflags)
-  }else{
+  }else if(!isI2F){ // scalar fp2int & fp2fp
+    //inst FPTOINT and FPTOFP module
+    val fpcvt = Module(new FP_INCVT(width))
+    fpcvt.io.fire := fire
+    fpcvt.io.src := src
+    fpcvt.io.rm := rm
+    fpcvt.io.opType := opType
+    fpcvt.io.input1H := input1H
+    fpcvt.io.output1H := output1H
+    fpcvt.io.isFpToVecInst := isFpToVecInst
+    fpcvt.io.isFround := isFround
+    fpcvt.io.isFcvtmod := isFcvtmod
     val result = fpcvt.io.result
     val fflags = fpcvt.io.fflags
     io.result := Mux(s2_fpCanonicalNAN, s2_resultForfpCanonicalNAN, result)
     io.fflags := Mux(s2_fpCanonicalNAN && !s2_outIsFP, "b10000".U, Mux(s2_fpCanonicalNAN && s2_isFround, 0.U, fflags))
+  }else { // scalar int2fp
+    val int2fp = Module(new INT2FP(width))
+    int2fp.io.fire := fire
+    int2fp.io.src := src
+    int2fp.io.rm := rm
+    int2fp.io.opType := opType
+    int2fp.io.input1H := input1H
+    int2fp.io.output1H := output1H
+    val result = int2fp.io.result
+    val fflags = int2fp.io.fflags
+    io.result := result
+    io.fflags := fflags
   }
 }
 class CVT_IO(width: Int) extends Bundle{
@@ -244,7 +268,7 @@ class FP_INCVT(width: Int) extends Module {
   expNext := expAdderIn0Next + expAdderIn1Next
   val expReg = RegEnable(expNext, fire)
 
-  val leadZerosNext = Lzc((fracSrc<<(64 - f64.fracWidth)).asUInt)
+  val leadZerosNext = Lzc((fracSrc<<(64 - f64.fracWidth)).asUInt).data
   expAdderIn0Next := Mux1H(Seq(
     isFpWidenNext -> Mux1H(float1HOutNext.head(2), fpParam.biasDeltaMap.take(2).map(delta => delta.U)),
     isFpCrossHighNext -> fpParam.biasDeltaMap(2).U,
@@ -676,7 +700,7 @@ class INT2FP(width: Int) extends Module{
   val isZeroIntSrc = RegEnable(isZeroIntSrcNext, false.B, fire)
   //CLZ
   val clzIn = absIntSrcNext.asUInt
-  val leadZerosNext = Lzc(clzIn)
+  val leadZerosNext = Lzc(clzIn).data
   //exp
   val expAdderIn0Next = Wire(UInt(widthExpAdder.W)) //13bits is enough
   val expAdderIn1Next = Wire(UInt(widthExpAdder.W))
@@ -840,7 +864,7 @@ class Estimate7(width: Int) extends Module{
   val result = RegEnable(resultNext, 0.U(64.W), fireReg)
 
   val clzIn = (fracSrc<<(64 - f64.fracWidth)).asUInt
-  val leadZerosNext = Lzc(clzIn)
+  val leadZerosNext = Lzc(clzIn).data
   val rmin =
     rm === RTZ || (signSrc && rm === RUP) || (!signSrc && rm === RDN) //cycle1
   //exp

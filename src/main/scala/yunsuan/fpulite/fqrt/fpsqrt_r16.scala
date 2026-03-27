@@ -3,6 +3,7 @@ package yunsuan.fpulite.fqrt
 import chisel3._
 import chisel3.util._
 import yunsuan.vector.vfsqrt._
+import yunsuan.util._
 
 class fpsqrt_r16(
                   S0_CSA_SPECULATIVE: Int = 1,
@@ -656,12 +657,9 @@ class fpsqrt_r16(
     (Fill(F64_FRAC_W, fp_format_i === 0.U(2.W)) & Cat("b0".U(1.W), op_i(48 + F16_FRAC_W - 1 - 1, 48), Fill(F64_FRAC_W - F16_FRAC_W, "b0".U(1.W)))) |
       (Fill(F64_FRAC_W, fp_format_i === 1.U(2.W)) & Cat("b0".U(1.W), op_i(32 + F32_FRAC_W - 1 - 1, 32), Fill(F64_FRAC_W - F32_FRAC_W, "b0".U(1.W)))) |
       (Fill(F64_FRAC_W, fp_format_i === 2.U(2.W)) & Cat("b0".U(1.W), op_i(0 + F64_FRAC_W - 1 - 1, 0)))
-  val u_lzc_0 = Module(new lzc(
-    WIDTH = F64_FRAC_W,
-    MODE = 1.U))
-  u_lzc_0.in_i <> op_frac_pre_shifted_0
-  u_lzc_0.cnt_o <> op_l_shift_num_pre_0
-  u_lzc_0.empty_o <> op_frac_is_zero_0
+  val u_lzc_0 = Lzc(op_frac_pre_shifted_0)
+  op_frac_is_zero_0    := u_lzc_0.isZero
+  op_l_shift_num_pre_0 := Mux(u_lzc_0.isZero, 0.U, u_lzc_0.data)
 
   op_l_shift_num_0 := Fill(log2Ceil(F64_FRAC_W), op_exp_is_zero_0) & op_l_shift_num_pre_0
   op_frac_l_shifted_s5_to_s2 := op_frac_pre_shifted_0(0 + F64_FRAC_W - 1 - 1, 0) << Cat(op_l_shift_num_0(5, 2), "b0".U(2.W))
@@ -669,32 +667,23 @@ class fpsqrt_r16(
   op_frac_pre_shifted_1 :=
     (Fill(F32_FRAC_W, fp_format_i === 0.U(2.W)) & Cat("b0".U(1.W), op_i(16 + F16_FRAC_W - 1 - 1, 16), Fill(F32_FRAC_W - F16_FRAC_W, "b0".U(1.W)))) |
       (Fill(F32_FRAC_W, fp_format_i === 1.U(2.W)) & Cat("b0".U(1.W), op_i(0 + F32_FRAC_W - 1 - 1, 0)))
-  val u_lzc_1 = Module(new lzc(
-    WIDTH = F32_FRAC_W,
-    MODE = 1.U))
-  u_lzc_1.in_i <> op_frac_pre_shifted_1
-  u_lzc_1.cnt_o <> op_l_shift_num_pre_1
-  u_lzc_1.empty_o <> op_frac_is_zero_1
+  val u_lzc_1 = Lzc(op_frac_pre_shifted_1)
+  op_frac_is_zero_1    := u_lzc_1.isZero
+  op_l_shift_num_pre_1 := Mux(u_lzc_1.isZero, 0.U, u_lzc_1.data)
 
   op_l_shift_num_1 := Fill(log2Ceil(F32_FRAC_W), op_exp_is_zero_1) & op_l_shift_num_pre_1
   op_frac_l_shifted_1 := op_frac_pre_shifted_1(0 + F32_FRAC_W - 1 - 1, 0) << op_l_shift_num_1
   op_frac_pre_shifted_2 := Cat("b0".U(1.W), op_i(32 + F16_FRAC_W - 1 - 1, 32))
-  val u_lzc_2 = Module(new lzc(
-    WIDTH = F16_FRAC_W,
-    MODE = 1.U))
-  u_lzc_2.in_i <> op_frac_pre_shifted_2
-  u_lzc_2.cnt_o <> op_l_shift_num_pre_2
-  u_lzc_2.empty_o <> op_frac_is_zero_2
+  val u_lzc_2 = Lzc(op_frac_pre_shifted_2)
+  op_frac_is_zero_2    := u_lzc_2.isZero
+  op_l_shift_num_pre_2 := Mux(u_lzc_2.isZero, 0.U, u_lzc_2.data)
 
   op_l_shift_num_2 := Fill(log2Ceil(F16_FRAC_W), op_exp_is_zero_2) & op_l_shift_num_pre_2
   op_frac_l_shifted_2 := op_frac_pre_shifted_2(0 + F16_FRAC_W - 1 - 1, 0) << op_l_shift_num_2
   op_frac_pre_shifted_3 := Cat("b0".U(1.W), op_i(0 + F16_FRAC_W - 1 - 1, 0))
-  val u_lzc_3 = Module(new lzc(
-    WIDTH = F16_FRAC_W,
-    MODE = 1.U))
-  u_lzc_3.in_i <> op_frac_pre_shifted_3
-  u_lzc_3.cnt_o <> op_l_shift_num_pre_3
-  u_lzc_3.empty_o <> op_frac_is_zero_3
+  val u_lzc_3 = Lzc(op_frac_pre_shifted_3)
+  op_frac_is_zero_3    := u_lzc_3.isZero
+  op_l_shift_num_pre_3 := Mux(u_lzc_3.isZero, 0.U, u_lzc_3.data)
 
   op_l_shift_num_3 := Fill(log2Ceil(F16_FRAC_W), op_exp_is_zero_3) & op_l_shift_num_pre_3
   op_frac_l_shifted_3 := op_frac_pre_shifted_3(0 + F16_FRAC_W - 1 - 1, 0) << op_l_shift_num_3

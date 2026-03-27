@@ -21,6 +21,14 @@ extern "C"{
 #define i16_fromNegOverflow  (-0x7FFF - 1)
 #define i16_fromNaN          0x7FFF
 
+typedef int64_t sreg_t;
+typedef uint64_t reg_t;
+
+#define sext32(x) ((sreg_t)(int32_t)(x))
+#define zext32(x) ((reg_t)(uint32_t)(x))
+#define sext_xlen(x) (((sreg_t)(x) << (64 - XLEN)) >> (64 - XLEN))
+#define GET_W7(x) (x & 0x7f)
+
 
 const  uint16_t defaultNaN_ui16 = defaultNaNF16UI;
 const  uint32_t defaultNaN_ui32 = defaultNaNF32UI;
@@ -601,4 +609,56 @@ inline float64_t f64_recip7(float64_t in)
     }
 
     return uA.f;
+}
+
+//ref:  https://locklessinc.com/articles/sat_arithmetic/
+template<typename T, typename UT>
+static inline T sat_add(T x, T y, bool &sat) {
+    UT ux = x;
+    UT uy = y;
+    UT res = ux + uy;
+    sat = false;
+    int sh = sizeof(T) * 8 - 1;
+
+    /* Calculate overflowed result. (Don't change the sign bit of ux) */
+    ux = (ux >> sh) + (((UT)0x1 << sh) - 1);
+
+    /* Force compiler to use cmovns instruction */
+    if ((T) ((ux ^ uy) | ~(uy ^ res)) >= 0) {
+        res = ux;
+        sat = true;
+    }
+    
+    return res;
+}
+
+template<typename T>
+T sat_subu(T x, T y, bool &sat) {
+    T res = x - y;
+    sat = false;
+
+    sat = !(res <= x);
+    res &= -(res <= x);
+
+    return res;
+}
+
+template<typename T, typename UT>
+static inline T sat_sub(T x, T y, bool &sat) {
+    UT ux = x;
+    UT uy = y;
+    UT res = ux - uy;
+    sat = false;
+    int sh = sizeof(T) * 8 - 1;
+
+    /* Calculate overflowed result. (Don't change the sign bit of ux) */
+    ux = (ux >> sh) + (((UT)0x1 << sh) - 1);
+
+    /* Force compiler to use cmovns instruction */
+    if ((T) ((ux ^ uy) & (ux ^ res)) < 0) {
+        res = ux;
+        sat = true;
+    }
+
+    return res;
 }

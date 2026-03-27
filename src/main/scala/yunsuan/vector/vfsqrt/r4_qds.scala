@@ -185,18 +185,3 @@ class r4_qds_spec extends Module{
     qds_sign(3,2) === "b00".U(2.W)
   )
 }
-
-class lzc(
-           WIDTH: Int = 58,
-           MODE: UInt = 1.U
-         ) extends Module{
-  val io = IO(new Bundle {
-
-  })
-
-  val in_i    = IO(Input(UInt(WIDTH.W)))
-  val cnt_o   = IO(Output(UInt(log2Ceil(WIDTH).W)))
-  val empty_o = IO(Output(UInt(1.W)))
-  cnt_o := Mux(empty_o.asBool, 0.U,PriorityEncoder(Mux(MODE.asBool, Reverse(in_i), in_i)))
-  empty_o := ~in_i.orR
-}

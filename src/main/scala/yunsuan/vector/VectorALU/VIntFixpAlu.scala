@@ -108,7 +108,6 @@ class VIntFixpAlu64b extends Module {
   io.vxsat := vFixPoint64b.io.vxsat
 }
 
-
 class VIntFixpAlu extends Module {
   val io = IO(new Bundle {
     val fire = Input(Bool())

@@ -91,7 +91,7 @@ class FpCvtIO(width: Int) extends Bundle {
   val result = Output(UInt(width.W))
   val fflags = Output(UInt(5.W))
 }
-class FPCVT(xlen :Int) extends Module{
+class FPCVT(xlen :Int, isI2F: Boolean = false) extends Module{
   val io = IO(new FpCvtIO(xlen))
   val (opType, sew) = (io.opType, io.sew)
   val widen = opType(4, 3) // 0->single 1->widen 2->norrow => width of result
@@ -145,7 +145,7 @@ class FPCVT(xlen :Int) extends Module{
   )
   dontTouch(input1H)
   dontTouch(output1H)
-  val fcvt = Module(new CVT64(xlen, isVectorCvt=false))
+  val fcvt = Module(new CVT64(xlen, isVectorCvt=false, isI2F))
   fcvt.io.sew := io.sew
   fcvt.io.fire := io.fire
   fcvt.io.src := io.src
