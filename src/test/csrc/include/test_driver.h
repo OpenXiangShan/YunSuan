@@ -45,6 +45,7 @@ private:
   VGMIntegerMAC vimac;
   VGMFloatCvt vcvt;
   SGMFloatCvt scvt;
+  SGMFloatCompare fcmp;
 
 public:
   TestDriver();
@@ -86,6 +87,7 @@ public:
     verbose = true;
     vfd.verbose_exec(); valu.verbose_exec();
     vperm.verbose_exec();vid.verbose_exec();
+    fcmp.verbose_exec();
   }
   void keep_input() { keepinput = true; }
 };
