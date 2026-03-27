@@ -42,7 +42,7 @@ object VPUTestFuType { // only use in test, difftest with xs
   def fcvti2f= "b0000_1001".U(8.W)
   def vimac = "b0000_1010".U(8.W) // not used
   def fcmp = "b0000_1011".U(8.W)
-  def imul = "b0000_1011".U(8.W)
+  def imul = "b0000_1100".U(8.W)
 
   def unknown(typ: UInt) = {
     (typ > 12.U)
