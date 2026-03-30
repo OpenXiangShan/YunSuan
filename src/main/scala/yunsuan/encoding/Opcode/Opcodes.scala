@@ -988,8 +988,7 @@ object Opcodes {
     def isNR(implicit op: UInt): Bool = getSubOp.isOneOf(MV_NR)
     def isVmerge(implicit op: UInt): Bool = getSubOp.isOneOf(MERGE_VV, MERGE_VX)
 
-    def needMask(implicit op: UInt) = getSubOp.isOneOf(MERGE_VV, MERGE_VX)
-    def needNoMask(implicit op: UInt) = getSubOp.isOneOf(MV_NR, MV_X2VS, MERGE_VV)
+    def needNoMask(implicit op: UInt) = getSubOp.isOneOf(MV_NR, MV_X2VS, MERGE_VV, MERGE_VX)
     def vlIsOne(implicit op: UInt) = getSubOp.isOneOf(MV_X2VS)
     def vlIsZeroUpdate(implicit op: UInt) = getSubOp.isOneOf(MV_VS2X, MV_NR)
 
