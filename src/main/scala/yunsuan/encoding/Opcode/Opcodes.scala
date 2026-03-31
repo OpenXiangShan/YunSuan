@@ -626,7 +626,7 @@ object Opcodes {
     def isSat(implicit op: UInt): Bool = getOpClass.isOneOf(CADDER) && getOp.isOneOf(SADDU, SADD, SSUBU, SSUB)
     def isAvg(implicit op: UInt): Bool = getOpClass.isOneOf(CADDER) && getOp.isOneOf(AADDU, AADD, ASUBU, ASUB) && getDataType === S2VDV
 
-    def isNClip(implicit op: UInt): Bool = getOpClass.isOneOf(SHIFT) && getOp.isOneOf(CLIPU, CLIP)
+    def isNClip(implicit op: UInt): Bool = getOpClass.isOneOf(CSHIFT) && getOp.isOneOf(CLIPU, CLIP)
 
     def isVand(implicit op: UInt): Bool = getOp === AND
     def isVnand(implicit op: UInt): Bool = getOp === NAND
