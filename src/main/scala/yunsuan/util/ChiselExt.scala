@@ -3,6 +3,7 @@ package yunsuan.util
 import chisel3._
 import chisel3.util.{BitPat, Cat}
 
+import chisel3.util.experimental.decode._
 import scala.language.implicitConversions
 
 object ChiselExt {
@@ -75,15 +76,15 @@ object ChiselExt {
 
   object UIntExt {
     sealed trait UIntCanCompare[T] {
-      def compare(item: T, value: UInt): Bool
+      def toBitPat(x: T): BitPat
     }
 
     implicit object UIntComparer extends UIntCanCompare[UInt] {
-      def compare(item: UInt, value: UInt): Bool = item === value
+      def toBitPat(x: UInt): BitPat = BitPat(x)
     }
 
     implicit object BitPatComparer extends UIntCanCompare[BitPat] {
-      def compare(item: BitPat, value: UInt): Bool = item === value
+      def toBitPat(x: BitPat): BitPat = x
     }
   }
 
@@ -108,9 +109,14 @@ object ChiselExt {
 
     def isOneOf(bp1: UInt, bp2: UInt*): Bool = isOneOf(bp1 +: bp2)
 
-    def isOneOf[T: UIntCanCompare](data: Iterable[T])(implicit comparer: UIntCanCompare[T]): Bool = {
-      Cat(data.map(comparer.compare(_, value)).toSeq).orR
-    }
+    def isOneOf[T: UIntCanCompare](data: Iterable[T])(implicit comparer: UIntCanCompare[T]): Bool = decoder(
+      QMCMinimizer,
+      value,
+      TruthTable(
+        data.map(x => comparer.toBitPat(x) -> BitPat("b1")),
+        BitPat("b0")
+      )
+    ).asBool
 
     /**
      * Literal value cat
