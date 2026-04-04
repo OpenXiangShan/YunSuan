@@ -139,6 +139,10 @@ abstract class Opcodes {
     res
   }
 
+  def DvSvlS1(bp1: BitPat, bp2: BitPat*)(implicit name: SourceName): Type = {
+    Value(bp1, bp2: _*)(name) + VpWen + VlRen + Src1En
+  }
+
   def DvSvlS2vS1(bp1: BitPat, bp2: BitPat*)(implicit name: SourceName): Type = {
     Value(bp1, bp2: _*)(name) + VpWen + VlRen + Src2Vp + Src1En
   }
@@ -1454,6 +1458,15 @@ object Opcodes {
     val vmerge_vx_e16 = DvSvlS2vS1(MERGE_VX, E16)
     val vmerge_vx_e32 = DvSvlS2vS1(MERGE_VX, E32)
     val vmerge_vx_e64 = DvSvlS2vS1(MERGE_VX, E64)
+    val vmv_v2v_e8    = DvSvlS1(MERGE_VV, E8 )
+    val vmv_v2v_e16   = DvSvlS1(MERGE_VV, E16)
+    val vmv_v2v_e32   = DvSvlS1(MERGE_VV, E32)
+    val vmv_v2v_e64   = DvSvlS1(MERGE_VV, E64)
+    val vmv_x2v_e8    = DvSvlS1(MERGE_VX, E8 )
+    val vmv_x2v_e16   = DvSvlS1(MERGE_VX, E16)
+    val vmv_x2v_e32   = DvSvlS1(MERGE_VX, E32)
+    val vmv_x2v_e64   = DvSvlS1(MERGE_VX, E64)
+
     val vmvnr         = DvS2v(MV_NR   , EX )
     val vmv_x2vs_e8   = DsS1a(MV_X2VS , E8 )
     val vmv_x2vs_e16  = DsS1a(MV_X2VS , E16)
