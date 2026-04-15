@@ -1,11 +1,10 @@
 package yunsuan.encoding.Opcode
 
 import chisel3._
-import chisel3.util.BitPat
+import chisel3.util.{BitPat, Fill, log2Up}
 import sourcecode.{Name => SourceName}
 import yunsuan.encoding.Opcode.OpcodeTraits._
-import yunsuan.util.ChiselExt.BinaryStringHelper
-import yunsuan.util.ChiselExt.UIntToExt
+import yunsuan.util.ChiselExt._
 
 import scala.beans.BeanProperty
 import scala.collection.mutable
@@ -16,6 +15,8 @@ abstract class Opcode(val factory: Opcodes) extends Cloneable {
   var name: String = _
 
   var traits: Set[OpcodeTrait] = Set[OpcodeTrait]()
+
+  protected var latency: Option[Int] = None
 
   def setTraits(OpcodeTraits: OpcodeTrait*): this.type = {
     this.traits = OpcodeTraits.toSet
@@ -43,6 +44,11 @@ abstract class Opcode(val factory: Opcodes) extends Cloneable {
   }
 
   def getTraits: Set[OpcodeTrait] = this.traits
+
+  def setLatency(lat: Int): this.type = {
+    this.latency = Some(lat)
+    this
+  }
 
   def S1v: this.type = {
     checkSrc1En()
@@ -77,6 +83,14 @@ abstract class Opcode(val factory: Opcodes) extends Cloneable {
     this
   }
 
+  def getLat: Int = {
+    if (this.latency.isEmpty) {
+      this.setLatency(this.factory.getLat(this))
+    }
+
+    this.latency.get
+  }
+
   override def toString: String = {
     val bitString = s"${encode.rawString}".padTo(encode.getWidth, '0')
     f"${getName()}%20s (BitPat<${encode.getWidth}>(b$bitString)) @ ${factory} with traits(${traits.mkString(",")})"
@@ -96,6 +110,15 @@ abstract class Opcode(val factory: Opcodes) extends Cloneable {
 
 object Opcode {
   def apply() = UInt(Opcodes.getWidth.W)
+}
+
+object Latency {
+  def apply(): UInt = UInt(log2Up(width + 2).W)
+
+  // use all 1s to specify uncertain latency like div
+  def uncertain(): UInt = Fill(width, 1.U)
+
+  lazy val width: Int = log2Up(Opcodes.getMaxFixLat + 2)
 }
 
 abstract class Opcodes {
@@ -124,6 +147,16 @@ abstract class Opcodes {
   }
 
   def apply(): UInt = UInt(Opcodes.this.getWidth.W)
+
+  lazy val maxLat = getMaxLat
+
+  def getMaxLat: Int = this.all.map(_.getLat).max
+
+  // Todo: override it in every child class
+  def getLat(opcode: Opcode): Int = {
+    println(s"[Warning] please rewrite getLat method in class $getClass")
+    0
+  }
 
   def Value(bp1: BitPat, bp2: BitPat*)(implicit name: SourceName): Type = {
     ValueImpl((bp1 +: bp2).reduce(_ ## _))
@@ -218,6 +251,12 @@ object Opcodes {
   def getWidth: Int = width
 
   def updateWidth(w: Int): Unit = Opcodes.width = w.max(Opcodes.width)
+
+  private var maxFixLat: Int = 0
+
+  def getMaxFixLat: Int = maxFixLat
+
+  def updateMaxFixLat(lat: Int): Unit = this.maxFixLat = lat.max(this.maxFixLat)
 
   trait FMacOpcode extends Opcodes with DataType {
     private val OP2 = bb"0"
@@ -372,7 +411,7 @@ object Opcodes {
       )
     }
 
-    
+
     private def isVectorMisc(implicit op: UInt): Bool = getFamily === VF_MISC
 
     def isVfadd(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FADD
@@ -405,7 +444,7 @@ object Opcodes {
     def isFsgnjx(implicit op: UInt): Bool = isVfsgnjx
     def isFminm(implicit op: UInt): Bool = isVfminm
     def isFmaxm(implicit op: UInt): Bool = isVfmaxm
-      
+
     def isFmul(implicit op: UInt): Bool = {
       getOpNum === OP2 && getSubOpcode === FMUL
     }
@@ -1235,6 +1274,8 @@ object Opcodes {
     val vrev8_e32 = DvSvlS2v(REV8, BITOP, S2VDV, E32)
     val vrev8_e64 = DvSvlS2v(REV8, BITOP, S2VDV, E64)
 
+    Opcodes.updateMaxFixLat(this.getMaxLat)
+
     def getOp(implicit op: UInt): UInt = op.drop(8)
     def getOpClass(implicit op: UInt): UInt = op(7, 5)
     def getDataType(implicit op: UInt): UInt = op(4, 2)
@@ -1373,6 +1414,25 @@ object Opcodes {
     def isrev8Result(implicit op: UInt): Bool = getOpClass === BITOP && getOp === REV8 && getDataType === S2VDV
     def isvIAluAddervd(implicit op: UInt): Bool = getOpClass === CADDER && getOp.isOneOf(AADDU, AADD, ASUBU, ASUB) && getDataType === S2VDV
     def isoriginAddResult(implicit op: UInt): Bool = getOpClass === ADDER && getOp.isOneOf(ADD, SUB) && getDataType === S2VDV
+
+    object LitUtil {
+      def getOp(implicit op: BitPat): BitPat = op.drop(8)
+      def getOpClass(implicit op: BitPat): BitPat = op(7, 5)
+      def getDataType(implicit op: BitPat): BitPat = op(4, 2)
+      def isMaxMin(implicit op: BitPat): Boolean = getOpClass.isOneOf(ADDER) && getOp.isOneOf(MINU, MIN, MAXU, MAX)
+      def isSat(implicit op: BitPat): Boolean = getOpClass.isOneOf(CADDER) && getOp.isOneOf(SADDU, SADD, SSUBU, SSUB)
+      def isNClip(implicit op: BitPat): Boolean = getOpClass.isOneOf(CSHIFT) && getOp.isOneOf(CLIPU, CLIP)
+
+      def getLat(implicit op: BitPat): Int = {
+        if (isSat || isMaxMin || isNClip) 1
+        else 0
+      }
+    }
+
+    override def getLat(opcode: Opcode): Int = {
+      require(this.all.contains(opcode))
+      LitUtil.getLat(opcode.encode)
+    }
   }
 
   object VIAluOpcode extends VIAluOpcode
