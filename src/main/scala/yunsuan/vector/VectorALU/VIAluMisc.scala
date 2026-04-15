@@ -14,11 +14,15 @@ class VIAluMiscCtrl extends Bundle {
   val sel16 = Bool()
   val sel32 = Bool()
   val sel64 = Bool()
-  val isExt = ValidIO(new ExtInfo)
+  val isVf2 = Bool()
+  val isVf4 = Bool()
+  val isVf8 = Bool()
   val widenVs2 = Bool()
   val widen = Bool()
   val isNarrow = Bool()
   val isSigned = Bool()
+  val isLeftShiftLogic = Bool()
+  val isCtz= Bool()
 }
 
 class VIAluMiscData(xlen: Int) extends Bundle {
@@ -29,13 +33,38 @@ class VIAluMiscData(xlen: Int) extends Bundle {
   val vxrm = UInt(2.W)
 }
 
-class VIAluMiscToS1(xlen: Int) extends Bundle {
-  val vd = UInt(xlen.W)
+class VIAluMiscInput(xlen: Int) extends Bundle {
+  val ctrl = new VIAluMiscCtrl
+  val data = new VIAluMiscData(xlen)
+}
+
+class VIAluMiscOutput(xlen: Int) extends Bundle {
+  val extResult = UInt(xlen.W)
+
+  val andResult = UInt(xlen.W)
+  val orResult = UInt(xlen.W)
+  val xorResult = UInt(xlen.W)
+  val vnandResult = UInt(xlen.W)
+  val VandnResult = UInt(xlen.W)
+  val vnorReault = UInt(xlen.W)
+  val VornResult = UInt(xlen.W)
+  val vxnorReault = UInt(xlen.W)
+
+  val scalResult = UInt(xlen.W)
+  val vroShiftResult = UInt(xlen.W)
+  val vwsllResult = UInt(xlen.W)
+  val leftShiftResult = UInt(xlen.W)
+  val rightShiftResult = UInt(xlen.W)
+  val leadZeroResult = UInt(xlen.W)
+  val brevResult = UInt(xlen.W)
+  val brev8Result = UInt(xlen.W)
+  val rev8Result = UInt(xlen.W)
+
+
+
   val narrowVd = UInt((xlen / 2).W)
   val vxsat = UInt(8.W)
-  val isVcpop = Bool()
   val popResult = UInt(xlen.W)
-  val isNClip = Bool()
   val signBitSel8  = UInt(4.W)
   val signBitSel16 = UInt(2.W)
   val signBitSel32 = Bool()
@@ -50,17 +79,6 @@ class VIAluMiscToS1(xlen: Int) extends Bundle {
   val nclipResultSel32Tmp = UInt((xlen / 2).W)
 }
 
-
-class VIAluMiscInput(xlen: Int) extends Bundle {
-  val opcode = VIAluOpcode()
-  val ctrl = new VIAluMiscCtrl
-  val data = new VIAluMiscData(xlen)
-}
-
-class VIAluMiscOutput(xlen: Int) extends Bundle {
-  val toS1 = new VIAluMiscToS1(xlen)
-}
-
 class VIAluMisc(xlen: Int = 64) extends Module {
   import VIAluOpcode._
 
@@ -71,19 +89,19 @@ class VIAluMisc(xlen: Int = 64) extends Module {
 
   private val isVector: Boolean = true
 
-  private implicit val opcode: UInt = io.in.opcode
   private val sel8  = io.in.ctrl.sel8
   private val sel16 = io.in.ctrl.sel16
   private val sel32 = io.in.ctrl.sel32
   private val sel64 = io.in.ctrl.sel64
-  private val isExt = io.in.ctrl.isExt.valid
-  private val isVf2 = io.in.ctrl.isExt.bits.isVf2
-  private val isVf4 = io.in.ctrl.isExt.bits.isVf4
-  private val isVf8 = io.in.ctrl.isExt.bits.isVf8
+  private val isVf2 = io.in.ctrl.isVf2
+  private val isVf4 = io.in.ctrl.isVf4
+  private val isVf8 = io.in.ctrl.isVf8
   private val widenVs2 = io.in.ctrl.widenVs2
   private val widen = io.in.ctrl.widen
   private val isNarrow = io.in.ctrl.isNarrow
   private val isSigned = io.in.ctrl.isSigned
+  private val isLeftShiftLogic = io.in.ctrl.isLeftShiftLogic
+  private val isCtz = io.in.ctrl.isCtz
   private val vs2 = io.in.data.vs2
   private val vs1 = io.in.data.vs1
   private val vs2Widen = io.in.data.vs2Widen
@@ -138,18 +156,12 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   private val andResult = vs2 & vs1
   private val orResult  = vs2 | vs1
   private val xorResult = vs2 ^ vs1
+  private val vnandResult = ~andResult
+  private val VandnResult = (vs2 & (~vs1).asUInt)
+  private val vnorReault = ~orResult
+  private val VornResult = (vs2 | (~vs1).asUInt)
+  private val vxnorReault = ~xorResult
 
-  private val bitLogicResult = Wire(UInt(xlen.W))
-  bitLogicResult := Mux1H(Seq(
-    isVand -> andResult,
-    isVor  -> orResult,
-    isVxor -> xorResult,
-    isVnand -> ~andResult,
-    isVandn -> (vs2 & (~vs1).asUInt),
-    isVnor -> ~orResult,
-    isVorn -> (vs2 | (~vs1).asUInt),
-    isVxnor -> ~xorResult
-  ))
 
   private val vs2WidenVec = Wire(Vec(8, UInt(8.W)))
   private val vs1WidenVec = Wire(Vec(8, UInt(8.W)))
@@ -293,9 +305,6 @@ class VIAluMisc(xlen: Int = 64) extends Module {
     scalResultSel32(i) := genRound(rightShift32(i * 32 + 31, i * 32), rightShiftData32(i * 32 + 31, i * 32))
   }
   scalResultSel64 := genRound(rightShift64, rightShiftData64)
-
-  private val shiftResult = Wire(UInt(xlen.W))
-  shiftResult := Mux(isLeftShiftLogic, leftShiftResult, rightShiftResult)
 
   private val narrowResult = Wire(UInt((xlen / 2).W))
   narrowResult := Mux1H(Seq(
@@ -509,13 +518,6 @@ class VIAluMisc(xlen: Int = 64) extends Module {
     sel64 -> rev8ResultSel64.asUInt,
   ))
 
-  private val revResult = Wire(UInt(xlen.W))
-  revResult := Mux1H(Seq(
-    isVbrev  -> brevResult,
-    isVbrev8 -> brev8Result,
-    isVrev8  -> rev8Result,
-  ))
-
   private val leadZeroIn = Mux(isCtz, brevResult, vs2)
   private val lzc = Lzc(leadZeroIn, isVector)
 
@@ -549,31 +551,44 @@ class VIAluMisc(xlen: Int = 64) extends Module {
     sel16 -> leftShift32,
     sel32 -> leftShift64,
   ))
+  
+  io.out.andResult := andResult
+  io.out.orResult  := orResult
+  io.out.xorResult := xorResult
+  io.out.vnandResult := vnandResult
+  io.out.VandnResult := VandnResult
+  io.out.vnorReault := vnorReault
+  io.out.VornResult := VornResult
+  io.out.vxnorReault := vxnorReault
 
-  io.out.toS1.vd := MuxCase(bitLogicResult, Seq(
-    isExt -> extResult,
-    isShift -> Mux(isScalVro,
-      Mux(isNotVro, scalResult, vroShiftResult),
-      Mux(widen, vwsllResult, shiftResult)),
-    isZvbbOthers -> Mux(isCountZero, leadZeroResult, revResult),
-  ))
-  io.out.toS1.narrowVd := narrowResult
-  io.out.toS1.vxsat := nClipSat
-  io.out.toS1.isVcpop := isZvbbOthers & !isCountZero & isVcpop
-  io.out.toS1.popResult := popResult
-  io.out.toS1.isNClip := isNClip
-  io.out.toS1.signBitSel8  := signBitSel8.asUInt
-  io.out.toS1.signBitSel16 := signBitSel16.asUInt
-  io.out.toS1.signBitSel32 := signBit
-  io.out.toS1.overflowSignSel8 := overflowSignSel8.asUInt
-  io.out.toS1.overflowSignSel16 := overflowSignSel16.asUInt
-  io.out.toS1.overflowSignSel32 := overflowSign
-  io.out.toS1.upOverflowUnSignSel8 := upOverflowUnSignSel8.asUInt
-  io.out.toS1.upOverflowUnSignSel16 := upOverflowUnSignSel16.asUInt
-  io.out.toS1.upOverflowUnSignSel32 := upOverflowUnSign
-  io.out.toS1.nclipResultSel8Tmp := nclipResultsel8Tmp.asUInt
-  io.out.toS1.nclipResultSel16Tmp := nclipResultsel16Tmp.asUInt
-  io.out.toS1.nclipResultSel32Tmp := scalResultSel64.tail(32)
+  io.out.extResult := extResult
+
+  io.out.scalResult := scalResult
+  io.out.vroShiftResult := vroShiftResult
+  io.out.vwsllResult := vwsllResult
+  io.out.leftShiftResult := leftShiftResult
+  io.out.rightShiftResult := rightShiftResult
+  io.out.leadZeroResult := leadZeroResult
+  io.out.brevResult := brevResult
+  io.out.brev8Result := brev8Result
+  io.out.rev8Result := rev8Result
+
+
+  io.out.narrowVd := narrowResult
+  io.out.vxsat := nClipSat
+  io.out.popResult := popResult
+  io.out.signBitSel8  := signBitSel8.asUInt
+  io.out.signBitSel16 := signBitSel16.asUInt
+  io.out.signBitSel32 := signBit
+  io.out.overflowSignSel8 := overflowSignSel8.asUInt
+  io.out.overflowSignSel16 := overflowSignSel16.asUInt
+  io.out.overflowSignSel32 := overflowSign
+  io.out.upOverflowUnSignSel8 := upOverflowUnSignSel8.asUInt
+  io.out.upOverflowUnSignSel16 := upOverflowUnSignSel16.asUInt
+  io.out.upOverflowUnSignSel32 := upOverflowUnSign
+  io.out.nclipResultSel8Tmp := nclipResultsel8Tmp.asUInt
+  io.out.nclipResultSel16Tmp := nclipResultsel16Tmp.asUInt
+  io.out.nclipResultSel32Tmp := scalResultSel64.tail(32)
 
 
   dontTouch(vs2WidenVec)
@@ -592,7 +607,6 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   dontTouch(scalResultSel16)
   dontTouch(scalResultSel32)
   dontTouch(scalResultSel64)
-  dontTouch(shiftResult)
   dontTouch(rightShift8)
   dontTouch(rightShift16)
   dontTouch(rightShift32)
@@ -601,7 +615,4 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   dontTouch(rightShiftData16)
   dontTouch(rightShiftData32)
   dontTouch(rightShiftData64)
-
-
-
 }
