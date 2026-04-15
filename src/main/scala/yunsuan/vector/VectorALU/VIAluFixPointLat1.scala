@@ -4,9 +4,8 @@ import chisel3._
 import chisel3.util._
 import yunsuan.encoding.Opcode.FixedPointConst._
 
-class VIAluFixPointS1Input(xlen: Int) extends Bundle {
-  val adderToS1 = new VIAluAdderToS1(xlen)
-  val miscToS1 = new VIAluMiscToS1(xlen)
+class VIAluFixPointLat1Input(xlen: Int) extends Bundle {
+  val VIAluFixPointLat0ToLat1 = new VIAluFixPointLat0ToLat1(xlen)
   val sel8 = Bool()
   val sel16 = Bool()
   val sel32 = Bool()
@@ -17,17 +16,17 @@ class VIAluFixPointS1Input(xlen: Int) extends Bundle {
   val isMisc = Bool()
 }
 
-class VIAluFixPointS1Output(xlen: Int) extends Bundle {
+class VIAluFixPointLat1Output(xlen: Int) extends Bundle {
   val vd = UInt(xlen.W)
   val addCarryCmpMask = UInt(8.W)
   val narrowVd = UInt((xlen / 2).W)
   val vxsat = UInt(8.W)
 }
 
-class VIAluFixPointS1(xlen: Int = 64) extends Module {
+class VIAluFixPointLat1(xlen: Int = 64) extends Module {
   val io = IO(new Bundle {
-    val in = Input(new VIAluFixPointS1Input(xlen))
-    val out = Output(new VIAluFixPointS1Output(xlen))
+    val in = Input(new VIAluFixPointLat1Input(xlen))
+    val out = Output(new VIAluFixPointLat1Output(xlen))
   })
   private val sel8 = io.in.sel8
   private val sel16 = io.in.sel16
@@ -38,37 +37,32 @@ class VIAluFixPointS1(xlen: Int = 64) extends Module {
   private val isSigned = io.in.isSigned
   private val isMisc = io.in.isMisc
 
-  private val vdAdder = io.in.adderToS1.vd
-  private val addCarryCmpMask = io.in.adderToS1.addCarryCmpMask
-  private val vxsatAdder = io.in.adderToS1.vxsat
-  private val isSat = io.in.adderToS1.isSat
-  private val isAvg = io.in.adderToS1.isAvg
-  private val isMaxMin = io.in.adderToS1.isMaxMin
-  private val isMax = io.in.adderToS1.isMax
-  private val ltResult = io.in.adderToS1.ltResult
-  private val sat = io.in.adderToS1.sat
-  private val originAddResult = io.in.adderToS1.originAddResult
-  private val satUpOverflowUnSign = io.in.adderToS1.upOverflowUnSign
-  private val satDownOverflowSign = io.in.adderToS1.downOverflowSign
+  private val addCarryCmpMask = io.in.VIAluFixPointLat0ToLat1.addCarryCmpMask
+  private val vxsatAdder = io.in.VIAluFixPointLat0ToLat1.VIAluAddervxsat
+  private val isSat = io.in.VIAluFixPointLat0ToLat1.isSat
+  private val isMaxMin = io.in.VIAluFixPointLat0ToLat1.isMaxMin
+  private val isMax = io.in.VIAluFixPointLat0ToLat1.isMax
+  private val ltResult = io.in.VIAluFixPointLat0ToLat1.ltResult
+  private val sat = io.in.VIAluFixPointLat0ToLat1.sat
+  private val originAddResult = io.in.VIAluFixPointLat0ToLat1.originAddResult
+  private val satUpOverflowUnSign = io.in.VIAluFixPointLat0ToLat1.upOverflowUnSign
+  private val satDownOverflowSign = io.in.VIAluFixPointLat0ToLat1.downOverflowSign
 
-  private val vdMisc = io.in.miscToS1.vd
-  private val narrowVd = io.in.miscToS1.narrowVd
-  private val vxsatMisc = io.in.miscToS1.vxsat
-  private val isVcpop = io.in.miscToS1.isVcpop
-  private val popResult = io.in.miscToS1.popResult
-  private val isNClip = io.in.miscToS1.isNClip
-  private val signBitSel8  = io.in.miscToS1.signBitSel8
-  private val signBitSel16 = io.in.miscToS1.signBitSel16
-  private val signBitSel32 = io.in.miscToS1.signBitSel32
-  private val overflowSignSel8  = io.in.miscToS1.overflowSignSel8
-  private val overflowSignSel16 = io.in.miscToS1.overflowSignSel16
-  private val overflowSignSel32 = io.in.miscToS1.overflowSignSel32
-  private val upOverflowUnsignSel8  = io.in.miscToS1.upOverflowUnSignSel8
-  private val upOverflowUnsignSel16 = io.in.miscToS1.upOverflowUnSignSel16
-  private val upOverflowUnsignSel32 = io.in.miscToS1.upOverflowUnSignSel32
-  private val nclipResultSel8Tmp  = io.in.miscToS1.nclipResultSel8Tmp
-  private val nclipResultSel16Tmp = io.in.miscToS1.nclipResultSel16Tmp
-  private val nclipResultSel32Tmp = io.in.miscToS1.nclipResultSel32Tmp
+  private val narrowVd = io.in.VIAluFixPointLat0ToLat1.narrowVd
+  private val vxsatMisc = io.in.VIAluFixPointLat0ToLat1.VIAluMiscvxsat
+  private val isNClip = io.in.VIAluFixPointLat0ToLat1.isNClip
+  private val signBitSel8  = io.in.VIAluFixPointLat0ToLat1.signBitSel8
+  private val signBitSel16 = io.in.VIAluFixPointLat0ToLat1.signBitSel16
+  private val signBitSel32 = io.in.VIAluFixPointLat0ToLat1.signBitSel32
+  private val overflowSignSel8  = io.in.VIAluFixPointLat0ToLat1.overflowSignSel8
+  private val overflowSignSel16 = io.in.VIAluFixPointLat0ToLat1.overflowSignSel16
+  private val overflowSignSel32 = io.in.VIAluFixPointLat0ToLat1.overflowSignSel32
+  private val upOverflowUnsignSel8  = io.in.VIAluFixPointLat0ToLat1.upOverflowUnSignSel8
+  private val upOverflowUnsignSel16 = io.in.VIAluFixPointLat0ToLat1.upOverflowUnSignSel16
+  private val upOverflowUnsignSel32 = io.in.VIAluFixPointLat0ToLat1.upOverflowUnSignSel32
+  private val nclipResultSel8Tmp  = io.in.VIAluFixPointLat0ToLat1.nclipResultSel8Tmp
+  private val nclipResultSel16Tmp = io.in.VIAluFixPointLat0ToLat1.nclipResultSel16Tmp
+  private val nclipResultSel32Tmp = io.in.VIAluFixPointLat0ToLat1.nclipResultSel32Tmp
 
   def selectPos(in: UInt, i: Int): Bool = {
     Mux1H(Seq(
@@ -138,12 +132,10 @@ class VIAluFixPointS1(xlen: Int = 64) extends Module {
     sel32 -> nClipResultSel32,
   ))
 
-  io.out.vd := Mux(isMisc,
-    Mux(isVcpop, popResult, vdMisc),
-    MuxCase(originAddResult, Seq(
-      isSat -> satResult,
-      isAvg -> vdAdder,
-      isMaxMin -> maxMinResult)))
+  io.out.vd := Mux1H(Seq(
+    isSat -> satResult,
+    isMaxMin -> maxMinResult
+  ))
   io.out.narrowVd := Mux(isNClip, nClipResult, narrowVd)
   io.out.addCarryCmpMask := addCarryCmpMask
   io.out.vxsat := Mux(isMisc, Mux(isNClip, vxsatMisc, 0.U), Mux(isSat, sat, vxsatAdder))

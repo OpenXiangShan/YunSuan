@@ -1144,6 +1144,42 @@ object Opcodes {
     def isCountZero(implicit op: UInt): Bool = false.B // not supported yet
     def isCtz(implicit op: UInt): Bool = false.B // not supported yet
     def isPredicateAlwaysTrue(implicit op: UInt): Bool = getOpClass === ADDER && getOp.isOneOf(ADC, SBC)
+
+    def isandResult(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === AND
+    def isorResult(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === OR
+    def isxorResult(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === XOR
+    def isvnandResult(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === NAND
+    def isVandnResult(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === ANDN
+    def isvnorReault(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === NOR
+    def isVornResult(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === ORN
+    def isvxnorReault(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === XNOR
+    def isextResult(implicit op: UInt): Bool = getOpClass === MOVE && getOp.isOneOf(ZEXT, SEXT) && getDataType.isOneOf(S2F2DV, S2F4DV, S2F8DV)
+    def isscalResult(implicit op: UInt): Bool = getOpClass === CSHIFT && getOp.isOneOf(SRL, SRA) && getDataType === S2VDV
+    def isvroShiftResult(implicit op: UInt): Bool = getOpClass === SHIFT && getOp.isOneOf(ROR, ROL) && getDataType === S2VDV
+    def isvwsllResult(implicit op: UInt): Bool = getOpClass === CSHIFT && getOp === SLL && getDataType === S2VDW
+    def isleftShiftResult(implicit op: UInt): Bool = getOpClass === SHIFT && getOp === SLL && getDataType === S2VDV
+
+    def isrightShiftResult(implicit op: UInt): Bool =
+      (
+        getOpClass === SHIFT &&
+        getOp.isOneOf(SRL, SRA) &&
+        getDataType === S2VDV
+      ) || (
+        getOpClass === CSHIFT &&
+        getOp.isOneOf(SRL, SRA) &&
+        getDataType === S2WDV
+      ) || (
+        getOpClass === CSHIFT &&
+        getOp.isOneOf(CLIPU, CLIP) &&
+       getDataType === S2WDV
+      )
+
+    def isleadZeroResult(implicit op: UInt): Bool = false.B  // not supported yet
+    def isbrevResult(implicit op: UInt): Bool = false.B  // not supported yet
+    def isbrev8Result(implicit op: UInt): Bool = false.B  // not supported yet
+    def isrev8Result(implicit op: UInt): Bool = getOpClass === BITOP && getOp === REV8 && getDataType === S2VDV
+    def isvIAluAddervd(implicit op: UInt): Bool = getOpClass === CADDER && getOp.isOneOf(AADDU, AADD, ASUBU, ASUB) && getDataType === S2VDV
+    def isoriginAddResult(implicit op: UInt): Bool = getOpClass === ADDER && getOp.isOneOf(ADD, SUB) && getDataType === S2VDV
   }
 
   object VIAluOpcode extends VIAluOpcode

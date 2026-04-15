@@ -14,6 +14,17 @@ class VIAluAdderCtrl extends Bundle {
   val widen = Bool()
   val isSigned = Bool()
   val isAddCarry = Bool()
+  val isSub = Bool()
+  val isCmpEq = Bool()
+  val isCmpNe = Bool()
+  val isCmpLt = Bool()
+  val isCmpLe = Bool()
+  val isCmpGt = Bool()
+  val isVmsbc = Bool()
+  val isAvg = Bool()
+  val isSat = Bool()
+  val isMaxMin = Bool()
+  val isMax = Bool()
 }
 
 class VIAluAdderData(xlen: Int) extends Bundle {
@@ -26,29 +37,20 @@ class VIAluAdderData(xlen: Int) extends Bundle {
   val mask = UInt(8.W)
 }
 
-class VIAluAdderToS1(xlen: Int) extends Bundle {
-  val vd = UInt(xlen.W)
-  val addCarryCmpMask = UInt(8.W)
-  val vxsat = UInt(8.W)
-  val isSat = Bool()
-  val isAvg = Bool()
-  val isMaxMin = Bool()
-  val isMax = Bool()
-  val ltResult = UInt(8.W)
-  val sat = UInt(8.W)
-  val originAddResult = UInt(xlen.W)
-  val upOverflowUnSign = UInt(8.W)
-  val downOverflowSign = UInt(8.W)
-}
-
 class VIAluAdderInput(xlen: Int) extends Bundle {
-  val opcode = VIAluOpcode()
   val ctrl = new VIAluAdderCtrl
   val data = new VIAluAdderData(xlen)
 }
 
 class VIAluAdderOutput(xlen: Int) extends Bundle {
-  val toS1 = new VIAluAdderToS1(xlen)
+  val vd = UInt(xlen.W)
+  val addCarryCmpMask = UInt(8.W)
+  val vxsat = UInt(8.W)
+  val ltResult = UInt(8.W)
+  val sat = UInt(8.W)
+  val originAddResult = UInt(xlen.W)
+  val upOverflowUnSign = UInt(8.W)
+  val downOverflowSign = UInt(8.W)
 }
 
 class VIAluAdder(xlen: Int = 64) extends Module {
@@ -57,9 +59,6 @@ class VIAluAdder(xlen: Int = 64) extends Module {
     val out = Output(new VIAluAdderOutput(xlen))
   })
 
-  import VIAluOpcode._
-
-  private implicit val opcode = io.in.opcode
   private val sel8 = io.in.ctrl.sel8
   private val sel16 = io.in.ctrl.sel16
   private val sel32 = io.in.ctrl.sel32
@@ -68,6 +67,17 @@ class VIAluAdder(xlen: Int = 64) extends Module {
   private val widen = io.in.ctrl.widen
   private val isSigned = io.in.ctrl.isSigned
   private val isAddCarry = io.in.ctrl.isAddCarry
+  private val isSub = io.in.ctrl.isSub
+  private val isCmpEq = io.in.ctrl.isCmpEq
+  private val isCmpNe = io.in.ctrl.isCmpNe
+  private val isCmpLt = io.in.ctrl.isCmpLt
+  private val isCmpLe = io.in.ctrl.isCmpLe
+  private val isCmpGt = io.in.ctrl.isCmpGt
+  private val isVmsbc = io.in.ctrl.isVmsbc
+  private val isAvg = io.in.ctrl.isAvg
+  private val isSat = io.in.ctrl.isSat
+  private val isMaxMin = io.in.ctrl.isMaxMin
+  private val isMax = io.in.ctrl.isMax
 
   private val vs2 = io.in.data.vs2
   private val vs1 = io.in.data.vs1
@@ -526,18 +536,14 @@ class VIAluAdder(xlen: Int = 64) extends Module {
     sel64 -> avgResultSel64,
   ))
 
-  io.out.toS1.vd := avgResult
-  io.out.toS1.addCarryCmpMask := addCarryCmpMask
-  io.out.toS1.vxsat := Mux(isAvg, avgOverflow, 0.U)
-  io.out.toS1.isSat := isSat
-  io.out.toS1.isAvg := isAvg
-  io.out.toS1.isMaxMin := isMaxMin
-  io.out.toS1.isMax := isMax
-  io.out.toS1.ltResult := ltResult
-  io.out.toS1.sat := sat
-  io.out.toS1.originAddResult := originAddResult
-  io.out.toS1.upOverflowUnSign := upOverflowUnSign.asUInt
-  io.out.toS1.downOverflowSign := downOverflowSign.asUInt
+  io.out.vd := avgResult
+  io.out.addCarryCmpMask := addCarryCmpMask
+  io.out.vxsat := Mux(isAvg, avgOverflow, 0.U)
+  io.out.ltResult := ltResult
+  io.out.sat := sat
+  io.out.originAddResult := originAddResult
+  io.out.upOverflowUnSign := upOverflowUnSign.asUInt
+  io.out.downOverflowSign := downOverflowSign.asUInt
 
   dontTouch(avgResultSel8)
   dontTouch(avgResultSel16)
