@@ -241,39 +241,6 @@ package object yunsuan {
     def vmv_x_s                        = "b01010011".U(OpTypeWidth.W) // vmvxs
   }
 
-  object VfpuType {
-    def dummy         = "b11111111".U(OpTypeWidth.W) // exu not implemented
-    def isVfalu  = BitPat("b000?????")
-    def isVfmacc = BitPat("b001?????")
-    def isVfdiv  = BitPat("b010?????")
-    def vfadd    = "b00000000".U(8.W)
-    def vfsub    = "b00000001".U(8.W)
-    def vfmin    = "b00000010".U(8.W)
-    def vfmax    = "b00000011".U(8.W)
-    def vfmerge  = "b00000100".U(8.W)
-    def vfmove   = "b00000101".U(8.W)
-    def vfsgnj   = "b00000110".U(8.W)
-    def vfsgnjn  = "b00000111".U(8.W)
-    def vfsgnjx  = "b00001000".U(8.W)
-    def vfeq     = "b00001001".U(8.W)
-    def vfne     = "b00001010".U(8.W)
-    def vflt     = "b00001011".U(8.W)
-    def vfle     = "b00001100".U(8.W)
-    def vfgt     = "b00001101".U(8.W)
-    def vfge     = "b00001110".U(8.W)
-    def fclass   = "b00001111".U(8.W)
-    def vfmul    = "b00100000".U(8.W)
-    def vfmacc   = "b00100001".U(8.W)
-    def vfnmacc  = "b00100010".U(8.W)
-    def vfmsac   = "b00100011".U(8.W)
-    def vfnmsac  = "b00100100".U(8.W)
-    def vfmadd   = "b00100101".U(8.W)
-    def vfnmadd  = "b00100110".U(8.W)
-    def vfmsub   = "b00100111".U(8.W)
-    def vfnmsub  = "b00101000".U(8.W)
-    def vfdiv    = "b01000000".U(8.W)
-  }
-
   object VpermType {
     // notNeedSew:1bit  isFp:1bit  specialSrcType1:1bit vmvn:2bits  opcode:3bits
     // 00 -> vvv
@@ -312,74 +279,7 @@ package object yunsuan {
     def notNeedSew(fuOpType: UInt) = fuOpType(7)
   }
 
-  object VfaluType {
-    // isWiden:1bit opcode:5bits
-    def dummy = BitPat.Y(OpTypeWidth) // exu not implemented
-    //                                  opb_isWiden,res_isWiden, opcode
-    def vfadd     = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fadd)
-    def vfwadd    = LiteralCat(0.U(1.W), 0.U(1.W), 1.U(1.W), VfaddOpCode.fadd)
-    def vfwadd_w  = LiteralCat(0.U(1.W), 1.U(1.W), 1.U(1.W), VfaddOpCode.fadd)
-    def vfsub     = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fsub)
-    def vfwsub    = LiteralCat(0.U(1.W), 0.U(1.W), 1.U(1.W), VfaddOpCode.fsub)
-    def vfwsub_w  = LiteralCat(0.U(1.W), 1.U(1.W), 1.U(1.W), VfaddOpCode.fsub)
-    def vfmin     = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmin)
-    def vfmax     = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmax)
-    def vfmerge   = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmerge)
-    def vfmv      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmove)
-    def vfsgnj    = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fsgnj)
-    def vfsgnjn   = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fsgnjn)
-    def vfsgnjx   = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fsgnjx)
-    def vfeq      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.feq)
-    def vfne      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fne)
-    def vflt      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.flt)
-    def vfle      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fle)
-    def vfgt      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fgt)
-    def vfge      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fge)
-    def vfclass   = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fclass)
-    def vfmv_f_s  = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmv_f_s)
-    def vfmv_s_f  = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmv_s_f)
-    def vfredusum = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fsum_ure)
-    def vfredmax  = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmax_re)
-    def vfredmin  = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmin_re)
-    def vfredosum = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fsum_ore)
-    def vfwredosum= LiteralCat(0.U(1.W), 0.U(1.W), 1.U(1.W), VfaddOpCode.fsum_ore)
-    def fminm     = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fminm)
-    def fmaxm     = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fmaxm)
-    def fleq      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fleq)
-    def fltq      = LiteralCat(0.U(1.W), 0.U(1.W), 0.U(1.W), VfaddOpCode.fltq)
-  }
-
   val VMoveOpcode = Opcodes.VMoveOpcode
-
-  object VfaddOpCode {
-    def dummy    = "b11111".U(5.W)
-    def fadd     = "b00000".U(5.W)
-    def fsub     = "b00001".U(5.W)
-    def fmin     = "b00010".U(5.W)
-    def fmax     = "b00011".U(5.W)
-    def fmerge   = "b00100".U(5.W)
-    def fmove    = "b00101".U(5.W)
-    def fsgnj    = "b00110".U(5.W)
-    def fsgnjn   = "b00111".U(5.W)
-    def fsgnjx   = "b01000".U(5.W)
-    def feq      = "b01001".U(5.W)
-    def fne      = "b01010".U(5.W)
-    def flt      = "b01011".U(5.W)
-    def fle      = "b01100".U(5.W)
-    def fgt      = "b01101".U(5.W)
-    def fge      = "b01110".U(5.W)
-    def fclass   = "b01111".U(5.W)
-    def fmv_f_s  = "b10001".U(5.W)
-    def fmv_s_f  = "b10010".U(5.W)
-    def fsum_ure = "b11010".U(5.W) // unordered
-    def fmin_re  = "b10100".U(5.W)
-    def fmax_re  = "b10101".U(5.W)
-    def fsum_ore = "b10110".U(5.W) // ordered
-    def fminm    = "b11110".U(5.W)
-    def fmaxm    = "b10011".U(5.W)
-    def fleq     = "b11100".U(5.W)
-    def fltq     = "b11011".U(5.W)
-  }
 
   object VfmaType{
     // isWiden:1bit opcode:5bits

@@ -15,10 +15,6 @@ ElementOutput VGMFloatAdder::calculation_e16(ElementInput input) {
       output.result = f16_min(i2f16((uint16_t)input.src1), i2f16((uint16_t)input.src2)).v;  break;
     case VFMAX:
       output.result = f16_max(i2f16((uint16_t)input.src1), i2f16((uint16_t)input.src2)).v;  break;
-    case VFMERGE:
-      output.result = ((uint8_t)input.src3 & 0x01) == 1? i2f16((uint16_t)input.src2).v: i2f16((uint16_t)input.src1).v;  break;
-    case VFMOVE:
-      output.result = i2f16((uint16_t)input.src2).v;  break;
     case VFSGNJ:
       output.result = f16_sgnj(i2f16((uint16_t)input.src1), i2f16((uint16_t)input.src2), false, false).v;  break;
     case VFSGNJN:
@@ -73,10 +69,6 @@ ElementOutput VGMFloatAdder::calculation_e32(ElementInput input) {
       output.result = f32_min(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2)).v;  break;
     case VFMAX:
       output.result = f32_max(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2)).v;  break;
-    case VFMERGE:
-      output.result = ((uint8_t)input.src3 & 0x01) == 1? i2f32((uint32_t)input.src2).v: i2f32((uint32_t)input.src1).v;  break;
-    case VFMOVE:
-      output.result = i2f32((uint32_t)input.src2).v;  break;
     case VFSGNJ:
       output.result = f32_sgnj(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2), false, false).v;  break;
     case VFSGNJN:
@@ -131,10 +123,6 @@ ElementOutput VGMFloatAdder::calculation_e64(ElementInput input) {
       output.result = f64_min(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2)).v;  break;
     case VFMAX:
       output.result = f64_max(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2)).v;  break;
-    case VFMERGE:
-      output.result = ((uint8_t)input.src3 & 0x01) == 1? i2f64((uint64_t)input.src2).v: i2f64((uint64_t)input.src1).v;  break;
-    case VFMOVE:
-      output.result = i2f64((uint64_t)input.src2).v;  break;
     case VFSGNJ:
       output.result = f64_sgnj(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2), false, false).v;  break;
     case VFSGNJN:
@@ -164,4 +152,3 @@ ElementOutput VGMFloatAdder::calculation_e64(ElementInput input) {
   if (verbose) { display_calculation(typeid(this).name(), __func__, input, output); }
   return output;
 }
-

@@ -38,9 +38,16 @@ class VectorMove extends Module {
   val vs2 = io.in.bits.vs2
   val vs1 = io.in.bits.vs1
   val mask = io.in.bits.mask
-  implicit val opcode = io.in.bits.opcode
+  private implicit val opcode: UInt = io.in.bits.opcode
 
   val eewVd = SewOH(vsew)
+  val scalarVs1Data = Mux1H(Seq(
+    (vsew === e8)  -> Fill(VLEN / 8 , vs1(7 , 0)),
+    (vsew === e16) -> Fill(VLEN / 16, vs1(15, 0)),
+    (vsew === e32) -> Fill(VLEN / 32, vs1(31, 0)),
+    (vsew === e64) -> Fill(VLEN / 64, vs1(63, 0)),
+  ))
+  val vmergeVs1Data = Mux(isVmergeVX, scalarVs1Data, vs1)
 
   // Integer Merge/Move, vmv.s.x
   // Floating-Point Merge/Move, vfmv.s.f
@@ -49,10 +56,10 @@ class VectorMove extends Module {
   ))
   val vmergeTmp = Wire(Vec(numBytes, UInt(8.W)))
   for (i <- 0 until numBytes) {
-    vmergeTmp(i) := Mux(vmaskAdjust(i), vs1(8*i+7, 8*i), vs2(8*i+7, 8*i))
+    vmergeTmp(i) := Mux(vmaskAdjust(i), vmergeVs1Data(8*i+7, 8*i), vs2(8*i+7, 8*i))
   }
   val vmergeResult = Wire(UInt(VLEN.W))
-  vmergeResult := Mux(vm || isX2VS, vs1, vmergeTmp.asUInt)
+  vmergeResult := Mux(vm, vmergeVs1Data, vmergeTmp.asUInt)
 
   // vmv.x.s, vfmv.f.s
   val vmvResult = Wire(UInt(64.W))
@@ -71,6 +78,7 @@ class VectorMove extends Module {
   vd := Mux1H(Seq(
     isVS2X -> vmvResult,
     isNR -> vmvnrResult,
+    isX2VS -> vs1,
     isVmerge -> vmergeResult,
   ))
 

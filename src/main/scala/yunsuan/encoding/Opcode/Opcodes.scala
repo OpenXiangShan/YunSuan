@@ -175,6 +175,13 @@ abstract class Opcodes {
     Value(bp1, bp2: _*)(name) + VsWen
   }
 
+  def DsSvlS2vS1s(subOp: BitPat, opb: BitPat, res: BitPat, dtype: BitPat)(implicit name: SourceName): Type = {
+    Value(dtype, opb, res, subOp)(name) + VsWen + VlRen + Src2Vp + Src1En + Src1Vs
+  }
+
+  def DwsSvlS2vS1ws(subOp: BitPat, opb: BitPat, res: BitPat, dtype: BitPat)(implicit name: SourceName): Type = {
+    Value(dtype, opb, res, subOp)(name) + VwsWen + VlRen + Src2Vp + Src1En + Src1Vws
+  }
   override def toString: String = {
     getClass.getSimpleName
   }
@@ -192,6 +199,9 @@ object Opcodes {
       FCvtOpcode,
       FMiscOpcode,
       FMacOpcode,
+      VFMacOpcode,
+      VFCvtOpcode,
+      VFMiscOpcode,
     )
 
     for (opcodeCls <- opcodes) {
@@ -217,28 +227,30 @@ object Opcodes {
     private val DW = bb"1"
     private val S2V = bb"0"
     private val S2W = bb"1"
-    private val NOTADD = bb"0"
-    private val USEADD = bb"1"
-    private val NOTMUL = bb"0"
-    private val USEMUL = bb"1"
 
     // bit(2): 0 -> vs1 * vd, 1 -> vs1 * vs2
     // bit(1): 0 -> add     , 1 -> sub
     // bit(0): 0 -> pos     , 1 -> neg
-    private val FMADD  = bb"000" // +((vs1[i] * vd[i]) + vs2[i])
-    private val FNMADD = bb"001" // -((vs1[i] * vd[i]) + vs2[i])
-    private val FMSUB  = bb"010" // +((vs1[i] * vd[i]) - vs2[i])
-    private val FNMSUB = bb"011" // -((vs1[i] * vd[i]) - vs2[i])
-    private val FMACC  = bb"100" // +((vs1[i] * vs2[i]) + vd[i])
-    private val FNMACC = bb"101" // -((vs1[i] * vs2[i]) + vd[i])
-    private val FMSAC  = bb"110" // +((vs1[i] * vs2[i]) - vd[i])
-    private val FNMSAC = bb"111" // -((vs1[i] * vs2[i]) - vd[i])
+    private val FMADD  = bb"0000" // +((vs1[i] * vd[i]) + vs2[i])
+    private val FNMADD = bb"0001" // -((vs1[i] * vd[i]) + vs2[i])
+    private val FMSUB  = bb"0010" // +((vs1[i] * vd[i]) - vs2[i])
+    private val FNMSUB = bb"0011" // -((vs1[i] * vd[i]) - vs2[i])
+    private val FMACC  = bb"0100" // +((vs1[i] * vs2[i]) + vd[i])
+    private val FNMACC = bb"0101" // -((vs1[i] * vs2[i]) + vd[i])
+    private val FMSAC  = bb"0110" // +((vs1[i] * vs2[i]) - vd[i])
+    private val FNMSAC = bb"0111" // -((vs1[i] * vs2[i]) - vd[i])
+    private val FADD   = bb"0000"
+    private val FSUB   = bb"0001"
+    private val FMIN   = bb"0010"
+    private val FMAX   = bb"0011"
+    private val FMUL   = bb"0100"
+    private val FSGNJ  = bb"0101"
+    private val FSGNJN = bb"0110"
+    private val FSGNJX = bb"0111"
+    private val FWADD4 = FMIN
 
-    private val FADD = bb"000"
-    private val FSUB = bb"001"
-    private val FWADD4 = bb"010"
+    private val VF_MISC = bb"11"
 
-    private val FMUL = bb"100"
 
     val fmadd_fp16   : Opcode = Value(FMADD , OP3, S2V, DV, FP16, F)
     val fmsub_fp16   : Opcode = Value(FMSUB , OP3, S2V, DV, FP16, F)
@@ -248,6 +260,13 @@ object Opcodes {
     val fsub_fp16    : Opcode = Value(FSUB  , OP2, S2V, DV, FP16, F)
     val fmul_fp16    : Opcode = Value(FMUL  , OP2, S2V, DV, FP16, F)
     val vfmul_fp16   : Opcode = DvSvlS2vS1(FMUL  , OP2, S2V, DV, FP16, V)
+    val vfadd_fp16   : Opcode = DvSvlS2vS1(FADD  , OP2, S2V, DV, FP16, V) + ForceVfAlu
+    val vfsub_fp16   : Opcode = DvSvlS2vS1(FSUB  , OP2, S2V, DV, FP16, V) + ForceVfAlu
+    val vfmin_fp16   : Opcode = DvSvlS2vS1(FMIN  , OP2, S2V, DV, FP16, V) + ForceVfAlu
+    val vfmax_fp16   : Opcode = DvSvlS2vS1(FMAX  , OP2, S2V, DV, FP16, V) + ForceVfAlu
+    val vfsgnj_fp16  : Opcode = DvSvlS2vS1(FSGNJ , OP2, S2V, DV, FP16, V) + ForceVfAlu
+    val vfsgnjn_fp16 : Opcode = DvSvlS2vS1(FSGNJN, OP2, S2V, DV, FP16, V) + ForceVfAlu
+    val vfsgnjx_fp16 : Opcode = DvSvlS2vS1(FSGNJX, OP2, S2V, DV, FP16, V) + ForceVfAlu
     val vfmadd_fp16  : Opcode = DvSvlS2vS1S3v(FMADD , OP3, S2V, DV, FP16, V)
     val vfnmadd_fp16 : Opcode = DvSvlS2vS1S3v(FNMADD, OP3, S2V, DV, FP16, V)
     val vfmsub_fp16  : Opcode = DvSvlS2vS1S3v(FMSUB , OP3, S2V, DV, FP16, V)
@@ -256,10 +275,10 @@ object Opcodes {
     val vfnmacc_fp16 : Opcode = DvSvlS2vS1S3v(FNMACC, OP3, S2V, DV, FP16, V)
     val vfmsac_fp16  : Opcode = DvSvlS2vS1S3v(FMSAC , OP3, S2V, DV, FP16, V)
     val vfnmsac_fp16 : Opcode = DvSvlS2vS1S3v(FNMSAC, OP3, S2V, DV, FP16, V)
-    val vfwadd_fp16  : Opcode = DvSvlS2vS1S3v(FADD  , OP2, S2V, DW, FP16, V)
-    val vfwsub_fp16  : Opcode = DvSvlS2vS1S3v(FSUB  , OP2, S2V, DW, FP16, V)
-    val vfwadd_w_fp16: Opcode = DvSvlS2vS1S3v(FADD  , OP2, S2W, DW, FP16, V)
-    val vfwsub_w_fp16: Opcode = DvSvlS2vS1S3v(FSUB  , OP2, S2W, DW, FP16, V)
+    val vfwadd_fp16  : Opcode = DvSvlS2vS1S3v(FADD  , OP2, S2V, DW, FP16, V) + ForceVfAlu
+    val vfwsub_fp16  : Opcode = DvSvlS2vS1S3v(FSUB  , OP2, S2V, DW, FP16, V) + ForceVfAlu
+    val vfwadd_w_fp16: Opcode = DvSvlS2vS1S3v(FADD  , OP2, S2W, DW, FP16, V) + ForceVfAlu
+    val vfwsub_w_fp16: Opcode = DvSvlS2vS1S3v(FSUB  , OP2, S2W, DW, FP16, V) + ForceVfAlu
     val vfwmul_fp16  : Opcode = DvSvlS2vS1S3v(FMUL  , OP2, S2V, DW, FP16, V)
     val vfwmacc_fp16 : Opcode = DvSvlS2vS1S3v(FMACC , OP3, S2V, DW, FP16, V)
     val vfwnmacc_fp16: Opcode = DvSvlS2vS1S3v(FNMACC, OP3, S2V, DW, FP16, V)
@@ -273,6 +292,13 @@ object Opcodes {
     val fsub_fp32    : Opcode = Value(FSUB  , OP2, S2V, DV, FP32, F)
     val fmul_fp32    : Opcode = Value(FMUL  , OP2, S2V, DV, FP32, F)
     val vfmul_fp32   : Opcode = DvSvlS2vS1(FMUL  , OP2, S2V, DV, FP32, V)
+    val vfadd_fp32   : Opcode = DvSvlS2vS1(FADD  , OP2, S2V, DV, FP32, V) + ForceVfAlu
+    val vfsub_fp32   : Opcode = DvSvlS2vS1(FSUB  , OP2, S2V, DV, FP32, V) + ForceVfAlu
+    val vfmin_fp32   : Opcode = DvSvlS2vS1(FMIN  , OP2, S2V, DV, FP32, V) + ForceVfAlu
+    val vfmax_fp32   : Opcode = DvSvlS2vS1(FMAX  , OP2, S2V, DV, FP32, V) + ForceVfAlu
+    val vfsgnj_fp32  : Opcode = DvSvlS2vS1(FSGNJ , OP2, S2V, DV, FP32, V) + ForceVfAlu
+    val vfsgnjn_fp32 : Opcode = DvSvlS2vS1(FSGNJN, OP2, S2V, DV, FP32, V) + ForceVfAlu
+    val vfsgnjx_fp32 : Opcode = DvSvlS2vS1(FSGNJX, OP2, S2V, DV, FP32, V) + ForceVfAlu
     val vfmadd_fp32  : Opcode = DvSvlS2vS1S3v(FMADD , OP3, S2V, DV, FP32, V)
     val vfnmadd_fp32 : Opcode = DvSvlS2vS1S3v(FNMADD, OP3, S2V, DV, FP32, V)
     val vfmsub_fp32  : Opcode = DvSvlS2vS1S3v(FMSUB , OP3, S2V, DV, FP32, V)
@@ -281,10 +307,10 @@ object Opcodes {
     val vfnmacc_fp32 : Opcode = DvSvlS2vS1S3v(FNMACC, OP3, S2V, DV, FP32, V)
     val vfmsac_fp32  : Opcode = DvSvlS2vS1S3v(FMSAC , OP3, S2V, DV, FP32, V)
     val vfnmsac_fp32 : Opcode = DvSvlS2vS1S3v(FNMSAC, OP3, S2V, DV, FP32, V)
-    val vfwadd_fp32  : Opcode = DvSvlS2vS1(FADD  , OP2, S2V, DW, FP32, V)
-    val vfwsub_fp32  : Opcode = DvSvlS2vS1(FSUB  , OP2, S2V, DW, FP32, V)
-    val vfwadd_w_fp32: Opcode = DvSvlS2vS1(FADD  , OP2, S2W, DW, FP32, V)
-    val vfwsub_w_fp32: Opcode = DvSvlS2vS1(FSUB  , OP2, S2W, DW, FP32, V)
+    val vfwadd_fp32  : Opcode = DvSvlS2vS1(FADD  , OP2, S2V, DW, FP32, V) + ForceVfAlu
+    val vfwsub_fp32  : Opcode = DvSvlS2vS1(FSUB  , OP2, S2V, DW, FP32, V) + ForceVfAlu
+    val vfwadd_w_fp32: Opcode = DvSvlS2vS1(FADD  , OP2, S2W, DW, FP32, V) + ForceVfAlu
+    val vfwsub_w_fp32: Opcode = DvSvlS2vS1(FSUB  , OP2, S2W, DW, FP32, V) + ForceVfAlu
     val vfwmul_fp32  : Opcode = DvSvlS2vS1(FMUL  , OP2, S2V, DW, FP32, V)
     val vfwmacc_fp32 : Opcode = DvSvlS2vS1S3v(FMACC , OP3, S2V, DW, FP32, V)
     val vfwnmacc_fp32: Opcode = DvSvlS2vS1S3v(FNMACC, OP3, S2V, DW, FP32, V)
@@ -298,6 +324,13 @@ object Opcodes {
     val fsub_fp64    : Opcode = Value(FSUB  , OP2, S2V, DV, FP64, F)
     val fmul_fp64    : Opcode = Value(FMUL  , OP2, S2V, DV, FP64, F)
     val vfmul_fp64   : Opcode = DvSvlS2vS1(FMUL  , OP2, S2V, DV, FP64, V)
+    val vfadd_fp64   : Opcode = DvSvlS2vS1(FADD  , OP2, S2V, DV, FP64, V) + ForceVfAlu
+    val vfsub_fp64   : Opcode = DvSvlS2vS1(FSUB  , OP2, S2V, DV, FP64, V) + ForceVfAlu
+    val vfmin_fp64   : Opcode = DvSvlS2vS1(FMIN  , OP2, S2V, DV, FP64, V) + ForceVfAlu
+    val vfmax_fp64   : Opcode = DvSvlS2vS1(FMAX  , OP2, S2V, DV, FP64, V) + ForceVfAlu
+    val vfsgnj_fp64  : Opcode = DvSvlS2vS1(FSGNJ , OP2, S2V, DV, FP64, V) + ForceVfAlu
+    val vfsgnjn_fp64 : Opcode = DvSvlS2vS1(FSGNJN, OP2, S2V, DV, FP64, V) + ForceVfAlu
+    val vfsgnjx_fp64 : Opcode = DvSvlS2vS1(FSGNJX, OP2, S2V, DV, FP64, V) + ForceVfAlu
     val vfmadd_fp64  : Opcode = DvSvlS2vS1S3v(FMADD , OP3, S2V, DV, FP64, V)
     val vfnmadd_fp64 : Opcode = DvSvlS2vS1S3v(FNMADD, OP3, S2V, DV, FP64, V)
     val vfmsub_fp64  : Opcode = DvSvlS2vS1S3v(FMSUB , OP3, S2V, DV, FP64, V)
@@ -311,62 +344,112 @@ object Opcodes {
     val vfwadd4_fp32 : Opcode = Value(FWADD4, OP2, S2V, DW, FP32, V)
     // There are no widen uops when FP64
 
-    def getOpNum(op: UInt): Bool = op(5)
+    def getFamily(implicit op: UInt): UInt = op(9, 8)
 
-    def getSubOpcode(op: UInt): UInt = op(8, 6)
+    def getOpNum(implicit op: UInt): Bool = op(5)
 
-    def getFormat(op: UInt) = op(2, 1)
+    def getSubOpcode(implicit op: UInt): UInt = op(8, 6)
 
-    def useADD(op: UInt): Bool = {
-      getOpNum(op) === OP3 ||
-        getOpNum(op) === OP2 && (getSubOpcode(op) === FADD || getSubOpcode(op) === FSUB)
+    def getVs2Format(implicit op: UInt): UInt = op(4)
+
+    def getDestMode(implicit op: UInt): UInt = op(3)
+
+    def getDataType(implicit op: UInt): UInt = op(2, 1)
+
+    def getFuType(implicit op: UInt): UInt = op(0)
+
+    def getFormat(implicit op: UInt): UInt = op(2, 1)
+
+    def useADD(implicit op: UInt): Bool = { (
+      getOpNum === OP3 ||
+        getOpNum === OP2 && (getSubOpcode === FADD || getSubOpcode === FSUB)
+      )
     }
 
-    def useMUL(op: UInt): Bool = {
-      getOpNum(op) === OP3 ||
-        getOpNum(op) === OP2 && getSubOpcode(op) === FMUL
+    def useMUL(implicit op: UInt): Bool = { (
+      getOpNum === OP3 ||
+        getOpNum === OP2 && getSubOpcode === FMUL
+      )
     }
 
-    def isFmul(op: UInt): Bool = {
-      getOpNum(op) === OP2 && getSubOpcode(op) === FMUL
+    
+    private def isVectorMisc(implicit op: UInt): Bool = getFamily === VF_MISC
+
+    def isVfadd(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FADD
+    def isVfsub(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FSUB
+    def isVfmin(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FMIN
+    def isVfmax(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FMAX
+    def isVfsgnj(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FSGNJ
+    def isVfsgnjn(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FSGNJN
+    def isVfsgnjx(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FSGNJX
+    def isVfminm(implicit op: UInt): Bool = isVfmin
+    def isVfmaxm(implicit op: UInt): Bool = isVfmax
+
+    def isVfwFadd(implicit op: UInt): Bool = getSubOpcode === FADD && getDestMode === DW
+    def isVfwFsub(implicit op: UInt): Bool = getSubOpcode === FSUB && getDestMode === DW
+    def isVfWiden(implicit op: UInt): Bool =
+        getDestMode === DW &&
+        (
+          (getOpNum === OP2 && getSubOpcode.isOneOf(FADD, FSUB, FMUL)) ||
+            (getOpNum === OP3 && getSubOpcode.isOneOf(FMACC, FNMACC, FMSAC, FNMSAC))
+        )
+    def isOpbWiden(implicit op: UInt): Bool = isVfWiden && getVs2Format === S2W && !isVectorMisc
+    def isResWiden(implicit op: UInt): Bool = isVfWiden && !isVectorMisc
+
+    def isFadd(implicit op: UInt): Bool = getSubOpcode === FADD  && !isVectorMisc
+    def isFsub(implicit op: UInt): Bool = getSubOpcode === FSUB  && !isVectorMisc
+    def isFmin(implicit op: UInt): Bool = isVfmin
+    def isFmax(implicit op: UInt): Bool = isVfmax
+    def isFsgnj(implicit op: UInt): Bool = isVfsgnj && !isVectorMisc
+    def isFsgnjn(implicit op: UInt): Bool = isVfsgnjn
+    def isFsgnjx(implicit op: UInt): Bool = isVfsgnjx
+    def isFminm(implicit op: UInt): Bool = isVfminm
+    def isFmaxm(implicit op: UInt): Bool = isVfmaxm
+      
+    def isFmul(implicit op: UInt): Bool = {
+      getOpNum === OP2 && getSubOpcode === FMUL
     }
 
-    def isFmadd(op: UInt): Bool = {
-      getOpNum(op) === OP3 && getSubOpcode(op) === FMADD
+    def isFmadd(implicit op: UInt): Bool = {
+      getOpNum === OP3 && getSubOpcode === FMADD
     }
 
-    def isFnmadd(op: UInt): Bool = {
-      getOpNum(op) === OP3 && getSubOpcode(op) === FNMADD
+    def isFnmadd(implicit op: UInt): Bool = {
+      getOpNum === OP3 && getSubOpcode === FNMADD
     }
 
-    def isFmsub(op: UInt): Bool = {
-      getOpNum(op) === OP3 && getSubOpcode(op) === FMSUB
+    def isFmsub(implicit op: UInt): Bool = {
+      getOpNum === OP3 && getSubOpcode === FMSUB
     }
 
-    def isFnmsub(op: UInt): Bool = {
-      getOpNum(op) === OP3 && getSubOpcode(op) === FNMSUB
+    def isFnmsub(implicit op: UInt): Bool = {
+      getOpNum === OP3 && getSubOpcode === FNMSUB
     }
 
-    def isFmacc(op: UInt): Bool = {
-      getOpNum(op) === OP3 && getSubOpcode(op) === FMACC
+    def isFmacc(implicit op: UInt): Bool = {
+      getOpNum === OP3 && getSubOpcode === FMACC
     }
 
-    def isFnmacc(op: UInt): Bool = {
-      getOpNum(op) === OP3 && getSubOpcode(op) === FNMACC
+    def isFnmacc(implicit op: UInt): Bool = {
+      getOpNum === OP3 && getSubOpcode === FNMACC
     }
 
-    def isFmsac(op: UInt): Bool = {
-      getOpNum(op) === OP3 && getSubOpcode(op) === FMSAC
+    def isFmsac(implicit op: UInt): Bool = {
+      getOpNum === OP3 && getSubOpcode === FMSAC
     }
 
-    def isFnmsac(op: UInt): Bool = {
-      getOpNum(op) === OP3 && getSubOpcode(op) === FNMSAC
+    def isFnmsac(implicit op: UInt): Bool = {
+      getOpNum === OP3 && getSubOpcode === FNMSAC
     }
   }
 
   object FMacOpcode extends FMacOpcode
+  object VFMacOpcode extends FMacOpcode
 
   trait FMiscOpcode extends Opcodes with DataType {
+    private val S2V = bb"0"
+    private val S2W = bb"1"
+
     private val FSGNJ  = bb"0000"
     private val FSGNJN = bb"0001"
     private val FSGNJX = bb"0010"
@@ -411,13 +494,6 @@ object Opcodes {
     val vmfne_fp16  : Opcode = DmSvlS2vS1(FNE   , DM, FP16, V)
     val vmfgt_fp16  : Opcode = DmSvlS2vS1(FGT   , DM, FP16, V)
     val vmfge_fp16  : Opcode = DmSvlS2vS1(FGE   , DM, FP16, V)
-    val vfadd_fp16  : Opcode = DvSvlS2vS1(FADD  , DV, FP16, V)
-    val vfsub_fp16  : Opcode = DvSvlS2vS1(FSUB  , DV, FP16, V)
-    val vfmin_fp16  : Opcode = DvSvlS2vS1(FMIN  , DV, FP16, V)
-    val vfmax_fp16  : Opcode = DvSvlS2vS1(FMAX  , DV, FP16, V)
-    val vfsgnj_fp16 : Opcode = DvSvlS2vS1(FSGNJ , DV, FP16, V)
-    val vfsgnjn_fp16: Opcode = DvSvlS2vS1(FSGNJN, DV, FP16, V)
-    val vfsgnjx_fp16: Opcode = DvSvlS2vS1(FSGNJX, DV, FP16, V)
     val vfclass_fp16: Opcode = DvSvlS2v(FCLASS  , DV, FP16, V)
     val feq_fp32    : Opcode = Value(FEQ   , DM, FP32, F)
     val fle_fp32    : Opcode = Value(FLE   , DM, FP32, F)
@@ -440,13 +516,6 @@ object Opcodes {
     val vmfne_fp32  : Opcode = DmSvlS2vS1(FNE   , DM, FP32, V)
     val vmfgt_fp32  : Opcode = DmSvlS2vS1(FGT   , DM, FP32, V)
     val vmfge_fp32  : Opcode = DmSvlS2vS1(FGE   , DM, FP32, V)
-    val vfadd_fp32  : Opcode = DvSvlS2vS1(FADD  , DV, FP32, V)
-    val vfsub_fp32  : Opcode = DvSvlS2vS1(FSUB  , DV, FP32, V)
-    val vfmin_fp32  : Opcode = DvSvlS2vS1(FMIN  , DV, FP32, V)
-    val vfmax_fp32  : Opcode = DvSvlS2vS1(FMAX  , DV, FP32, V)
-    val vfsgnj_fp32 : Opcode = DvSvlS2vS1(FSGNJ , DV, FP32, V)
-    val vfsgnjn_fp32: Opcode = DvSvlS2vS1(FSGNJN, DV, FP32, V)
-    val vfsgnjx_fp32: Opcode = DvSvlS2vS1(FSGNJX, DV, FP32, V)
     val vfclass_fp32: Opcode = DvSvlS2v(FCLASS  , DV, FP32, V)
     val feq_fp64    : Opcode = Value(FEQ   , DM, FP64, F)
     val fle_fp64    : Opcode = Value(FLE   , DM, FP64, F)
@@ -469,13 +538,6 @@ object Opcodes {
     val vmfne_fp64  : Opcode = DmSvlS2vS1(FNE   , DM, FP64, V)
     val vmfgt_fp64  : Opcode = DmSvlS2vS1(FGT   , DM, FP64, V)
     val vmfge_fp64  : Opcode = DmSvlS2vS1(FGE   , DM, FP64, V)
-    val vfadd_fp64  : Opcode = DvSvlS2vS1(FADD  , DV, FP64, V)
-    val vfsub_fp64  : Opcode = DvSvlS2vS1(FSUB  , DV, FP64, V)
-    val vfmin_fp64  : Opcode = DvSvlS2vS1(FMIN  , DV, FP64, V)
-    val vfmax_fp64  : Opcode = DvSvlS2vS1(FMAX  , DV, FP64, V)
-    val vfsgnj_fp64 : Opcode = DvSvlS2vS1(FSGNJ , DV, FP64, V)
-    val vfsgnjn_fp64: Opcode = DvSvlS2vS1(FSGNJN, DV, FP64, V)
-    val vfsgnjx_fp64: Opcode = DvSvlS2vS1(FSGNJX, DV, FP64, V)
     val vfclass_fp64: Opcode = DvSvlS2v(FCLASS  , DV, FP64, V)
 
     def getOpcodes(implicit op: UInt): UInt  = op(7, 4)
@@ -500,11 +562,141 @@ object Opcodes {
     def isFsgnjx(implicit op: UInt): Bool = getOpcodes === FSGNJX
     def isFminm(implicit op: UInt): Bool  = getOpcodes === FMINM
     def isFmaxm(implicit op: UInt): Bool  = getOpcodes === FMAXM
+
+    def isFne(implicit op: UInt): Bool = getOpcodes === FNE && getDestType === DM
+    def isFgt(implicit op: UInt): Bool = getOpcodes === FGT && getDestType === DM
+    def isFge(implicit op: UInt): Bool = getOpcodes === FGE && getDestType === DM
+    def isFleq(implicit op: UInt): Bool = getOpcodes === FLEQ && getDestType === DM
+    def isFltq(implicit op: UInt): Bool = getOpcodes === FLTQ && getDestType === DM
   }
 
   object FMiscOpcode extends FMiscOpcode
-
   object FAluOpcode extends FMiscOpcode
+
+  trait VFMiscOpcode extends Opcodes with DataType {
+    private val VF_MISC = bb"11"
+
+    private val FEQ    = bb"0000"
+    private val FLE    = bb"0010"
+    private val FLT    = bb"0110"
+    private val FNE    = bb"1000"
+    private val FGT    = bb"1010"
+    private val FGE    = bb"1110"
+    private val FCLASS = bb"0100"
+
+    private val DM = bb"1"
+    private val DV = bb"0"
+
+    val vmfeq_fp16  : Opcode = DmSvlS2vS1(VF_MISC, FEQ   , DM, FP16, V)
+    val vmfle_fp16  : Opcode = DmSvlS2vS1(VF_MISC, FLE   , DM, FP16, V)
+    val vmflt_fp16  : Opcode = DmSvlS2vS1(VF_MISC, FLT   , DM, FP16, V)
+    val vmfne_fp16  : Opcode = DmSvlS2vS1(VF_MISC, FNE   , DM, FP16, V)
+    val vmfgt_fp16  : Opcode = DmSvlS2vS1(VF_MISC, FGT   , DM, FP16, V)
+    val vmfge_fp16  : Opcode = DmSvlS2vS1(VF_MISC, FGE   , DM, FP16, V)
+    val vfclass_fp16: Opcode = DvSvlS2v(VF_MISC, FCLASS, DV, FP16, V)
+    val vmfeq_fp32  : Opcode = DmSvlS2vS1(VF_MISC, FEQ   , DM, FP32, V)
+    val vmfle_fp32  : Opcode = DmSvlS2vS1(VF_MISC, FLE   , DM, FP32, V)
+    val vmflt_fp32  : Opcode = DmSvlS2vS1(VF_MISC, FLT   , DM, FP32, V)
+    val vmfne_fp32  : Opcode = DmSvlS2vS1(VF_MISC, FNE   , DM, FP32, V)
+    val vmfgt_fp32  : Opcode = DmSvlS2vS1(VF_MISC, FGT   , DM, FP32, V)
+    val vmfge_fp32  : Opcode = DmSvlS2vS1(VF_MISC, FGE   , DM, FP32, V)
+    val vfclass_fp32: Opcode = DvSvlS2v(VF_MISC, FCLASS, DV, FP32, V)
+    val vmfeq_fp64  : Opcode = DmSvlS2vS1(VF_MISC, FEQ   , DM, FP64, V)
+    val vmfle_fp64  : Opcode = DmSvlS2vS1(VF_MISC, FLE   , DM, FP64, V)
+    val vmflt_fp64  : Opcode = DmSvlS2vS1(VF_MISC, FLT   , DM, FP64, V)
+    val vmfne_fp64  : Opcode = DmSvlS2vS1(VF_MISC, FNE   , DM, FP64, V)
+    val vmfgt_fp64  : Opcode = DmSvlS2vS1(VF_MISC, FGT   , DM, FP64, V)
+    val vmfge_fp64  : Opcode = DmSvlS2vS1(VF_MISC, FGE   , DM, FP64, V)
+    val vfclass_fp64: Opcode = DvSvlS2v(VF_MISC, FCLASS, DV, FP64, V)
+
+    def getFamily(implicit op: UInt): UInt = op(9, 8)
+    def getOpcodes(implicit op: UInt): UInt = op(7, 4)
+    def getDestType(implicit op: UInt): UInt = op(3)
+    def getFormat(implicit op: UInt): UInt = op(2, 1)
+    def getDataType(implicit op: UInt): UInt = op(0)
+
+    private def isVectorMisc(implicit op: UInt): Bool = getFamily === VF_MISC
+
+    def isFeq(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FEQ && getDestType === DM
+    def isFlt(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FLT && getDestType === DM
+    def isFle(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FLE && getDestType === DM
+    def isFne(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FNE && getDestType === DM
+    def isFgt(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FGT && getDestType === DM
+    def isFge(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FGE && getDestType === DM
+    def isFclass(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FCLASS && getDestType === DV
+    def isVfCompare(implicit op: UInt): Bool = isVectorMisc && getDestType === DM
+    def isDstMask(implicit op: UInt): Bool = isVfCompare
+  }
+
+  object VFMiscOpcode extends VFMiscOpcode
+
+  trait VFRedOpcode extends Opcodes with DataType {
+    private val opbN = bb"0"
+    private val resN = bb"0"
+    private val resW = bb"1"
+
+    private val FRED_USUM = bb"11010"
+    private val FRED_MIN  = bb"10100"
+    private val FRED_MAX  = bb"10101"
+    private val FRED_OSUM = bb"10110"
+
+    val vfredusum_fp16 : Opcode = DsSvlS2vS1s(FRED_USUM, opbN, resN, FP16)
+    val vfredusum_fp32 : Opcode = DsSvlS2vS1s(FRED_USUM, opbN, resN, FP32)
+    val vfredusum_fp64 : Opcode = DsSvlS2vS1s(FRED_USUM, opbN, resN, FP64)
+    val vfredosum_fp16 : Opcode = DsSvlS2vS1s(FRED_OSUM, opbN, resN, FP16)
+    val vfredosum_fp32 : Opcode = DsSvlS2vS1s(FRED_OSUM, opbN, resN, FP32)
+    val vfredosum_fp64 : Opcode = DsSvlS2vS1s(FRED_OSUM, opbN, resN, FP64)
+    val vfredmin_fp16  : Opcode = DsSvlS2vS1s(FRED_MIN,  opbN, resN, FP16)
+    val vfredmin_fp32  : Opcode = DsSvlS2vS1s(FRED_MIN,  opbN, resN, FP32)
+    val vfredmin_fp64  : Opcode = DsSvlS2vS1s(FRED_MIN,  opbN, resN, FP64)
+    val vfredmax_fp16  : Opcode = DsSvlS2vS1s(FRED_MAX,  opbN, resN, FP16)
+    val vfredmax_fp32  : Opcode = DsSvlS2vS1s(FRED_MAX,  opbN, resN, FP32)
+    val vfredmax_fp64  : Opcode = DsSvlS2vS1s(FRED_MAX,  opbN, resN, FP64)
+    val vfwredusum_fp16: Opcode = DwsSvlS2vS1ws(FRED_USUM, opbN, resW, FP16)
+    val vfwredusum_fp32: Opcode = DwsSvlS2vS1ws(FRED_USUM, opbN, resW, FP32)
+    val vfwredosum_fp16: Opcode = DwsSvlS2vS1ws(FRED_OSUM, opbN, resW, FP16)
+    val vfwredosum_fp32: Opcode = DwsSvlS2vS1ws(FRED_OSUM, opbN, resW, FP32)
+
+    // to do
+    def isVfredusum(implicit op: UInt): Bool = false.B
+    def isVfredmin(implicit op: UInt): Bool = false.B
+    def isVfredmax(implicit op: UInt): Bool = false.B
+    def isVfredosum(implicit op: UInt): Bool = false.B
+    def isVfwredosum(implicit op: UInt): Bool = false.B
+    def isVfRedUnordered(implicit op: UInt): Bool = isVfredusum || isVfredmin || isVfredmax
+    def isVfRedUnComp(implicit op: UInt): Bool = isVfredmin || isVfredmax
+    def isVfRedOrdered(implicit op: UInt): Bool = isVfredosum || isVfwredosum
+    def isVfWRedOrdered(implicit op: UInt): Bool = isVfwredosum
+    def isVfredosumNoWiden(implicit op: UInt): Bool = isVfredosum
+    def isVfReduction(implicit op: UInt): Bool = isVfRedUnordered || isVfRedOrdered
+
+    def vfredusum(implicit op: UInt): Bool = isVfredusum
+    def vfredmin(implicit op: UInt): Bool = isVfredmin
+    def vfredmax(implicit op: UInt): Bool = isVfredmax
+    def vfredosum(implicit op: UInt): Bool = isVfredosum
+    def vfwredosum(implicit op: UInt): Bool = isVfwredosum
+  }
+
+  object VFRedOpcode extends VFRedOpcode
+
+  trait VFDivOpcode extends Opcodes with DataType {
+    private val FDIV  = bb"0"
+    private val FSQRT = bb"1"
+
+    val vfdiv_fp16 : Opcode = DvSvlS2vS1(FDIV , FP16, V)
+    val vfsqrt_fp16: Opcode = DvSvlS2vS1(FSQRT, FP16, V)
+    val vfdiv_fp32 : Opcode = DvSvlS2vS1(FDIV , FP32, V)
+    val vfsqrt_fp32: Opcode = DvSvlS2vS1(FSQRT, FP32, V)
+    val vfdiv_fp64 : Opcode = DvSvlS2vS1(FDIV , FP64, V)
+    val vfsqrt_fp64: Opcode = DvSvlS2vS1(FSQRT, FP64, V)
+
+    private def getOp(implicit op: UInt): UInt = op(3)
+
+    def isFDiv(implicit op: UInt): Bool = getOp === FDIV
+    def isFSqrt(implicit op: UInt): Bool = getOp === FSQRT
+  }
+
+  object VFDivOpcode extends VFDivOpcode
 
   trait FCvtOpcode extends Opcodes with DataType {
     private val F2F = bb"00"
@@ -563,12 +755,12 @@ object Opcodes {
     val frndnx_fp64: Opcode = Value(FP64, FP64, rndnx, F2F, F)
 
     // two narrow
-    val vfcvt_fp16_fp32: Opcode = Value(FP16, FP32, cvt, F2F, V)
-    val vfcvt_fp32_fp64: Opcode = Value(FP32, FP64, cvt, F2F, V)
+    val vfcvt_fp16_fp32: Opcode = DvSvlS2v(FP16, FP32, cvt, F2F, V)
+    val vfcvt_fp32_fp64: Opcode = DvSvlS2v(FP32, FP64, cvt, F2F, V)
 
     // two widen
-    val vfcvt_fp32_fp16: Opcode = Value(FP32, FP16, cvt, F2F, V)
-    val vfcvt_fp64_fp32: Opcode = Value(FP64, FP32, cvt, F2F, V)
+    val vfcvt_fp32_fp16: Opcode = DvSvlS2v(FP32, FP16, cvt, F2F, V)
+    val vfcvt_fp64_fp32: Opcode = DvSvlS2v(FP64, FP32, cvt, F2F, V)
 
     val fcvt_si32_fp16: Opcode = Value(I32, FP16, F2S, F2I, F)
     val fcvt_ui32_fp16: Opcode = Value(I32, FP16, F2U, F2I, F)
@@ -584,22 +776,22 @@ object Opcodes {
     val fcvt_ui64_fp64: Opcode = Value(I64, FP64, F2U, F2I, F)
     val fcvtmod_si32_fp64: Opcode = Value(I32, FP64, F2SMOD, F2I, F)
 
-    val vfcvt_si8_fp16 : Opcode = Value(I8, FP16, F2S, F2I, V)
-    val vfcvt_ui8_fp16 : Opcode = Value(I8, FP16, F2U, F2I, V)
-    val vfcvt_si16_fp16: Opcode = Value(I16, FP16, F2S, F2I, V)
-    val vfcvt_ui16_fp16: Opcode = Value(I16, FP16, F2U, F2I, V)
-    val vfcvt_si32_fp16: Opcode = Value(I32, FP16, F2S, F2I, V)
-    val vfcvt_ui32_fp16: Opcode = Value(I32, FP16, F2U, F2I, V)
-    val vfcvt_si16_fp32: Opcode = Value(I16, FP32, F2S, F2I, V)
-    val vfcvt_ui16_fp32: Opcode = Value(I16, FP32, F2U, F2I, V)
-    val vfcvt_si32_fp32: Opcode = Value(I32, FP32, F2S, F2I, V)
-    val vfcvt_ui32_fp32: Opcode = Value(I32, FP32, F2U, F2I, V)
-    val vfcvt_si64_fp32: Opcode = Value(I64, FP32, F2S, F2I, V)
-    val vfcvt_ui64_fp32: Opcode = Value(I64, FP32, F2U, F2I, V)
-    val vfcvt_si32_fp64: Opcode = Value(I32, FP64, F2S, F2I, V)
-    val vfcvt_ui32_fp64: Opcode = Value(I32, FP64, F2U, F2I, V)
-    val vfcvt_si64_fp64: Opcode = Value(I64, FP64, F2S, F2I, V)
-    val vfcvt_ui64_fp64: Opcode = Value(I64, FP64, F2U, F2I, V)
+    val vfcvt_si8_fp16 : Opcode = DvSvlS2v(I8, FP16, F2S, F2I, V)
+    val vfcvt_ui8_fp16 : Opcode = DvSvlS2v(I8, FP16, F2U, F2I, V)
+    val vfcvt_si16_fp16: Opcode = DvSvlS2v(I16, FP16, F2S, F2I, V)
+    val vfcvt_ui16_fp16: Opcode = DvSvlS2v(I16, FP16, F2U, F2I, V)
+    val vfcvt_si32_fp16: Opcode = DvSvlS2v(I32, FP16, F2S, F2I, V)
+    val vfcvt_ui32_fp16: Opcode = DvSvlS2v(I32, FP16, F2U, F2I, V)
+    val vfcvt_si16_fp32: Opcode = DvSvlS2v(I16, FP32, F2S, F2I, V)
+    val vfcvt_ui16_fp32: Opcode = DvSvlS2v(I16, FP32, F2U, F2I, V)
+    val vfcvt_si32_fp32: Opcode = DvSvlS2v(I32, FP32, F2S, F2I, V)
+    val vfcvt_ui32_fp32: Opcode = DvSvlS2v(I32, FP32, F2U, F2I, V)
+    val vfcvt_si64_fp32: Opcode = DvSvlS2v(I64, FP32, F2S, F2I, V)
+    val vfcvt_ui64_fp32: Opcode = DvSvlS2v(I64, FP32, F2U, F2I, V)
+    val vfcvt_si32_fp64: Opcode = DvSvlS2v(I32, FP64, F2S, F2I, V)
+    val vfcvt_ui32_fp64: Opcode = DvSvlS2v(I32, FP64, F2U, F2I, V)
+    val vfcvt_si64_fp64: Opcode = DvSvlS2v(I64, FP64, F2S, F2I, V)
+    val vfcvt_ui64_fp64: Opcode = DvSvlS2v(I64, FP64, F2U, F2I, V)
 
     val fcvt_fp16_si32: Opcode = Value(FP16, I32,    S2F, I2F, F)
     val fcvt_fp16_ui32: Opcode = Value(FP16, I32,    U2F, I2F, F)
@@ -617,34 +809,34 @@ object Opcodes {
     val fmv_fp32_i    : Opcode = Value(FP32, I64, FMVI2F, I2F, F)
     val fmv_fp64_i    : Opcode = Value(FP64, I64, FMVI2F, I2F, F)
 
-    val vfcvt_fp16_si16: Opcode = Value(FP16, I16, S2F, I2F, V)
-    val vfcvt_fp16_ui16: Opcode = Value(FP16, I16, U2F, I2F, V)
-    val vfcvt_fp16_si32: Opcode = Value(FP16, I32, S2F, I2F, V)
-    val vfcvt_fp16_ui32: Opcode = Value(FP16, I32, U2F, I2F, V)
-    val vfcvt_fp32_si16: Opcode = Value(FP32, I16, S2F, I2F, V)
-    val vfcvt_fp32_ui16: Opcode = Value(FP32, I16, U2F, I2F, V)
-    val vfcvt_fp32_si32: Opcode = Value(FP32, I32, S2F, I2F, V)
-    val vfcvt_fp32_ui32: Opcode = Value(FP32, I32, U2F, I2F, V)
-    val vfcvt_fp32_si64: Opcode = Value(FP32, I64, S2F, I2F, V)
-    val vfcvt_fp32_ui64: Opcode = Value(FP32, I64, U2F, I2F, V)
-    val vfcvt_fp64_si32: Opcode = Value(FP64, I32, S2F, I2F, V)
-    val vfcvt_fp64_ui32: Opcode = Value(FP64, I32, U2F, I2F, V)
-    val vfcvt_fp64_si64: Opcode = Value(FP64, I64, S2F, I2F, V)
-    val vfcvt_fp64_ui64: Opcode = Value(FP64, I64, U2F, I2F, V)
+    val vfcvt_fp16_si16: Opcode = DvSvlS2v(FP16, I16, S2F, I2F, V)
+    val vfcvt_fp16_ui16: Opcode = DvSvlS2v(FP16, I16, U2F, I2F, V)
+    val vfcvt_fp16_si32: Opcode = DvSvlS2v(FP16, I32, S2F, I2F, V)
+    val vfcvt_fp16_ui32: Opcode = DvSvlS2v(FP16, I32, U2F, I2F, V)
+    val vfcvt_fp32_si16: Opcode = DvSvlS2v(FP32, I16, S2F, I2F, V)
+    val vfcvt_fp32_ui16: Opcode = DvSvlS2v(FP32, I16, U2F, I2F, V)
+    val vfcvt_fp32_si32: Opcode = DvSvlS2v(FP32, I32, S2F, I2F, V)
+    val vfcvt_fp32_ui32: Opcode = DvSvlS2v(FP32, I32, U2F, I2F, V)
+    val vfcvt_fp32_si64: Opcode = DvSvlS2v(FP32, I64, S2F, I2F, V)
+    val vfcvt_fp32_ui64: Opcode = DvSvlS2v(FP32, I64, U2F, I2F, V)
+    val vfcvt_fp64_si32: Opcode = DvSvlS2v(FP64, I32, S2F, I2F, V)
+    val vfcvt_fp64_ui32: Opcode = DvSvlS2v(FP64, I32, U2F, I2F, V)
+    val vfcvt_fp64_si64: Opcode = DvSvlS2v(FP64, I64, S2F, I2F, V)
+    val vfcvt_fp64_ui64: Opcode = DvSvlS2v(FP64, I64, U2F, I2F, V)
 
     val fmv_i_fp16 : Opcode = Value(FP16, FMVF2I, OTHER, F)
     val fmv_i_fp32 : Opcode = Value(FP32, FMVF2I, OTHER, F)
     val fmv_i_fp64 : Opcode = Value(FP64, FMVF2I, OTHER, F)
 
-    val vfrec7_fp16  : Opcode = Value(FP16, FREC7, OTHER, V)
-    val vfrec7_fp32  : Opcode = Value(FP32, FREC7, OTHER, V)
-    val vfrec7_fp64  : Opcode = Value(FP64, FREC7, OTHER, V)
-    val vfrsqrt7_fp16: Opcode = Value(FP16, FRSQRT7, OTHER, V)
-    val vfrsqrt7_fp32: Opcode = Value(FP32, FRSQRT7, OTHER, V)
-    val vfrsqrt7_fp64: Opcode = Value(FP64, FRSQRT7, OTHER, V)
+    val vfrec7_fp16  : Opcode = DvSvlS2v(FP16, FREC7, OTHER, V)
+    val vfrec7_fp32  : Opcode = DvSvlS2v(FP32, FREC7, OTHER, V)
+    val vfrec7_fp64  : Opcode = DvSvlS2v(FP64, FREC7, OTHER, V)
+    val vfrsqrt7_fp16: Opcode = DvSvlS2v(FP16, FRSQRT7, OTHER, V)
+    val vfrsqrt7_fp32: Opcode = DvSvlS2v(FP32, FRSQRT7, OTHER, V)
+    val vfrsqrt7_fp64: Opcode = DvSvlS2v(FP64, FRSQRT7, OTHER, V)
 
     def getOutputDataWidth(implicit op: UInt): UInt = op(8, 7)
-    def getInputDataWidth(implicit op: UInt): UInt = op(6, 5)
+    def getInputDataWidth(implicit op: UInt): UInt = Mux(isOther, getOutputDataWidth, op(6, 5))
     def getCvtSign(implicit op: UInt): UInt = op(4, 3)
     def getCvtType(implicit op: UInt): UInt = op(2, 1)
     def getDataType(implicit op: UInt): UInt = op(0)
@@ -690,6 +882,7 @@ object Opcodes {
   }
 
   object FCvtOpcode extends FCvtOpcode
+  object VFCvtOpcode extends FCvtOpcode
 
   trait VIAluOpcode extends Opcodes with DataType {
 
@@ -1521,6 +1714,30 @@ object Opcodes {
     def isX2VS(implicit op: UInt): Bool = getSubOp.isOneOf(MV_X2VS)
     def isNR(implicit op: UInt): Bool = getSubOp.isOneOf(MV_NR)
     def isVmerge(implicit op: UInt): Bool = getSubOp.isOneOf(MERGE_VV, MERGE_VX)
+    def isVmergeVX(implicit op: UInt): Bool = getSubOp.isOneOf(MERGE_VX)
+
+    def isVfmerge(implicit op: UInt): Bool = op.isOneOf(
+      vmerge_vv_e16.encode,
+      vmerge_vv_e32.encode,
+      vmerge_vv_e64.encode,
+      vmerge_vx_e16.encode,
+      vmerge_vx_e32.encode,
+      vmerge_vx_e64.encode,
+    )
+    def isVfmv_f_s(implicit op: UInt): Bool = op.isOneOf(
+      vmv_vs2x_e16.encode,
+      vmv_vs2x_e32.encode,
+      vmv_vs2x_e64.encode,
+    )
+    def isVfmv_s_f(implicit op: UInt): Bool = op.isOneOf(
+      vmv_x2vs_e16.encode,
+      vmv_x2vs_e32.encode,
+      vmv_x2vs_e64.encode,
+    )
+    def isVfmv(implicit op: UInt): Bool = isVfmv_f_s || isVfmv_s_f
+    def isVfScalarMove(implicit op: UInt): Bool = isVfmv
+    def isVfScalarMoveFromVec(implicit op: UInt): Bool = isVfmv_f_s
+    def isVfScalarMoveToVec(implicit op: UInt): Bool = isVfmv_s_f
 
     def needNoMask(implicit op: UInt) = getSubOp.isOneOf(MV_NR, MV_X2VS, MERGE_VV, MERGE_VX)
     def vlIsOne(implicit op: UInt) = getSubOp.isOneOf(MV_X2VS)

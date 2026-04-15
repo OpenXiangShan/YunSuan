@@ -1,9 +1,15 @@
 package yunsuan.fpulite
 import chisel3._
 import chisel3.util._
+import yunsuan.encoding.Opcode.Opcode
+import yunsuan.encoding.Opcode.Opcodes.{VFMiscOpcode, VFMacOpcode, VFRedOpcode}
 import yunsuan.vector._
-import yunsuan.{VfaddOpCode, VectorElementFormat}
+import yunsuan.VectorElementFormat
+
 class FloatAdder() extends Module {
+  import VFMiscOpcode._
+  import VFRedOpcode._
+  
   val VLEN = 128
   val exponentWidth = 11
   val significandWidth = 53
@@ -13,7 +19,7 @@ class FloatAdder() extends Module {
     val fp_a, fp_b    = Input (UInt(floatWidth.W)) // fp_a -> vs2, fp_b -> vs1
     val round_mode    = Input (UInt(3.W))
     val fp_format     = Input (VectorElementFormat()) // result format b01->fp16,b10->fp32,b11->fp64
-    val op_code       = Input (UInt(5.W))
+    val op_code       = Input (Opcode())
     val fp_aIsFpCanonicalNAN = Input (Bool())
     val fp_bIsFpCanonicalNAN = Input (Bool())
     val fp_result     = Output(UInt(floatWidth.W))
@@ -25,28 +31,28 @@ class FloatAdder() extends Module {
   val fire = io.fire
 
   val hasMinMaxCompare = true
-  val is_add    = io.op_code === VfaddOpCode.fadd
-  val is_sub    = io.op_code === VfaddOpCode.fsub
-  val is_min    = io.op_code === VfaddOpCode.fmin
-  val is_max    = io.op_code === VfaddOpCode.fmax
-  val is_fmerge = (io.op_code === VfaddOpCode.fmerge)
-  val is_fmove  = io.op_code === VfaddOpCode.fmove || (io.op_code === VfaddOpCode.fmv_f_s) || (io.op_code === VfaddOpCode.fmv_s_f)
-  val is_fsgnj  = io.op_code === VfaddOpCode.fsgnj
-  val is_fsgnjn = io.op_code === VfaddOpCode.fsgnjn
-  val is_fsgnjx = io.op_code === VfaddOpCode.fsgnjx
-  val is_feq    = io.op_code === VfaddOpCode.feq
-  val is_fne    = io.op_code === VfaddOpCode.fne
-  val is_flt    = io.op_code === VfaddOpCode.flt
-  val is_fle    = io.op_code === VfaddOpCode.fle
-  val is_fgt    = io.op_code === VfaddOpCode.fgt
-  val is_fge    = io.op_code === VfaddOpCode.fge
-  val is_fclass = io.op_code === VfaddOpCode.fclass
-  val is_fsum_ure = io.op_code === VfaddOpCode.fsum_ure
-  val is_fmin_re  = io.op_code === VfaddOpCode.fmin_re
-  val is_fmax_re  = io.op_code === VfaddOpCode.fmax_re
-  val is_fsum_ore = io.op_code === VfaddOpCode.fsum_ore
+  private implicit val vfOp: UInt = io.op_code
+  val is_add    = VFMacOpcode.isFadd(io.op_code) 
+  val is_sub    = VFMacOpcode.isFsub(io.op_code) 
+  val is_min    = VFMacOpcode.isFmin(io.op_code)
+  val is_max    = VFMacOpcode.isFmax(io.op_code)
 
-  val fast_is_sub = io.op_code(0)
+  val is_fsgnj  = VFMacOpcode.isFsgnj(io.op_code)
+  val is_fsgnjn = VFMacOpcode.isFsgnjn(io.op_code)
+  val is_fsgnjx = VFMacOpcode.isFsgnjx(io.op_code)
+  val is_feq    = VFMiscOpcode.isFeq(io.op_code)
+  val is_fne    = VFMiscOpcode.isFne(io.op_code)
+  val is_flt    = VFMiscOpcode.isFlt(io.op_code)
+  val is_fle    = VFMiscOpcode.isFle(io.op_code)
+  val is_fgt    = VFMiscOpcode.isFgt(io.op_code)
+  val is_fge    = VFMiscOpcode.isFge(io.op_code)
+  val is_fclass = VFMiscOpcode.isFclass(io.op_code)
+  val is_fsum_ure = VFRedOpcode.isVfredusum(io.op_code)
+  val is_fmin_re  = VFRedOpcode.isVfredmin(io.op_code)
+  val is_fmax_re  = VFRedOpcode.isVfredmax(io.op_code)
+  val is_fsum_ore  = VFRedOpcode.isVfredosum(io.op_code)
+
+  val fast_is_sub = is_sub
 
   val f64_fp_a = Wire(UInt(floatWidth.W))
   val f32_0_fp_a = Wire(UInt(floatWidth.W))
@@ -161,28 +167,14 @@ class FloatAdder() extends Module {
   val fp_f32_result = Cat(Fill(32, resultNeedBox), U_F32_0_result)
   val fp_f16_result = Cat(Fill(48, resultNeedBox), U_F16_0_result)
 
-  io.fp_result := Mux1H(
-    Seq(
-      res_is_f16,
-      res_is_f32,
-      res_is_f64
-    ),
-    Seq(
-      fp_f16_result,
-      fp_f32_result,
-      fp_f64_result
-    )
-  )
-  io.fflags := Mux1H(
-    Seq(
-      res_is_f16,
-      res_is_f32,
-      res_is_f64
-    ),
-    Seq(
-      U_F16_0_fflags,
-      U_F32_0_fflags,
-      U_F64_Widen_0_fflags
-    )
-  )
+  io.fp_result := Mux1H(Seq(
+    res_is_f16 -> fp_f16_result,
+    res_is_f32 -> fp_f32_result,
+    res_is_f64 -> fp_f64_result,
+  ))
+  io.fflags := Mux1H(Seq(
+    res_is_f16 -> U_F16_0_fflags,
+    res_is_f32 -> U_F32_0_fflags,
+    res_is_f64 -> U_F64_Widen_0_fflags,
+  ))
 }
