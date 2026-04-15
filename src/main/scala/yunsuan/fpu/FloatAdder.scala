@@ -89,30 +89,16 @@ class FloatAdder() extends Module  {
   val fp_f32_result = Cat(Fill(32, resultNeedBox), F32_result)
   val fp_f16_result = Cat(Fill(48, resultNeedBox), F16_result)
 
-  io.fp_result := Mux1H(
-    Seq(
-      res_is_f16,
-      res_is_f32,
-      res_is_f64
-    ),
-    Seq(
-      fp_f16_result,
-      fp_f32_result,
-      fp_f64_result
-    )
-  )
-  io.fflags := Mux1H(
-    Seq(
-      res_is_f16,
-      res_is_f32,
-      res_is_f64
-    ),
-    Seq(
-      F16_fflags,
-      F32_fflags,
-      F64_fflags
-    )
-  )
+  io.fp_result := Mux1H(Seq(
+    res_is_f16 -> fp_f16_result,
+    res_is_f32 -> fp_f32_result,
+    res_is_f64 -> fp_f64_result,
+  ))
+  io.fflags := Mux1H(Seq(
+    res_is_f16 -> F16_fflags,
+    res_is_f32 -> F32_fflags,
+    res_is_f64 -> F64_fflags,
+  ))
 
 }
 private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,val hasMinMaxCompare:Boolean = false) extends Module {
@@ -268,34 +254,18 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
     val out_NAN = Mux(res_is_f32, Cat(0.U,Fill(8,1.U),1.U,0.U(22.W)), Cat(0.U(17.W),Fill(5,1.U),1.U,0.U(9.W)))
     val fp_a_16_or_32 = Mux(res_is_f32, fp_aFix(31, 0), Cat(0.U(16.W), fp_aFix(15, 0)))
     val fp_b_16_or_32 = Mux(res_is_f32, fp_bFix(31, 0), Cat(0.U(16.W), fp_bFix(15, 0)))
-    result_min := Mux1H(
-      Seq(
-        !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN & fp_b_is_NAN,
-        fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN & fp_b_is_NAN,
-      ),
-      Seq(
-        Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), fp_b_16_or_32, fp_a_16_or_32),
-        fp_a_16_or_32,
-        fp_b_16_or_32,
-        out_NAN
-      )
-    )
-    result_max := Mux1H(
-      Seq(
-        !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN & fp_b_is_NAN,
-        fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN & fp_b_is_NAN,
-      ),
-      Seq(
-        Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), fp_b_16_or_32, fp_a_16_or_32),
-        fp_a_16_or_32,
-        fp_b_16_or_32,
-        out_NAN
-      )
-    )
+    result_min := Mux1H(Seq(
+      (!fp_a_is_NAN & !fp_b_is_NAN) -> Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), fp_b_16_or_32, fp_a_16_or_32),
+      (!fp_a_is_NAN & fp_b_is_NAN) -> fp_a_16_or_32,
+      (fp_a_is_NAN & !fp_b_is_NAN) -> fp_b_16_or_32,
+      (fp_a_is_NAN & fp_b_is_NAN) -> out_NAN,
+    ))
+    result_max := Mux1H(Seq(
+      (!fp_a_is_NAN & !fp_b_is_NAN) -> Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), fp_b_16_or_32, fp_a_16_or_32),
+      (!fp_a_is_NAN & fp_b_is_NAN) -> fp_a_16_or_32,
+      (fp_a_is_NAN & !fp_b_is_NAN) -> fp_b_16_or_32,
+      (fp_a_is_NAN & fp_b_is_NAN) -> out_NAN,
+    ))
     result_fminm := Mux(!fp_a_is_NAN & !fp_b_is_NAN,
       Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),
         fp_b_16_or_32,
@@ -309,8 +279,7 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
       out_NAN
     )
 
-    val result_stage0 = Mux1H(
-      Seq(
+    val resultStage0Sel = Seq(
         is_min,
         is_max,
         is_fsgnj,
@@ -318,17 +287,29 @@ private[fpu] class FloatAdderF32F16MixedPipeline(val is_print:Boolean = false,va
         is_fsgnjx,
         is_fminm,
         is_fmaxm,
-      ),
-      Seq(
-        result_min,
-        result_max,
-        result_fsgnj,
-        result_fsgnjn,
-        result_fsgnjx,
-        result_fminm,
-        result_fmaxm,
       )
-    )
+    val resultStage0SelCount = PopCount(resultStage0Sel)
+    when (resultStage0SelCount > 1.U) {
+      printf(p"[FloatAdderF16F32Pipeline] result_stage0 select conflict count=${resultStage0SelCount} op_code=${Hexadecimal(io.op_code)} active=")
+      when (is_min)    { printf(p"is_min ") }
+      when (is_max)    { printf(p"is_max ") }
+      when (is_fsgnj)  { printf(p"is_fsgnj ") }
+      when (is_fsgnjn) { printf(p"is_fsgnjn ") }
+      when (is_fsgnjx) { printf(p"is_fsgnjx ") }
+      when (is_fminm)  { printf(p"is_fminm ") }
+      when (is_fmaxm)  { printf(p"is_fmaxm ") }
+      printf(p"\n")
+    }
+    val result_stage0 = Mux1H(Seq(
+      is_min -> result_min,
+      is_max -> result_max,
+      is_fsgnj -> result_fsgnj,
+      is_fsgnjn -> result_fsgnjn,
+      is_fsgnjx -> result_fsgnjx,
+      is_fminm -> result_fminm,
+      is_fmaxm -> result_fmaxm,
+    ))
+    assert(resultStage0SelCount <= 1.U, "FloatAdderF16F32Pipeline result_stage0 select must be one-hot")
     val fflags_NV_stage0 = (is_min | is_max | is_fminm | is_fmaxm) & (fp_a_is_SNAN | fp_b_is_SNAN)
     val fflags_stage0 = Cat(fflags_NV_stage0,0.U(4.W))
     io.fp_c := Mux(RegEnable(is_add | is_sub , fire),float_adder_result,RegEnable(result_stage0, fire))
@@ -455,34 +436,18 @@ private[fpu] class FloatAdderF64Pipeline(val is_print:Boolean = false,val hasMin
     val result_fsgnjn = Cat(~fp_bFix.head(1), fp_aFix.tail(1))
     val result_fsgnjx = Cat(fp_bFix.head(1) ^ fp_aFix.head(1), fp_aFix.tail(1))
     val out_NAN = Cat(0.U, Fill(exponentWidth, 1.U), 1.U, Fill(significandWidth - 2, 0.U))
-    result_min := Mux1H(
-      Seq(
-        !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN & fp_b_is_NAN,
-        fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN & fp_b_is_NAN,
-      ),
-      Seq(
-        Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), io.fp_b, io.fp_a),
-        io.fp_a,
-        io.fp_b,
-        out_NAN
-      )
-    )
-    result_max := Mux1H(
-      Seq(
-        !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN & fp_b_is_NAN,
-        fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN & fp_b_is_NAN,
-      ),
-      Seq(
-        Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), io.fp_b, io.fp_a),
-        io.fp_a,
-        io.fp_b,
-        out_NAN
-      )
-    )
+    result_min := Mux1H(Seq(
+      (!fp_a_is_NAN & !fp_b_is_NAN) -> Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), io.fp_b, io.fp_a),
+      (!fp_a_is_NAN & fp_b_is_NAN) -> io.fp_a,
+      (fp_a_is_NAN & !fp_b_is_NAN) -> io.fp_b,
+      (fp_a_is_NAN & fp_b_is_NAN) -> out_NAN,
+    ))
+    result_max := Mux1H(Seq(
+      (!fp_a_is_NAN & !fp_b_is_NAN) -> Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), io.fp_b, io.fp_a),
+      (!fp_a_is_NAN & fp_b_is_NAN) -> io.fp_a,
+      (fp_a_is_NAN & !fp_b_is_NAN) -> io.fp_b,
+      (fp_a_is_NAN & fp_b_is_NAN) -> out_NAN,
+    ))
     result_fminm := Mux(!fp_a_is_NAN & !fp_b_is_NAN,
       Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),
         io.fp_b,
@@ -496,8 +461,7 @@ private[fpu] class FloatAdderF64Pipeline(val is_print:Boolean = false,val hasMin
       out_NAN
     )
 
-    val result_stage0 = Mux1H(
-      Seq(
+    val resultStage0Sel = Seq(
         is_min,
         is_max,
         is_fsgnj,
@@ -505,17 +469,30 @@ private[fpu] class FloatAdderF64Pipeline(val is_print:Boolean = false,val hasMin
         is_fsgnjx,
         is_fminm,
         is_fmaxm,
-      ),
-      Seq(
-        result_min,
-        result_max,
-        result_fsgnj,
-        result_fsgnjn,
-        result_fsgnjx,
-        result_fminm,
-        result_fmaxm,
       )
-    )
+    val resultStage0SelCount = PopCount(resultStage0Sel)
+    when (resultStage0SelCount > 1.U) {
+      printf(p"[FloatAdderF64Pipeline] result_stage0 select conflict count=${resultStage0SelCount} op_code=${Hexadecimal(io.op_code)} active=")
+      when (is_min)    { printf(p"is_min ") }
+      when (is_max)    { printf(p"is_max ") }
+      when (is_fsgnj)  { printf(p"is_fsgnj ") }
+      when (is_fsgnjn) { printf(p"is_fsgnjn ") }
+      when (is_fsgnjx) { printf(p"is_fsgnjx ") }
+      when (is_fminm)  { printf(p"is_fminm ") }
+      when (is_fmaxm)  { printf(p"is_fmaxm ") }
+      printf(p"\n")
+    }
+    assert(resultStage0SelCount <= 1.U, "FloatAdderF64Pipeline result_stage0 select must be one-hot")
+    val result_stage0 = Mux1H(Seq(
+      is_min -> result_min,
+      is_max -> result_max,
+      is_fsgnj -> result_fsgnj,
+      is_fsgnjn -> result_fsgnjn,
+      is_fsgnjx -> result_fsgnjx,
+      is_fminm -> result_fminm,
+      is_fmaxm -> result_fmaxm,
+    ))
+    
     val fflags_NV_stage0 = (is_min | is_max | is_fminm | is_fmaxm) & (fp_a_is_SNAN | fp_b_is_SNAN)
     val fflags_stage0 = Cat(fflags_NV_stage0, 0.U(4.W))
     io.fp_c := Mux(RegEnable(is_add | is_sub, fire), float_adder_result, RegEnable(result_stage0, fire))

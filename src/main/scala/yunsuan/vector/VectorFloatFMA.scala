@@ -3,10 +3,13 @@ package yunsuan.vector
 import chisel3._
 import chisel3.util._
 import scala.collection.mutable.ListBuffer
-import yunsuan.VfmaOpCode
 import yunsuan.util._
+import yunsuan.encoding.Opcode.Opcodes.VFMacOpcode
 
 class VectorFloatFMA() extends Module{
+  import VFMacOpcode._
+  
+  
   val exponentWidth : Int = 11
   val significandWidth : Int = 53
   val floatWidth = exponentWidth + significandWidth
@@ -18,7 +21,7 @@ class VectorFloatFMA() extends Module{
     val widen_b      = Input (UInt(floatWidth.W)) // widen_b -> Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
     val round_mode   = Input (UInt(3.W))
     val fp_format    = Input (UInt(2.W)) // result format b01->fp16,b10->fp32,b11->fp64
-    val op_code      = Input (UInt(4.W))
+    val op_code      = Input (VFMacOpcode())
     val frs1         = Input (UInt(64.W))
     val is_vec       = Input (Bool())
     val is_frs1      = Input (Bool())
@@ -29,6 +32,7 @@ class VectorFloatFMA() extends Module{
     val fp_bIsFpCanonicalNAN = Input(Bool())
     val fp_cIsFpCanonicalNAN = Input(Bool())
   })
+  private val opcode: UInt = io.op_code
   val printfen: Boolean = false
   def shiftLeftWithMux(srcValue: UInt, shiftValue: UInt): UInt = {
     val vecLength  = shiftValue.getWidth + 1
@@ -58,15 +62,15 @@ class VectorFloatFMA() extends Module{
   val fire = io.fire
   val fire_reg0 = GatedValidRegNext(fire)
   val fire_reg1 = GatedValidRegNext(fire_reg0)
-  val is_vfmul   = io.op_code === VfmaOpCode.vfmul
-  val is_vfmacc  = io.op_code === VfmaOpCode.vfmacc
-  val is_vfnmacc = io.op_code === VfmaOpCode.vfnmacc
-  val is_vfmsac  = io.op_code === VfmaOpCode.vfmsac
-  val is_vfnmsac = io.op_code === VfmaOpCode.vfnmsac
-  val is_vfmadd  = io.op_code === VfmaOpCode.vfmadd
-  val is_vfnmadd = io.op_code === VfmaOpCode.vfnmadd
-  val is_vfmsub  = io.op_code === VfmaOpCode.vfmsub
-  val is_vfnmsub = io.op_code === VfmaOpCode.vfnmsub
+  val is_vfmul   = isFmul(opcode)
+  val is_vfmacc  = isFmacc(opcode)
+  val is_vfnmacc = isFnmacc(opcode)
+  val is_vfmsac  = isFmsac(opcode)
+  val is_vfnmsac = isFnmsac(opcode)
+  val is_vfmadd  = isFmadd(opcode)
+  val is_vfnmadd = isFnmadd(opcode)
+  val is_vfmsub  = isFmsub(opcode)
+  val is_vfnmsub = isFnmsub(opcode)
   val is_fp64                 = io.fp_format === 3.U(2.W)
   val is_fp64_reg0            = RegEnable(is_fp64, fire)
   val is_fp64_reg1            = RegEnable(is_fp64_reg0, fire_reg0)

@@ -2,7 +2,9 @@ package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
-import yunsuan.{VfaddOpCode, VectorElementFormat}
+import yunsuan.VectorElementFormat
+import yunsuan.encoding.Opcode.Opcode
+import yunsuan.encoding.Opcode.Opcodes.{VFMiscOpcode, VFRedOpcode, VFMacOpcode}
 
   /*
    * new change: bf16
@@ -47,7 +49,7 @@ class VectorBrainFloatAdder() extends Module {
     val fp_format     = Input (VectorElementFormat()) // b00->bf16 still under consideration
     val opb_widening  = Input (Bool())    // true -> opb widening
     val res_widening  = Input (Bool())    // true -> widening operation
-    val op_code       = Input (UInt(5.W))
+    val op_code       = Input (Opcode())
     val fp_aIsFpCanonicalNAN = Input (Bool())
     val fp_bIsFpCanonicalNAN = Input (Bool())
     val maskForReduction = Input(UInt(8.W))
@@ -63,7 +65,7 @@ class VectorBrainFloatAdder() extends Module {
   val fire = io.fire
 
   val hasMinMaxCompare = true
-  val fast_is_sub = io.op_code(0)
+  val fast_is_sub = VFMacOpcode.isFsub(io.op_code)
 
   // bf16
   val bf16_0_fp_a = io.fp_a(15, 0)
@@ -145,28 +147,21 @@ class VectorBrainFloatAdder() extends Module {
     U_BF16_0_result
   )
 
-  io.fp_result := Mux1H(
-    Seq(
-      res_is_bf16
-    ),
-    Seq(
-      bf16_result
-    )
-  )
+  io.fp_result := Mux1H(Seq(
+    res_is_bf16 -> bf16_result,
+  ))
   val bf16_fflags   = Cat(Fill(5, is_vec_reg) & U_BF16_3_fflags, Fill(5, is_vec_reg) & U_BF16_2_fflags, Fill(5, is_vec_reg) & U_BF16_1_fflags, U_BF16_0_fflags)
 
-  io.fflags := Mux1H(
-    Seq(
-      res_is_bf16
-    ),
-    Seq(
-      bf16_fflags
-    )
-  )
+  io.fflags := Mux1H(Seq(
+    res_is_bf16 -> bf16_fflags,
+  ))
   
 }
 
 class FloatAdderBF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:Boolean = false) extends Module {
+  import VFMiscOpcode._
+  import VFRedOpcode._
+
   val exponentWidth = 8
   val significandWidth = 8
   val floatWidth = exponentWidth + significandWidth
@@ -178,7 +173,7 @@ class FloatAdderBF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:B
     val mask        = Input (Bool())
     val round_mode  = Input (UInt(3.W))
     val fflags      = Output(UInt(5.W))
-    val op_code     = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
+    val op_code     = if (hasMinMaxCompare) Input(Opcode()) else Input(UInt(0.W))
     val fp_aIsFpCanonicalNAN = Input(Bool())
     val fp_bIsFpCanonicalNAN = Input(Bool())
     val maskForReduction = Input(UInt(2.W))
@@ -237,26 +232,25 @@ class FloatAdderBF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:B
   if (hasMinMaxCompare) {
     val fp_a_is_zero = !io.fp_aIsFpCanonicalNAN & Efp_a_is_zero && !fp_a_mantissa_isnot_zero
     val fp_b_is_zero = !io.fp_bIsFpCanonicalNAN & Efp_b_is_zero && !fp_b_mantissa_isnot_zero
-    val is_add = io.op_code === VfaddOpCode.fadd
-    val is_sub = io.op_code === VfaddOpCode.fsub
-    val is_min = io.op_code === VfaddOpCode.fmin
-    val is_max = io.op_code === VfaddOpCode.fmax
-    val is_feq = io.op_code === VfaddOpCode.feq
-    val is_fne = io.op_code === VfaddOpCode.fne
-    val is_flt = io.op_code === VfaddOpCode.flt
-    val is_fle = io.op_code === VfaddOpCode.fle
-    val is_fgt = io.op_code === VfaddOpCode.fgt
-    val is_fge = io.op_code === VfaddOpCode.fge
-    val is_fsgnj  = io.op_code === VfaddOpCode.fsgnj 
-    val is_fsgnjn = io.op_code === VfaddOpCode.fsgnjn
-    val is_fsgnjx = io.op_code === VfaddOpCode.fsgnjx
-    val is_fclass = io.op_code === VfaddOpCode.fclass
-    val is_fmerge = io.op_code === VfaddOpCode.fmerge
-    val is_fmove  = (io.op_code === VfaddOpCode.fmove) || (io.op_code === VfaddOpCode.fmv_f_s) || (io.op_code === VfaddOpCode.fmv_s_f)
-    val is_fsum_ure = io.op_code === VfaddOpCode.fsum_ure
-    val is_fmin_re = io.op_code === VfaddOpCode.fmin_re
-    val is_fmax_re = io.op_code === VfaddOpCode.fmax_re
-    val is_fsum_ore = io.op_code === VfaddOpCode.fsum_ore
+    implicit val vfOp: UInt = io.op_code
+    val is_add = VFMacOpcode.isFadd(io.op_code)
+    val is_sub = VFMacOpcode.isFsub(io.op_code)
+    val is_min = VFMacOpcode.isFmin(io.op_code)
+    val is_max = VFMacOpcode.isFmax(io.op_code)
+    val is_feq = VFMiscOpcode.isFeq(io.op_code)
+    val is_fne = VFMiscOpcode.isFne(io.op_code)
+    val is_flt = VFMiscOpcode.isFlt(io.op_code)
+    val is_fle = VFMiscOpcode.isFle(io.op_code)
+    val is_fgt = VFMiscOpcode.isFgt(io.op_code)
+    val is_fge = VFMiscOpcode.isFge(io.op_code)
+    val is_fsgnj  = VFMacOpcode.isFsgnj(io.op_code)
+    val is_fsgnjn = VFMacOpcode.isFsgnjn(io.op_code)
+    val is_fsgnjx = VFMacOpcode.isFsgnjx(io.op_code)
+    val is_fclass = VFMiscOpcode.isFclass(io.op_code)
+    val is_fsum_ure = VFRedOpcode.isVfredusum(io.op_code)
+    val is_fmin_re = VFRedOpcode.isVfredmin(io.op_code)
+    val is_fmax_re = VFRedOpcode.isVfredmax(io.op_code)
+    val is_fsum_ore = VFRedOpcode.isVfredosum(io.op_code)
     val fp_a_sign = io.fp_a.head(1)
     val fp_b_sign = io.fp_b.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -287,38 +281,20 @@ class FloatAdderBF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:B
     val result_fsgnjn = Cat(~fp_bFix.head(1), fp_aFix.tail(1))
     val result_fsgnjx = Cat(fp_bFix.head(1) ^ fp_aFix.head(1), fp_aFix.tail(1))
     val result_fclass = Wire(UInt(floatWidth.W))
-    val result_fmerge = Mux(io.mask, fp_bFix, fp_aFix)
-    val result_fmove  = fp_bFix
     val out_NAN = Cat(0.U,Fill(exponentWidth,1.U),1.U,Fill(significandWidth-2,0.U))
     val out_Nzero = Cat(Mux(io.round_mode ==="b010".U, 0.U, 1.U), Fill(floatWidth - 1, 0.U))
-    result_min := Mux1H(
-      Seq(
-        !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN &  fp_b_is_NAN,
-        fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN &  fp_b_is_NAN,
-      ),
-      Seq(
-        Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),io.fp_b,io.fp_a),
-        io.fp_a,
-        io.fp_b,
-        out_NAN
-      )
-    )
-    result_max := Mux1H(
-      Seq(
-        !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN &  fp_b_is_NAN,
-        fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN &  fp_b_is_NAN,
-      ),
-      Seq(
-        Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),io.fp_b,io.fp_a),
-        io.fp_a,
-        io.fp_b,
-        out_NAN
-      )
-    )
+    result_min := Mux1H(Seq(
+      (!fp_a_is_NAN & !fp_b_is_NAN) -> Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),io.fp_b,io.fp_a),
+      (!fp_a_is_NAN &  fp_b_is_NAN) -> io.fp_a,
+      (fp_a_is_NAN & !fp_b_is_NAN) -> io.fp_b,
+      (fp_a_is_NAN &  fp_b_is_NAN) -> out_NAN,
+    ))
+    result_max := Mux1H(Seq(
+      (!fp_a_is_NAN & !fp_b_is_NAN) -> Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),io.fp_b,io.fp_a),
+      (!fp_a_is_NAN &  fp_b_is_NAN) -> io.fp_a,
+      (fp_a_is_NAN & !fp_b_is_NAN) -> io.fp_b,
+      (fp_a_is_NAN &  fp_b_is_NAN) -> out_NAN,
+    ))
     result_feq := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_equal)
     result_fne := !result_feq
     result_flt := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_greater)
@@ -367,8 +343,7 @@ class FloatAdderBF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:B
       out_NAN,
       Mux(io.maskForReduction.andR, result_min, re_masked_one_out)
     )
-    val result_stage0 = Mux1H(
-      Seq(
+    val resultStage0Sel = Seq(
         is_min,
         is_max,
         is_feq,
@@ -381,34 +356,52 @@ class FloatAdderBF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:B
         is_fsgnjn,
         is_fsgnjx,
         is_fclass,
-        is_fmerge,
-        is_fmove,
         is_fsum_ure_masked,
         is_fmax_re,
         is_fmin_re,
         is_fsum_ore_masked,
-      ),
-      Seq(
-        result_min,
-        result_max,
-        result_feq,
-        result_fne,
-        result_flt,
-        result_fle,
-        result_fgt,
-        result_fge,
-        result_fsgnj,
-        result_fsgnjn,
-        result_fsgnjx,
-        result_fclass,
-        result_fmerge,
-        result_fmove,
-        result_fsum_ure_masked,
-        result_fmax_re,
-        result_fmin_re,
-        result_fsum_ore_masked,
       )
-    )
+    val resultStage0SelCount = PopCount(resultStage0Sel)
+    when (resultStage0SelCount > 1.U) {
+      printf(p"[VectorBrainFloatAdder] result_stage0 select conflict count=${resultStage0SelCount} op_code=${Hexadecimal(io.op_code)} active=")
+      when (is_min)             { printf(p"is_min ") }
+      when (is_max)             { printf(p"is_max ") }
+      when (is_feq)             { printf(p"is_feq ") }
+      when (is_fne)             { printf(p"is_fne ") }
+      when (is_flt)             { printf(p"is_flt ") }
+      when (is_fle)             { printf(p"is_fle ") }
+      when (is_fgt)             { printf(p"is_fgt ") }
+      when (is_fge)             { printf(p"is_fge ") }
+      when (is_fsgnj)           { printf(p"is_fsgnj ") }
+      when (is_fsgnjn)          { printf(p"is_fsgnjn ") }
+      when (is_fsgnjx)          { printf(p"is_fsgnjx ") }
+      when (is_fclass)          { printf(p"is_fclass ") }
+      when (is_fsum_ure_masked) { printf(p"is_fsum_ure_masked ") }
+      when (is_fmax_re)         { printf(p"is_fmax_re ") }
+      when (is_fmin_re)         { printf(p"is_fmin_re ") }
+      when (is_fsum_ore_masked) { printf(p"is_fsum_ore_masked ") }
+      printf(p"\n")
+    }
+    assert(resultStage0SelCount <= 1.U, "VectorBrainFloatAdder result_stage0 select must be one-hot")
+    val result_stage0 = Mux1H(Seq(
+      is_min -> result_min,
+      is_max -> result_max,
+      is_feq -> result_feq,
+      is_fne -> result_fne,
+      is_flt -> result_flt,
+      is_fle -> result_fle,
+      is_fgt -> result_fgt,
+      is_fge -> result_fge,
+      is_fsgnj -> result_fsgnj,
+      is_fsgnjn -> result_fsgnjn,
+      is_fsgnjx -> result_fsgnjx,
+      is_fclass -> result_fclass,
+      is_fsum_ure_masked -> result_fsum_ure_masked,
+      is_fmax_re -> result_fmax_re,
+      is_fmin_re -> result_fmin_re,
+      is_fsum_ore_masked -> result_fsum_ore_masked,
+    ))
+
     val fflags_NV_stage0 = ((is_min | is_max) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_feq | is_fne) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN)) |

@@ -210,14 +210,12 @@ extern "C"{
 #define F32_SIGN ((uint64_t)1ul << 31)
 #define F64_SIGN ((uint64_t)1ul << 63)
 
-#define VFA_NUM 16 // for random
+#define VFA_NUM 14 // for random
 // vfa funcop type
 #define VFADD   (binstoi("00000"))
 #define VFSUB   (binstoi("00001"))
 #define VFMIN   (binstoi("00010"))
 #define VFMAX   (binstoi("00011"))
-#define VFMERGE (binstoi("00100"))
-#define VFMOVE  (binstoi("00101"))
 #define VFSGNJ  (binstoi("00110"))
 #define VFSGNJN (binstoi("00111"))
 #define VFSGNJX (binstoi("01000"))
@@ -229,8 +227,8 @@ extern "C"{
 #define VFGE    (binstoi("01110"))
 #define VFGE    (binstoi("01110"))
 #define VFCLASS (binstoi("01111"))
-#define VFA_ALL_OPTYPES {VFADD,VFSUB,VFMIN,VFMAX,VFMERGE,VFMOVE,VFSGNJ,VFSGNJN,VFSGNJX,VFEQ,VFNE,VFLT,VFLE,VFGT,VFGE,VFCLASS}
-#define VFA_MUST_FRS1_OPTYPES {VFMERGE,VFMOVE,VFGT,VFGE}
+#define VFA_ALL_OPTYPES {VFADD,VFSUB,VFMIN,VFMAX,VFSGNJ,VFSGNJN,VFSGNJX,VFEQ,VFNE,VFLT,VFLE,VFGT,VFGE,VFCLASS}
+#define VFA_MUST_FRS1_OPTYPES {VFGT,VFGE}
 #define VFA_NEED_FRS1_OPTYPES {VFADD,VFSUB,VFMIN,VFMAX,VFSGNJ,VFSGNJN,VFSGNJX,VFEQ,VFNE,VFLT,VFLE}
 // vff funcop type
 #define VFF_NUM 9

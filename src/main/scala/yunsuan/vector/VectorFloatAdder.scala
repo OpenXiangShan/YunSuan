@@ -2,29 +2,18 @@ package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
-import yunsuan.{VfaddOpCode, VectorElementFormat}
+import yunsuan.{VectorElementFormat}
+import yunsuan.encoding.Opcode.Opcode
+import yunsuan.encoding.Opcode.Opcodes.{VFMiscOpcode, VFRedOpcode, VFMacOpcode}
 
 /**
   * f16/f32/f64, support widen
-  * op_code(Width=5):
-  * 0: Add
-  * 1: Sub, vfrsub contrl logic reverse the input data
-  * 2: Minimum
-  * 3: Maximum
-  * 4: Floating-Point Merge
-  * 5: Floating-Point Move
-  * 6: Sign-Injection
-  * 7: Sign-Injection, not
-  * 8: Sign-Injection, xor
-  * 9: Compare, equal
-  *10: Compare, not equal
-  *11: Compare, less than
-  *12: Compare, less than or equal
-  *13: Compare, greater than
-  *14: Compare, greater than or equal
-  *15: Classify
+  * op_code carries the full fuOpType.
   **/
 class VectorFloatAdder() extends Module {
+  import VFMiscOpcode._
+  import VFRedOpcode._
+
   val VLEN = 128
   val exponentWidth = 11
   val significandWidth = 53
@@ -43,7 +32,7 @@ class VectorFloatAdder() extends Module {
     val fp_format     = Input (VectorElementFormat()) // result format b01->fp16,b10->fp32,b11->fp64
     val opb_widening  = Input (Bool())    // true -> opb widening
     val res_widening  = Input (Bool())    // true -> widening operation
-    val op_code       = Input (UInt(5.W))
+    val op_code       = Input (Opcode())
     val fp_aIsFpCanonicalNAN = Input (Bool())
     val fp_bIsFpCanonicalNAN = Input (Bool())
     val maskForReduction = Input(UInt(8.W))
@@ -60,28 +49,26 @@ class VectorFloatAdder() extends Module {
   val fire = io.fire
 
   val hasMinMaxCompare = true
-  val is_add    = io.op_code === VfaddOpCode.fadd
-  val is_sub    = io.op_code === VfaddOpCode.fsub
-  val is_min    = io.op_code === VfaddOpCode.fmin
-  val is_max    = io.op_code === VfaddOpCode.fmax
-  val is_fmerge = (io.op_code === VfaddOpCode.fmerge)
-  val is_fmove  = io.op_code === VfaddOpCode.fmove || (io.op_code === VfaddOpCode.fmv_f_s) || (io.op_code === VfaddOpCode.fmv_s_f)
-  val is_fsgnj  = io.op_code === VfaddOpCode.fsgnj
-  val is_fsgnjn = io.op_code === VfaddOpCode.fsgnjn
-  val is_fsgnjx = io.op_code === VfaddOpCode.fsgnjx
-  val is_feq    = io.op_code === VfaddOpCode.feq
-  val is_fne    = io.op_code === VfaddOpCode.fne
-  val is_flt    = io.op_code === VfaddOpCode.flt
-  val is_fle    = io.op_code === VfaddOpCode.fle
-  val is_fgt    = io.op_code === VfaddOpCode.fgt
-  val is_fge    = io.op_code === VfaddOpCode.fge
-  val is_fclass = io.op_code === VfaddOpCode.fclass
-  val is_fsum_ure = io.op_code === VfaddOpCode.fsum_ure
-  val is_fmin_re  = io.op_code === VfaddOpCode.fmin_re
-  val is_fmax_re  = io.op_code === VfaddOpCode.fmax_re
-  val is_fsum_ore = io.op_code === VfaddOpCode.fsum_ore
-
-  val fast_is_sub = io.op_code(0)
+  private implicit val opcode: UInt = io.op_code
+  val is_add      = VFMacOpcode.isFadd(io.op_code)
+  val is_sub      = VFMacOpcode.isFsub(io.op_code)
+  val is_min      = VFMacOpcode.isFmin(io.op_code)
+  val is_max      = VFMacOpcode.isFmax(io.op_code)
+  val is_fsgnj    = VFMacOpcode.isFsgnj(io.op_code)
+  val is_fsgnjn   = VFMacOpcode.isFsgnjn(io.op_code)
+  val is_fsgnjx   = VFMacOpcode.isFsgnjx(io.op_code)
+  val is_feq      = VFMiscOpcode.isFeq(io.op_code)
+  val is_fne      = VFMiscOpcode.isFne(io.op_code)
+  val is_flt      = VFMiscOpcode.isFlt(io.op_code)
+  val is_fle      = VFMiscOpcode.isFle(io.op_code)
+  val is_fgt      = VFMiscOpcode.isFgt(io.op_code)
+  val is_fge      = VFMiscOpcode.isFge(io.op_code)
+  val is_fclass   = VFMiscOpcode.isFclass(io.op_code)
+  val is_fsum_ure = isVfredusum
+  val is_fmin_re  = isVfredmin
+  val is_fmax_re  = isVfredmax
+  val is_fsum_ore = isVfredosum
+  val fast_is_sub = is_sub
 
   val fold = Wire(UInt(3.W))
   val widen_a_foldTo1_2 = Wire(UInt(floatWidth.W))
@@ -289,18 +276,11 @@ class VectorFloatAdder() extends Module {
   val fp_f16_result = Cat(Fill(16, is_vec_reg) & U_F16_3_result, Fill(16, is_vec_reg) & U_F16_2_result,
                           Fill(16, is_vec_reg) & U_F16_1_result, U_F16_0_result)
 
-  io.fp_result := Mux1H(
-    Seq(
-      res_is_f16,
-      res_is_f32,
-      res_is_f64
-    ),
-    Seq(
-      fp_f16_result,
-      fp_f32_result,
-      fp_f64_result
-    )
-  )
+  io.fp_result := Mux1H(Seq(
+    res_is_f16 -> fp_f16_result,
+    res_is_f32 -> fp_f32_result,
+    res_is_f64 -> fp_f64_result,
+  ))
   io.fflags := Cat(
     Fill(5,is_vec_reg & res_is_f16) & U_F16_3_fflags,
     Fill(5,is_vec_reg & res_is_f16) & U_F16_2_fflags,
@@ -389,7 +369,7 @@ class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = false,val hasMin
     val fp_format    = Input (UInt(2.W))
     val opb_widening = Input (Bool())
     val res_widening = Input (Bool())
-    val op_code = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
+    val op_code = if (hasMinMaxCompare) Input(Opcode()) else Input(UInt(0.W))
     val fp_aIsFpCanonicalNAN = Input (Bool())
     val fp_bIsFpCanonicalNAN = Input (Bool())
     val maskForReduction = Input(UInt(2.W))
@@ -508,26 +488,24 @@ class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = false,val hasMin
     float_adder_result := out_fp32_to_fp16_or_fp32_reg
   }
   if (hasMinMaxCompare) {
-    val is_add = io.op_code === VfaddOpCode.fadd
-    val is_sub = io.op_code === VfaddOpCode.fsub
-    val is_min = io.op_code === VfaddOpCode.fmin
-    val is_max = io.op_code === VfaddOpCode.fmax
-    val is_feq = io.op_code === VfaddOpCode.feq
-    val is_fne = io.op_code === VfaddOpCode.fne
-    val is_flt = io.op_code === VfaddOpCode.flt
-    val is_fle = io.op_code === VfaddOpCode.fle
-    val is_fgt = io.op_code === VfaddOpCode.fgt
-    val is_fge = io.op_code === VfaddOpCode.fge
-    val is_fsgnj  = io.op_code === VfaddOpCode.fsgnj 
-    val is_fsgnjn = io.op_code === VfaddOpCode.fsgnjn
-    val is_fsgnjx = io.op_code === VfaddOpCode.fsgnjx
-    val is_fclass = io.op_code === VfaddOpCode.fclass
-    val is_fmerge = io.op_code === VfaddOpCode.fmerge
-    val is_fmove  = (io.op_code === VfaddOpCode.fmove) || (io.op_code === VfaddOpCode.fmv_f_s) || (io.op_code === VfaddOpCode.fmv_s_f)
-    val is_fsum_ure = io.op_code === VfaddOpCode.fsum_ure
-    val is_fmin_re = io.op_code === VfaddOpCode.fmin_re
-    val is_fmax_re = io.op_code === VfaddOpCode.fmax_re
-    val is_fsum_ore = io.op_code === VfaddOpCode.fsum_ore
+    val is_add = VFMacOpcode.isFadd(io.op_code)
+    val is_sub = VFMacOpcode.isFsub(io.op_code)
+    val is_min = VFMacOpcode.isFmin(io.op_code)
+    val is_max = VFMacOpcode.isFmax(io.op_code)
+    val is_feq = VFMiscOpcode.isFeq(io.op_code)
+    val is_fne = VFMiscOpcode.isFne(io.op_code)
+    val is_flt = VFMiscOpcode.isFlt(io.op_code)
+    val is_fle = VFMiscOpcode.isFle(io.op_code)
+    val is_fgt = VFMiscOpcode.isFgt(io.op_code)
+    val is_fge = VFMiscOpcode.isFge(io.op_code)
+    val is_fsgnj  = VFMacOpcode.isFsgnj(io.op_code)
+    val is_fsgnjn = VFMacOpcode.isFsgnjn(io.op_code)
+    val is_fsgnjx = VFMacOpcode.isFsgnjx(io.op_code)
+    val is_fclass = VFMiscOpcode.isFclass(io.op_code)
+    val is_fsum_ure = VFRedOpcode.isVfredusum(io.op_code)
+    val is_fmin_re = VFRedOpcode.isVfredmin(io.op_code)
+    val is_fmax_re = VFRedOpcode.isVfredmax(io.op_code)
+    val is_fsum_ore = VFRedOpcode.isVfredosum(io.op_code)
     val fp_a_sign = fp_a_to32.head(1)
     val fp_b_sign = fp_b_to32.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -562,49 +540,23 @@ class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = false,val hasMin
       Cat(0.U(16.W), Cat(fp_bFix(15) ^ fp_aFix(15), fp_aFix(14, 0)))
     )
     val result_fclass = Wire(UInt(floatWidth.W))
-    val result_fmerge = Mux(
-      res_is_f32,
-      Mux(io.mask, fp_bFix, fp_aFix),
-      Mux(io.mask, Cat(0.U(16.W), fp_bFix(15, 0)), Cat(0.U(16.W), fp_aFix(15, 0)))
-    )
-    val result_fmove = Mux(
-      res_is_f32,
-      fp_bFix,
-      Cat(0.U(16.W), fp_bFix(15, 0))
-    )
     val out_NAN = Mux(res_is_f32, Cat(0.U,Fill(8,1.U),1.U,0.U(22.W)), Cat(0.U(17.W),Fill(5,1.U),1.U,0.U(9.W)))
     val zero_sign = Mux(io.round_mode ==="b010".U, 0.U, 1.U)
     val out_Nzero = Mux(res_is_f32, Cat(zero_sign, 0.U(31.W)), Cat(0.U(16.W), zero_sign, 0.U(15.W)))
     val fp_a_16_or_32 = Mux(res_is_f32, fp_aFix(31, 0), Cat(0.U(16.W), fp_aFix(15, 0)))
     val fp_b_16_or_32 = Mux(res_is_f32, fp_bFix(31, 0), Cat(0.U(16.W), fp_bFix(15, 0)))
-    result_min := Mux1H(
-      Seq(
-        !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN & fp_b_is_NAN,
-        fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN & fp_b_is_NAN,
-      ),
-      Seq(
-        Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), fp_b_16_or_32, fp_a_16_or_32),
-        fp_a_16_or_32,
-        fp_b_16_or_32,
-        out_NAN
-      )
-    )
-    result_max := Mux1H(
-      Seq(
-        !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN & fp_b_is_NAN,
-        fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN & fp_b_is_NAN,
-      ),
-      Seq(
-        Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), fp_b_16_or_32, fp_a_16_or_32),
-        fp_a_16_or_32,
-        fp_b_16_or_32,
-        out_NAN
-      )
-    )
+    result_min := Mux1H(Seq(
+      (!fp_a_is_NAN & !fp_b_is_NAN) -> Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), fp_b_16_or_32, fp_a_16_or_32),
+      (!fp_a_is_NAN & fp_b_is_NAN) -> fp_a_16_or_32,
+      (fp_a_is_NAN & !fp_b_is_NAN) -> fp_b_16_or_32,
+      (fp_a_is_NAN & fp_b_is_NAN) -> out_NAN,
+    ))
+    result_max := Mux1H(Seq(
+      (!fp_a_is_NAN & !fp_b_is_NAN) -> Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), fp_b_16_or_32, fp_a_16_or_32),
+      (!fp_a_is_NAN & fp_b_is_NAN) -> fp_a_16_or_32,
+      (fp_a_is_NAN & !fp_b_is_NAN) -> fp_b_16_or_32,
+      (fp_a_is_NAN & fp_b_is_NAN) -> out_NAN,
+    ))
     result_feq := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_equal)
     result_fne := !result_feq
     result_flt := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_greater)
@@ -652,8 +604,7 @@ class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = false,val hasMin
       out_NAN,
       Mux(io.maskForReduction.andR, result_min, re_masked_one_out)
     )
-    val result_stage0 = Mux1H(
-      Seq(
+    val resultStage0Sel = Seq(
         is_min,
         is_max,
         is_feq,
@@ -666,34 +617,52 @@ class FloatAdderF32WidenF16MixedPipeline(val is_print:Boolean = false,val hasMin
         is_fsgnjn,
         is_fsgnjx,
         is_fclass,
-        is_fmerge,
-        is_fmove,
         is_fsum_ure_masked,
         is_fmax_re,
         is_fmin_re,
         is_fsum_ore_masked,
-      ),
-      Seq(
-        result_min,
-        result_max,
-        result_feq,
-        result_fne,
-        result_flt,
-        result_fle,
-        result_fgt,
-        result_fge,
-        result_fsgnj,
-        result_fsgnjn,
-        result_fsgnjx,
-        result_fclass,
-        result_fmerge,
-        result_fmove,
-        result_fsum_ure_masked,
-        result_fmax_re,
-        result_fmin_re,
-        result_fsum_ore_masked,
       )
-    )
+    val resultStage0SelCount = PopCount(resultStage0Sel)
+    when (resultStage0SelCount > 1.U) {
+      printf(p"[VectorFloatAdder/F32WidenF16Mixed] result_stage0 select conflict count=${resultStage0SelCount} op_code=${Hexadecimal(io.op_code)} active=")
+      when (is_min)             { printf(p"is_min ") }
+      when (is_max)             { printf(p"is_max ") }
+      when (is_feq)             { printf(p"is_feq ") }
+      when (is_fne)             { printf(p"is_fne ") }
+      when (is_flt)             { printf(p"is_flt ") }
+      when (is_fle)             { printf(p"is_fle ") }
+      when (is_fgt)             { printf(p"is_fgt ") }
+      when (is_fge)             { printf(p"is_fge ") }
+      when (is_fsgnj)           { printf(p"is_fsgnj ") }
+      when (is_fsgnjn)          { printf(p"is_fsgnjn ") }
+      when (is_fsgnjx)          { printf(p"is_fsgnjx ") }
+      when (is_fclass)          { printf(p"is_fclass ") }
+      when (is_fsum_ure_masked) { printf(p"is_fsum_ure_masked ") }
+      when (is_fmax_re)         { printf(p"is_fmax_re ") }
+      when (is_fmin_re)         { printf(p"is_fmin_re ") }
+      when (is_fsum_ore_masked) { printf(p"is_fsum_ore_masked ") }
+      printf(p"\n")
+    }
+    assert(resultStage0SelCount <= 1.U, "VectorFloatAdder stage0 select must be one-hot")
+    val result_stage0 = Mux1H(Seq(
+      is_min -> result_min,
+      is_max -> result_max,
+      is_feq -> result_feq,
+      is_fne -> result_fne,
+      is_flt -> result_flt,
+      is_fle -> result_fle,
+      is_fgt -> result_fgt,
+      is_fge -> result_fge,
+      is_fsgnj -> result_fsgnj,
+      is_fsgnjn -> result_fsgnjn,
+      is_fsgnjx -> result_fsgnjx,
+      is_fclass -> result_fclass,
+      is_fsum_ure_masked -> result_fsum_ure_masked,
+      is_fmax_re -> result_fmax_re,
+      is_fmin_re -> result_fmin_re,
+      is_fsum_ore_masked -> result_fsum_ore_masked,
+    ))
+    
     val fflags_NV_stage0 = ((is_min | is_max) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_feq | is_fne) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN)) |
@@ -991,20 +960,12 @@ class FarPathF32WidenF16MixedPipeline(
   )
   OF_reg := RegEnable(Mux(res_is_f32,EA_add1.andR,EA_add1.tail(3).andR), fire) & (far_case_overflow_reg | (FS1_reg.head(1).asBool & FS0_0_reg & far_case_normal_round_up_reg))
   NX := Mux(far_case_normal_reg,lgs_normal_reg(1,0).orR,lgs_overflow_reg(1,0).orR) | OF_reg
-  far_fraction_result_reg := Mux1H(
-    Seq(
-      far_case_normal_reg & normal_fsel0_reg,
-      far_case_normal_reg & normal_fsel1_reg,
-      far_case_overflow_reg & overflow_fsel0_reg,
-      far_case_overflow_reg & overflow_fsel1_reg
-    ),
-    Seq(
-      Cat(FS0_reg(significandWidth-2,1+13), Mux(res_is_f32_reg,FS0_reg(13),FS0_reg(13) ^ far_case_normal_round_up_reg), FS0_reg(12,1),FS0_0_reg ^ far_case_normal_round_up_reg),
-      Cat(FS1_reg(significandWidth-2,1+13), Mux(res_is_f32_reg,FS1_reg(13),0.U), FS1_reg(12,1),0.U),
-      Cat(FS0_reg(significandWidth-1,2+13), Mux(res_is_f32_reg,FS0_reg(14),FS0_reg(14) ^ far_case_overflow_round_up_reg), FS0_reg(13,2),FS0_1_reg ^ far_case_overflow_round_up_reg),
-      FS1_reg(significandWidth-1,1)
-    )
-  )
+  far_fraction_result_reg := Mux1H(Seq(
+    (far_case_normal_reg & normal_fsel0_reg) -> Cat(FS0_reg(significandWidth-2,1+13), Mux(res_is_f32_reg,FS0_reg(13),FS0_reg(13) ^ far_case_normal_round_up_reg), FS0_reg(12,1),FS0_0_reg ^ far_case_normal_round_up_reg),
+    (far_case_normal_reg & normal_fsel1_reg) -> Cat(FS1_reg(significandWidth-2,1+13), Mux(res_is_f32_reg,FS1_reg(13),0.U), FS1_reg(12,1),0.U),
+    (far_case_overflow_reg & overflow_fsel0_reg) -> Cat(FS0_reg(significandWidth-1,2+13), Mux(res_is_f32_reg,FS0_reg(14),FS0_reg(14) ^ far_case_overflow_round_up_reg), FS0_reg(13,2),FS0_1_reg ^ far_case_overflow_round_up_reg),
+    (far_case_overflow_reg & overflow_fsel1_reg) -> FS1_reg(significandWidth-1,1),
+  ))
   val result_overflow_reg = Mux(
     RTZ_reg | (RDN_reg & !far_sign_result_reg) | (RUP_reg & far_sign_result_reg),
     Cat(far_sign_result_reg,Fill(exponentWidth-1,1.U),0.U,Fill(significandWidth-1,1.U)),
@@ -1170,34 +1131,18 @@ class ClosePathF32WidenF16MixedPipeline(
     (!Efp_b_is_greater & U_CS2.io.result.head(1).asBool & Mux(res_is_f32,U_CS2.io.result(0),U_CS2.io.result(0+13)).asBool & CS2_round_up) |
       (Efp_b_is_greater & U_CS3.io.result.head(1).asBool & Mux(res_is_f32,U_CS3.io.result(0),U_CS3.io.result(0+13)).asBool & CS3_round_up)
     )
-  val CS_0123_result = Mux1H(
-    Seq(
-      sel_CS0,
-      sel_CS1,
-      sel_CS2,
-      sel_CS3
-    ),
-    Seq(
-      Cat(CS0,0.U),
-      Cat(CS1,0.U),
-      CS2,
-      CS3
-    )
-  )
-  val mask_onehot = Mux1H(
-    Seq(
-      sel_CS0,
-      sel_CS1,
-      sel_CS2,
-      sel_CS3
-    ),
-    Seq(
-      Cat(mask_Efp_a_onehot,1.U),
-      Cat(mask_Efp_b_onehot,1.U),
-      Cat(mask_Efp_a_onehot,Efp_a===(significandWidth+1).U),
-      Cat(mask_Efp_b_onehot,Efp_b===(significandWidth+1).U)
-    )
-  )
+  val CS_0123_result = Mux1H(Seq(
+    sel_CS0 -> Cat(CS0,0.U),
+    sel_CS1 -> Cat(CS1,0.U),
+    sel_CS2 -> CS2,
+    sel_CS3 -> CS3,
+  ))
+  val mask_onehot = Mux1H(Seq(
+    sel_CS0 -> Cat(mask_Efp_a_onehot,1.U),
+    sel_CS1 -> Cat(mask_Efp_b_onehot,1.U),
+    sel_CS2 -> Cat(mask_Efp_a_onehot,Efp_a===(significandWidth+1).U),
+    sel_CS3 -> Cat(mask_Efp_b_onehot,Efp_b===(significandWidth+1).U),
+  ))
   val priority_mask = CS_0123_result | mask_onehot
   val lzd_0123 = LZD(priority_mask)
   val lzd_0123_reg = RegEnable(lzd_0123, fire)
@@ -1223,24 +1168,14 @@ class ClosePathF32WidenF16MixedPipeline(
     )
   )
   close_exponent_result_reg := EA_reg - EA_sub_value_reg
-  close_sign_result_reg := RegEnable(Mux1H(
-    Seq(
-      sel_CS0 & (exp_is_equal & (U_CS0.io.result.head(1).asBool | U_CS1.io.result.head(1).asBool)),
-      sel_CS0 & exp_is_equal & (!U_CS0.io.result.head(1).asBool & !U_CS1.io.result.head(1).asBool),
-      sel_CS1,
-      sel_CS2,
-      sel_CS3,
-      sel_CS4
-    ),
-    Seq(
-      fp_a_sign,
-      RDN,
-      !fp_a_sign,
-      fp_a_sign,
-      !fp_a_sign,
-      Mux(Efp_b_is_greater,!fp_a_sign,fp_a_sign)
-    )
-  ), fire)
+  close_sign_result_reg := RegEnable(Mux1H(Seq(
+    (sel_CS0 & (exp_is_equal & (U_CS0.io.result.head(1).asBool | U_CS1.io.result.head(1).asBool))) -> fp_a_sign,
+    (sel_CS0 & exp_is_equal & (!U_CS0.io.result.head(1).asBool & !U_CS1.io.result.head(1).asBool)) -> RDN,
+    sel_CS1 -> (!fp_a_sign),
+    sel_CS2 -> fp_a_sign,
+    sel_CS3 -> (!fp_a_sign),
+    sel_CS4 -> Mux(Efp_b_is_greater,!fp_a_sign,fp_a_sign),
+  )), fire)
   io.fp_c := Cat(close_sign_result_reg,close_exponent_result_reg,close_fraction_result_reg)
   if (hasMinMaxCompare) io.CS1 := U_CS1.io.result
   else io.CS1 := 0.U
@@ -1462,20 +1397,12 @@ class FarPathFloatAdderF64WidenPipeline(
   )
   OF := RegEnable(EA_add1.andR, fire) & (far_case_overflow | (FS1.head(1).asBool & FS0(0) & far_case_normal_round_up))
   NX := Mux(far_case_normal,lgs_normal_reg(1,0).orR,lgs_overflow(1,0).orR) | OF
-  far_fraction_result := Mux1H(
-    Seq(
-      far_case_normal & normal_fsel0,
-      far_case_normal & normal_fsel1,
-      far_case_overflow & overflow_fsel0,
-      far_case_overflow & overflow_fsel1
-    ),
-    Seq(
-      Cat(FS0(significandWidth-2,1),FS0(0) ^ far_case_normal_round_up),
-      Cat(FS1(significandWidth-2,1),0.U),
-      Cat(FS0(significandWidth-1,2),FS0(1) ^ far_case_overflow_round_up),
-      FS1(significandWidth-1,1)
-    )
-  )
+  far_fraction_result := Mux1H(Seq(
+    (far_case_normal & normal_fsel0) -> Cat(FS0(significandWidth-2,1),FS0(0) ^ far_case_normal_round_up),
+    (far_case_normal & normal_fsel1) -> Cat(FS1(significandWidth-2,1),0.U),
+    (far_case_overflow & overflow_fsel0) -> Cat(FS0(significandWidth-1,2),FS0(1) ^ far_case_overflow_round_up),
+    (far_case_overflow & overflow_fsel1) -> FS1(significandWidth-1,1),
+  ))
   val result_overflow = Mux(
     RTZ_reg | (RDN_reg & !far_sign_result_reg) | (RUP_reg & far_sign_result_reg),
     Cat(far_sign_result_reg,Fill(exponentWidth-1,1.U),0.U,Fill(significandWidth-1,1.U)),
@@ -1609,34 +1536,18 @@ class ClosePathFloatAdderF64WidenPipeline(
     (!Efp_b_is_greater & U_CS2.io.result.head(1).asBool & U_CS2.io.result(0).asBool & CS2_round_up) |
       (Efp_b_is_greater & U_CS3.io.result.head(1).asBool & U_CS3.io.result(0).asBool & CS3_round_up)
     )
-  val CS_0123_result = Mux1H(
-    Seq(
-      sel_CS0,
-      sel_CS1,
-      sel_CS2,
-      sel_CS3
-    ),
-    Seq(
-      Cat(CS0,0.U),
-      Cat(CS1,0.U),
-      CS2,
-      CS3
-    )
-  )
-  val mask_onehot = Mux1H(
-    Seq(
-      sel_CS0,
-      sel_CS1,
-      sel_CS2,
-      sel_CS3
-    ),
-    Seq(
-      Cat(mask_Efp_a_onehot,1.U),
-      Cat(mask_Efp_b_onehot,1.U),
-      Cat(mask_Efp_a_onehot,Efp_a===(significandWidth+1).U),
-      Cat(mask_Efp_b_onehot,Efp_b===(significandWidth+1).U)
-    )
-  )
+  val CS_0123_result = Mux1H(Seq(
+    sel_CS0 -> Cat(CS0,0.U),
+    sel_CS1 -> Cat(CS1,0.U),
+    sel_CS2 -> CS2,
+    sel_CS3 -> CS3,
+  ))
+  val mask_onehot = Mux1H(Seq(
+    sel_CS0 -> Cat(mask_Efp_a_onehot,1.U),
+    sel_CS1 -> Cat(mask_Efp_b_onehot,1.U),
+    sel_CS2 -> Cat(mask_Efp_a_onehot,Efp_a===(significandWidth+1).U),
+    sel_CS3 -> Cat(mask_Efp_b_onehot,Efp_b===(significandWidth+1).U),
+  ))
   val priority_mask = CS_0123_result | mask_onehot
   val lzd_0123 = LZD(priority_mask)
   val lzd_0123_reg = RegEnable(lzd_0123, fire)
@@ -1662,24 +1573,14 @@ class ClosePathFloatAdderF64WidenPipeline(
     )
   )
   close_exponent_result := RegEnable(EA, fire) - EA_sub_value
-  close_sign_result := RegEnable(Mux1H(
-    Seq(
-      sel_CS0 & (exp_is_equal & (U_CS0.io.result.head(1).asBool | U_CS1.io.result.head(1).asBool)),
-      sel_CS0 & exp_is_equal & (!U_CS0.io.result.head(1).asBool & !U_CS1.io.result.head(1).asBool),
-      sel_CS1,
-      sel_CS2,
-      sel_CS3,
-      sel_CS4
-    ),
-    Seq(
-      fp_a_sign,
-      RDN,
-      !fp_a_sign,
-      fp_a_sign,
-      !fp_a_sign,
-      Mux(Efp_b_is_greater,!fp_a_sign,fp_a_sign)
-    )
-  ), fire)
+  close_sign_result := RegEnable(Mux1H(Seq(
+    (sel_CS0 & (exp_is_equal & (U_CS0.io.result.head(1).asBool | U_CS1.io.result.head(1).asBool))) -> fp_a_sign,
+    (sel_CS0 & exp_is_equal & (!U_CS0.io.result.head(1).asBool & !U_CS1.io.result.head(1).asBool)) -> RDN,
+    sel_CS1 -> (!fp_a_sign),
+    sel_CS2 -> fp_a_sign,
+    sel_CS3 -> (!fp_a_sign),
+    sel_CS4 -> Mux(Efp_b_is_greater,!fp_a_sign,fp_a_sign),
+  )), fire)
   io.fp_c := Cat(close_sign_result,close_exponent_result,close_fraction_result)
   if (hasMinMaxCompare) io.CS1 := U_CS1.io.result
   else io.CS1 := 0.U
@@ -1707,7 +1608,7 @@ class FloatAdderF64WidenPipeline(val is_print:Boolean = false,val hasMinMaxCompa
     val fflags      = Output(UInt(5.W))
     val opb_widening = Input (Bool())
     val res_widening = Input (Bool())
-    val op_code = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
+    val op_code = if (hasMinMaxCompare) Input(Opcode()) else Input(UInt(0.W))
     val fp_aIsFpCanonicalNAN = Input(Bool())
     val fp_bIsFpCanonicalNAN = Input(Bool())
     val maskForReduction = Input(UInt(2.W))
@@ -1805,26 +1706,24 @@ class FloatAdderF64WidenPipeline(val is_print:Boolean = false,val hasMinMaxCompa
     float_adder_result := Mux(is_far_path_reg,U_far_path.io.fp_c,U_close_path.io.fp_c)
   }
   if (hasMinMaxCompare) {
-    val is_add = io.op_code === VfaddOpCode.fadd
-    val is_sub = io.op_code === VfaddOpCode.fsub
-    val is_min = io.op_code === VfaddOpCode.fmin
-    val is_max = io.op_code === VfaddOpCode.fmax
-    val is_feq = io.op_code === VfaddOpCode.feq
-    val is_fne = io.op_code === VfaddOpCode.fne
-    val is_flt = io.op_code === VfaddOpCode.flt
-    val is_fle = io.op_code === VfaddOpCode.fle
-    val is_fgt = io.op_code === VfaddOpCode.fgt
-    val is_fge = io.op_code === VfaddOpCode.fge
-    val is_fsgnj  = io.op_code === VfaddOpCode.fsgnj 
-    val is_fsgnjn = io.op_code === VfaddOpCode.fsgnjn
-    val is_fsgnjx = io.op_code === VfaddOpCode.fsgnjx
-    val is_fclass = io.op_code === VfaddOpCode.fclass
-    val is_fmerge = io.op_code === VfaddOpCode.fmerge
-    val is_fmove  = (io.op_code === VfaddOpCode.fmove) || (io.op_code === VfaddOpCode.fmv_f_s) || (io.op_code === VfaddOpCode.fmv_s_f)
-    val is_fsum_ure = io.op_code === VfaddOpCode.fsum_ure
-    val is_fmin_re = io.op_code === VfaddOpCode.fmin_re
-    val is_fmax_re = io.op_code === VfaddOpCode.fmax_re
-    val is_fsum_ore = io.op_code === VfaddOpCode.fsum_ore
+    val is_add = VFMacOpcode.isFadd(io.op_code)
+    val is_sub = VFMacOpcode.isFsub(io.op_code)
+    val is_min = VFMacOpcode.isFmin(io.op_code)
+    val is_max = VFMacOpcode.isFmax(io.op_code)
+    val is_feq = VFMiscOpcode.isFeq(io.op_code)
+    val is_fne = VFMiscOpcode.isFne(io.op_code)
+    val is_flt = VFMiscOpcode.isFlt(io.op_code)
+    val is_fle = VFMiscOpcode.isFle(io.op_code)
+    val is_fgt = VFMiscOpcode.isFgt(io.op_code)
+    val is_fge = VFMiscOpcode.isFge(io.op_code)
+    val is_fsgnj  = VFMacOpcode.isFsgnj(io.op_code)
+    val is_fsgnjn = VFMacOpcode.isFsgnjn(io.op_code)
+    val is_fsgnjx = VFMacOpcode.isFsgnjx(io.op_code)
+    val is_fclass = VFMiscOpcode.isFclass(io.op_code)
+    val is_fsum_ure = VFRedOpcode.isVfredusum(io.op_code)
+    val is_fmin_re = VFRedOpcode.isVfredmin(io.op_code)
+    val is_fmax_re = VFRedOpcode.isVfredmax(io.op_code)
+    val is_fsum_ore = VFRedOpcode.isVfredosum(io.op_code)
     val fp_a_sign = io.fp_a.head(1)
     val fp_b_sign = io.fp_b.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -1855,38 +1754,20 @@ class FloatAdderF64WidenPipeline(val is_print:Boolean = false,val hasMinMaxCompa
     val result_fsgnjn = Cat(~fp_bFix.head(1), fp_aFix.tail(1))
     val result_fsgnjx = Cat(fp_bFix.head(1) ^ fp_aFix.head(1), fp_aFix.tail(1))
     val result_fclass = Wire(UInt(floatWidth.W))
-    val result_fmerge = Mux(io.mask, fp_bFix, fp_aFix)
-    val result_fmove = fp_bFix
     val out_NAN = Cat(0.U, Fill(exponentWidth, 1.U), 1.U, Fill(significandWidth - 2, 0.U))
     val out_Nzero = Cat(Mux(io.round_mode ==="b010".U, 0.U, 1.U), Fill(floatWidth - 1, 0.U))
-    result_min := Mux1H(
-      Seq(
-        !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN & fp_b_is_NAN,
-        fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN & fp_b_is_NAN,
-      ),
-      Seq(
-        Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), io.fp_b, io.fp_a),
-        io.fp_a,
-        io.fp_b,
-        out_NAN
-      )
-    )
-    result_max := Mux1H(
-      Seq(
-        !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN & fp_b_is_NAN,
-        fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN & fp_b_is_NAN,
-      ),
-      Seq(
-        Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), io.fp_b, io.fp_a),
-        io.fp_a,
-        io.fp_b,
-        out_NAN
-      )
-    )
+    result_min := Mux1H(Seq(
+      (!fp_a_is_NAN & !fp_b_is_NAN) -> Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), io.fp_b, io.fp_a),
+      (!fp_a_is_NAN & fp_b_is_NAN) -> io.fp_a,
+      (fp_a_is_NAN & !fp_b_is_NAN) -> io.fp_b,
+      (fp_a_is_NAN & fp_b_is_NAN) -> out_NAN,
+    ))
+    result_max := Mux1H(Seq(
+      (!fp_a_is_NAN & !fp_b_is_NAN) -> Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero), io.fp_b, io.fp_a),
+      (!fp_a_is_NAN & fp_b_is_NAN) -> io.fp_a,
+      (fp_a_is_NAN & !fp_b_is_NAN) -> io.fp_b,
+      (fp_a_is_NAN & fp_b_is_NAN) -> out_NAN,
+    ))
     result_feq := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_equal)
     result_fne := !result_feq
     result_flt := Mux(fp_a_is_NAN | fp_b_is_NAN, 0.U, fp_b_is_greater)
@@ -1935,8 +1816,7 @@ class FloatAdderF64WidenPipeline(val is_print:Boolean = false,val hasMinMaxCompa
       out_NAN,
       Mux(io.maskForReduction.andR, result_min, re_masked_one_out)
     )
-    val result_stage0 = Mux1H(
-      Seq(
+    val resultStage0Sel = Seq(
         is_min,
         is_max,
         is_feq,
@@ -1949,34 +1829,52 @@ class FloatAdderF64WidenPipeline(val is_print:Boolean = false,val hasMinMaxCompa
         is_fsgnjn,
         is_fsgnjx,
         is_fclass,
-        is_fmerge,
-        is_fmove,
         is_fsum_ure_masked,
         is_fmax_re,
         is_fmin_re,
         is_fsum_ore_masked,
-      ),
-      Seq(
-        result_min,
-        result_max,
-        result_feq,
-        result_fne,
-        result_flt,
-        result_fle,
-        result_fgt,
-        result_fge,
-        result_fsgnj,
-        result_fsgnjn,
-        result_fsgnjx,
-        result_fclass,
-        result_fmerge,
-        result_fmove,
-        result_fsum_ure_masked,
-        result_fmax_re,
-        result_fmin_re,
-        result_fsum_ore_masked,
       )
-    )
+    val resultStage0SelCount = PopCount(resultStage0Sel)
+    when (resultStage0SelCount > 1.U) {
+      printf(p"[VectorFloatAdder/F64Widen] result_stage0 select conflict count=${resultStage0SelCount} op_code=${Hexadecimal(io.op_code)} active=")
+      when (is_min)             { printf(p"is_min ") }
+      when (is_max)             { printf(p"is_max ") }
+      when (is_feq)             { printf(p"is_feq ") }
+      when (is_fne)             { printf(p"is_fne ") }
+      when (is_flt)             { printf(p"is_flt ") }
+      when (is_fle)             { printf(p"is_fle ") }
+      when (is_fgt)             { printf(p"is_fgt ") }
+      when (is_fge)             { printf(p"is_fge ") }
+      when (is_fsgnj)           { printf(p"is_fsgnj ") }
+      when (is_fsgnjn)          { printf(p"is_fsgnjn ") }
+      when (is_fsgnjx)          { printf(p"is_fsgnjx ") }
+      when (is_fclass)          { printf(p"is_fclass ") }
+      when (is_fsum_ure_masked) { printf(p"is_fsum_ure_masked ") }
+      when (is_fmax_re)         { printf(p"is_fmax_re ") }
+      when (is_fmin_re)         { printf(p"is_fmin_re ") }
+      when (is_fsum_ore_masked) { printf(p"is_fsum_ore_masked ") }
+      printf(p"\n")
+    }
+    assert(resultStage0SelCount <= 1.U, "VectorFloatAdder stage0 select must be one-hot")
+
+    val result_stage0 = Mux1H(Seq(
+      is_min -> result_min,
+      is_max -> result_max,
+      is_feq -> result_feq,
+      is_fne -> result_fne,
+      is_flt -> result_flt,
+      is_fle -> result_fle,
+      is_fgt -> result_fgt,
+      is_fge -> result_fge,
+      is_fsgnj -> result_fsgnj,
+      is_fsgnjn -> result_fsgnjn,
+      is_fsgnjx -> result_fsgnjx,
+      is_fclass -> result_fclass,
+      is_fsum_ure_masked -> result_fsum_ure_masked,
+      is_fmax_re -> result_fmax_re,
+      is_fmin_re -> result_fmin_re,
+      is_fsum_ore_masked -> result_fsum_ore_masked,
+    ))
     val fflags_NV_stage0 = ((is_min | is_max) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_feq | is_fne) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN)) |
@@ -2171,20 +2069,12 @@ class FarPathF16Pipeline(
   )
   OF := RegEnable(EA_add1.andR, fire) & (far_case_overflow | (FS1.head(1).asBool & FS0(0) & far_case_normal_round_up))
   NX := Mux(far_case_normal,lgs_normal_reg(1,0).orR,lgs_overflow(1,0).orR) | OF
-  far_fraction_result := Mux1H(
-    Seq(
-      far_case_normal & normal_fsel0,
-      far_case_normal & normal_fsel1,
-      far_case_overflow & overflow_fsel0,
-      far_case_overflow & overflow_fsel1
-    ),
-    Seq(
-      Cat(FS0(significandWidth-2,1),FS0(0) ^ far_case_normal_round_up),
-      Cat(FS1(significandWidth-2,1),0.U),
-      Cat(FS0(significandWidth-1,2),FS0(1) ^ far_case_overflow_round_up),
-      FS1(significandWidth-1,1)
-    )
-  )
+  far_fraction_result := Mux1H(Seq(
+    (far_case_normal & normal_fsel0)     -> Cat(FS0(significandWidth-2,1),FS0(0) ^ far_case_normal_round_up),
+    (far_case_normal & normal_fsel1)     -> Cat(FS1(significandWidth-2,1),0.U),
+    (far_case_overflow & overflow_fsel0) -> Cat(FS0(significandWidth-1,2),FS0(1) ^ far_case_overflow_round_up),
+    (far_case_overflow & overflow_fsel1) -> FS1(significandWidth-1,1),
+  ))
   val result_overflow = Mux(
     RTZ_reg | (RDN_reg & !far_sign_result_reg) | (RUP_reg & far_sign_result_reg),
     Cat(far_sign_result_reg,Fill(exponentWidth-1,1.U),0.U,Fill(significandWidth-1,1.U)),
@@ -2316,34 +2206,18 @@ class ClosePathF16Pipeline(
     (!Efp_b_is_greater & U_CS2.io.result.head(1).asBool & U_CS2.io.result(0).asBool & CS2_round_up) |
       (Efp_b_is_greater & U_CS3.io.result.head(1).asBool & U_CS3.io.result(0).asBool & CS3_round_up)
     )
-  val CS_0123_result = Mux1H(
-    Seq(
-      sel_CS0,
-      sel_CS1,
-      sel_CS2,
-      sel_CS3
-    ),
-    Seq(
-      Cat(CS0,0.U),
-      Cat(CS1,0.U),
-      CS2,
-      CS3
-    )
-  )
-  val mask_onehot = Mux1H(
-    Seq(
-      sel_CS0,
-      sel_CS1,
-      sel_CS2,
-      sel_CS3
-    ),
-    Seq(
-      Cat(mask_Efp_a_onehot,1.U),
-      Cat(mask_Efp_b_onehot,1.U),
-      Cat(mask_Efp_a_onehot,Efp_a===(significandWidth+1).U),
-      Cat(mask_Efp_b_onehot,Efp_b===(significandWidth+1).U)
-    )
-  )
+  val CS_0123_result = Mux1H(Seq(
+    sel_CS0 -> Cat(CS0,0.U),
+    sel_CS1 -> Cat(CS1,0.U),
+    sel_CS2 -> CS2,
+    sel_CS3 -> CS3,
+  ))
+  val mask_onehot = Mux1H(Seq(
+    sel_CS0 -> Cat(mask_Efp_a_onehot,1.U),
+    sel_CS1 -> Cat(mask_Efp_b_onehot,1.U),
+    sel_CS2 -> Cat(mask_Efp_a_onehot,Efp_a===(significandWidth+1).U),
+    sel_CS3 -> Cat(mask_Efp_b_onehot,Efp_b===(significandWidth+1).U),
+  ))
   val priority_mask = CS_0123_result | mask_onehot
 
 
@@ -2375,24 +2249,14 @@ class ClosePathF16Pipeline(
     )
   )
   close_exponent_result := RegEnable(EA, fire) - EA_sub_value
-  close_sign_result := RegEnable(Mux1H(
-    Seq(
-      sel_CS0 & (exp_is_equal & (U_CS0.io.result.head(1).asBool | U_CS1.io.result.head(1).asBool)),
-      sel_CS0 & exp_is_equal & (!U_CS0.io.result.head(1).asBool & !U_CS1.io.result.head(1).asBool),
-      sel_CS1,
-      sel_CS2,
-      sel_CS3,
-      sel_CS4
-    ),
-    Seq(
-      fp_a_sign,
-      RDN,
-      !fp_a_sign,
-      fp_a_sign,
-      !fp_a_sign,
-      Mux(Efp_b_is_greater,!fp_a_sign,fp_a_sign)
-    )
-  ), fire)
+  close_sign_result := RegEnable(Mux1H(Seq(
+    (sel_CS0 & (exp_is_equal & (U_CS0.io.result.head(1).asBool | U_CS1.io.result.head(1).asBool))) -> fp_a_sign,
+    (sel_CS0 & exp_is_equal & (!U_CS0.io.result.head(1).asBool & !U_CS1.io.result.head(1).asBool)) -> RDN,
+    sel_CS1 -> (!fp_a_sign),
+    sel_CS2 -> fp_a_sign,
+    sel_CS3 -> (!fp_a_sign),
+    sel_CS4 -> Mux(Efp_b_is_greater,!fp_a_sign,fp_a_sign),
+  )), fire)
   io.fp_c := Cat(close_sign_result,close_exponent_result,close_fraction_result)
   if (hasMinMaxCompare) io.CS1 := U_CS1.io.result
   else io.CS1 := 0.U
@@ -2417,7 +2281,7 @@ class FloatAdderF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:Bo
     val mask        = Input (Bool())
     val round_mode  = Input (UInt(3.W))
     val fflags      = Output(UInt(5.W))
-    val op_code     = if (hasMinMaxCompare) Input(UInt(5.W)) else Input(UInt(0.W))
+    val op_code     = if (hasMinMaxCompare) Input(Opcode()) else Input(UInt(0.W))
     val fp_aIsFpCanonicalNAN = Input(Bool())
     val fp_bIsFpCanonicalNAN = Input(Bool())
     val maskForReduction = Input(UInt(2.W))
@@ -2476,26 +2340,24 @@ class FloatAdderF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:Bo
   if (hasMinMaxCompare) {
     val fp_a_is_zero = !io.fp_aIsFpCanonicalNAN & Efp_a_is_zero && !fp_a_mantissa_isnot_zero
     val fp_b_is_zero = !io.fp_bIsFpCanonicalNAN & Efp_b_is_zero && !fp_b_mantissa_isnot_zero
-    val is_add = io.op_code === VfaddOpCode.fadd
-    val is_sub = io.op_code === VfaddOpCode.fsub
-    val is_min = io.op_code === VfaddOpCode.fmin
-    val is_max = io.op_code === VfaddOpCode.fmax
-    val is_feq = io.op_code === VfaddOpCode.feq
-    val is_fne = io.op_code === VfaddOpCode.fne
-    val is_flt = io.op_code === VfaddOpCode.flt
-    val is_fle = io.op_code === VfaddOpCode.fle
-    val is_fgt = io.op_code === VfaddOpCode.fgt
-    val is_fge = io.op_code === VfaddOpCode.fge
-    val is_fsgnj  = io.op_code === VfaddOpCode.fsgnj 
-    val is_fsgnjn = io.op_code === VfaddOpCode.fsgnjn
-    val is_fsgnjx = io.op_code === VfaddOpCode.fsgnjx
-    val is_fclass = io.op_code === VfaddOpCode.fclass
-    val is_fmerge = io.op_code === VfaddOpCode.fmerge
-    val is_fmove  = (io.op_code === VfaddOpCode.fmove) || (io.op_code === VfaddOpCode.fmv_f_s) || (io.op_code === VfaddOpCode.fmv_s_f)
-    val is_fsum_ure = io.op_code === VfaddOpCode.fsum_ure
-    val is_fmin_re = io.op_code === VfaddOpCode.fmin_re
-    val is_fmax_re = io.op_code === VfaddOpCode.fmax_re
-    val is_fsum_ore = io.op_code === VfaddOpCode.fsum_ore
+    val is_add = VFMacOpcode.isFadd(io.op_code)
+    val is_sub = VFMacOpcode.isFsub(io.op_code)
+    val is_min = VFMacOpcode.isFmin(io.op_code)
+    val is_max = VFMacOpcode.isFmax(io.op_code)
+    val is_feq = VFMiscOpcode.isFeq(io.op_code)
+    val is_fne = VFMiscOpcode.isFne(io.op_code)
+    val is_flt = VFMiscOpcode.isFlt(io.op_code)
+    val is_fle = VFMiscOpcode.isFle(io.op_code)
+    val is_fgt = VFMiscOpcode.isFgt(io.op_code)
+    val is_fge = VFMiscOpcode.isFge(io.op_code)
+    val is_fsgnj  = VFMacOpcode.isFsgnj(io.op_code)
+    val is_fsgnjn = VFMacOpcode.isFsgnjn(io.op_code)
+    val is_fsgnjx = VFMacOpcode.isFsgnjx(io.op_code)
+    val is_fclass = VFMiscOpcode.isFclass(io.op_code)
+    val is_fsum_ure = VFRedOpcode.isVfredusum(io.op_code)
+    val is_fmin_re = VFRedOpcode.isVfredmin(io.op_code)
+    val is_fmax_re = VFRedOpcode.isVfredmax(io.op_code)
+    val is_fsum_ore = VFRedOpcode.isVfredosum(io.op_code)
     val fp_a_sign = io.fp_a.head(1)
     val fp_b_sign = io.fp_b.head(1)
     val fp_b_sign_is_greater = fp_a_sign & !fp_b_sign
@@ -2526,38 +2388,20 @@ class FloatAdderF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:Bo
     val result_fsgnjn = Cat(~fp_bFix.head(1), fp_aFix.tail(1))
     val result_fsgnjx = Cat(fp_bFix.head(1) ^ fp_aFix.head(1), fp_aFix.tail(1))
     val result_fclass = Wire(UInt(floatWidth.W))
-    val result_fmerge = Mux(io.mask, fp_bFix, fp_aFix)
-    val result_fmove  = fp_bFix
     val out_NAN = Cat(0.U,Fill(exponentWidth,1.U),1.U,Fill(significandWidth-2,0.U))
     val out_Nzero = Cat(Mux(io.round_mode ==="b010".U, 0.U, 1.U), Fill(floatWidth - 1, 0.U))
-    result_min := Mux1H(
-      Seq(
-        !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN &  fp_b_is_NAN,
-        fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN &  fp_b_is_NAN,
-      ),
-      Seq(
-        Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),io.fp_b,io.fp_a),
-        io.fp_a,
-        io.fp_b,
-        out_NAN
-      )
-    )
-    result_max := Mux1H(
-      Seq(
-        !fp_a_is_NAN & !fp_b_is_NAN,
-        !fp_a_is_NAN &  fp_b_is_NAN,
-        fp_a_is_NAN & !fp_b_is_NAN,
-        fp_a_is_NAN &  fp_b_is_NAN,
-      ),
-      Seq(
-        Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),io.fp_b,io.fp_a),
-        io.fp_a,
-        io.fp_b,
-        out_NAN
-      )
-    )
+    result_min := Mux1H(Seq(
+      (!fp_a_is_NAN & !fp_b_is_NAN) -> Mux(fp_b_is_less || (fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),io.fp_b,io.fp_a),
+      (!fp_a_is_NAN &  fp_b_is_NAN) -> io.fp_a,
+      (fp_a_is_NAN & !fp_b_is_NAN) -> io.fp_b,
+      (fp_a_is_NAN &  fp_b_is_NAN) -> out_NAN,
+    ))
+    result_max := Mux1H(Seq(
+      (!fp_a_is_NAN & !fp_b_is_NAN) -> Mux(fp_b_is_greater.asBool || (!fp_b_sign.asBool && fp_b_is_zero && fp_a_is_zero),io.fp_b,io.fp_a),
+      (!fp_a_is_NAN &  fp_b_is_NAN) -> io.fp_a,
+      (fp_a_is_NAN & !fp_b_is_NAN) -> io.fp_b,
+      (fp_a_is_NAN &  fp_b_is_NAN) -> out_NAN,
+    ))
     result_feq := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_equal)
     result_fne := !result_feq
     result_flt := Mux(fp_a_is_NAN | fp_b_is_NAN,0.U,fp_b_is_greater)
@@ -2606,8 +2450,7 @@ class FloatAdderF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:Bo
       out_NAN,
       Mux(io.maskForReduction.andR, result_min, re_masked_one_out)
     )
-    val result_stage0 = Mux1H(
-      Seq(
+    val resultStage0Sel = Seq(
         is_min,
         is_max,
         is_feq,
@@ -2620,34 +2463,52 @@ class FloatAdderF16Pipeline(val is_print:Boolean = false,val hasMinMaxCompare:Bo
         is_fsgnjn,
         is_fsgnjx,
         is_fclass,
-        is_fmerge,
-        is_fmove,
         is_fsum_ure_masked,
         is_fmax_re,
         is_fmin_re,
         is_fsum_ore_masked,
-      ),
-      Seq(
-        result_min,
-        result_max,
-        result_feq,
-        result_fne,
-        result_flt,
-        result_fle,
-        result_fgt,
-        result_fge,
-        result_fsgnj,
-        result_fsgnjn,
-        result_fsgnjx,
-        result_fclass,
-        result_fmerge,
-        result_fmove,
-        result_fsum_ure_masked,
-        result_fmax_re,
-        result_fmin_re,
-        result_fsum_ore_masked,
       )
-    )
+    val resultStage0SelCount = PopCount(resultStage0Sel)
+    when (resultStage0SelCount > 1.U) {
+      printf(p"[VectorFloatAdder/F16] result_stage0 select conflict count=${resultStage0SelCount} op_code=${Hexadecimal(io.op_code)} active=")
+      when (is_min)             { printf(p"is_min ") }
+      when (is_max)             { printf(p"is_max ") }
+      when (is_feq)             { printf(p"is_feq ") }
+      when (is_fne)             { printf(p"is_fne ") }
+      when (is_flt)             { printf(p"is_flt ") }
+      when (is_fle)             { printf(p"is_fle ") }
+      when (is_fgt)             { printf(p"is_fgt ") }
+      when (is_fge)             { printf(p"is_fge ") }
+      when (is_fsgnj)           { printf(p"is_fsgnj ") }
+      when (is_fsgnjn)          { printf(p"is_fsgnjn ") }
+      when (is_fsgnjx)          { printf(p"is_fsgnjx ") }
+      when (is_fclass)          { printf(p"is_fclass ") }
+      when (is_fsum_ure_masked) { printf(p"is_fsum_ure_masked ") }
+      when (is_fmax_re)         { printf(p"is_fmax_re ") }
+      when (is_fmin_re)         { printf(p"is_fmin_re ") }
+      when (is_fsum_ore_masked) { printf(p"is_fsum_ore_masked ") }
+      printf(p"\n")
+    }
+    assert(resultStage0SelCount <= 1.U, "VectorFloatAdder stage0 select must be one-hot")
+
+    val result_stage0 = Mux1H(Seq(
+      is_min -> result_min,
+      is_max -> result_max,
+      is_feq -> result_feq,
+      is_fne -> result_fne,
+      is_flt -> result_flt,
+      is_fle -> result_fle,
+      is_fgt -> result_fgt,
+      is_fge -> result_fge,
+      is_fsgnj -> result_fsgnj,
+      is_fsgnjn -> result_fsgnjn,
+      is_fsgnjx -> result_fsgnjx,
+      is_fclass -> result_fclass,
+      is_fsum_ure_masked -> result_fsum_ure_masked,
+      is_fmax_re -> result_fmax_re,
+      is_fmin_re -> result_fmin_re,
+      is_fsum_ore_masked -> result_fsum_ore_masked,
+    ))
     val fflags_NV_stage0 = ((is_min | is_max) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_feq | is_fne) & (fp_a_is_SNAN | fp_b_is_SNAN)) |
       ((is_flt | is_fle | is_fgt | is_fge) & (fp_a_is_NAN | fp_b_is_NAN)) |
