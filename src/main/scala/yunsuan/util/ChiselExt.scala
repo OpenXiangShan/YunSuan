@@ -1,9 +1,9 @@
 package yunsuan.util
 
 import chisel3._
+import chisel3.util.experimental.decode._
 import chisel3.util.{BitPat, Cat}
 
-import chisel3.util.experimental.decode._
 import scala.language.implicitConversions
 
 object ChiselExt {
@@ -72,25 +72,25 @@ object ChiselExt {
       else
         BitPat.dontCare(n - bitPat.width) ## this.bitPat
     }
+
+    def isOneOf(bps: BitPat*): Boolean = {
+      bps.exists(_.cover(bitPat))
+    }
   }
 
-  object UIntExt {
-    sealed trait UIntCanCompare[T] {
-      def toBitPat(x: T): BitPat
-    }
+  sealed trait UIntCanCompare[T] {
+    def toBitPat(x: T): BitPat
+  }
 
-    implicit object UIntComparer extends UIntCanCompare[UInt] {
-      def toBitPat(x: UInt): BitPat = BitPat(x)
-    }
+  implicit object UIntComparer extends UIntCanCompare[UInt] {
+    def toBitPat(x: UInt): BitPat = BitPat(x)
+  }
 
-    implicit object BitPatComparer extends UIntCanCompare[BitPat] {
-      def toBitPat(x: BitPat): BitPat = x
-    }
+  implicit object BitPatComparer extends UIntCanCompare[BitPat] {
+    def toBitPat(x: BitPat): BitPat = x
   }
 
   class UIntExt(val value: UInt) {
-    import UIntExt._
-
     def toFixWidthBitPat(n: Int): BitPat = {
       BitPat(this.value.pad(n))
     }
