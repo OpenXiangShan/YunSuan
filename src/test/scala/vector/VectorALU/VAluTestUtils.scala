@@ -58,16 +58,7 @@ trait BundleGenHelper {
   }
 
   def genVAluInput(s: SrcBundle, c: CtrlBundle) = {
-    (new VIFuInput).Lit(
-      _.opcode -> (new VAluOpcode).Lit(_.op -> c.opcode.U),
-      _.info -> genVIFuInfo(c),
-      _.srcType -> Vec.Lit(c.srcTypeVs2.U(4.W), c.srcTypeVs1.U(4.W)),
-      _.vdType -> c.vdType.U,
-      _.vs1 -> s.vs1.U(128.W),
-      _.vs2 -> s.vs2.U(128.W),
-      _.old_vd -> s.old_vd.U(128.W),
-      _.mask -> s.mask.U(128.W),
-    )
+    // Todo: vector test
   }
 
   def genVPermInput(s: SrcBundle, c: CtrlBundle) = {

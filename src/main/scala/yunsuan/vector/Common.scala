@@ -114,10 +114,12 @@ object Common {
   }
 
   object SewOH {
-    def e8 : UInt = "b0001".U(4.W)
-    def e16: UInt = "b0010".U(4.W)
-    def e32: UInt = "b0100".U(4.W)
-    def e64: UInt = "b1000".U(4.W)
+    def width: Int = 4
+
+    def e8 : UInt = "b0001".U(width.W)
+    def e16: UInt = "b0010".U(width.W)
+    def e32: UInt = "b0100".U(width.W)
+    def e64: UInt = "b1000".U(width.W)
 
     def convertFromVSew(vsew: UInt): UInt = {
       require(vsew.getWidth >= 2 && vsew.getWidth <= 3)
@@ -197,6 +199,11 @@ object Common {
 
     def this(v: Vec[UInt]) = {
       this(v.asUInt)
+    }
+
+    def toByteVec: Vec[UInt] = {
+      require(width % 8 == 0)
+      this.splitToVec(width / 8, 8)
     }
 
     def to8bitVec: Vec[UInt] = {

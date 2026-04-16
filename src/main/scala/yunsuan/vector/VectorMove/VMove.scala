@@ -4,9 +4,9 @@ import chisel3._
 import chisel3.util._
 import yunsuan.VMoveOpcode
 import yunsuan.VMoveOpcode._
-import yunsuan.vector.alu.VSew._
 import yunsuan.vector.BitsExtend
 import yunsuan.vector.Common.SewOH
+import yunsuan.vector.Common.VSew._
 
 class VMoveInfo extends Bundle {
   val vm = Bool()

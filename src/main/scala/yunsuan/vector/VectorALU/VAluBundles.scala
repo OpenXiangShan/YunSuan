@@ -5,6 +5,7 @@ import chisel3._
 import chisel3.util._
 import yunsuan.vector.alu.VAluOpcode._
 
+// Todo: remove it
 class VAluOpcode extends Bundle{
   val op = UInt(6.W)
   // Alu opcode:
@@ -74,6 +75,7 @@ class VAluOpcode extends Bundle{
   def isVro     = op === vrol || op === vror
 }
 
+// Todo: remove it
 class VIFuInfo extends Bundle {
   val vm = Bool()
   val ma = Bool()
@@ -85,6 +87,7 @@ class VIFuInfo extends Bundle {
   val vxrm = UInt(2.W)
 }
 
+@deprecated("This bundle will be removed.")
 class VIFuInput extends Bundle {
   val opcode = new VAluOpcode
   val info = new VIFuInfo
@@ -96,6 +99,7 @@ class VIFuInput extends Bundle {
   val mask = UInt(128.W)
 }
 
+@deprecated("This bundle will be removed.")
 class VIFuOutput extends Bundle {
   val vd = UInt(128.W)
   val vxsat = Bool()

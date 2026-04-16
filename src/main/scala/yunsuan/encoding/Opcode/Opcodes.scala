@@ -1,7 +1,7 @@
 package yunsuan.encoding.Opcode
 
 import chisel3._
-import chisel3.util.{BitPat, Fill, log2Up}
+import chisel3.util._
 import sourcecode.{Name => SourceName}
 import yunsuan.encoding.Opcode.OpcodeTraits._
 import yunsuan.util.ChiselExt._
@@ -1351,15 +1351,6 @@ object Opcodes {
 
     def isNClip(implicit op: UInt): Bool = getOpClass.isOneOf(CSHIFT) && getOp.isOneOf(CLIPU, CLIP)
 
-    def isVand(implicit op: UInt): Bool = getOp === AND
-    def isVnand(implicit op: UInt): Bool = getOp === NAND
-    def isVandn(implicit op: UInt): Bool = getOp === ANDN
-    def isVxor(implicit op: UInt): Bool = getOp === XOR
-    def isVor(implicit op: UInt): Bool = getOp === OR
-    def isVnor(implicit op: UInt): Bool = getOp === NOR
-    def isVorn(implicit op: UInt): Bool = getOp === ORN
-    def isVxnor(implicit op: UInt): Bool = getOp === XNOR
-
     def isCmpEq(implicit op: UInt): Bool = getOp === EQ
     def isCmpLt(implicit op: UInt): Bool = getOp === LT || getOp === LTU
     def isCmpNe(implicit op: UInt): Bool = getOp === NE
@@ -1379,41 +1370,34 @@ object Opcodes {
     def isCtz(implicit op: UInt): Bool = false.B // not supported yet
     def isPredicateAlwaysTrue(implicit op: UInt): Bool = getOpClass === ADDER && getOp.isOneOf(ADC, SBC)
 
-    def isandResult(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === AND
-    def isorResult(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === OR
-    def isxorResult(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === XOR
-    def isvnandResult(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === NAND
-    def isVandnResult(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === ANDN
-    def isvnorReault(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === NOR
-    def isVornResult(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === ORN
-    def isvxnorReault(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === XNOR
-    def isextResult(implicit op: UInt): Bool = getOpClass === MOVE && getOp.isOneOf(ZEXT, SEXT) && getDataType.isOneOf(S2F2DV, S2F4DV, S2F8DV)
-    def isscalResult(implicit op: UInt): Bool = getOpClass === CSHIFT && getOp.isOneOf(SRL, SRA) && getDataType === S2VDV
-    def isvroShiftResult(implicit op: UInt): Bool = getOpClass === SHIFT && getOp.isOneOf(ROR, ROL) && getDataType === S2VDV
-    def isvwsllResult(implicit op: UInt): Bool = getOpClass === CSHIFT && getOp === SLL && getDataType === S2VDW
-    def isleftShiftResult(implicit op: UInt): Bool = getOpClass === SHIFT && getOp === SLL && getDataType === S2VDV
+    object Res {
+      def isAnd(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === AND
+      def isOr(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === OR
+      def isXor(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === XOR
+      def isNand(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === NAND
+      def isAndn(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === ANDN
+      def isNor(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === NOR
+      def isOrn(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === ORN
+      def isXnor(implicit op: UInt): Bool = getOpClass === LOGIC && getOp === XNOR
+      def isExt(implicit op: UInt): Bool = getOpClass === MOVE && getOp.isOneOf(ZEXT, SEXT) && getDataType.isOneOf(S2F2DV, S2F4DV, S2F8DV)
+      def isScal(implicit op: UInt): Bool = getOpClass === CSHIFT && getOp.isOneOf(SRL, SRA) && getDataType === S2VDV
+      def isVroShift(implicit op: UInt): Bool = getOpClass === SHIFT && getOp.isOneOf(ROR, ROL) && getDataType === S2VDV
+      def isVwsll(implicit op: UInt): Bool = getOpClass === CSHIFT && getOp === SLL && getDataType === S2VDW
+      def isLeftShift(implicit op: UInt): Bool = getOpClass === SHIFT && getOp === SLL && getDataType === S2VDV
 
-    def isrightShiftResult(implicit op: UInt): Bool =
-      (
-        getOpClass === SHIFT &&
-        getOp.isOneOf(SRL, SRA) &&
-        getDataType === S2VDV
-      ) || (
-        getOpClass === CSHIFT &&
-        getOp.isOneOf(SRL, SRA) &&
-        getDataType === S2WDV
-      ) || (
-        getOpClass === CSHIFT &&
-        getOp.isOneOf(CLIPU, CLIP) &&
-       getDataType === S2WDV
-      )
+      def isRightShift(implicit op: UInt): Bool = Mux1H(Seq(
+        (getOpClass === SHIFT  && getDataType === S2VDV) -> getOp.isOneOf(SRL, SRA),
+        (getOpClass === CSHIFT && getDataType === S2WDV) -> getOp.isOneOf(SRL, SRA),
+        (getOpClass === CSHIFT && getDataType === S2WDV) -> getOp.isOneOf(CLIPU, CLIP),
+      ))
 
-    def isleadZeroResult(implicit op: UInt): Bool = false.B  // not supported yet
-    def isbrevResult(implicit op: UInt): Bool = false.B  // not supported yet
-    def isbrev8Result(implicit op: UInt): Bool = false.B  // not supported yet
-    def isrev8Result(implicit op: UInt): Bool = getOpClass === BITOP && getOp === REV8 && getDataType === S2VDV
-    def isvIAluAddervd(implicit op: UInt): Bool = getOpClass === CADDER && getOp.isOneOf(AADDU, AADD, ASUBU, ASUB) && getDataType === S2VDV
-    def isoriginAddResult(implicit op: UInt): Bool = getOpClass === ADDER && getOp.isOneOf(ADD, SUB) && getDataType === S2VDV
+      def isLeadZero(implicit op: UInt): Bool = false.B  // not supported yet
+      def isBrev(implicit op: UInt): Bool = false.B  // not supported yet
+      def isBrev8(implicit op: UInt): Bool = false.B  // not supported yet
+      def isRev8(implicit op: UInt): Bool = getOpClass === BITOP && getDataType === S2VDV && getOp === REV8
+      def isAvg(implicit op: UInt): Bool = getOpClass === CADDER && getDataType === S2VDV && getOp.isOneOf(AADDU, AADD, ASUBU, ASUB)
+      def isAdder(implicit op: UInt): Bool = getOpClass === ADDER && getDataType === S2VDV && getOp.isOneOf(ADD, SUB, ADC, SBC)
+    }
 
     object LitUtil {
       def getOp(implicit op: BitPat): BitPat = op.drop(8)
@@ -1769,6 +1753,8 @@ object Opcodes {
 
     protected def getSubOp(implicit op: UInt): UInt = op(4, 2)
     protected def getSubOp(op: BitPat): BitPat = op(4, 2)
+
+    def getElemWidth(implicit op: UInt): UInt = op(1, 0)
 
     def isVS2X(implicit op: UInt): Bool = getSubOp.isOneOf(MV_VS2X)
     def isX2VS(implicit op: UInt): Bool = getSubOp.isOneOf(MV_X2VS)
