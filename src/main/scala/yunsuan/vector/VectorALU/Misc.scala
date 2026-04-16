@@ -2,111 +2,44 @@ package yunsuan.vector.VectorALU
 
 import chisel3._
 import chisel3.util._
-import yunsuan.encoding.Opcode.FixedPointRoundingMode._
-import yunsuan.encoding.Opcode.Opcodes.VIAluOpcode
 import yunsuan.util._
+import yunsuan.vector.Common.Vxrm
 import yunsuan.vector.UIntSplit
+import yunsuan.vector.VectorALU.VIAlu.NarrowMaskGroup
 
 import scala.math.pow
 
-class VIAluMiscCtrl extends Bundle {
-  val sel8 = Bool()
-  val sel16 = Bool()
-  val sel32 = Bool()
-  val sel64 = Bool()
-  val isVf2 = Bool()
-  val isVf4 = Bool()
-  val isVf8 = Bool()
-  val widenVs2 = Bool()
-  val widen = Bool()
-  val isNarrow = Bool()
-  val isSigned = Bool()
-  val isLeftShiftLogic = Bool()
-  val isCtz= Bool()
-}
 
-class VIAluMiscData(xlen: Int) extends Bundle {
-  val vs2 = UInt(xlen.W)
-  val vs1 = UInt(xlen.W)
-  val vs2Widen = UInt(xlen.W)
-  val vs1Widen = UInt(xlen.W)
-  val vxrm = UInt(2.W)
-}
+class Misc extends VIAlu.Module {
 
-class VIAluMiscInput(xlen: Int) extends Bundle {
-  val ctrl = new VIAluMiscCtrl
-  val data = new VIAluMiscData(xlen)
-}
+  val in = IO(Input(new Misc.In))
+  val out = IO(Output(new Misc.Out))
 
-class VIAluMiscOutput(xlen: Int) extends Bundle {
-  val extResult = UInt(xlen.W)
-
-  val andResult = UInt(xlen.W)
-  val orResult = UInt(xlen.W)
-  val xorResult = UInt(xlen.W)
-  val vnandResult = UInt(xlen.W)
-  val VandnResult = UInt(xlen.W)
-  val vnorReault = UInt(xlen.W)
-  val VornResult = UInt(xlen.W)
-  val vxnorReault = UInt(xlen.W)
-
-  val scalResult = UInt(xlen.W)
-  val vroShiftResult = UInt(xlen.W)
-  val vwsllResult = UInt(xlen.W)
-  val leftShiftResult = UInt(xlen.W)
-  val rightShiftResult = UInt(xlen.W)
-  val leadZeroResult = UInt(xlen.W)
-  val brevResult = UInt(xlen.W)
-  val brev8Result = UInt(xlen.W)
-  val rev8Result = UInt(xlen.W)
-
-
-
-  val narrowVd = UInt((xlen / 2).W)
-  val vxsat = UInt(8.W)
-  val popResult = UInt(xlen.W)
-  val signBitSel8  = UInt(4.W)
-  val signBitSel16 = UInt(2.W)
-  val signBitSel32 = Bool()
-  val overflowSignSel8 = UInt(4.W)
-  val overflowSignSel16 = UInt(2.W)
-  val overflowSignSel32 = Bool()
-  val upOverflowUnSignSel8 = UInt(4.W)
-  val upOverflowUnSignSel16 = UInt(2.W)
-  val upOverflowUnSignSel32 = Bool()
-  val nclipResultSel8Tmp = UInt((xlen / 2).W)
-  val nclipResultSel16Tmp = UInt((xlen / 2).W)
-  val nclipResultSel32Tmp = UInt((xlen / 2).W)
-}
-
-class VIAluMisc(xlen: Int = 64) extends Module {
-  import VIAluOpcode._
-
-  val io = IO(new Bundle {
-    val in = Input(new VIAluMiscInput(xlen))
-    val out = Output(new VIAluMiscOutput(xlen))
-  })
+  val res = Wire(new Misc.OutRes)
+  val mid = Wire(new Misc.OutMidRes)
 
   private val isVector: Boolean = true
 
-  private val sel8  = io.in.ctrl.sel8
-  private val sel16 = io.in.ctrl.sel16
-  private val sel32 = io.in.ctrl.sel32
-  private val sel64 = io.in.ctrl.sel64
-  private val isVf2 = io.in.ctrl.isVf2
-  private val isVf4 = io.in.ctrl.isVf4
-  private val isVf8 = io.in.ctrl.isVf8
-  private val widenVs2 = io.in.ctrl.widenVs2
-  private val widen = io.in.ctrl.widen
-  private val isNarrow = io.in.ctrl.isNarrow
-  private val isSigned = io.in.ctrl.isSigned
-  private val isLeftShiftLogic = io.in.ctrl.isLeftShiftLogic
-  private val isCtz = io.in.ctrl.isCtz
-  private val vs2 = io.in.data.vs2
-  private val vs1 = io.in.data.vs1
-  private val vs2Widen = io.in.data.vs2Widen
-  private val vs1Widen = io.in.data.vs1Widen
-  private val rm = io.in.data.vxrm
+  private val sel8  = in.ctrl.sel8
+  private val sel16 = in.ctrl.sel16
+  private val sel32 = in.ctrl.sel32
+  private val sel64 = in.ctrl.sel64
+  private val sew1H = Cat(sel64, sel32, sel16, sel8)
+  private val isVf2 = in.ctrl.isVf2
+  private val isVf4 = in.ctrl.isVf4
+  private val isVf8 = in.ctrl.isVf8
+  private val widenVs2 = in.ctrl.widenVs2
+  private val widen = in.ctrl.widen
+  private val isNarrow = in.ctrl.isNarrow
+  private val isSigned = in.ctrl.isSigned
+  private val isLeftShiftLogic = in.ctrl.isLeftShiftLogic
+  private val isCtz = in.ctrl.isCtz
+  private val rm = in.vxrm
+
+  private val vs2 = in.data.vs2
+  private val vs1 = in.data.vs1
+  private val vs2Widen = in.data.vs2Widen
+  private val vs1Widen = in.data.vs1Widen
 
   private val ext = Wire(Vec(8, UInt(8.W)))
   ext(0) := vs2Widen(7, 0)
@@ -150,23 +83,21 @@ class VIAluMisc(xlen: Int = 64) extends Module {
     isVf8 -> Fill(8, isSigned & vs2Widen(7)),
   ))
 
-  private val extResult = Wire(UInt(xlen.W))
-  extResult := ext.asUInt
+  res.ext := ext.asUInt
 
-  private val andResult = vs2 & vs1
-  private val orResult  = vs2 | vs1
-  private val xorResult = vs2 ^ vs1
-  private val vnandResult = ~andResult
-  private val VandnResult = (vs2 & (~vs1).asUInt)
-  private val vnorReault = ~orResult
-  private val VornResult = (vs2 | (~vs1).asUInt)
-  private val vxnorReault = ~xorResult
-
+  res.and   := vs2 & vs1
+  res.or    := vs2 | vs1
+  res.xor   := vs2 ^ vs1
+  res.vnand := ~res.and
+  res.vandn := (vs2 & (~vs1).asUInt)
+  res.vnor  := ~res.or
+  res.vorn  := (vs2 | (~vs1).asUInt)
+  res.vxnor := ~res.xor
 
   private val vs2WidenVec = Wire(Vec(8, UInt(8.W)))
   private val vs1WidenVec = Wire(Vec(8, UInt(8.W)))
-  private val vs2WidenWire = Wire(UInt(xlen.W))
-  private val vs1WidenWire = Wire(UInt(xlen.W))
+  private val vs2WidenWire = Wire(UInt(dWidth.W))
+  private val vs1WidenWire = Wire(UInt(dWidth.W))
 
   vs2WidenVec(0) := vs2Widen(7, 0)
   vs2WidenVec(1) := Mux(sel8, 0.U, vs2Widen(15, 8))
@@ -257,16 +188,13 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   private val (rightShift32, rightShiftData32) = rightShift(32)
   private val (rightShift64, rightShiftData64) = rightShift(64)
 
-  private val leftShiftResult = Wire(UInt(xlen.W))
-  private val rightShiftResult = Wire(UInt(xlen.W))
-
-  leftShiftResult := Mux1H(Seq(
+  res.leftShift := Mux1H(Seq(
     sel8  -> leftShift8,
     sel16 -> leftShift16,
     sel32 -> leftShift32,
     sel64 -> leftShift64,
   ))
-  rightShiftResult := Mux1H(Seq(
+  res.rightShift := Mux1H(Seq(
     sel8  -> rightShift8,
     sel16 -> rightShift16,
     sel32 -> rightShift32,
@@ -275,14 +203,11 @@ class VIAluMisc(xlen: Int = 64) extends Module {
 
   def genRound(in: UInt, rIn: UInt): UInt = {
     val (g, r, s) = (in(0), rIn.head(1).asBool, rIn.tail(1))
-    val roundUp = MuxLookup(
-      rm,
-      false.B
-    )(Seq(
-      RNU -> r,
-      RNE -> (r & (s.orR | g)),
-      RDN -> false.B,
-      ROD -> (!g & rIn.orR),
+    val roundUp = Mux1H(Seq(
+      rm.isRnu -> r,
+      rm.isRne -> (r & (s.orR | g)),
+      rm.isRdn -> false.B,
+      rm.isRod -> (!g & rIn.orR),
     ))
     val incOne = Wire(UInt((in.getWidth + 1).W))
     incOne := in + 1.U
@@ -293,7 +218,7 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   private val scalResultSel8 = Wire(Vec(8, UInt(8.W)))
   private val scalResultSel16 = Wire(Vec(4, UInt(16.W)))
   private val scalResultSel32 = Wire(Vec(2, UInt(32.W)))
-  private val scalResultSel64 = Wire(UInt(xlen.W))
+  private val scalResultSel64 = Wire(UInt(dWidth.W))
 
   for (i <- 0 until 8) {
     scalResultSel8(i) := genRound(rightShift8(i * 8 + 7, i * 8), rightShiftData8(i * 8 + 7, i * 8))
@@ -306,24 +231,20 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   }
   scalResultSel64 := genRound(rightShift64, rightShiftData64)
 
-  private val narrowResult = Wire(UInt((xlen / 2).W))
-  narrowResult := Mux1H(Seq(
+  res.narrow := Mux1H(Seq(
     sel8  -> Cat(rightShift16(55, 48), rightShift16(39, 32), rightShift16(23, 16), rightShift16(7, 0)),
     sel16 -> Cat(rightShift32(47, 32), rightShift32(15, 0)),
     sel32 -> rightShift64,
   ))
 
-  private val scalResult = Wire(UInt(xlen.W))
-  scalResult := Mux1H(Seq(
+  res.scal := Mux1H(Seq(
     sel8  -> scalResultSel8.asUInt,
     sel16 -> scalResultSel16.asUInt,
     sel32 -> scalResultSel32.asUInt,
     sel64 -> scalResultSel64,
   ))
 
-  private val nClipSatSel8  = Wire(Vec(4, Bool()))
-  private val nClipSatSel16 = Wire(Vec(2, Bool()))
-  private val nClipSatSel32 = Wire(Bool())
+  private val nClipSat = Wire(new NarrowMaskGroup())
   private val signBitSel8 = Wire(Vec(4, Bool()))
   private val overflowSignSel8 = Wire(Vec(4, Bool()))
   private val upOverflowUnSignSel8 = Wire(Vec(4, Bool()))
@@ -338,7 +259,7 @@ class VIAluMisc(xlen: Int = 64) extends Module {
     val upOverflowSign = scalResultSel16(i).tail(1).head(8).orR
     val downOverflowSign = !scalResultSel16(i).tail(1).head(8).andR
     overflowSignSel8(i) := Mux(signBitSel8(i), downOverflowSign, upOverflowSign)
-    nClipSatSel8(i) := Mux(isSigned, overflowSignSel8(i), upOverflowUnSignSel8(i))
+    nClipSat.e8(i) := Mux(isSigned, overflowSignSel8(i), upOverflowUnSignSel8(i))
     nclipResultsel8Tmp(i) := scalResultSel16(i).tail(8)
   }
   for (i <- 0 until 2) {
@@ -347,7 +268,7 @@ class VIAluMisc(xlen: Int = 64) extends Module {
     val upOverflowSign = scalResultSel32(i).tail(1).head(16).orR
     val downOverflowSign = !scalResultSel32(i).tail(1).head(16).andR
     overflowSignSel16(i) := Mux(signBitSel16(i), downOverflowSign, upOverflowSign)
-    nClipSatSel16(i) := Mux(isSigned, overflowSignSel16(i), upOverflowUnSignSel16(i))
+    nClipSat.e16(i) := Mux(isSigned, overflowSignSel16(i), upOverflowUnSignSel16(i))
     nclipResultsel16Tmp(i) := scalResultSel32(i).tail(16)
   }
   private val upOverflowUnSign = scalResultSel64.head(32).orR
@@ -355,14 +276,9 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   private val upOverflowSign = scalResultSel64.tail(1).head(32).orR
   private val downOverflowSign = !scalResultSel64.tail(1).head(32).andR
   private val overflowSign = Mux(signBit, downOverflowSign, upOverflowSign)
-  nClipSatSel32 := Mux(isSigned, overflowSign, upOverflowUnSign)
+  nClipSat.e32.head := Mux(isSigned, overflowSign, upOverflowUnSign)
 
-  private val nClipSat = Wire(UInt(4.W))
-  nClipSat := Mux1H(Seq(
-    sel8  -> nClipSatSel8.asUInt,
-    sel16 -> nClipSatSel16.asUInt,
-    sel32 -> nClipSatSel32,
-  ))
+  mid.narrowVxsatNClip := nClipSat.toE8Mask(sew1H)
 
   def shiftRotateLeftOneElement(data: UInt, shift: UInt, sew: Int): UInt = {
     sew match {
@@ -406,8 +322,7 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   private val vroShift16 = Mux(isLeftShiftLogic, vroShiftRotateLeft16, vroShiftRotateRight16)
   private val vroShift8  = Mux(isLeftShiftLogic, vroShiftRotateLeft8,  vroShiftRotateRight8)
 
-  private val vroShiftResult = Wire(UInt(xlen.W))
-  vroShiftResult := Mux1H(Seq(
+  res.vroShift := Mux1H(Seq(
     sel8  -> vroShift8,
     sel16 -> vroShift16,
     sel32 -> vroShift32,
@@ -440,7 +355,7 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   private val pop8  = Wire(Vec(8, UInt(8.W)))
   private val pop16 = Wire(Vec(4, UInt(16.W)))
   private val pop32 = Wire(Vec(2, UInt(32.W)))
-  private val pop64 = Wire(UInt(xlen.W))
+  private val pop64 = Wire(UInt(dWidth.W))
   for (i <- 0 until 8) {
     pop8(i) := PopCount8(vs2(i * 8 + 7, i * 8))
   }
@@ -452,8 +367,7 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   }
   pop64 := pop32(1)(5, 0) +& pop32(0)(5, 0)
 
-  private val popResult = Wire(UInt(xlen.W))
-  popResult := Mux1H(Seq(
+  res.pop := Mux1H(Seq(
     sel8  -> pop8.asUInt,
     sel16 -> pop16.asUInt,
     sel32 -> pop32.asUInt,
@@ -476,16 +390,14 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   }
   brevResultSel64 := Cat(vs2.asBools)
 
-  private val brevResult = Wire(UInt(xlen.W))
-  brevResult := Mux1H(Seq(
+  res.brev := Mux1H(Seq(
     sel8  -> brevResultSel8.asUInt,
     sel16 -> brevResultSel16.asUInt,
     sel32 -> brevResultSel32.asUInt,
     sel64 -> brevResultSel64.asUInt,
   ))
 
-  private val brev8Result = Wire(UInt(xlen.W))
-  brev8Result := brevResultSel8.asUInt
+  res.brev8 := brevResultSel8.asUInt
 
   private val rev8ResultSel16 = Wire(Vec(4, Vec(2, UInt(8.W))))
   private val rev8ResultSel32 = Wire(Vec(2, Vec(4, UInt(8.W))))
@@ -510,15 +422,14 @@ class VIAluMisc(xlen: Int = 64) extends Module {
     rev8ResultSel64(7 - i) := rev8ResultSel64Tmp(i)
   }
 
-  private val rev8Result = Wire(UInt(xlen.W))
-  rev8Result := Mux1H(Seq(
+  res.rev8 := Mux1H(Seq(
     sel8  -> vs2,
     sel16 -> rev8ResultSel16.asUInt,
     sel32 -> rev8ResultSel32.asUInt,
     sel64 -> rev8ResultSel64.asUInt,
   ))
 
-  private val leadZeroIn = Mux(isCtz, brevResult, vs2)
+  private val leadZeroIn = Mux(isCtz, res.brev, vs2)
   private val lzc = Lzc(leadZeroIn, isVector)
 
   private val clzResultSel8  = Wire(Vec(8, UInt(8.W)))
@@ -537,71 +448,43 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   }
   clzResultSel64 := lzc.io.vectorOut.get.out64
 
-  private val leadZeroResult = Wire(UInt(xlen.W))
-  leadZeroResult := Mux1H(Seq(
+  res.leadZero := Mux1H(Seq(
     sel8  -> clzResultSel8.asUInt,
     sel16 -> clzResultSel16.asUInt,
     sel32 -> clzResultSel32.asUInt,
     sel64 -> clzResultSel64.asUInt,
   ))
 
-  private val vwsllResult = Wire(UInt(xlen.W))
-  vwsllResult := Mux1H(Seq(
+  res.vwsll := Mux1H(Seq(
     sel8  -> leftShift16,
     sel16 -> leftShift32,
     sel32 -> leftShift64,
   ))
   
-  io.out.andResult := andResult
-  io.out.orResult  := orResult
-  io.out.xorResult := xorResult
-  io.out.vnandResult := vnandResult
-  io.out.VandnResult := VandnResult
-  io.out.vnorReault := vnorReault
-  io.out.VornResult := VornResult
-  io.out.vxnorReault := vxnorReault
+  mid.signBitSel8  := signBitSel8.asUInt
+  mid.signBitSel16 := signBitSel16.asUInt
+  mid.signBitSel32 := signBit
+  mid.overflowSignSel8 := overflowSignSel8.asUInt
+  mid.overflowSignSel16 := overflowSignSel16.asUInt
+  mid.overflowSignSel32 := overflowSign
+  mid.upOverflowUnSignSel8 := upOverflowUnSignSel8.asUInt
+  mid.upOverflowUnSignSel16 := upOverflowUnSignSel16.asUInt
+  mid.upOverflowUnSignSel32 := upOverflowUnSign
+  mid.nclipResultSel8Tmp := nclipResultsel8Tmp.asUInt
+  mid.nclipResultSel16Tmp := nclipResultsel16Tmp.asUInt
+  mid.nclipResultSel32Tmp := scalResultSel64.tail(32)
 
-  io.out.extResult := extResult
-
-  io.out.scalResult := scalResult
-  io.out.vroShiftResult := vroShiftResult
-  io.out.vwsllResult := vwsllResult
-  io.out.leftShiftResult := leftShiftResult
-  io.out.rightShiftResult := rightShiftResult
-  io.out.leadZeroResult := leadZeroResult
-  io.out.brevResult := brevResult
-  io.out.brev8Result := brev8Result
-  io.out.rev8Result := rev8Result
-
-
-  io.out.narrowVd := narrowResult
-  io.out.vxsat := nClipSat
-  io.out.popResult := popResult
-  io.out.signBitSel8  := signBitSel8.asUInt
-  io.out.signBitSel16 := signBitSel16.asUInt
-  io.out.signBitSel32 := signBit
-  io.out.overflowSignSel8 := overflowSignSel8.asUInt
-  io.out.overflowSignSel16 := overflowSignSel16.asUInt
-  io.out.overflowSignSel32 := overflowSign
-  io.out.upOverflowUnSignSel8 := upOverflowUnSignSel8.asUInt
-  io.out.upOverflowUnSignSel16 := upOverflowUnSignSel16.asUInt
-  io.out.upOverflowUnSignSel32 := upOverflowUnSign
-  io.out.nclipResultSel8Tmp := nclipResultsel8Tmp.asUInt
-  io.out.nclipResultSel16Tmp := nclipResultsel16Tmp.asUInt
-  io.out.nclipResultSel32Tmp := scalResultSel64.tail(32)
-
+  out.res := res
+  out.mid := mid
 
   dontTouch(vs2WidenVec)
   dontTouch(vs1WidenVec)
-  dontTouch(vwsllResult)
   dontTouch(vroShift8)
   dontTouch(vroShift16)
   dontTouch(vroShift32)
   dontTouch(vroShift64)
-  dontTouch(vroShiftResult)
-  dontTouch(nClipSatSel8)
-  dontTouch(nClipSatSel16)
-  dontTouch(nClipSatSel32)
+  dontTouch(nClipSat)
+  dontTouch(nClipSat)
   dontTouch(nClipSat)
   dontTouch(scalResultSel8)
   dontTouch(scalResultSel16)
@@ -615,4 +498,82 @@ class VIAluMisc(xlen: Int = 64) extends Module {
   dontTouch(rightShiftData16)
   dontTouch(rightShiftData32)
   dontTouch(rightShiftData64)
+  dontTouch(out.res)
+  dontTouch(out.mid)
+}
+
+object Misc {
+  class In extends VIAlu.Bundle {
+    val vxrm = Vxrm()
+    val ctrl = new InCtrl
+    val data = new InData
+  }
+
+  class Out extends VIAlu.Bundle {
+    val res = new OutRes
+    val mid = new OutMidRes
+  }
+
+  class InCtrl extends VIAlu.Bundle {
+    val sel8 = Bool()
+    val sel16 = Bool()
+    val sel32 = Bool()
+    val sel64 = Bool()
+    val isVf2 = Bool()
+    val isVf4 = Bool()
+    val isVf8 = Bool()
+    val widenVs2 = Bool()
+    val widen = Bool()
+    val isNarrow = Bool()
+    val isSigned = Bool()
+    val isLeftShiftLogic = Bool()
+    val isCtz = Bool()
+  }
+
+  class InData extends VIAlu.Bundle {
+    val vs2 = WidthData()
+    val vs1 = WidthData()
+    val vs2Widen = WidthData()
+    val vs1Widen = WidthData()
+  }
+
+  class OutRes extends VIAlu.Bundle {
+    val ext = WidthData()
+    val and = WidthData()
+    val or = WidthData()
+    val xor = WidthData()
+    val vnand = WidthData()
+    val vandn = WidthData()
+    val vnor = WidthData()
+    val vorn = WidthData()
+    val vxnor = WidthData()
+    val scal = WidthData()
+    val vroShift = WidthData()
+    val vwsll = WidthData()
+    val leftShift = WidthData()
+    val rightShift = WidthData()
+    val leadZero = WidthData()
+    val brev = WidthData()
+    val brev8 = WidthData()
+    val rev8 = WidthData()
+
+    val narrow = NarrowData()
+    val pop = WidthData()
+  }
+
+  class OutMidRes extends VIAlu.Bundle {
+    val signBitSel8 = UInt(4.W)
+    val signBitSel16 = UInt(2.W)
+    val signBitSel32 = Bool()
+    val overflowSignSel8 = UInt(4.W)
+    val overflowSignSel16 = UInt(2.W)
+    val overflowSignSel32 = Bool()
+    val upOverflowUnSignSel8 = UInt(4.W)
+    val upOverflowUnSignSel16 = UInt(2.W)
+    val upOverflowUnSignSel32 = Bool()
+    val narrowVxsatNClip = NarrowMask()
+    val nclipResultSel8Tmp  = NarrowData()
+    val nclipResultSel16Tmp = NarrowData()
+    val nclipResultSel32Tmp = NarrowData()
+  }
 }

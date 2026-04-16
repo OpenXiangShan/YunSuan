@@ -5,6 +5,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.decode._
 
+// Todo: remove it
 object VAluOpcode {
   val vadd   = 0.U(6.W)
   val vsub   = 1.U(6.W)
@@ -63,39 +64,4 @@ object VAluOpcode {
   val vrol    = 53.U(6.W)
   val vror    = 54.U(6.W)
   val vwsll   = 55.U(6.W)
-}
-
-import VAluOpcode._
-
-object VIntFixpTable {
-                   //           misc
-                   //         sub | cmp
-                   //          |  |  |
-  val default =       BitPat("b?  1  0")
-  val table   = Seq(
-    BitPat(vadd)   -> BitPat("b0  0  0"),
-    BitPat(vsub)   -> BitPat("b1  0  0"),
-    BitPat(vadc)   -> BitPat("b0  0  0"),
-    BitPat(vmadc)  -> BitPat("b0  0  1"),
-    BitPat(vsbc)   -> BitPat("b1  0  0"),
-    BitPat(vmsbc)  -> BitPat("b1  0  1"),
-    BitPat(vmseq)  -> BitPat("b?  0  1"),
-    BitPat(vmsne)  -> BitPat("b?  0  1"),
-    BitPat(vmslt)  -> BitPat("b1  0  1"),
-    BitPat(vmsle)  -> BitPat("b1  0  1"),
-    BitPat(vmsgt)  -> BitPat("b1  0  1"),
-    BitPat(vmin)   -> BitPat("b1  0  0"),
-    BitPat(vmax)   -> BitPat("b1  0  0"),
-    BitPat(vsadd)  -> BitPat("b0  0  0"),
-    BitPat(vssub)  -> BitPat("b1  0  0"),
-    BitPat(vaadd)  -> BitPat("b0  0  0"),
-    BitPat(vasub)  -> BitPat("b1  0  0"),
-  )
-}
-
-object VSew {
-  val e8  = "b00".U(2.W)
-  val e16 = "b01".U(2.W)
-  val e32 = "b10".U(2.W)
-  val e64 = "b11".U(2.W)
 }
