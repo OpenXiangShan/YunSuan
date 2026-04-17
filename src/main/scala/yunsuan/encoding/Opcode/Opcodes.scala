@@ -1790,6 +1790,9 @@ object Opcodes {
     def vlIsZeroUpdate(implicit op: UInt) = getSubOp.isOneOf(MV_VS2X, MV_NR)
 
     def isLegal(implicit op: UInt) = getSubOp.isOneOf(this.allBitPats.map(getSubOp))
+
+    // The latency of all uops in move is 0
+    override def getLat(opcode: Opcode): Int = 0
   }
 
   object VMoveOpcode extends VMoveOpcode
