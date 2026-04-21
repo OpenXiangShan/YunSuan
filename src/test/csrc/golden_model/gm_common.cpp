@@ -186,7 +186,8 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
         }
       }
     }
-  }else if(input.fuType == FloatCompare){
+  }else if(input.fuType == FloatCompare || input.fuType == FloatALU ||
+           input.fuType == FloatMul || input.fuType == FloatFMA){
     half_number = 1;
     result_shift_len = 64;
     for(int i = 0; i < 2; i++) {
@@ -322,7 +323,8 @@ VecOutput VPUGoldenModel::get_expected_output(VecInput input) {
           output.result[i] = ((uint64_t)output_part[i*half_number].result|mask);
           output.fflags[i] = (uint32_t)output_part[i*half_number].fflags;
         }
-      }else if(input.fuType == FloatCompare){
+      }else if(input.fuType == FloatCompare || input.fuType == FloatALU ||
+               input.fuType == FloatMul || input.fuType == FloatFMA){
         output.result[i] = (uint64_t)output_part[i*half_number].result;
         output.fflags[i] = (uint32_t)output_part[i*half_number].fflags;
       }else if(input.fuType == VIntegerMAC) {
@@ -479,7 +481,8 @@ ElementInput VPUGoldenModel::select_element(VecInput input, int idx) {
       element.src2 = input.is_frs1 ? (uint64_t)input64->src2[0] : (uint64_t)input32->src2[idx];
       element.src3 = (uint64_t)input32->src3[idx];
     }
-  }else if(input.fuType == FloatCompare){
+  }else if(input.fuType == FloatCompare || input.fuType == FloatALU ||
+           input.fuType == FloatMul || input.fuType == FloatFMA){
     element.src1 = (uint64_t)input64->src1[idx];
     element.src2 = (uint64_t)input64->src2[idx];
     element.src3 = (uint64_t)input64->src3[idx];

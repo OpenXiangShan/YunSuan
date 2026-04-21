@@ -25,6 +25,7 @@ struct TestType {
   uint8_t fuType;
   bool pick_fuOpType;
   uint16_t fuOpType;
+  bool scalarFloatBoxedInput;
 };
 
 class TestDriver {
@@ -45,8 +46,11 @@ private:
   VGMIntegerMAC vimac;
   VGMFloatCvt vcvt;
   SGMFloatCvt scvt;
-  SGMIntegerMul smul;
   SGMFloatCompare fcmp;
+  SGMFloatALU sfalu;
+  SGMFloatMul sfmul;
+  SGMFloatFMA sfma;
+  SGMIntegerMul smul;
 
 public:
   TestDriver();
@@ -89,7 +93,6 @@ public:
     verbose = true;
     vfd.verbose_exec(); valu.verbose_exec();
     vperm.verbose_exec();vid.verbose_exec();
-    fcmp.verbose_exec();
   }
   void keep_input() { keepinput = true; }
 };

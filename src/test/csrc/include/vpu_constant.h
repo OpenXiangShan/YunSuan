@@ -27,11 +27,14 @@ extern "C"{
 #define VIntegerMAC (10)
 #define IntegerMul (11)
 #define FloatCompare (12)
+#define FloatALU (13)
+#define FloatMul (14)
+#define FloatFMA (15)
 // #define ALL_FUTYPES {VFloatAdder,VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt}
 
 //will be delated
-#define FU_NUM 12
-#define ALL_FUTYPES {VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt,FloatCvtF2X,FloatCvtI2F,VIntegerMAC,IntegerMul,FloatCompare}
+#define FU_NUM 15
+#define ALL_FUTYPES {VFloatFMA,VFloatDivider,VIntegerALU,VPermutation,VIntegerALUV2,VIntegerDivider,VFloatCvt,FloatCvtF2X,FloatCvtI2F,VIntegerMAC,IntegerMul,FloatCompare,FloatALU,FloatMul,FloatFMA}
 
 #define INT_ROUNDING(result, xrm, gb) \
   do { \
@@ -232,21 +235,37 @@ extern "C"{
 #define VFA_MUST_FRS1_OPTYPES {VFGT,VFGE}
 #define VFA_NEED_FRS1_OPTYPES {VFADD,VFSUB,VFMIN,VFMAX,VFSGNJ,VFSGNJN,VFSGNJX,VFEQ,VFNE,VFLT,VFLE}
 
-#define FCMP_NUM 13
+#define FCMP_NUM 6
 #define FCMP_FEQ    (binstoi("0000"))
 #define FCMP_FLT    (binstoi("0001"))
 #define FCMP_FLE    (binstoi("0010"))
-#define FCMP_FMIN   (binstoi("0011"))
-#define FCMP_FMAX   (binstoi("0100"))
-#define FCMP_FSGNJ  (binstoi("0101"))
-#define FCMP_FSGNJX (binstoi("0110"))
-#define FCMP_FSGNJN (binstoi("0111"))
-#define FCMP_FMINM  (binstoi("1000"))
-#define FCMP_FMAXM  (binstoi("1001"))
-#define FCMP_FLTQ   (binstoi("1010"))
-#define FCMP_FLEQ   (binstoi("1011"))
-#define FCMP_FCLASS (binstoi("1100"))
-#define FCMP_ALL_OPTYPES {FCMP_FEQ,FCMP_FLT,FCMP_FLE,FCMP_FMIN,FCMP_FMAX,FCMP_FSGNJ,FCMP_FSGNJX,FCMP_FSGNJN,FCMP_FMINM,FCMP_FMAXM,FCMP_FLTQ,FCMP_FLEQ,FCMP_FCLASS}
+#define FCMP_FLTQ   (binstoi("0101"))
+#define FCMP_FLEQ   (binstoi("0110"))
+#define FCMP_FCLASS (binstoi("1000"))
+#define FCMP_ALL_OPTYPES {FCMP_FEQ,FCMP_FLT,FCMP_FLE,FCMP_FLTQ,FCMP_FLEQ,FCMP_FCLASS}
+
+#define FALU_NUM 9
+#define FALU_FADD   (binstoi("00000"))
+#define FALU_FSUB   (binstoi("00001"))
+#define FALU_FMIN   (binstoi("00010"))
+#define FALU_FMAX   (binstoi("00011"))
+#define FALU_FSGNJ  (binstoi("00110"))
+#define FALU_FSGNJN (binstoi("00111"))
+#define FALU_FSGNJX (binstoi("01000"))
+#define FALU_FMAXM  (binstoi("10011"))
+#define FALU_FMINM  (binstoi("11110"))
+#define FALU_ALL_OPTYPES {FALU_FADD,FALU_FSUB,FALU_FMIN,FALU_FMAX,FALU_FSGNJ,FALU_FSGNJN,FALU_FSGNJX,FALU_FMAXM,FALU_FMINM}
+
+#define FMUL_NUM 1
+#define FMUL_FMUL (binstoi("0000"))
+#define FMUL_ALL_OPTYPES {FMUL_FMUL}
+
+#define FMA_NUM 4
+#define FMA_FMACC  (binstoi("0001"))
+#define FMA_FNMACC (binstoi("0010"))
+#define FMA_FMSAC  (binstoi("0011"))
+#define FMA_FNMSAC (binstoi("0100"))
+#define FMA_ALL_OPTYPES {FMA_FMACC,FMA_FNMACC,FMA_FMSAC,FMA_FNMSAC}
 // vff funcop type
 #define VFF_NUM 9
 #define VFMUL   (binstoi("0000"))
