@@ -10,8 +10,10 @@ import yunsuan.vector.mac.VIMac
 import yunsuan.vector._
 import yunsuan.scalar.INT2FP
 import yunsuan.scalar.FPCVT
+import yunsuan.fpu.falu.FloatAdderV2
+import yunsuan.fpu.fmul.FloatMUL
+import yunsuan.fpu.{FloatCompare, FloatFMAV2}
 import yunsuan.scalar.Mul
-import yunsuan.fpu.FloatCompare
 import yunsuan.encoding.Opcode.Opcodes.FMiscOpcode
 
 trait VSPParameter {
@@ -28,6 +30,9 @@ trait VSPParameter {
   val VIMAC_latency: Int = 2
   val IMUL_latency: Int = 2
   val FCMP_latency: Int = 0
+  val FALU_latency: Int = 1
+  val FMUL_latency: Int = 2
+  val FMA_latency: Int = 3
 }
 
 object VPUTestFuType { // only use in test, difftest with xs
@@ -36,17 +41,20 @@ object VPUTestFuType { // only use in test, difftest with xs
   def vfd = "b0000_0010".U(8.W)
   def via = "b0000_0011".U(8.W)
   def vperm = "b0000_0100".U(8.W)
+  def viaf = "b0000_0101".U(8.W)
   def vid = "b0000_0110".U(8.W)
-  def vcvt= "b0000_0111".U(8.W)
+  def vcvt = "b0000_0111".U(8.W)
+  def fcvtf2x = "b0000_1000".U(8.W)
+  def fcvti2f = "b0000_1001".U(8.W)
+  def vimac = "b0000_1010".U(8.W) // not used
   def imul = "b0000_1011".U(8.W)
   def fcmp = "b0000_1100".U(8.W)
-=======
-  def fcmp = "b0000_1011".U(8.W)
-  def imul = "b0000_1100".U(8.W)
->>>>>>> efe018d (feat(FCMP): support maximum/minimum and sign-injection instructions)
+  def falu = "b0000_1101".U(8.W)
+  def fmul = "b0000_1110".U(8.W)
+  def fma = "b0000_1111".U(8.W)
 
   def unknown(typ: UInt) = {
-    (typ > 12.U)
+    (typ > 15.U)
   }
 }
 
@@ -124,7 +132,10 @@ class SimTop() extends VPUTestModule {
       VPUTestFuType.fcvti2f -> VCVT_latency.U,
       VPUTestFuType.vimac -> VIMAC_latency.U,
       VPUTestFuType.imul -> IMUL_latency.U,
-      VPUTestFuType.fcmp -> FCMP_latency.U
+      VPUTestFuType.fcmp -> FCMP_latency.U,
+      VPUTestFuType.falu -> FALU_latency.U,
+      VPUTestFuType.fmul -> FMUL_latency.U,
+      VPUTestFuType.fma -> FMA_latency.U
     )) // fuType --> latency, spec case for div
     assert(!VPUTestFuType.unknown(io.in.bits.fuType))
   }
@@ -211,6 +222,9 @@ class SimTop() extends VPUTestModule {
   val vimac_result = Wire(new VSTOutputIO)
   val imul_result = Wire(new VSTOutputIO)
   val fcmp_result = Wire(new VSTOutputIO)
+  val falu_result = Wire(new VSTOutputIO)
+  val fmul_result = Wire(new VSTOutputIO)
+  val fma_result = Wire(new VSTOutputIO)
   when (io.in.fire || io.out.fire) {
     vfd_result_valid.map(_ := false.B)
   }
@@ -228,8 +242,9 @@ class SimTop() extends VPUTestModule {
     val fpcvt = Module(new FPCVT(XLEN))
     val imul = Module(new Mul(XLEN))
     val fcmp = Module(new FloatCompare)
-    val imul = Module(new Mul(XLEN))
-    val fcmp = Module(new FloatCompare)
+    val falu = Module(new FloatAdderV2)
+    val fmul = Module(new FloatMUL)
+    val fma = Module(new FloatFMAV2)
 
     require(vfa.io.fp_a.getWidth == XLEN)
     vfa.io.fire := busy
@@ -392,6 +407,44 @@ class SimTop() extends VPUTestModule {
     fcmp_result.vxsat := 0.U
     fcmp_result.result(i) := fcmp.io.result
     fcmp_result.fflags(i) := ZeroExt(fcmp.io.fflags, 20)
+
+    // falu
+    falu.io.fire := busy
+    falu.io.in.fp_fmt := sew
+    falu.io.in.op_code := opcode(4, 0)
+    falu.io.in.fp_a := src1
+    falu.io.in.fp_b := src2
+    falu.io.in.fpAAppend := 0.U
+    falu.io.in.round_mode := rm
+    falu.io.in.inCtrlFromFMUL := 0.U.asTypeOf(falu.io.in.inCtrlFromFMUL)
+    falu.io.in.isSubFromFMUL := false.B
+    falu_result.result(i) := falu.io.out.fp_result
+    falu_result.fflags(i) := ZeroExt(falu.io.out.fflags, 20)
+    falu_result.vxsat := 0.U
+
+    // fmul
+    fmul.io.fire := busy
+    fmul.io.in.isFMUL := true.B
+    fmul.io.in.isNeg := false.B
+    fmul.io.in.fp_fmt := sew
+    fmul.io.in.fp_a := src1
+    fmul.io.in.fp_b := src2
+    fmul.io.in.round_mode := rm
+    fmul_result.result(i) := fmul.io.out.fp_result
+    fmul_result.fflags(i) := ZeroExt(fmul.io.out.fflags, 20)
+    fmul_result.vxsat := 0.U
+
+    // fma
+    fma.io.in.fire := busy
+    fma.io.in.fp_fmt := sew
+    fma.io.in.op_code := opcode(3, 0)
+    fma.io.in.fp_a := src1
+    fma.io.in.fp_b := src2
+    fma.io.in.fp_c := src3
+    fma.io.in.round_mode := rm
+    fma_result.result(i) := fma.io.out.fp_result
+    fma_result.fflags(i) := ZeroExt(fma.io.out.fflags, 20)
+    fma_result.vxsat := 0.U
   }
 
   val vperm = Module(new VPermTop)
@@ -505,7 +558,10 @@ class SimTop() extends VPUTestModule {
     VPUTestFuType.fcvti2f -> i2f_result,
     VPUTestFuType.vimac -> vimac_result,
     VPUTestFuType.imul -> imul_result,
-    VPUTestFuType.fcmp -> fcmp_result
+    VPUTestFuType.fcmp -> fcmp_result,
+    VPUTestFuType.falu -> falu_result,
+    VPUTestFuType.fmul -> fmul_result,
+    VPUTestFuType.fma -> fma_result
   ))
 }
 
