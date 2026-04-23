@@ -34,7 +34,8 @@ object VectorFMA {
     val floatWidth = exponentWidth + significandWidth
 
     val csaWidth = 2 * significandWidth + 1
-    val fpCRshiftValueInvWidth = 150
+    val rShiftWindowWidth = csaWidth + significandWidth + 3 // 3 :G/R/S
+    val fpCRshiftValueInvWidth = (rShiftWindowWidth + 1 - 3) + 1 //first1:S 3:G/R/S second1:invert/complement
     val adderWidth = 3 * significandWidth + 5
     val laneFlagWidth = 4
     val eGreaterWidth = 24

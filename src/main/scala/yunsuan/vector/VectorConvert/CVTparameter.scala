@@ -59,6 +59,8 @@ object f64 extends FloatFormat{
 
 object fpParam {
   val fpMap = Seq(f16, f32, f64)
-  val biasDeltaMap = Seq(f32.bias - f16.bias, f64.bias - f32.bias, f64.bias - f16.bias)
+  val fp16AndFp32Formats = Seq(f16, f32)
+  val fp16To32BiasDelta = f32.bias - f16.bias
+  val fp32To64BiasDelta = f64.bias - f32.bias
+  val fp16To64BiasDelta = f64.bias - f16.bias
 }
-
