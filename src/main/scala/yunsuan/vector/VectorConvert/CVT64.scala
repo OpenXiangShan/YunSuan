@@ -9,9 +9,10 @@ import yunsuan.util._
 import yunsuan.encoding.Opcode.Opcodes.FCvtOpcode
 import yunsuan.vector.Common._
 
-class CVT64(width: Int = 64, isVectorCvt: Boolean, isI2F: Boolean = false) extends CVT(width){
+class CVT64(width: Int = 64, isVectorCvt: Boolean, isI2F: Boolean = false) extends Module{
+  val io = IO(new VCVT.IO(width))
   val (fire, src, opType, rm, inSew1H, outSew1H, isScalarFpInst) =
-    (io.fire, io.src, io.opType, io.rm, io.inSew1H, io.outSew1H, io.isScalarFpInst)
+    (io.in.fire, io.in.data.src, io.in.ctrl.opType, io.in.ctrl.rm, io.in.ctrl.inSew1H, io.in.ctrl.outSew1H, io.in.ctrl.isScalarFpInst)
   val fireReg = GatedValidRegNext(fire)
 
   val inIsFpNext       = FCvtOpcode.inIsFp(opType)
@@ -24,18 +25,16 @@ class CVT64(width: Int = 64, isVectorCvt: Boolean, isI2F: Boolean = false) exten
   val isFcvtmod        = FCvtOpcode.isFcvtMod(opType)
 
   val isInt2FpNext      = FCvtOpcode.isI2F(opType)
-  val isFpWidenNext     = FCvtOpcode.isFpWiden(opType)
-  val isFpNarrowNext    = FCvtOpcode.isFpNarrow(opType)
+  val fpInputWidthNext  = FCvtOpcode.getInputDataWidth(opType)
+  val fpOutputWidthNext = FCvtOpcode.getOutputDataWidth(opType)
+  val isFpWidenNext     = FCvtOpcode.isF2F(opType) && fpOutputWidthNext > fpInputWidthNext
+  val isFpNarrowNext    = FCvtOpcode.isF2F(opType) && fpOutputWidthNext < fpInputWidthNext
   val isFp2IntNext      = FCvtOpcode.isF2I(opType)
-  val isFpCrossHighNext = FCvtOpcode.isFpCrossHigh(opType)
-  val isFpCrossLowNext  = FCvtOpcode.isFpCrossLow(opType)
 
   val isFroundOrFroundnxNext = isFround.orR
   val isFpWiden = RegEnable(isFpWidenNext, false.B, fire)
   val isFpNarrow = RegEnable(isFpNarrowNext, false.B, fire)
   val isFp2Int = RegEnable(isFp2IntNext, false.B, fire)
-  val isFpCrossHigh = RegEnable(isFpCrossHighNext, false.B, fire)
-  val isFpCrossLow = RegEnable(isFpCrossLowNext, false.B, fire)
   val isFroundReg = RegEnable(isFroundOrFroundnxNext, false.B, fire)
   val isFcvtmodReg = RegEnable(isFcvtmod, false.B, fire)
 
@@ -56,7 +55,7 @@ class CVT64(width: Int = 64, isVectorCvt: Boolean, isI2F: Boolean = false) exten
 
   val s1_isInt2Fp = RegEnable(isInt2FpNext, false.B, fire)
   val s1_isEstimate7 = RegEnable(isEstimate7Next, false.B, fire)
-  val s1_isFPsrc = isFpWiden || isFpNarrow || isFpCrossHigh || isFpCrossLow || isFp2Int || isFroundReg || isFcvtmodReg
+  val s1_isFPsrc = isFpWiden || isFpNarrow || isFp2Int || isFroundReg || isFcvtmodReg
   val s1_outIsFP = RegEnable(outIsFpNext, fire)
   val s1_outIsF64 = RegEnable(s0_outIsF64, fire)
   val s1_outIsF32 = RegEnable(s0_outIsF32, fire)
@@ -122,8 +121,20 @@ class CVT64(width: Int = 64, isVectorCvt: Boolean, isI2F: Boolean = false) exten
       s2_isFPsrc -> fpcvt.io.fflags,
       s2_isEstimate7 -> estmate7.io.fflags
     ))
-    io.result := result
-    io.fflags := fflags
+    val resultEx1 = Mux1H(Seq(
+      s1_isInt2Fp -> int2fp.io.resultEx1,
+      s1_isFPsrc -> fpcvt.io.resultEx1,
+      s1_isEstimate7 -> estmate7.io.resultEx1,
+    ))
+    val fflagsEx1 = Mux1H(Seq(
+      s1_isInt2Fp -> int2fp.io.fflagsEx1,
+      s1_isFPsrc -> fpcvt.io.fflagsEx1,
+      s1_isEstimate7 -> estmate7.io.fflagsEx1,
+    ))
+    io.out.ex2.res := result
+    io.out.ex2.fflags := fflags
+    io.out.ex1.res := resultEx1
+    io.out.ex1.fflags := fflagsEx1
   }else if(!isI2F){ // scalar fp2int & fp2fp
     //inst FPTOINT and FPTOFP module
     val fpcvt = Module(new FP_INCVT(width))
@@ -138,8 +149,10 @@ class CVT64(width: Int = 64, isVectorCvt: Boolean, isI2F: Boolean = false) exten
     fpcvt.io.isFcvtmod := isFcvtmod
     val result = fpcvt.io.result
     val fflags = fpcvt.io.fflags
-    io.result := Mux(s2_fpCanonicalNAN, s2_resultForfpCanonicalNAN, result)
-    io.fflags := Mux(s2_fpCanonicalNAN && !s2_outIsFP, "b10000".U, Mux(s2_fpCanonicalNAN && s2_isFround, 0.U, fflags))
+    io.out.ex2.res := Mux(s2_fpCanonicalNAN, s2_resultForfpCanonicalNAN, result)
+    io.out.ex2.fflags := Mux(s2_fpCanonicalNAN && !s2_outIsFP, "b10000".U, Mux(s2_fpCanonicalNAN && s2_isFround, 0.U, fflags))
+    io.out.ex1.res := fpcvt.io.resultEx1
+    io.out.ex1.fflags := fpcvt.io.fflagsEx1
   }else { // scalar int2fp
     val int2fp = Module(new INT2FP(width))
     int2fp.io.fire := fire
@@ -150,8 +163,10 @@ class CVT64(width: Int = 64, isVectorCvt: Boolean, isI2F: Boolean = false) exten
     int2fp.io.outSew1H := outSew1H
     val result = int2fp.io.result
     val fflags = int2fp.io.fflags
-    io.result := result
-    io.fflags := fflags
+    io.out.ex2.res := result
+    io.out.ex2.fflags := fflags
+    io.out.ex1.res := int2fp.io.resultEx1
+    io.out.ex1.fflags := int2fp.io.fflagsEx1
   }
 }
 class CVT_IO(width: Int) extends Bundle{
@@ -164,6 +179,8 @@ class CVT_IO(width: Int) extends Bundle{
   val isScalarFpInst = Input(Bool())
   val isFround  = Input(UInt(2.W))
   val isFcvtmod = Input(Bool())
+  val resultEx1 = Output(UInt(width.W))
+  val fflagsEx1 = Output(Fflags())
   val result    = Output(UInt(width.W))
   val fflags    = Output(Fflags())
 }
@@ -174,6 +191,8 @@ class INTCVT_IO(width: Int) extends Bundle{
   val rm       = Input(Frm())
   val inSew1H  = Input(Sew())
   val outSew1H = Input(Sew())
+  val resultEx1 = Output(UInt(width.W))
+  val fflagsEx1 = Output(Fflags())
   val result   = Output(UInt(width.W))
   val fflags   = Output(Fflags())
 }
@@ -189,6 +208,9 @@ class FP_INCVT(width: Int) extends Module {
   val hasSignIntNext   = FCvtOpcode.isSignInt(opType)
   val float1HSrcNext = inSew1H(3, 1)  //exclude f8
   val float1HOutNext = outSew1H(3, 1) //exclude f8
+  val outIsFp16Next = float1HOutNext(0)
+  val outIsFp32Next = float1HOutNext(1)
+  val outIsFp64Next = float1HOutNext(2)
 
   val isFroundOrFroundnxNext = isFround.orR
   val isFroundnxNext = isFround(1)
@@ -212,11 +234,13 @@ class FP_INCVT(width: Int) extends Module {
   val isInfSrcNext = expIsOnesSrcNext && !fracNotZeroSrcNext
   val isSNaNSrcNext = isNaNSrcNext && !fracSrc.head(1)
 
-  val isFpWidenNext     = FCvtOpcode.isFpWiden(opType)
-  val isFpNarrowNext    = FCvtOpcode.isFpNarrow(opType)
-  val isFp2IntNext      = FCvtOpcode.isF2I(opType)
-  val isFpCrossHighNext = FCvtOpcode.isFpCrossHigh(opType)
-  val isFpCrossLowNext  = FCvtOpcode.isFpCrossLow(opType)
+  val fpInputWidthNext    = FCvtOpcode.getInputDataWidth(opType)
+  val fpOutputWidthNext   = FCvtOpcode.getOutputDataWidth(opType)
+  val isFpWidenNext       = FCvtOpcode.isF2F(opType) && fpOutputWidthNext > fpInputWidthNext
+  val isFpNarrowNext      = FCvtOpcode.isF2F(opType) && fpOutputWidthNext < fpInputWidthNext
+  val isFp16To64Next      = FCvtOpcode.isF2F(opType) && FCvtOpcode.inIs16(opType) && FCvtOpcode.outIs64(opType)
+  val isFp64To16Next      = FCvtOpcode.isF2F(opType) && FCvtOpcode.inIs64(opType) && FCvtOpcode.outIs16(opType)
+  val isFp2IntNext        = FCvtOpcode.isF2I(opType)
 
   val froundOrFroundnxIsZeroOrInfNext = isFroundOrFroundnxNext && (isZeroSrcNext || isInfSrcNext)
 
@@ -233,8 +257,6 @@ class FP_INCVT(width: Int) extends Module {
   val isFpWiden = RegEnable(isFpWidenNext, false.B, fire)
   val isFpNarrow = RegEnable(isFpNarrowNext, false.B, fire)
   val isFp2Int = RegEnable(isFp2IntNext, false.B, fire)
-  val isFpCrossHigh = RegEnable(isFpCrossHighNext, false.B, fire)
-  val isFpCrossLow = RegEnable(isFpCrossLowNext, false.B, fire)
   val isNaNSrc = RegEnable(isNaNSrcNext, false.B, fire)
   val s0_fpCanonicalNAN = isScalarFpInst & (inSew1H(1) & !src.head(48).andR | inSew1H(2) & !src.head(32).andR)
   val s1_fpCanonicalNAN = RegEnable(s0_fpCanonicalNAN, fire)
@@ -273,22 +295,33 @@ class FP_INCVT(width: Int) extends Module {
 
   val leadZerosNext = Lzc((fracSrc<<(64 - f64.fracWidth)).asUInt).data
   expAdderIn0Next := Mux1H(Seq(
-    isFpWidenNext -> Mux1H(float1HOutNext.head(2), fpParam.biasDeltaMap.take(2).map(delta => delta.U)),
-    isFpCrossHighNext -> fpParam.biasDeltaMap(2).U,
-    (isFpNarrowNext || isFpCrossLowNext) -> Mux(isSubnormalSrcNext, false.B ## 1.U, false.B ## expSrcNext),
+    isFpWidenNext -> Mux(
+      isFp16To64Next,
+      fpParam.fp16To64BiasDelta.U,
+      Mux1H(Seq(
+        outIsFp32Next -> fpParam.fp16To32BiasDelta.U,
+        outIsFp64Next -> fpParam.fp32To64BiasDelta.U
+      ))
+    ),
+    isFpNarrowNext -> Mux(isSubnormalSrcNext, false.B ## 1.U, false.B ## expSrcNext),
     isFp2IntNext -> Mux(isSubnormalSrcNext, false.B ## 1.U, false.B ## expSrcNext)
   ))
-  val biasDelta = Mux1H(float1HOutNext.tail(1), fpParam.biasDeltaMap.take(2).map(delta => delta.U))
   val bias =  Mux1H(float1HSrcNext, fpParam.fpMap.map(fp => fp.bias.U))
   val minusExp = extend((~(false.B ## Mux1H(
     Seq(
-      (isFpWidenNext || isFpCrossHighNext) -> leadZerosNext,
-      isFpNarrowNext -> biasDelta,
-      isFpCrossLowNext -> fpParam.biasDeltaMap(2).U,
-      isFp2IntNext -> bias
+      isFpWidenNext   -> leadZerosNext,
+      isFpNarrowNext  -> Mux(
+        isFp64To16Next,
+        fpParam.fp16To64BiasDelta.U,
+        Mux1H(Seq(
+          outIsFp16Next -> fpParam.fp16To32BiasDelta.U,
+          outIsFp32Next -> fpParam.fp32To64BiasDelta.U
+        ))
+      ),
+      isFp2IntNext    -> bias
     )))).asUInt, f64.expAdderWidth).asUInt
 
-  val expPlus1EnableNext = isFpNarrowNext || isFp2IntNext || isFpCrossLowNext || (isFpWidenNext || isFpCrossHighNext) && isSubnormalSrcNext
+  val expPlus1EnableNext = isFpNarrowNext || isFp2IntNext || (isFpWidenNext && isSubnormalSrcNext)
   val expPlus1Enable = RegEnable(expPlus1EnableNext, fire)
   expAdderIn1Next := Mux(
     expPlus1EnableNext,
@@ -314,7 +347,7 @@ class FP_INCVT(width: Int) extends Module {
   val fracValueSrc = (expNotZeroSrcNext && !expIsOnesSrcNext) ## fracSrc
   val shamtInNext = fracValueSrc ## 0.U(11.W) ## false.B  //fp Narrow & fp->int
   val shamtWidth = Mux(outIsIntNext || isFroundOrFroundnxNext, Mux1H(float1HSrcNext, fpParam.fpMap.map(fp => (63+fp.bias).U)),
-    Mux(isFpCrossLowNext, (fpParam.biasDeltaMap(2) + 1).U, Mux1H(float1HOutNext.tail(1), fpParam.biasDeltaMap.take(2).map(delta => (delta + 1).U)))
+    Mux(isFp64To16Next, (fpParam.fp16To64BiasDelta + 1).U, fp64To32OrFp32To16BiasDelta + 1.U)
   ) + (~expSrcNext).asUInt
   val shamtWidthPlus1 = shamtWidth + 1.U
   val shamtNext = Mux(shamtWidth.andR, 0.U, Mux(shamtWidth(10, 6).orR, 65.U, shamtWidthPlus1))
@@ -412,7 +445,7 @@ class FP_INCVT(width: Int) extends Module {
    * cycle: 1
    */
   val rounderMapIn = Wire(UInt(64.W))
-  rounderMapIn := Mux(isFpNarrow || isFpCrossLow, fracSrcLeft, shiftLeft)
+  rounderMapIn := Mux(isFpNarrow, fracSrcLeft, shiftLeft)
 
   val rounderMap =
     fpParam.fpMap.map(fp => Seq(
@@ -459,8 +492,8 @@ class FP_INCVT(width: Int) extends Module {
   val fracRounded = Mux(upRounded, rounderInputIncrease, rounderInput)
   val rmin =
     rm === RTZ || (signSrc && rm === RUP) || (!signSrc && rm === RDN) //cycle1
-  when(isFpWiden || isFpCrossHigh){
-    /** fp -> fp widen/ fp16 -> fp64 cross high
+  when(isFpWiden){
+    /** fp -> fp wider
      */
     def fpWidenResultMapGen(fp: FloatFormat): Seq[UInt] = {
       VecInit((0 to 2).map {
@@ -482,8 +515,8 @@ class FP_INCVT(width: Int) extends Module {
 
     val fpwidenResultMap: Seq[UInt] = Seq(f32, f64).map(fp => Mux1H(result1H.asBools.reverse, fpWidenResultMapGen(fp)))
     resultNext := Mux1H(float1HOut.head(2), fpwidenResultMap)
-  }.elsewhen(isFpNarrow || isFpCrossLow){
-    /** fp -> fp Narrow / fp64 -> fp16 cross low
+  }.elsewhen(isFpNarrow){
+    /** fp -> fp narrower
      * note: IEEE754 uf：exp in (-b^emin, b^emin), after rounding(RiscV!!!)
      * note: IEEE754 uf：exp in (-b^emin, b^emin), before rounding(other)
      */
@@ -673,6 +706,8 @@ class FP_INCVT(width: Int) extends Module {
     )
   }
   fflagsNext := Cat(nv, dz, of, uf, nx)
+  io.resultEx1 := resultNext
+  io.fflagsEx1 := fflagsNext
   io.result := result
   io.fflags := fflags
 
@@ -788,6 +823,8 @@ class INT2FP(width: Int) extends Module{
   resultNext := Mux1H(float1HOut, int2FpResultMap)
   //output
   fflagsNext := Cat(nv, dz, of, uf, nx)
+  io.resultEx1 := resultNext
+  io.fflagsEx1 := fflagsNext
   io.result := result
   io.fflags := fflags
 }
@@ -940,9 +977,8 @@ class Estimate7(width: Int) extends Module{
   resultNext := Mux(isRec, Mux1H(float1HOut, recResultMap), Mux1H(float1HOut, sqrtResultMap))
 
   fflagsNext := Cat(nv, dz, of, uf, nx)
+  io.resultEx1 := resultNext
+  io.fflagsEx1 := fflagsNext
   io.result := result
   io.fflags := fflags
 }
-
-
-
