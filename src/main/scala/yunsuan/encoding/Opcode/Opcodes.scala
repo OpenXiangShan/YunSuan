@@ -593,8 +593,8 @@ object Opcodes {
     def getDataType(implicit op: UInt): UInt = op(0)
 
     def isFeq(implicit op: UInt): Bool    = getOpcodes === FEQ && getDestType === DM
-    def isFlt(implicit op: UInt): Bool    = getOpcodes === FLT && getDestType === DM
-    def isFle(implicit op: UInt): Bool    = getOpcodes === FLE && getDestType === DM
+    def isFlt(implicit op: UInt): Bool    = getOpcodes.isOneOf(FLT, FLTQ) && getDestType === DM
+    def isFle(implicit op: UInt): Bool    = getOpcodes.isOneOf(FLE, FLEQ) && getDestType === DM
     def isQuiet(implicit op: UInt): Bool  = op(5, 4).andR && getDestType === DM
     def isFclass(implicit op: UInt): Bool = getOpcodes === FCLASS && getDestType === DV
     def isFMin(implicit op: UInt): Bool   = getOpcodes === FMIN && getDestType === DV
