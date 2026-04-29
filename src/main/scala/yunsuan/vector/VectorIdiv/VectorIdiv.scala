@@ -5,78 +5,68 @@ import chisel3.util._
 import yunsuan.util._
 
 
-class VectorIdiv extends Module {
-  val Vectorwidth = 128
-  val io = IO(new Bundle() {
-    val sew = Input(UInt(2.W))
-    /*
-    b00 = I8
-    b01 = I16
-    b10 = I32
-    b11 = I64
-     */
-    val sign = Input(Bool())
-    val dividend_v = Input(UInt(Vectorwidth.W))
-    val divisor_v = Input(UInt(Vectorwidth.W))
-    val flush = Input(Bool())
-    val d_zero = Output(UInt(16.W))
-
-    val div_in_valid = Input(Bool())
-    val div_in_ready = Output(Bool())
-    val div_out_ready = Input(Bool())
-    val div_out_valid = Output(Bool())
-    val div_out_q_v = Output(UInt(Vectorwidth.W))
-    val div_out_rem_v = Output(UInt(Vectorwidth.W))
-  })
+class VectorIdiv extends VectorIdiv.Module {
+  val in = IO(Input(new VectorIdiv.In))
+  val out = IO(Output(new VectorIdiv.Out))
 
   val finish = Wire(Bool())
   val idle :: divide :: output :: Nil = Enum(3)
   val (oh_idle, oh_divide, oh_output) =
     (UIntToOH(idle,3),UIntToOH(divide,3),UIntToOH(output,3))
 
-  // handshake
-  val stateReg = RegInit((1<< idle.litValue.toInt).U(3.W))
-  val stateNext = WireInit(stateReg)
-  val in_handshake = io.div_in_valid & io.div_in_ready
-  val out_handshake = io.div_out_valid & io.div_out_ready
+  val sign  = in.ex0.bits.ctrl.sign
+  val flush = in.ex0.bits.ctrl.flush
+  val sel8  = in.ex0.bits.ctrl.sel8
+  val sel16 = in.ex0.bits.ctrl.sel16
+  val sel32 = in.ex0.bits.ctrl.sel32
+  val sel64 = in.ex0.bits.ctrl.sel64
+  val dividend_v = in.ex0.bits.data.dividend_v
+  val divisor_v  = in.ex0.bits.data.divisor_v
 
+  // handshake
+  val stateReg = RegInit((1 << idle.litValue.toInt).U(3.W))
+  val stateNext = WireInit(stateReg)
+  val in_handshake = in.ex0.fire
+  val out_handshake = out.ex0.fire
 
   // fsm
   // part 1
-  when (io.flush) {
+  when (flush) {
     stateReg := oh_idle
   }.otherwise {
     stateReg := stateNext
   }
   // part 2
   switch(stateReg) {
-    is((1<< idle.litValue.toInt).U(3.W)) {
+    is((1 << idle.litValue.toInt).U(3.W)) {
       when (in_handshake) {
         stateNext := oh_divide
       }
     }
-    is((1<< divide.litValue.toInt).U(3.W)) {
+    is((1 << divide.litValue.toInt).U(3.W)) {
       when (finish) {
         stateNext := oh_output
       }.otherwise {
         stateNext := oh_divide
       }
     }
-    is((1<< output.litValue.toInt).U(3.W)) {
+    is((1 << output.litValue.toInt).U(3.W)) {
       when (out_handshake) {
         stateNext := oh_idle
       }
     }
   }
   // part 3
-  io.div_in_ready := stateReg(idle)
-  io.div_out_valid := stateReg(output)
+  in.ex0.ready := stateReg(idle)
+  out.ex0.valid := stateReg(output)
 
-  val x_reg = RegEnable(io.dividend_v, in_handshake)
-  val d_reg = RegEnable(io.divisor_v,in_handshake)
-  val sign_reg = RegEnable(io.sign, in_handshake)
-  val sew_reg = RegEnable(io.sew, in_handshake)
-  val sew_hb = UIntToOH(sew_reg, 4)
+  val x_reg = RegEnable(dividend_v, in_handshake)
+  val d_reg = RegEnable(divisor_v, in_handshake)
+  val sign_reg  = RegEnable(sign, in_handshake)
+  val sel8_reg  = RegEnable(sel8, in_handshake)
+  val sel16_reg = RegEnable(sel16, in_handshake)
+  val sel32_reg = RegEnable(sel32, in_handshake)
+  val sel64_reg = RegEnable(sel64, in_handshake)
   val Index_bound = Array(7, 15, 31, 63)
 
   /*
@@ -86,95 +76,97 @@ class VectorIdiv extends Module {
     I64 : 1*SRT16Divint(64) : sew = 11 4*SRT16Divint(16) : sew = 11 2*SRT16Divint(32) : sew = 11 1*SRT16Divint(64) sew = 11
    */
   // I8
-  val divide_8_q_result = Wire(Vec(8,UInt(8.W)))
-  val divide_8_rem_result = Wire(Vec(8,UInt(8.W)))
-  val divide_8_finish = Wire(Vec(8,Bool()))
-  val divide_8_d_zero = Wire(Vec(8,Bool()))
-  for (i <-0 until 8) {
-    val begin = i * 8
-    val end = (i + 1) * 8 - 1
+  val divide_8_q_result   = Wire(Vec(i8Size, UInt(i8Width.W)))
+  val divide_8_rem_result = Wire(Vec(i8Size, UInt(i8Width.W)))
+  val divide_8_finish     = Wire(Vec(i8Size, Bool()))
+  for (i <- 0 until i8Size) {
+    val begin = i * i8Width
+    val end = (i + 1) * i8Width - 1
     val divide_8 = Module(new I8DivNr4().suggestName(s"8bit_divide_${i}"))
-    divide_8.io.sign := sign_reg
-    divide_8.io.flush := io.flush
-    divide_8.io.div_in_valid := stateReg(divide)
-    val ready = divide_8.io.div_ready // not use
-    divide_8.io.dividend := x_reg(end, begin)
-    divide_8.io.divisor := d_reg(end, begin)
+    divide_8.io.sign          := sign_reg
+    divide_8.io.flush         := flush
+    divide_8.io.div_in_valid  := stateReg(divide)
+    divide_8.io.dividend      := x_reg(end, begin)
+    divide_8.io.divisor       := d_reg(end, begin)
     divide_8.io.div_out_ready := stateReg(output)
-    divide_8_finish(i) := divide_8.io.div_out_valid
-    divide_8_q_result(i) := divide_8.io.div_out_q
-    divide_8_rem_result(i) := divide_8.io.div_out_rem
-    divide_8_d_zero(i) := divide_8.io.d_zero
+
+    divide_8_finish(i)        := divide_8.io.div_out_valid
+    divide_8_q_result(i)      := divide_8.io.div_out_q
+    divide_8_rem_result(i)    := divide_8.io.div_out_rem
   }
   // I16
-  val divide_16_q_result = Wire(Vec(4,UInt(16.W)))//additional field, storing both I8 and I16 results
-  val divide_16_rem_result = Wire(Vec(4,UInt(16.W)))
-  val divide_16_finish = Wire(Vec(4,Bool()))
-  val divide_16_d_zero = Wire(Vec(4,Bool()))
-
-  for (i <- 0 until 4) {
-    val begin_I16 = i * 16
-    val end_I16 = (i + 1) * 16 - 1
-    val begin_I8 = 64 + i * 8
-    val end_I8 = 64 + (i + 1) * 8 - 1
-    val divide_16_dividend =
-      Mux(sew_hb(0),x_reg(end_I8, begin_I8),
-        x_reg(end_I16, begin_I16))
-    val divide_16_divisor =
-      Mux(sew_hb(0), d_reg(end_I8, begin_I8),
-        d_reg(end_I16, begin_I16))
+  val divide_16_q_result   = Wire(Vec(i16Size, UInt(i16Width.W)))//additional field, storing both I8 and I16 results
+  val divide_16_rem_result = Wire(Vec(i16Size, UInt(i16Width.W)))
+  val divide_16_finish     = Wire(Vec(i16Size, Bool()))
+  for (i <- 0 until i16Size) {
+    val begin_I16 = i * i16Width
+    val end_I16   = (i + 1) * i16Width - 1
+    val begin_I8  = i64Width + i * i8Width
+    val end_I8    = i64Width + (i + 1) * i8Width - 1
+    val divide_16_dividend = Mux1H(Seq(
+      sel8_reg  -> x_reg(end_I8, begin_I8),
+      sel16_reg -> x_reg(end_I16, begin_I16),
+    ))
+    val divide_16_divisor = Mux1H(Seq(
+      sel8_reg  -> d_reg(end_I8, begin_I8),
+      sel16_reg -> d_reg(end_I16, begin_I16),
+    ))
     val divide_16 = Module(new SRT16Divint(16).suggestName(s"16bit_divide_${i}"))
-    divide_16.io.sign := sign_reg
-    divide_16.io.flush := io.flush
-    divide_16.io.sew := sew_reg
-    divide_16.io.div_in_valid := stateReg(divide)
-    val ready = divide_16.io.div_ready
-    divide_16.io.dividend := divide_16_dividend
-    divide_16.io.divisor := divide_16_divisor
+    divide_16.io.sign          := sign_reg
+    divide_16.io.flush         := flush
+    divide_16.io.sel8          := sel8_reg
+    divide_16.io.sel16         := sel16_reg
+    divide_16.io.sel32         := sel32_reg
+    divide_16.io.sel64         := sel64_reg
+    divide_16.io.div_in_valid  := stateReg(divide)
+    divide_16.io.dividend      := divide_16_dividend
+    divide_16.io.divisor       := divide_16_divisor
     divide_16.io.div_out_ready := stateReg(output)
-    divide_16_q_result(i) := divide_16.io.div_out_q
-    divide_16_rem_result(i) := divide_16.io.div_out_rem
-    divide_16_finish(i) := divide_16.io.div_out_valid
-    divide_16_d_zero(i) := divide_16.io.d_zero
 
+    divide_16_q_result(i)   := divide_16.io.div_out_q
+    divide_16_rem_result(i) := divide_16.io.div_out_rem
+    divide_16_finish(i)     := divide_16.io.div_out_valid
   }
   val divide_16_I8_q = Cat(divide_16_q_result(3)(Index_bound(0),0), divide_16_q_result(2)(Index_bound(0),0),divide_16_q_result(1)(Index_bound(0),0),divide_16_q_result(0)(Index_bound(0),0))
   val divide_16_I8_rem = Cat(divide_16_rem_result(3)(Index_bound(0),0), divide_16_rem_result(2)(Index_bound(0),0),divide_16_rem_result(1)(Index_bound(0),0),divide_16_rem_result(0)(Index_bound(0),0))
   val divide_16_I16_q = Cat(divide_16_q_result(3)(Index_bound(1),0), divide_16_q_result(2)(Index_bound(1),0),divide_16_q_result(1)(Index_bound(1),0),divide_16_q_result(0)(Index_bound(1),0))
   val divide_16_I16_rem = Cat(divide_16_rem_result(3)(Index_bound(1),0), divide_16_rem_result(2)(Index_bound(1),0),divide_16_rem_result(1)(Index_bound(1),0),divide_16_rem_result(0)(Index_bound(1),0))
   // I32
-  val divide_32_q_result = Wire(Vec(2,UInt(32.W)))
-  val divide_32_rem_result = Wire(Vec(2,UInt(32.W)))
-  val divide_32_finish = Wire(Vec(2,Bool()))
-  val divide_32_d_zero = Wire(Vec(2,Bool()))
-  for (i <-0 until 2) {
-    val begin_I8 = 64 + 32 + i * 8
-    val end_I8 = 64 + 32 + (i + 1) * 8 - 1
-    val begin_I16 = 64 + i * 16
-    val end_I16 = 64 + (i + 1) * 16 - 1
-    val begin_I32 = i * 32
-    val end_I32 = (i + 1) * 32 - 1
-    val divide_32_dividend =
-      Mux(sew_hb(0),x_reg(end_I8, begin_I8),
-        Mux(sew_hb(1),x_reg(end_I16, begin_I16),
-          x_reg(end_I32, begin_I32)))
-    val divide_32_divisor =
-      Mux(sew_hb(0), d_reg(end_I8, begin_I8),
-        Mux(sew_hb(1), d_reg(end_I16, begin_I16),
-          d_reg(end_I32, begin_I32)))
+  val divide_32_q_result   = Wire(Vec(i32Size, UInt(i32Width.W)))
+  val divide_32_rem_result = Wire(Vec(i32Size, UInt(i32Width.W)))
+  val divide_32_finish     = Wire(Vec(i32Size, Bool()))
+  for (i <- 0 until i32Size) {
+    val begin_I8  = i64Width + i32Width + i * i8Width
+    val end_I8    = i64Width + i32Width + (i + 1) * i8Width - 1
+    val begin_I16 = i64Width + i * i16Width
+    val end_I16   = i64Width + (i + 1) * i16Width - 1
+    val begin_I32 = i * i32Width
+    val end_I32   = (i + 1) * i32Width - 1
+    val divide_32_dividend = Mux1H(Seq(
+      sel8_reg  -> x_reg(end_I8, begin_I8),
+      sel16_reg -> x_reg(end_I16, begin_I16),
+      sel32_reg -> x_reg(end_I32, begin_I32),
+    ))
+    val divide_32_divisor = Mux1H(Seq(
+      sel8_reg  -> d_reg(end_I8, begin_I8),
+      sel16_reg -> d_reg(end_I16, begin_I16),
+      sel32_reg -> d_reg(end_I32, begin_I32),
+    ))
     val divide_32 = Module(new SRT16Divint(32).suggestName(s"32bit_divide_${i}"))
-    divide_32.io.sign := sign_reg
-    divide_32.io.flush := io.flush
-    divide_32.io.sew := sew_reg
-    divide_32.io.div_in_valid := stateReg(divide)
-    val ready = divide_32.io.div_ready
-    divide_32.io.dividend := divide_32_dividend
-    divide_32.io.divisor := divide_32_divisor
+    divide_32.io.sign          := sign_reg
+    divide_32.io.flush         := flush
+    divide_32.io.sel8          := sel8_reg
+    divide_32.io.sel16         := sel16_reg
+    divide_32.io.sel32         := sel32_reg
+    divide_32.io.sel64         := sel64_reg
+    divide_32.io.div_in_valid  := stateReg(divide)
+    divide_32.io.dividend      := divide_32_dividend
+    divide_32.io.divisor       := divide_32_divisor
     divide_32.io.div_out_ready := stateReg(output)
-    divide_32_q_result(i) := divide_32.io.div_out_q
-    divide_32_rem_result(i) := divide_32.io.div_out_rem
-    divide_32_finish(i) := divide_32.io.div_out_valid
-    divide_32_d_zero(i) := divide_32.io.d_zero
+
+    divide_32_q_result(i)      := divide_32.io.div_out_q
+    divide_32_rem_result(i)    := divide_32.io.div_out_rem
+    divide_32_finish(i)        := divide_32.io.div_out_valid
   }
   val divide_32_I8_q = Cat(divide_32_q_result(1)(Index_bound(0),0),divide_32_q_result(0)(Index_bound(0),0))
   val divide_32_I8_rem = Cat(divide_32_rem_result(1)(Index_bound(0),0),divide_32_rem_result(0)(Index_bound(0),0))
@@ -183,42 +175,45 @@ class VectorIdiv extends Module {
   val divide_32_I32_q = Cat(divide_32_q_result(1)(Index_bound(2),0),divide_32_q_result(0)(Index_bound(2),0))
   val divide_32_I32_rem = Cat(divide_32_rem_result(1)(Index_bound(2),0),divide_32_rem_result(0)(Index_bound(2),0))
   // I64
-  val divide_64_q_result = Wire(Vec(2,UInt(64.W)))
-  val divide_64_rem_result = Wire(Vec(2,UInt(64.W)))
-  val divide_64_finish = Wire(Vec(2,Bool()))
-  val divide_64_d_zero = Wire(Vec(2,Bool()))
-  for (i <-0 until 2) {
-    val begin_I8 = 64 + 32 + 16 + i * 8
-    val end_I8 = 64 + 32 + 16 + (i + 1) * 8 - 1
-    val begin_I16 = 64 + 32 + i * 16
-    val end_I16 = 64 + 32 + (i + 1) * 16 - 1
-    val begin_I32 = 64 + i * 32
-    val end_I32 = 64 + (i + 1) * 32 - 1
-    val begin_I64 = i * 64
-    val end_I64 = (i + 1) * 64 -1
-    val divide_64_dividend =
-      Mux(sew_hb(0), x_reg(end_I8, begin_I8),
-        Mux(sew_hb(1), x_reg(end_I16, begin_I16),
-          Mux(sew_hb(2),x_reg(end_I32, begin_I32),
-            x_reg(end_I64, begin_I64))))
-    val divide_64_divisor =
-      Mux(sew_hb(0), d_reg(end_I8, begin_I8),
-        Mux(sew_hb(1), d_reg(end_I16, begin_I16),
-          Mux(sew_hb(2), d_reg(end_I32, begin_I32),
-            d_reg(end_I64, begin_I64))))
+  val divide_64_q_result   = Wire(Vec(i64Size, UInt(i64Width.W)))
+  val divide_64_rem_result = Wire(Vec(i64Size, UInt(i64Width.W)))
+  val divide_64_finish     = Wire(Vec(i64Size, Bool()))
+  for (i <- 0 until i64Size) {
+    val begin_I8  = i64Width + i32Width + i16Width + i * i8Width
+    val end_I8    = i64Width + i32Width + i16Width + (i + 1) * i8Width - 1
+    val begin_I16 = i64Width + i32Width + i * i16Width
+    val end_I16   = i64Width + i32Width + (i + 1) * i16Width - 1
+    val begin_I32 = i64Width + i * i32Width
+    val end_I32   = i64Width + (i + 1) * i32Width - 1
+    val begin_I64 = i * i64Width
+    val end_I64   = (i + 1) * i64Width -1
+    val divide_64_dividend = Mux1H(Seq(
+      sel8_reg  -> x_reg(end_I8,  begin_I8),
+      sel16_reg -> x_reg(end_I16, begin_I16),
+      sel32_reg -> x_reg(end_I32, begin_I32),
+      sel64_reg -> x_reg(end_I64, begin_I64),
+    ))
+    val divide_64_divisor = Mux1H(Seq(
+      sel8_reg  -> d_reg(end_I8,  begin_I8),
+      sel16_reg -> d_reg(end_I16, begin_I16),
+      sel32_reg -> d_reg(end_I32, begin_I32),
+      sel64_reg -> d_reg(end_I64, begin_I64),
+    ))
     val divide_64 = Module(new SRT16Divint(64).suggestName(s"64bit_divide_${i}"))
-    divide_64.io.sign := sign_reg
-    divide_64.io.flush := io.flush
-    divide_64.io.sew := sew_reg
-    divide_64.io.div_in_valid := stateReg(divide)
-    val ready = divide_64.io.div_ready
-    divide_64.io.dividend := divide_64_dividend
-    divide_64.io.divisor := divide_64_divisor
+    divide_64.io.sign          := sign_reg
+    divide_64.io.flush         := flush
+    divide_64.io.sel8          := sel8_reg
+    divide_64.io.sel16         := sel16_reg
+    divide_64.io.sel32         := sel32_reg
+    divide_64.io.sel64         := sel64_reg
+    divide_64.io.div_in_valid  := stateReg(divide)
+    divide_64.io.dividend      := divide_64_dividend
+    divide_64.io.divisor       := divide_64_divisor
     divide_64.io.div_out_ready := stateReg(output)
-    divide_64_q_result(i) := divide_64.io.div_out_q
-    divide_64_rem_result(i) := divide_64.io.div_out_rem
-    divide_64_finish(i) := divide_64.io.div_out_valid
-    divide_64_d_zero(i) := divide_64.io.d_zero
+
+    divide_64_q_result(i)      := divide_64.io.div_out_q
+    divide_64_rem_result(i)    := divide_64.io.div_out_rem
+    divide_64_finish(i)        := divide_64.io.div_out_valid
   }
   val divide_64_I8_q = Cat(divide_64_q_result(1)(Index_bound(0),0),divide_64_q_result(0)(Index_bound(0),0))
   val divide_64_I8_rem = Cat(divide_64_rem_result(1)(Index_bound(0),0),divide_64_rem_result(0)(Index_bound(0),0))
@@ -230,36 +225,75 @@ class VectorIdiv extends Module {
   val divide_64_I64_rem = Cat(divide_64_rem_result(1)(Index_bound(3),0),divide_64_rem_result(0)(Index_bound(3),0))
 
 
-
-  val div_out_q_result = Wire(UInt(Vectorwidth.W))
+  val div_out_q_result = Wire(UInt(vWidth.W))
   val div_out_q_result_reg = RegEnable(div_out_q_result, stateReg(divide))
-  val div_out_rem_result = Wire(UInt(Vectorwidth.W))
+  val div_out_rem_result = Wire(UInt(vWidth.W))
   val div_out_rem_result_reg = RegEnable(div_out_rem_result,stateReg(divide))
-  val div_out_d_zero_result = Wire(UInt(16.W))
-  val div_out_d_zero_result_reg = RegEnable(div_out_d_zero_result,stateReg(divide))
 
   finish := divide_8_finish.reduce(_ & _) & divide_16_finish.reduce(_ & _) & divide_32_finish.reduce(_ & _) & divide_64_finish.reduce(_ & _)
-  div_out_d_zero_result :=
-    Mux(sew_hb(0), Cat(divide_64_d_zero.asUInt, divide_32_d_zero.asUInt, divide_16_d_zero.asUInt, divide_8_d_zero.asUInt),
-      Mux(sew_hb(1), Cat(0.U(8.W), divide_64_d_zero.asUInt, divide_32_d_zero.asUInt, divide_16_d_zero.asUInt),
-        Mux(sew_hb(2), Cat(0.U(12.W),divide_64_d_zero.asUInt, divide_32_d_zero.asUInt),
-          Cat(0.U(14.W),divide_64_d_zero.asUInt))))
-  div_out_q_result :=
-    Mux(sew_hb(0), Cat(divide_64_I8_q.asUInt,divide_32_I8_q.asUInt,divide_16_I8_q.asUInt, divide_8_q_result.asUInt),
-      Mux(sew_hb(1),Cat(divide_64_I16_q.asUInt,divide_32_I16_q.asUInt,divide_16_I16_q.asUInt),
-        Mux(sew_hb(2),Cat(divide_64_I32_q.asUInt,divide_32_I32_q.asUInt),
-          divide_64_I64_q.asUInt)))
-  div_out_rem_result :=
-    Mux(sew_hb(0), Cat(divide_64_I8_rem.asUInt, divide_32_I8_rem.asUInt, divide_16_I8_rem.asUInt, divide_8_rem_result.asUInt),
-      Mux(sew_hb(1), Cat(divide_64_I16_rem.asUInt, divide_32_I16_rem.asUInt, divide_16_I16_rem.asUInt),
-        Mux(sew_hb(2), Cat(divide_64_I32_rem.asUInt, divide_32_I32_rem.asUInt),
-          divide_64_I64_rem.asUInt)))
-
+  div_out_q_result := Mux1H(Seq(
+    sel8_reg  -> Cat(divide_64_I8_q.asUInt,divide_32_I8_q.asUInt,divide_16_I8_q.asUInt, divide_8_q_result.asUInt),
+    sel16_reg -> Cat(divide_64_I16_q.asUInt,divide_32_I16_q.asUInt,divide_16_I16_q.asUInt),
+    sel32_reg -> Cat(divide_64_I32_q.asUInt,divide_32_I32_q.asUInt),
+    sel64_reg -> divide_64_I64_q.asUInt
+  ))
+  div_out_rem_result := Mux1H(Seq(
+    sel8_reg  -> Cat(divide_64_I8_rem.asUInt, divide_32_I8_rem.asUInt, divide_16_I8_rem.asUInt, divide_8_rem_result.asUInt),
+    sel16_reg -> Cat(divide_64_I16_rem.asUInt, divide_32_I16_rem.asUInt, divide_16_I16_rem.asUInt),
+    sel32_reg -> Cat(divide_64_I32_rem.asUInt, divide_32_I32_rem.asUInt),
+    sel64_reg -> divide_64_I64_rem.asUInt
+  ))
 
   // output
-  io.div_out_q_v := div_out_q_result_reg
-  io.div_out_rem_v := div_out_rem_result_reg
-  io.d_zero := div_out_d_zero_result_reg
+  out.ex0.bits.q_v := div_out_q_result_reg
+  out.ex0.bits.rem_v := div_out_rem_result_reg
+}
 
+object VectorIdiv {
+  class In extends Bundle {
+    val ex0 = DecoupledIO(new InEx0)
+  }
 
+  class Out extends Bundle {
+    val ex0 = DecoupledIO(new OutEx0)
+  }
+
+  class InEx0 extends Bundle {
+    val ctrl = new InCtrlEx0
+    val data = new InDataEx0
+  }
+
+  class InCtrlEx0 extends Bundle {
+    val sign   = Bool()
+    val flush  = Bool()
+    val sel8   = Bool()
+    val sel16  = Bool()
+    val sel32  = Bool()
+    val sel64  = Bool()
+  }
+
+  class InDataEx0 extends Bundle {
+    val dividend_v = UInt(vWidth.W)
+    val divisor_v = UInt(vWidth.W)
+  }
+
+  class OutEx0 extends Bundle {
+    val q_v    = UInt(vWidth.W)
+    val rem_v  = UInt(vWidth.W)
+  }
+
+  trait Config {
+    val vWidth = 128
+    val i8Size = 8
+    val i8Width = 8
+    val i16Size = 4
+    val i16Width = 16
+    val i32Size = 2
+    val i32Width = 32
+    val i64Size = 2
+    val i64Width = 64
+  }
+
+  class Bundle extends chisel3.Bundle with Config
+  class Module extends chisel3.Module with Config
 }
