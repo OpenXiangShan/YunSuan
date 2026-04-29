@@ -40,7 +40,10 @@ class SRT16Divint(bit_width: Int) extends Module {
     val divisor = Input(UInt(bit_width.W))
     val flush = Input(Bool())
     val d_zero = Output(Bool())
-    val sew = Input(UInt(2.W)) // multi bit width
+    val sel8  = Input(Bool())
+    val sel16 = Input(Bool())
+    val sel32 = Input(Bool())
+    val sel64 = Input(Bool())
     /*
     'b00: I8
     'b01: I16
@@ -119,29 +122,42 @@ class SRT16Divint(bit_width: Int) extends Module {
   val x = ZeroExt(io.dividend,64)  // x dividend
   val d = ZeroExt(io.divisor,64) // d divisor
 
-  val format = io.sew
+  val sel8 = io.sel8
+  val sel16 = io.sel16
+  val sel32 = io.sel32
+  val sel64 = io.sel64
   // ext_x ext_d Due to the different bit widths of SEW, it cannot be guaranteed that the access signal is processed according to zero extension or sign extension, so it needs to be rechecked,
   val ext_x = MuxCase(0.U(64.W), Seq(
-    (format === "b00".U)  -> Mux(io.sign, SignExt(x(7,0),64), ZeroExt(x(7,0),64)),
-    (format === "b01".U)  -> Mux(io.sign, SignExt(x(15,0),64), ZeroExt(x(15,0),64)),
-    (format === "b10".U)  -> Mux(io.sign, SignExt(x(31,0),64), ZeroExt(x(31,0),64)),
-    (format === "b11".U)  -> Mux(io.sign, SignExt(x(63,0),64), ZeroExt(x(63,0),64))
+    sel8  -> Mux(io.sign, SignExt(x(7,0),64), ZeroExt(x(7,0),64)),
+    sel16 -> Mux(io.sign, SignExt(x(15,0),64), ZeroExt(x(15,0),64)),
+    sel32 -> Mux(io.sign, SignExt(x(31,0),64), ZeroExt(x(31,0),64)),
+    sel64 -> Mux(io.sign, SignExt(x(63,0),64), ZeroExt(x(63,0),64))
   ))
   val ext_d =  MuxCase(0.U(64.W), Seq(
-    (format === "b00".U) -> Mux(io.sign, SignExt(d(7, 0), 64), ZeroExt(d(7, 0), 64)),
-    (format === "b01".U) -> Mux(io.sign, SignExt(d(15, 0), 64), ZeroExt(d(15, 0), 64)),
-    (format === "b10".U) -> Mux(io.sign, SignExt(d(31, 0), 64), ZeroExt(d(31, 0), 64)),
-    (format === "b11".U) -> Mux(io.sign, SignExt(d(63, 0), 64), ZeroExt(d(63, 0), 64))
+    sel8  -> Mux(io.sign, SignExt(d(7, 0), 64), ZeroExt(d(7, 0), 64)),
+    sel16 -> Mux(io.sign, SignExt(d(15, 0), 64), ZeroExt(d(15, 0), 64)),
+    sel32 -> Mux(io.sign, SignExt(d(31, 0), 64), ZeroExt(d(31, 0), 64)),
+    sel64 -> Mux(io.sign, SignExt(d(63, 0), 64), ZeroExt(d(63, 0), 64))
   ))
   // Hard coding of symbol bits under different sews
-  val sign_array_x = VecInit(x(7),x(15),x(31),x(63))
-  val sign_array_d = VecInit(d(7),d(15),d(31),d(63))
+  val sign_array_x = Mux1H(Seq(
+    sel8  -> x(7),
+    sel16 -> x(15),
+    sel32 -> x(31),
+    sel64 -> x(63),
+  ))
+  val sign_array_d = Mux1H(Seq(
+    sel8  -> d(7),
+    sel16 -> d(15),
+    sel32 -> d(31),
+    sel64 -> d(63),
+  ))
 
 
 
-  val x_sign = io.sign && sign_array_x(format)
+  val x_sign = io.sign && sign_array_x
   val x_sign_reg = RegEnable(x_sign, stateReg(pre_0))
-  val d_sign = io.sign && sign_array_d(format)
+  val d_sign = io.sign && sign_array_d
 
   // reg use for pre0
   val init_q_A = Wire(UInt(bit_width.W)) //q_A :real q
