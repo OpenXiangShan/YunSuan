@@ -480,10 +480,16 @@ object Opcodes {
     def isFnmsac(implicit op: UInt): Bool = {
       getOpNum === OP3 && getSubOpcode === FNMSAC
     }
+
   }
 
   object FMacOpcode extends FMacOpcode
-  object VFMacOpcode extends FMacOpcode
+  object VFMacOpcode extends FMacOpcode {
+    override def getLat(opcode: Opcode): Int = {
+      require(this.all.contains(opcode))
+      3
+    }
+  }
 
   trait FMiscOpcode extends Opcodes with DataType {
     private val S2V = bb"0"
