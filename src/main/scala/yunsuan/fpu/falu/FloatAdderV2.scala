@@ -6,10 +6,11 @@ import chisel3._
 import chisel3.util._
 import yunsuan.fpu.falu._
 import yunsuan.fpu.fmul.utils.FMULToFADDCtrlBundle
+import yunsuan.encoding.Opcode.Opcodes.FMacOpcode
 
 class FloatAdderV2Input extends Bundle {
   val fp_fmt               = UInt(2.W)
-  val op_code              = UInt(5.W)
+  val op_code              = FMacOpcode()
   val fp_a, fp_b           = UInt(64.W)
   val fpAAppend            = UInt(53.W)
   val round_mode           = UInt(3.W)

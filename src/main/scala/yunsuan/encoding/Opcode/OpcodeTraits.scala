@@ -100,9 +100,6 @@ object OpcodeTraits {
 
   case object NeedVecEnable extends OpcodeTrait
 
-  // Force specific vector floating-point ops to be scheduled as VFALU.
-  case object ForceVfAlu extends OpcodeTrait
-
   case object Src12Rev extends OpcodeTrait
 
   case object NoDestAlloc extends OpcodeTrait

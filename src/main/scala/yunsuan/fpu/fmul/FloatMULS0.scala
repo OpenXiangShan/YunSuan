@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import yunsuan.fpu.fmul.FloatMulInput
 import yunsuan.fpu.fmul.utils._
-import yunsuan.vector.alu.VSew
+import yunsuan.vector.Common.VSew
 
 class FloatMULS0ToS1Bundle extends Bundle {
   val FMUL16S0ToS1 = new FMULS0ToS1Bundle(16)

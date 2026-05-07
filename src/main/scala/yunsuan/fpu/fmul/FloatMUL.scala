@@ -5,7 +5,7 @@ import chisel3.util._
 import yunsuan.util.GatedValidRegNext
 import yunsuan.fpu.fmul._
 import yunsuan.fpu.fmul.utils._
-import yunsuan.vector.alu.VSew
+import yunsuan.vector.Common.VSew
 
 
 class FloatMulInput extends Bundle{
