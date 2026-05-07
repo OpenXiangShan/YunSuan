@@ -2,8 +2,7 @@ package yunsuan.fpu
 
 import chisel3._
 import chisel3.util._
-import yunsuan.FaddOpCode
-import yunsuan.FmaOpCode
+import yunsuan.encoding.Opcode.Opcodes.FMacOpcode
 import yunsuan.fpu.falu.FloatAdderV2
 import yunsuan.fpu.fmul.FloatMUL
 import yunsuan.util.GatedValidRegNext
@@ -34,8 +33,8 @@ class FloatFMAV2() extends Module {
   val fireS2 = GatedValidRegNext(fireS1)
   val opcode = io.in.op_code
 
-  val isNeg = opcode === FmaOpCode.fnmacc || opcode === FmaOpCode.fnmsac
-  val isSub = opcode === FmaOpCode.fnmacc || opcode === FmaOpCode.fmsac
+  val isNeg = FMacOpcode.isFnmacc(opcode) || FMacOpcode.isFnmsac(opcode)
+  val isSub = FMacOpcode.isFnmacc(opcode) || FMacOpcode.isFmsac(opcode)
 
   val fpFmtS2 = RegEnable(RegEnable(io.in.fp_fmt, fire), fireS1)
   val rmS2    = RegEnable(RegEnable(io.in.round_mode, fire), fireS1)
@@ -58,7 +57,8 @@ class FloatFMAV2() extends Module {
   val fadd = Module(new FloatAdderV2)
   fadd.io.fire := fireS2
   fadd.io.in.fp_fmt := fpFmtS2
-  fadd.io.in.op_code := FaddOpCode.fadd
+  // dirty code
+  fadd.io.in.op_code := 0.U
   fadd.io.in.fp_a := fpAS2
   fadd.io.in.fp_b := fpCS2
   fadd.io.in.fpAAppend := fpAAppendS2

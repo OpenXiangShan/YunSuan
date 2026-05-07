@@ -1,9 +1,6 @@
 package yunsuan.fpu.fmul.utils
 import chisel3._
 import chisel3.util._
-import yunsuan.FmaOpCode
-import yunsuan.util.GatedValidRegNext
-import yunsuan.vector._
 
 class Booth4Opt(width: Int) extends Module{
   override def desiredName = (this.getClass.getName + s"_$width").split("\\.").last

@@ -24,7 +24,7 @@ class FloatAdder() extends Module  {
   val fp_format = FAluOpcode.getFormat(io.op_code) - 1.U //Cat(io.fp_format===3.U,io.fp_format(1))
   val fire = io.fire
   val hasMinMaxCompare = true
-  val fast_is_sub = FAluOpcode.isSub(io.op_code)
+  val fast_is_sub = FAluOpcode.isFsub(io.op_code)
 
   val f64_fp_a = Wire(UInt(floatWidth.W))
   val f32_fp_a = Wire(UInt(floatWidth.W))

@@ -6,8 +6,8 @@ import chisel3._
 import chisel3.util._
 import yunsuan.fpu.falu.FloatAdderV2Input
 import yunsuan.fpu.falu.utils._
-import yunsuan.vector.alu.VSew
-import yunsuan.FaddOpCode
+import yunsuan.vector.Common.VSew
+import yunsuan.encoding.Opcode.Opcodes.FMacOpcode
 import yunsuan.fpu.fmul.utils.FMULToFADDCtrlBundle
 
 class FloatAdderV2S0ToS1Bundle extends Bundle {
@@ -53,25 +53,25 @@ class FloatAdderV2S0 extends Module {
   val fp16BIsCanonicalNaN = isfp16 && !io.in.fp_b.head(48).andR
 
   // opcode -> ctrl signal: fadd/fsub
-  val isFaddOpcode  = opcode === FaddOpCode.fadd
-  val isFsubOpcode  = opcode === FaddOpCode.fsub
-  val isSub         = (isFMA && isSubFromFMUL) || (~isFMA && isFsubOpcode)
-  val isArith       = isFMA || (~isFMA && (isFaddOpcode || isFsubOpcode))
+  val isFaddOpcode  = FMacOpcode.isFadd(opcode)
+  val isFsubOpcode  = FMacOpcode.isFsub(opcode)
+  val isSub         = (isFMA && isSubFromFMUL) || (!isFMA && isFsubOpcode)
+  val isArith       = isFMA || (!isFMA && (isFaddOpcode || isFsubOpcode))
   val isArithF16    = isArith && isfp16
   val isArithF32    = isArith && isfp32
   val isArithF64    = isArith && isfp64
   
   // opcode -> ctrl signal: misc
-  val isFmaxOpcode   = opcode === FaddOpCode.fmax
-  val isFminOpcode   = opcode === FaddOpCode.fmin
-  val isFmaxmOpcode  = opcode === FaddOpCode.fmaxm
-  val isFminmOpcode  = opcode === FaddOpCode.fminm
-  val isFmax         = ~isFMA && (isFmaxOpcode  || isFmaxmOpcode)
-  val isFmin         = ~isFMA && (isFminOpcode  || isFminmOpcode)
-  val isMaxMinM      = ~isFMA && (isFmaxmOpcode || isFminmOpcode)
-  val isFsgnj        = opcode === FaddOpCode.fsgnj
-  val isFsgnjn       = opcode === FaddOpCode.fsgnjn
-  val isFsgnjx       = opcode === FaddOpCode.fsgnjx
+  val isFmaxOpcode   = FMacOpcode.isFmax(opcode)
+  val isFminOpcode   = FMacOpcode.isFmin(opcode)
+  val isFmaxmOpcode  = FMacOpcode.isFmaxm(opcode)
+  val isFminmOpcode  = FMacOpcode.isFminm(opcode)
+  val isFmax         = !isFMA && (isFmaxOpcode  || isFmaxmOpcode)
+  val isFmin         = !isFMA && (isFminOpcode  || isFminmOpcode)
+  val isMaxMinM      = !isFMA && (isFmaxmOpcode || isFminmOpcode)
+  val isFsgnj        = FMacOpcode.isFsgnj(opcode)
+  val isFsgnjn       = FMacOpcode.isFsgnjn(opcode)
+  val isFsgnjx       = FMacOpcode.isFsgnjx(opcode)
   val isFsgn         = isFsgnj || isFsgnjn || isFsgnjx
   val isMisc         = ~isArith
 

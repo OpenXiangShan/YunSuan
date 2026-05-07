@@ -26,14 +26,6 @@ class FloatCompare extends Module {
   val isFleq = FMiscOpcode.isFleq(io.opCode)
   val isCmp = isFeq || isFlt || isFle || isFltq || isFleq
   val isCmpNQ = isFlt || isFle
-  val isFmax = FMiscOpcode.isFmax(io.opCode) || FMiscOpcode.isFmaxm(io.opCode)
-  val isFmin = FMiscOpcode.isFmin(io.opCode) || FMiscOpcode.isFminm(io.opCode)
-  val isMaxMin = isFmax || isFmin
-  val isMaxMinM = FMiscOpcode.isFmaxm(io.opCode) || FMiscOpcode.isFminm(io.opCode)
-  val isFsgnj = FMiscOpcode.isFsgnj(io.opCode)
-  val isFsgnjx = FMiscOpcode.isFsgnjx(io.opCode)
-  val isFsgnjn = FMiscOpcode.isFsgnjn(io.opCode)
-  val isFsgn = isFsgnj || isFsgnjx || isFsgnjn
   val isFclass = FMiscOpcode.isFclass(io.opCode)
   val src0 = io.src0
   val src1 = io.src1
@@ -97,24 +89,6 @@ class FloatCompare extends Module {
       !src0AbsLt
     )
   )
-  val bothSrcNan = src0IsNan && src1IsNan
-  val anySrcNan = src0IsNan || src1IsNan
-  val nonSrcNan = !src0IsNan && !src1IsNan
-  val onlySrc0IsNan = src0IsNan && !src1IsNan
-  val onlySrc1IsNan = !src0IsNan && src1IsNan
-  val resultIsCanonicalNAN = (isMaxMinM && anySrcNan) || (!isMaxMinM && bothSrcNan)
-  val resultIsSrc0 = (nonSrcNan && ((isFmax && !selSrc0ForMin) || (isFmin && selSrc0ForMin))) || (!isMaxMinM && onlySrc1IsNan)
-  val resultIsSrc1 = (nonSrcNan && ((isFmax && selSrc0ForMin) || (isFmin && !selSrc0ForMin))) || (!isMaxMinM && onlySrc0IsNan)
-  val resultCanonicalNAN = Mux1H(Seq(isF16, isF32, isF64), Seq(
-    Cat(Fill(48, 1.U(1.W)), 0.U(1.W), Fill(6, 1.U(1.W)), 0.U(9.W)),
-    Cat(Fill(32, 1.U(1.W)), 0.U(1.W), Fill(9, 1.U(1.W)), 0.U(22.W)),
-    Cat(0.U(1.W), Fill(12, 1.U(1.W)), 0.U(51.W))
-  ))
-  val resultMaxMin = Mux1H(Seq(
-    resultIsCanonicalNAN -> resultCanonicalNAN,
-    resultIsSrc0 -> src0,
-    resultIsSrc1 -> src1
-  ))
 
   val fflagsNV = Mux(isCmpNQ, src0IsNan || src1IsNan, src0IsSNan || src1IsSNan)
   val fflagsCmpMaxMin = Cat(fflagsNV, 0.U(4.W))
@@ -158,39 +132,11 @@ class FloatCompare extends Module {
     src0IsQNan
   )))
 
-  val fsgnSrc0 = Mux(src0IsFpCanonicalNAN, resultCanonicalNAN, src0)
-  val fsgnSrc0Sign = Mux(src0IsFpCanonicalNAN, 0.U(1.W), src0Sign)
-  val fsgnSrc1Sign = Mux(src1IsFpCanonicalNAN, 0.U(1.W), src1Sign)
-  val resultSignNegate = !fsgnSrc1Sign
-  val resultSignXor = fsgnSrc0Sign ^ fsgnSrc1Sign
-  val resultFsgnj = Mux1H(Seq(
-    isF16 -> Cat(Fill(48, 1.U(1.W)), fsgnSrc1Sign, fsgnSrc0(14, 0)),
-    isF32 -> Cat(Fill(32, 1.U(1.W)), fsgnSrc1Sign, fsgnSrc0(30, 0)),
-    isF64 -> Cat(fsgnSrc1Sign, fsgnSrc0(62, 0))
-  ))
-  val resultFsgnjn = Mux1H(Seq(
-    isF16 -> Cat(Fill(48, 1.U(1.W)), resultSignNegate, fsgnSrc0(14, 0)),
-    isF32 -> Cat(Fill(32, 1.U(1.W)), resultSignNegate, fsgnSrc0(30, 0)),
-    isF64 -> Cat(resultSignNegate, fsgnSrc0(62, 0))
-  ))
-  val resultFsgnjx = Mux1H(Seq(
-    isF16 -> Cat(Fill(48, 1.U(1.W)), resultSignXor, fsgnSrc0(14, 0)),
-    isF32 -> Cat(Fill(32, 1.U(1.W)), resultSignXor, fsgnSrc0(30, 0)),
-    isF64 -> Cat(resultSignXor, fsgnSrc0(62, 0))
-  ))
-  val resultFsgn = Mux1H(Seq(
-    isFsgnj -> resultFsgnj,
-    isFsgnjn -> resultFsgnjn,
-    isFsgnjx -> resultFsgnjx
-  ))
-
   io.result := Mux1H(Seq(
     isCmp -> resultCmp,
-    isMaxMin -> resultMaxMin,
     isFclass -> resultFclass,
-    isFsgn -> resultFsgn
   ))
-  io.fflags := Mux(isFclass || isFsgn, 0.U, fflagsCmpMaxMin)
+  io.fflags := Mux(isFclass, 0.U, fflagsCmpMaxMin)
 }
 
 object GenFloatCompare extends App {

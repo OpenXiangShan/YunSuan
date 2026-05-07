@@ -354,31 +354,4 @@ package object yunsuan {
     def getOp(op: UInt) = Cat(op(3), op(1, 0))
     def isMulw7(op: UInt) = op(3)
   }
-
-  object FmaOpCode {
-    def width = 4
-
-    def dummy   = "b1111".U(width.W)
-    def fmul    = "b0000".U(width.W)
-    def fmacc   = "b0001".U(width.W)
-    def fmsac   = "b0011".U(width.W)
-    def fnmacc  = "b0010".U(width.W)
-    def fnmsac  = "b0100".U(width.W)
-  }
-
-  object FcmpOpCode {
-    def width = 4
-
-    def feq = "b0000".U(width.W)
-    def flt = "b0001".U(width.W)
-    def fle = "b0010".U(width.W)
-    def fltq = "b0101".U(width.W)
-    def fleq = "b0110".U(width.W)
-    def fclass = "b1000".U(width.W)
-    def isFeq(opcode:UInt) = opcode === feq
-    def isFlt(opcode:UInt) = opcode(0)
-    def isFle(opcode:UInt) = opcode(1)
-    def isQuiet(opcode:UInt) = opcode(2)
-    def isFclass(opcode:UInt) = opcode(3)
-  }
 }
