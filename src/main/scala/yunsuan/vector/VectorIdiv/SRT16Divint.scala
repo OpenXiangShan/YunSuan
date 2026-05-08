@@ -55,6 +55,7 @@ class SRT16Divint(bit_width: Int) extends Module {
     val div_ready = Output(Bool())
     val div_out_ready = Input(Bool())
     val div_out_valid = Output(Bool())
+    val div_latency = Output(ValidIO(UInt(VectorIdiv.NonFixedLatencyWidth.W)))
     val div_out_q = Output(UInt(bit_width.W))
     val div_out_rem = Output(UInt(bit_width.W))
 
@@ -290,6 +291,25 @@ class SRT16Divint(bit_width: Int) extends Module {
   init_iter := (lzc_diff_pre_1 >>2).asUInt + (lzc_diff_pre_1(1,0).andR).asUInt
   iter_num := Mux(stateReg(pre_1),init_iter,iter_num_reg -% 1.U)
   iter_finish := iter_num_reg === 0.U
+
+  val latencyValidReg = RegInit(false.B)
+  val latencyReg = RegInit(0.U(VectorIdiv.NonFixedLatencyWidth.W))
+  val earlyLatency = 4.U(VectorIdiv.NonFixedLatencyWidth.W)
+  val latency = Mux(
+    early_finish,
+    earlyLatency,
+    (ZeroExt(init_iter, VectorIdiv.NonFixedLatencyWidth) + 5.U(VectorIdiv.NonFixedLatencyWidth.W))(VectorIdiv.NonFixedLatencyWidth - 1, 0)
+  )
+  when (io.flush || in_handshake) {
+    latencyValidReg := false.B
+  }.elsewhen (stateReg(pre_1)) {
+    latencyValidReg := true.B
+    latencyReg := latency
+  }.elsewhen (stateReg(output) && io.div_out_ready) {
+    latencyValidReg := false.B
+  }
+  io.div_latency.valid := latencyValidReg
+  io.div_latency.bits := latencyReg
 
   // r shift  for align
   val w_align_init = Wire(Vec(2,UInt(w_width.W))) // sum/carry

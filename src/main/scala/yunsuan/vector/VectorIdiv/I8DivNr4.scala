@@ -1,8 +1,9 @@
-
 package yunsuan.vector
 
 import chisel3._
 import chisel3.util._
+import yunsuan.util._
+
 // 8bit div int module using non-restoring division
 class I8DivNr4(bit_width: Int=8) extends Module {
   val io = IO(new Bundle() {
@@ -19,6 +20,7 @@ class I8DivNr4(bit_width: Int=8) extends Module {
     val div_ready = Output(Bool())
     val div_out_ready = Input(Bool())
     val div_out_valid = Output(Bool())
+    val div_latency = Output(ValidIO(UInt(VectorIdiv.NonFixedLatencyWidth.W)))
     val div_out_q = Output(UInt(bit_width.W))
     val div_out_rem = Output(UInt(bit_width.W))
 
@@ -116,6 +118,25 @@ class I8DivNr4(bit_width: Int=8) extends Module {
   init_iter_num := bit_width.U >> 1
   iter_num := Mux(stateReg(pre), init_iter_num, iter_num_reg - 1.U)
   iter_finish := iter_num === 0.U
+
+  val latencyValidReg = RegInit(false.B)
+  val latencyReg = RegInit(0.U(VectorIdiv.NonFixedLatencyWidth.W))
+  val earlyLatency = 3.U(VectorIdiv.NonFixedLatencyWidth.W)
+  val latency = Mux(
+    early_finish,
+    earlyLatency,
+    (ZeroExt(init_iter_num, VectorIdiv.NonFixedLatencyWidth) + earlyLatency)(VectorIdiv.NonFixedLatencyWidth - 1, 0)
+  )
+  when (io.flush || in_handshake) {
+    latencyValidReg := false.B
+  }.elsewhen (stateReg(pre)) {
+    latencyValidReg := true.B
+    latencyReg := latency
+  }.elsewhen (stateReg(output) && io.div_out_ready) {
+    latencyValidReg := false.B
+  }
+  io.div_latency.valid := latencyValidReg
+  io.div_latency.bits := latencyReg
 
 
   // init q
