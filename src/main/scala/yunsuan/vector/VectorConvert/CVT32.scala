@@ -495,8 +495,8 @@ class CVT32ModuleS1(width: Int = 32) extends Module {
 
     val result1H = Seq(
       expIsOnes,
-      !expIsOnes && !maybeSub && ofRounded && (rmin || (rm === RTO)),
-      !expIsOnes && !maybeSub && ofRounded && !(rmin || (rm === RTO)),
+      !expIsOnes && !maybeSub && ofRounded && (rmin || (rm === ROD)),
+      !expIsOnes && !maybeSub && ofRounded && !(rmin || (rm === ROD)),
       !expIsOnes && !maybeSub && !ofRounded,
       !expIsOnes && maybeSub
     )

@@ -26,7 +26,8 @@ class RoundingUnit(val width: Int) extends Module {
       RTZ -> false.B,
       RUP -> (inexact & !io.signIn),
       RDN -> (inexact & io.signIn),
-      RMM -> r
+      RMM -> r,
+      ROD -> (inexact && !g),
     )
   )
   val out_r_up = io.in + 1.U
@@ -54,4 +55,3 @@ object RoundingUnit {
     rm === RTZ || (rm === RDN && !sign) || (rm === RUP && sign)
   }
 }
-

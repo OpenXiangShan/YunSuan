@@ -347,7 +347,14 @@ class FP_INCVT(width: Int) extends Module {
   val fracValueSrc = (expNotZeroSrcNext && !expIsOnesSrcNext) ## fracSrc
   val shamtInNext = fracValueSrc ## 0.U(11.W) ## false.B  //fp Narrow & fp->int
   val shamtWidth = Mux(outIsIntNext || isFroundOrFroundnxNext, Mux1H(float1HSrcNext, fpParam.fpMap.map(fp => (63+fp.bias).U)),
-    Mux(isFp64To16Next, (fpParam.fp16To64BiasDelta + 1).U, fp64To32OrFp32To16BiasDelta + 1.U)
+    Mux(
+      isFp64To16Next,
+      (fpParam.fp16To64BiasDelta + 1).U,
+      Mux1H(Seq(
+        outIsFp16Next -> (fpParam.fp16To32BiasDelta + 1).U,
+        outIsFp32Next -> (fpParam.fp32To64BiasDelta + 1).U
+      ))
+    )
   ) + (~expSrcNext).asUInt
   val shamtWidthPlus1 = shamtWidth + 1.U
   val shamtNext = Mux(shamtWidth.andR, 0.U, Mux(shamtWidth(10, 6).orR, 65.U, shamtWidthPlus1))
@@ -579,8 +586,8 @@ class FP_INCVT(width: Int) extends Module {
 
     val result1H = Cat(
       expIsOnesSrc,
-      !expIsOnesSrc && !maybeSub && ofRounded && (rmin || (rm === RTO)),
-      !expIsOnesSrc && !maybeSub && ofRounded && !(rmin || (rm === RTO)),
+      !expIsOnesSrc && !maybeSub && ofRounded && (rmin || (rm === ROD)),
+      !expIsOnesSrc && !maybeSub && ofRounded && !(rmin || (rm === ROD)),
       !expIsOnesSrc && !maybeSub && !ofRounded,
       !expIsOnesSrc && maybeSub
     )
