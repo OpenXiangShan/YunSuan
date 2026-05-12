@@ -11,7 +11,7 @@ import yunsuan.vector.VectorConvert.util._
 import yunsuan.vector.VectorConvert.utils._
 
 
-class CVT32(width: Int = 32) extends CVT(width) {
+class CVT32(width: Int = 32) extends Module {
   /** cycle0                                     |         cycle1                  |   cycle2
    * fp2int/fp2fp   in(32)   lzc    left         |         RoundingUnit(32)  adder |
    *                          ..    adder        |                                 |
@@ -19,8 +19,12 @@ class CVT32(width: Int = 32) extends CVT(width) {
    * int2fp   in(32) in_abs(32)  lzc  adder      | left    RoundingUnit(32)  adder |  -> result & fflags
    * vfr      in(32)             lzc  adder      | Table                           |
    */
+  val io = IO(new Bundle {
+    val in = Input(new VCVT.In(width))
+    val out = Output(new VCVT.Out(width))
+  })
   val (fire, src, opType, rm, inSew1H, outSew1H) = (
-    io.fire, io.src, io.opType, io.rm, io.inSew1H, io.outSew1H
+    io.in.fire, io.in.data.src, io.in.ctrl.opType, io.in.ctrl.rm, io.in.ctrl.inSew1H, io.in.ctrl.outSew1H
   )
   val fireS1 = GatedValidRegNext(fire)
   val cvt32ModuleS0 = Module(new CVT32ModuleS0(width))
@@ -56,7 +60,6 @@ class CVT32BundleOutputS0(width: Int) extends Bundle {
   val sticky         = Bool()
   val special        = new Special
   val isFpWiden      = Bool()
-  val isFpNarrow     = Bool()
   val isFp2Int       = Bool()
   val isInt2Fp       = Bool()
   val isEstimate7    = Bool()
@@ -65,7 +68,6 @@ class CVT32BundleOutputS0(width: Int) extends Bundle {
   val signSrc        = Bool()
   val rm             = Frm()
   val hasSignInt     = Bool()
-  val trunSticky     = Bool()
   // int2fp
   val intSignSrc     = Bool()
   val isZeroIntSrc   = Bool()
@@ -95,7 +97,6 @@ class CVT32ModuleS0(width: Int = 32) extends Module {
   val s0Out = io.s0Out
   val (src, opType, rm, inSew1H, outSew1H) = (s0In.src, s0In.opType, s0In.rm, s0In.inSew1H, s0In.outSew1H)
 
-  val outIsFp = FCvtOpcode.outIsFp(opType)
   val isEstimate7 = FCvtOpcode.isEstimate7(opType)
   val isRec = FCvtOpcode.isRec(opType)
   val hasSignInt = FCvtOpcode.isSignInt(opType)
@@ -120,12 +121,10 @@ class CVT32ModuleS0(width: Int = 32) extends Module {
   val isSNaNSrc = isNaNSrc && !fracSrc.head(1)
   val isQNaNSrc = isNaNSrc && fracSrc.head(1).asBool
   val isSubnormalRec2 = isSubnormalSrc && !fracSrc.head(2).orR
-  val trunSticky = fracSrc.tail(f16.fracWidth).orR
 
   val fpInputWidth    = FCvtOpcode.getInputDataWidth(opType)
   val fpOutputWidth   = FCvtOpcode.getOutputDataWidth(opType)
   val isFpWiden       = FCvtOpcode.isF2F(opType) && fpOutputWidth > fpInputWidth
-  val isFpNarrow      = FCvtOpcode.isF2F(opType) && fpOutputWidth < fpInputWidth
   val isFp2Int        = FCvtOpcode.isF2I(opType)
   val isInt2Fp        = FCvtOpcode.isI2F(opType)
 
@@ -140,14 +139,13 @@ class CVT32ModuleS0(width: Int = 32) extends Module {
   val minusExp = extend((~(false.B ## Mux1H(
     Seq(
       isFpWiden -> leadZeros,
-      isFpNarrow -> biasDelta,
       isFp2Int -> bias
     )))), f32.expAdderWidth).asUInt
   expAdderIn0 := Mux1H(Seq(
     isFpWiden -> biasDelta,
-    (isFpNarrow || isFp2Int) -> Mux(isSubnormalSrc, false.B ## 1.U, false.B ## expSrc)
+    isFp2Int -> Mux(isSubnormalSrc, false.B ## 1.U, false.B ## expSrc)
   ))
-  val expPlus1Enable = isFpNarrow || isFp2Int || (isFpWiden && isSubnormalSrc)
+  val expPlus1Enable = isFp2Int || (isFpWiden && isSubnormalSrc)
   expAdderIn1 := Mux(expPlus1Enable, minusExp, expSrc)
   exp := expAdderIn0 + expAdderIn1
   s0Out.exp := exp
@@ -162,10 +160,7 @@ class CVT32ModuleS0(width: Int = 32) extends Module {
 
   val fracImplict1Src = (expNotZeroSrc && !expIsOnes) ## fracSrc
   val shamtIn = fracImplict1Src ## 0.U(8.W) ## false.B
-  val shamtWidth = Mux(outIsFp,
-    (f32.bias - f16.bias + 1).U,
-    Mux1H(float1HSrc, fpParam.fp16AndFp32Formats.map(fp => (31 + fp.bias).U))
-  ) + (~expSrc).asUInt
+  val shamtWidth = Mux1H(float1HSrc, fpParam.fp16AndFp32Formats.map(fp => (31 + fp.bias).U)) + (~expSrc).asUInt
   val shamtWidthPlus1 = shamtWidth + 1.U
   val shamt = Mux(shamtWidth.andR, 0.U, Mux(shamtWidth(7,5).orR, 33.U, shamtWidthPlus1))
 
@@ -183,14 +178,12 @@ class CVT32ModuleS0(width: Int = 32) extends Module {
   s0Out.special.isNaN := isNaNSrc
   s0Out.special.isSNaN := isSNaNSrc
   s0Out.isFpWiden := isFpWiden
-  s0Out.isFpNarrow := isFpNarrow
   s0Out.isFp2Int := isFp2Int
   s0Out.isInt2Fp := isInt2Fp
   s0Out.outSew1H := outSew1H
   s0Out.signSrc := fpSignSrc
   s0Out.rm := rm
   s0Out.hasSignInt := hasSignInt
-  s0Out.trunSticky := trunSticky
 
   // int2fp
   val int1HSrc = inSew1H(2, 0)
@@ -282,7 +275,6 @@ class CVT32ModuleS1(width: Int = 32) extends Module {
   val expInS0 = s1In.exp
   val expPlus1Enable = s1In.expPlus1Enable
   val isFpWiden = s1In.isFpWiden
-  val isFpNarrow = s1In.isFpNarrow
   val isFp2Int  = s1In.isFp2Int
   val isInt2Fp = s1In.isInt2Fp
   val isEstimate7 = s1In.isEstimate7
@@ -293,7 +285,6 @@ class CVT32ModuleS1(width: Int = 32) extends Module {
   val signSrc = s1In.signSrc
   val rm = s1In.rm
   val hasSignInt = s1In.hasSignInt
-  val trunSticky = s1In.trunSticky
 
   val intSignSrc = s1In.intSignSrc
   val isZeroIntSrc = s1In.isZeroIntSrc
@@ -326,7 +317,7 @@ class CVT32ModuleS1(width: Int = 32) extends Module {
   val sticky = s1In.sticky
 
   val rounderMapIn = Wire(UInt(width.W))
-  rounderMapIn := Mux(isFpNarrow, fracSrcLeft, shiftLeft)
+  rounderMapIn := shiftLeft
 
   val rounderMap = fpParam.fp16AndFp32Formats.map(fp => Seq(
     rounderMapIn.head(fp.fracWidth),
@@ -427,7 +418,6 @@ class CVT32ModuleS1(width: Int = 32) extends Module {
   val rec7Table = Module(new Rec7Table)
   rec7Table.src := fracNormaled.head(7)
   val fracEstimate = Mux(isRec, rec7Table.out, rsqrt7Table.out)
-
   when (isFpWiden) {
     nv := isSNaN
     dz := false.B
@@ -441,76 +431,6 @@ class CVT32ModuleS1(width: Int = 32) extends Module {
       (isnormal || isSubnormal) -> signNonNan ## exp(f32.expWidth - 1, 0) ## fracNormaled.head(f32.fracWidth)
     ))
     result := fpWidenResult
-  }.elsewhen(isFpNarrow) {
-    /**
-     * note: IEEE754 uf: exp in (-b^emin, b^emin), after rounding(RiscV!!!)
-     * note: IEEE754 uf: exp in (-b^emin, b^emin), before rounding(other)
-     */
-    // Mux(cout, exp > FP.maxExp - 1, exp > FP.maxExp)
-    val ofRounded = !exp.head(1).asBool && Mux(cout,
-      exp(f16.expWidth - 1, 1).andR || exp(exp.getWidth - 2, f16.expWidth).orR,
-      exp(f16.expWidth - 1, 0).andR || exp(exp.getWidth - 2, f16.expWidth).orR
-    )
-    // val ufExpRounded = Mux(cout, interExp < 0.S, interExp < 1.S)
-    val maybeSub = exp.head(1).asBool || !exp.orR
-    val ufExpRounded = Mux(cout, exp.head(1).asBool, maybeSub)
-    val nxOfRounded = nxRounded || ofRounded
-    /** dest is Subnormal
-     * dest: 1-toBias, src: srcExp - srcBias
-     * src->dest: exp = srcExp - srcBias + toBias
-     */
-    // val maybeSub = exp < 1.S
-    val subFracRounded = Wire(UInt(f16.fracWidth.W))
-    val subExpRounded = Wire(UInt(f16.expWidth.W))
-
-    val (subFrac, shiftSticky) = (inRounder, sticky)
-    val subRounderMap = Seq(
-      subFrac.tail(1).head(f16.fracWidth),
-      subFrac.tail(1+f16.fracWidth).head(1), // 1+toFracWidth+1 => drop head & tail
-      trunSticky || shiftSticky || subFrac.tail(f16.fracWidth+2).orR,
-      subFrac.tail(1).head(f16.fracWidth).andR
-    )
-
-    val (subRounderInput, subRounderIn, subRounderSticky, subIsOnesRounderInput) = {
-      (subRounderMap(0), subRounderMap(1), subRounderMap(2), subRounderMap(3))
-    }
-
-    val subRounder = Module(new RoundingUnit(f16.fracWidth))
-    subRounder.io.in := subRounderInput
-    subRounder.io.roundIn := subRounderIn
-    subRounder.io.stickyIn := subRounderSticky
-    subRounder.io.signIn := signSrc
-    subRounder.io.rm := rm
-    val subNxRounded = subRounder.io.inexact
-    val subUpRounded = subRounder.io.r_up
-    subFracRounded := Mux(subUpRounded, subRounderInput + 1.U, subRounderInput)
-    val subCout = subUpRounded && subIsOnesRounderInput.asBool
-    subExpRounded := Mux(subCout, 1.U, 0.U)
-
-    nv := isSNaN
-    dz := false.B
-    of := !expIsOnes && ofRounded
-    uf := !expIsOnes && maybeSub && ufExpRounded && subNxRounded
-    nx := !expIsOnes && (!maybeSub && nxOfRounded || maybeSub && subNxRounded)
-
-    val result1H = Seq(
-      expIsOnes,
-      !expIsOnes && !maybeSub && ofRounded && (rmin || (rm === ROD)),
-      !expIsOnes && !maybeSub && ofRounded && !(rmin || (rm === ROD)),
-      !expIsOnes && !maybeSub && !ofRounded,
-      !expIsOnes && maybeSub
-    )
-
-    def fpNarrowResultGen: Seq[UInt] = Seq(
-      signNonNan ## ~0.U(f16.expWidth.W) ## fracNotZero ## 0.U((f16.fracWidth - 1).W),    // Inf or NaN->QNaN
-      signNonNan ## f16.maxExp.U(f16.expWidth.W) ## ~0.U(f16.fracWidth.W),                // of => GNF
-      signNonNan ## (f16.maxExp + 1).U(f16.expWidth.W) ## 0.U(f16.fracWidth.W),           // of => INF
-      signNonNan ## expRounded(f16.expWidth - 1, 0) ## fracRounded(f16.fracWidth - 1, 0), // normal
-      signNonNan ## subExpRounded(f16.expWidth - 1, 0) ## subFracRounded(f16.fracWidth - 1, 0) // sub or uf
-    )
-
-    val fpNarrowResult = Mux1H(result1H, fpNarrowResultGen)
-    result := fpNarrowResult
   }.elsewhen(isInt2Fp) {
     nv := false.B
     dz := false.B
