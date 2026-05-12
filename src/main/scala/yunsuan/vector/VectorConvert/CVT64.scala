@@ -10,7 +10,10 @@ import yunsuan.encoding.Opcode.Opcodes.FCvtOpcode
 import yunsuan.vector.Common._
 
 class CVT64(width: Int = 64, isVectorCvt: Boolean, isI2F: Boolean = false) extends Module{
-  val io = IO(new VCVT.IO(width))
+  val io = IO(new Bundle {
+    val in = Input(new VCVT.In(width))
+    val out = Output(new VCVT.Out(width))
+  })
   val (fire, src, opType, rm, inSew1H, outSew1H, isScalarFpInst) =
     (io.in.fire, io.in.data.src, io.in.ctrl.opType, io.in.ctrl.rm, io.in.ctrl.inSew1H, io.in.ctrl.outSew1H, io.in.ctrl.isScalarFpInst)
   val fireReg = GatedValidRegNext(fire)
@@ -28,12 +31,10 @@ class CVT64(width: Int = 64, isVectorCvt: Boolean, isI2F: Boolean = false) exten
   val fpInputWidthNext  = FCvtOpcode.getInputDataWidth(opType)
   val fpOutputWidthNext = FCvtOpcode.getOutputDataWidth(opType)
   val isFpWidenNext     = FCvtOpcode.isF2F(opType) && fpOutputWidthNext > fpInputWidthNext
-  val isFpNarrowNext    = FCvtOpcode.isF2F(opType) && fpOutputWidthNext < fpInputWidthNext
   val isFp2IntNext      = FCvtOpcode.isF2I(opType)
 
   val isFroundOrFroundnxNext = isFround.orR
   val isFpWiden = RegEnable(isFpWidenNext, false.B, fire)
-  val isFpNarrow = RegEnable(isFpNarrowNext, false.B, fire)
   val isFp2Int = RegEnable(isFp2IntNext, false.B, fire)
   val isFroundReg = RegEnable(isFroundOrFroundnxNext, false.B, fire)
   val isFcvtmodReg = RegEnable(isFcvtmod, false.B, fire)
@@ -55,7 +56,7 @@ class CVT64(width: Int = 64, isVectorCvt: Boolean, isI2F: Boolean = false) exten
 
   val s1_isInt2Fp = RegEnable(isInt2FpNext, false.B, fire)
   val s1_isEstimate7 = RegEnable(isEstimate7Next, false.B, fire)
-  val s1_isFPsrc = isFpWiden || isFpNarrow || isFp2Int || isFroundReg || isFcvtmodReg
+  val s1_isFPsrc = isFpWiden || isFp2Int || isFroundReg || isFcvtmodReg
   val s1_outIsFP = RegEnable(outIsFpNext, fire)
   val s1_outIsF64 = RegEnable(s0_outIsF64, fire)
   val s1_outIsF32 = RegEnable(s0_outIsF32, fire)
@@ -149,10 +150,12 @@ class CVT64(width: Int = 64, isVectorCvt: Boolean, isI2F: Boolean = false) exten
     fpcvt.io.isFcvtmod := isFcvtmod
     val result = fpcvt.io.result
     val fflags = fpcvt.io.fflags
+    val resultEx1 = fpcvt.io.resultEx1
+    val fflagsEx1 = fpcvt.io.fflagsEx1
     io.out.ex2.res := Mux(s2_fpCanonicalNAN, s2_resultForfpCanonicalNAN, result)
     io.out.ex2.fflags := Mux(s2_fpCanonicalNAN && !s2_outIsFP, "b10000".U, Mux(s2_fpCanonicalNAN && s2_isFround, 0.U, fflags))
-    io.out.ex1.res := fpcvt.io.resultEx1
-    io.out.ex1.fflags := fpcvt.io.fflagsEx1
+    io.out.ex1.res := resultEx1
+    io.out.ex1.fflags := fflagsEx1
   }else { // scalar int2fp
     val int2fp = Module(new INT2FP(width))
     int2fp.io.fire := fire
@@ -184,6 +187,7 @@ class CVT_IO(width: Int) extends Bundle{
   val result    = Output(UInt(width.W))
   val fflags    = Output(Fflags())
 }
+
 class INTCVT_IO(width: Int) extends Bundle{
   val fire     = Input(Bool())
   val src      = Input(UInt(width.W))
@@ -208,7 +212,6 @@ class FP_INCVT(width: Int) extends Module {
   val hasSignIntNext   = FCvtOpcode.isSignInt(opType)
   val float1HSrcNext = inSew1H(3, 1)  //exclude f8
   val float1HOutNext = outSew1H(3, 1) //exclude f8
-  val outIsFp16Next = float1HOutNext(0)
   val outIsFp32Next = float1HOutNext(1)
   val outIsFp64Next = float1HOutNext(2)
 
@@ -218,14 +221,16 @@ class FP_INCVT(width: Int) extends Module {
   //fp input extend
   val srcMap = (0 to 3).map(i => src((1 << i) * 8 - 1, 0))
   val floatMap = srcMap.zipWithIndex.map{case (float,i) => floatExtend(float, i)}.drop(1)
-  val input = Mux1H(float1HSrcNext, floatMap)
-  val expSrcNext = input.tail(1).head(f64.expWidth)
-  val fracSrc = input.tail(f64.expWidth+1).head(f64.fracWidth)
-  val signSrcNext = input.head(1).asBool
-  val decodeFloatSrc = Mux1H(float1HSrcNext, fpParam.fpMap.map(fp =>
-    VecInit(expSrcNext(fp.expWidth-1,0).orR, expSrcNext(fp.expWidth-1,0).andR, fracSrc.head(fp.fracWidth).orR).asUInt
-  )
-  )
+  val expSrcNextMap = floatMap.map(_.tail(1).head(f64.expWidth))
+  val fracSrcMap = floatMap.map(_.tail(f64.expWidth+1).head(f64.fracWidth))
+  val signSrcNextMap = floatMap.map(_.head(1).asBool)
+  val expSrcNext = Mux1H(float1HSrcNext, expSrcNextMap)
+  val fracSrc = Mux1H(float1HSrcNext, fracSrcMap)
+  val signSrcNext = Mux1H(float1HSrcNext, signSrcNextMap)
+  val decodeFloatSrcMap = fpParam.fpMap.zip(expSrcNextMap).zip(fracSrcMap).map { case ((fp, exp), frac) =>
+    VecInit(exp(fp.expWidth-1,0).orR, exp(fp.expWidth-1,0).andR, frac.head(fp.fracWidth).orR).asUInt
+  }
+  val decodeFloatSrc = Mux1H(float1HSrcNext, decodeFloatSrcMap)
   val (expNotZeroSrcNext, expIsOnesSrcNext, fracNotZeroSrcNext) = (decodeFloatSrc(0), decodeFloatSrc(1), decodeFloatSrc(2))
   val isNaNSrcNext = expIsOnesSrcNext && fracNotZeroSrcNext
   val isZeroSrcNext = !expNotZeroSrcNext && !fracNotZeroSrcNext
@@ -237,9 +242,7 @@ class FP_INCVT(width: Int) extends Module {
   val fpInputWidthNext    = FCvtOpcode.getInputDataWidth(opType)
   val fpOutputWidthNext   = FCvtOpcode.getOutputDataWidth(opType)
   val isFpWidenNext       = FCvtOpcode.isF2F(opType) && fpOutputWidthNext > fpInputWidthNext
-  val isFpNarrowNext      = FCvtOpcode.isF2F(opType) && fpOutputWidthNext < fpInputWidthNext
   val isFp16To64Next      = FCvtOpcode.isF2F(opType) && FCvtOpcode.inIs16(opType) && FCvtOpcode.outIs64(opType)
-  val isFp64To16Next      = FCvtOpcode.isF2F(opType) && FCvtOpcode.inIs64(opType) && FCvtOpcode.outIs16(opType)
   val isFp2IntNext        = FCvtOpcode.isF2I(opType)
 
   val froundOrFroundnxIsZeroOrInfNext = isFroundOrFroundnxNext && (isZeroSrcNext || isInfSrcNext)
@@ -255,7 +258,6 @@ class FP_INCVT(width: Int) extends Module {
   val isSNaNSrc = RegEnable(isSNaNSrcNext, false.B, fire)
 
   val isFpWiden = RegEnable(isFpWidenNext, false.B, fire)
-  val isFpNarrow = RegEnable(isFpNarrowNext, false.B, fire)
   val isFp2Int = RegEnable(isFp2IntNext, false.B, fire)
   val isNaNSrc = RegEnable(isNaNSrcNext, false.B, fire)
   val s0_fpCanonicalNAN = isScalarFpInst & (inSew1H(1) & !src.head(48).andR | inSew1H(2) & !src.head(32).andR)
@@ -266,8 +268,6 @@ class FP_INCVT(width: Int) extends Module {
   val isFcvtmodReg = RegEnable(isFcvtmod, false.B, fire)
   val froundOrFroundnxIsZeroOrInf = RegEnable(froundOrFroundnxIsZeroOrInfNext, false.B, fire)
 
-  // for fpnarrow sub
-  val trunSticky = RegEnable(fracSrc.tail(f32.fracWidth).orR, false.B, fire)
   val signSrc = RegEnable(signSrcNext, false.B, fire)
   val rm = RegEnable(rmNext, 0.U(3.W), fire)
   val hasSignInt = RegEnable(hasSignIntNext, false.B, fire)
@@ -293,7 +293,8 @@ class FP_INCVT(width: Int) extends Module {
   expNext := expAdderIn0Next + expAdderIn1Next
   val expReg = RegEnable(expNext, fire)
 
-  val leadZerosNext = Lzc((fracSrc<<(64 - f64.fracWidth)).asUInt).data
+  val leadZerosNextMap = fracSrcMap.map(frac => Lzc((frac << (64 - f64.fracWidth)).asUInt).data)
+  val leadZerosNext = Mux1H(float1HSrcNext, leadZerosNextMap)
   expAdderIn0Next := Mux1H(Seq(
     isFpWidenNext -> Mux(
       isFp16To64Next,
@@ -303,25 +304,16 @@ class FP_INCVT(width: Int) extends Module {
         outIsFp64Next -> fpParam.fp32To64BiasDelta.U
       ))
     ),
-    isFpNarrowNext -> Mux(isSubnormalSrcNext, false.B ## 1.U, false.B ## expSrcNext),
     isFp2IntNext -> Mux(isSubnormalSrcNext, false.B ## 1.U, false.B ## expSrcNext)
   ))
   val bias =  Mux1H(float1HSrcNext, fpParam.fpMap.map(fp => fp.bias.U))
   val minusExp = extend((~(false.B ## Mux1H(
     Seq(
       isFpWidenNext   -> leadZerosNext,
-      isFpNarrowNext  -> Mux(
-        isFp64To16Next,
-        fpParam.fp16To64BiasDelta.U,
-        Mux1H(Seq(
-          outIsFp16Next -> fpParam.fp16To32BiasDelta.U,
-          outIsFp32Next -> fpParam.fp32To64BiasDelta.U
-        ))
-      ),
       isFp2IntNext    -> bias
     )))).asUInt, f64.expAdderWidth).asUInt
 
-  val expPlus1EnableNext = isFpNarrowNext || isFp2IntNext || (isFpWidenNext && isSubnormalSrcNext)
+  val expPlus1EnableNext = isFp2IntNext || (isFpWidenNext && isSubnormalSrcNext)
   val expPlus1Enable = RegEnable(expPlus1EnableNext, fire)
   expAdderIn1Next := Mux(
     expPlus1EnableNext,
@@ -329,37 +321,35 @@ class FP_INCVT(width: Int) extends Module {
     expSrcNext
   )
   //frac
-  val fracSrcLeftNext = Wire(UInt(64.W))
-  fracSrcLeftNext := fracSrc << (64 - f64.fracWidth)
-  val shiftLeftNext = (fracSrcLeftNext.asUInt << 1) << leadZerosNext
+  val fracSrcLeftNextMap = fracSrcMap.map(frac => frac << (64 - f64.fracWidth))
+  val fracSrcLeftNext = Mux1H(float1HSrcNext, fracSrcLeftNextMap)
+  val shiftLeftNextMap = fracSrcLeftNextMap.zip(leadZerosNextMap).map { case (fracLeft, leadZeros) =>
+    (fracLeft.asUInt << 1) << leadZeros
+  }
+  val shiftLeftNext = Mux1H(float1HSrcNext, shiftLeftNextMap)
   val shiftLeft = RegEnable(shiftLeftNext, 0.U(64.W), fire)
   val fracSrcLeft = RegEnable(fracSrcLeftNext, 0.U(64.W), fire)
   val fracNormaled =  Wire(UInt(64.W))
   fracNormaled := Mux(isSubnormalSrc, shiftLeft, fracSrcLeft) //cycle1
 
-  /** shift right
-   * for: fp->fp Narrow, fp->int
-   * cycle: 1
-   *
-   */
-
   // common
+  val shamtInNextMap = decodeFloatSrcMap.zip(fracSrcMap).map { case (decode, frac) =>
+    val expNotZero = decode(0)
+    val expIsOnes = decode(1)
+    val fracValue = (expNotZero && !expIsOnes) ## frac
+    fracValue ## 0.U(11.W) ## false.B
+  }
   val fracValueSrc = (expNotZeroSrcNext && !expIsOnesSrcNext) ## fracSrc
-  val shamtInNext = fracValueSrc ## 0.U(11.W) ## false.B  //fp Narrow & fp->int
-  val shamtWidth = Mux(outIsIntNext || isFroundOrFroundnxNext, Mux1H(float1HSrcNext, fpParam.fpMap.map(fp => (63+fp.bias).U)),
-    Mux(
-      isFp64To16Next,
-      (fpParam.fp16To64BiasDelta + 1).U,
-      Mux1H(Seq(
-        outIsFp16Next -> (fpParam.fp16To32BiasDelta + 1).U,
-        outIsFp32Next -> (fpParam.fp32To64BiasDelta + 1).U
-      ))
-    )
-  ) + (~expSrcNext).asUInt
-  val shamtWidthPlus1 = shamtWidth + 1.U
-  val shamtNext = Mux(shamtWidth.andR, 0.U, Mux(shamtWidth(10, 6).orR, 65.U, shamtWidthPlus1))
-
-  val (inRounderTmp, stickyTmp) = ShiftRightJam(shamtInNext, shamtNext)
+  val shamtNextMap = fpParam.fpMap.zip(expSrcNextMap).map { case (fp, exp) =>
+    val shamtWidth = (63 + fp.bias).U + (~exp).asUInt
+    val shamtWidthPlus1 = shamtWidth + 1.U
+    Mux(shamtWidth.andR, 0.U, Mux(shamtWidth(10, 6).orR, 65.U, shamtWidthPlus1))
+  }
+  val inRounderStickyMap = shamtInNextMap.zip(shamtNextMap).map { case (shamtIn, shamt) =>
+    ShiftRightJam(shamtIn, shamt)
+  }
+  val inRounderTmp = Mux1H(float1HSrcNext, inRounderStickyMap.map(_._1))
+  val stickyTmp = Mux1H(float1HSrcNext, inRounderStickyMap.map(_._2))
 
   val inRounder = RegEnable(inRounderTmp, 0.U(65.W), fire)
   val sticky = RegEnable(stickyTmp, false.B, fire)
@@ -373,29 +363,28 @@ class FP_INCVT(width: Int) extends Module {
   val froundExpGreaterThanMaxExpNext = expSrcNext >= froundMaxExpNext
 
   val fracShiftMaskNext = Mux1H(float1HOutNext, fpParam.fpMap.map(fp => fp.froundShiftMask.U)) - expSrcNext
+  val froundShiftMaskNext = Mux1H(
+    (0 until (1 << 6)).map(i =>
+      (i.U === fracShiftMaskNext) -> Cat(~0.U((64-i).W), 0.U(i.W)))
+  )
+  val froundUpShiftMaskNext = Mux1H(
+    (0 until (1 << 6)).map(i =>
+      (i.U === fracShiftMaskNext) -> Cat(1.U((64-i).W), 0.U(i.W)))
+  )
 
   val froundExpLessThanBiasNext = Mux1H(float1HOutNext, fpParam.fpMap.map(fp => !expSrcNext(fp.expWidth-1) && !expSrcNext(fp.expWidth-2, 0).andR))
 
   val froundExpLessThanBias = RegEnable(froundExpLessThanBiasNext, false.B, fire)
   val froundExpGreaterThanMaxExp = RegEnable(froundExpGreaterThanMaxExpNext, false.B, fire)
-  val fracShiftMask = RegEnable(fracShiftMaskNext, 0.U, fire)
+  val froundShiftMask = RegEnable(froundShiftMaskNext, 0.U, fire)
+  val froundUpShiftMask = RegEnable(froundUpShiftMaskNext, 0.U, fire)
   val froundOldExp = RegEnable(expSrcNext, 0.U, fire)
   val froundOldFrac = RegEnable(fracSrc, 0.U, fire)
 
   // cycle1
-  val froundShiftMask = Wire(UInt(64.W))
-  val froundUpShiftMask = Wire(UInt(64.W))
   val froundOldInput = Wire(UInt(64.W))
   val froundUpInput = Wire(UInt(64.W))
 
-  froundShiftMask := Mux1H(
-    (0 until (1 << 6)).map(i =>
-      (i.U === fracShiftMask) -> Cat(~0.U((64-i).W), 0.U(i.W)))
-  )
-  froundUpShiftMask := Mux1H(
-    (0 until (1 << 6)).map(i =>
-      (i.U === fracShiftMask) -> Cat(1.U((64-i).W), 0.U(i.W)))
-  )
   froundOldInput := Cat(signSrc, froundOldExp, froundOldFrac) & froundShiftMask
   froundUpInput := froundOldInput + froundUpShiftMask
 
@@ -447,30 +436,9 @@ class FP_INCVT(width: Int) extends Module {
   val fcvtmodNxReg      = RegEnable(fcvtmodNx, false.B, fire)
   val fcvtmodExpLessThanBias = RegEnable(fcvtmodExpLessThanBiasNext, false.B, fire)
 
-  /** rounder
-   * for: int->fp, fp-fp Narrow, fp->int
-   * cycle: 1
-   */
-  val rounderMapIn = Wire(UInt(64.W))
-  rounderMapIn := Mux(isFpNarrow, fracSrcLeft, shiftLeft)
-
-  val rounderMap =
-    fpParam.fpMap.map(fp => Seq(
-      rounderMapIn.head(fp.fracWidth),
-      rounderMapIn.tail(fp.fracWidth).head(1),
-      rounderMapIn.tail(fp.fracWidth + 1).orR,
-      rounderMapIn.head(fp.fracWidth).andR
-    )
-    ).transpose
-
-  val (rounderInputMap, rounerInMap, rounderStikyMap, isOnesRounderInputMap) = {
-    (rounderMap(0), rounderMap(1), rounderMap(2), rounderMap(3))
-  }
-
-  val selectInRounder = isFp2Int || isFroundOrFroundnxReg
-  val rounderInput = Mux(selectInRounder, inRounder.head(64),  Mux1H(float1HOut, rounderInputMap))
-  val rounderRoundIn = Mux(selectInRounder, inRounder(0), Mux1H(float1HOut, rounerInMap))
-  val rounderStickyIn = Mux(selectInRounder, sticky, Mux1H(float1HOut, rounderStikyMap))
+  val rounderInput = inRounder.head(64)
+  val rounderRoundIn = inRounder(0)
+  val rounderStickyIn = sticky
 
   val rounder = Module(new RoundingUnit(64))
   rounder.io.in := rounderInput
@@ -490,10 +458,7 @@ class FP_INCVT(width: Int) extends Module {
   val hasSignInt1HOut = int1HOut.asBools.map(oh => Seq(oh && !hasSignInt, oh && hasSignInt)).flatten
   val isOnesRounderInputMapFp2Int =
     intParamMap.map(intType => Seq(intType, intType - 1)).flatten.map(intType => rounderInput.tail(64 - intType).andR)
-  val cout = upRounded && Mux(isFp2Int,
-    Mux1H(hasSignInt1HOut, isOnesRounderInputMapFp2Int),
-    Mux1H(float1HOut, isOnesRounderInputMap)
-  ).asBool
+  val cout = upRounded && Mux1H(hasSignInt1HOut, isOnesRounderInputMapFp2Int).asBool
   val expRounded = Wire(UInt(f64.expWidth.W))
   expRounded := Mux(cout, expIncrease, exp)
   val fracRounded = Mux(upRounded, rounderInputIncrease, rounderInput)
@@ -522,86 +487,6 @@ class FP_INCVT(width: Int) extends Module {
 
     val fpwidenResultMap: Seq[UInt] = Seq(f32, f64).map(fp => Mux1H(result1H.asBools.reverse, fpWidenResultMapGen(fp)))
     resultNext := Mux1H(float1HOut.head(2), fpwidenResultMap)
-  }.elsewhen(isFpNarrow){
-    /** fp -> fp narrower
-     * note: IEEE754 uf：exp in (-b^emin, b^emin), after rounding(RiscV!!!)
-     * note: IEEE754 uf：exp in (-b^emin, b^emin), before rounding(other)
-     */
-    // Mux(cout, exp > FP.maxExp -1, exp > FP.maxExp)
-    val ofRounded = !exp.head(1).asBool && Mux1H(float1HOut,
-      fpParam.fpMap.map(fp => Mux(cout,
-        exp(fp.expWidth - 1, 1).andR || exp(exp.getWidth - 2, fp.expWidth).orR,
-        exp(fp.expWidth - 1, 0).andR || exp(exp.getWidth - 2, fp.expWidth).orR)
-      )
-    )
-    //val ufExpRounded = Mux(cout, interExp < 0.S, interExp < 1.S)
-    val ufExpRounded = Mux(cout, exp.head(1).asBool, exp.head(1).asBool || !exp.orR)
-    val nxOfRounded = nxRounded || ofRounded
-    /** dest is Subnormal
-     * dest: 1-toBias, src: srcExp - srcBias
-     * src->dest :exp = srcExp - srcBias + toBias
-     */
-    //val maybeSub = exp < 1.S
-    val maybeSub = exp.head(1).asBool || !exp.orR
-    val subFracRounded = Wire(UInt(f32.fracWidth.W))
-    val subExpRounded = Wire(UInt(f32.expWidth.W))
-
-    val (subFrac, shiftSticky) = (inRounder, sticky)
-    val subRounderMap =
-      Seq(f16, f32).map(fp => Seq(
-        subFrac.tail(1).head(fp.fracWidth),
-        subFrac.tail(fp.fracWidth+1).head(1),  //1+toFracWidth +1 => drop head & tail
-        trunSticky || shiftSticky || subFrac.tail(fp.fracWidth+2).orR,
-        subFrac.tail(1).head(fp.fracWidth).andR
-      )
-      ).transpose
-
-    val (subRounderInputMap, subRounerInMap, subRounderStikyMap, subIsOnesRounderInputMap) = {
-      (subRounderMap(0), subRounderMap(1), subRounderMap(2), subRounderMap(3))
-    }
-
-    val subRounder = Module(new RoundingUnit(f32.fracWidth))
-    val subRounderInput = Mux1H(float1HOut.tail(1), subRounderInputMap)
-    subRounder.io.in := subRounderInput
-    subRounder.io.roundIn := Mux1H(float1HOut.tail(1), subRounerInMap)
-    subRounder.io.stickyIn := Mux1H(float1HOut.tail(1), subRounderStikyMap)
-    subRounder.io.signIn := signSrc
-    subRounder.io.rm := rm
-    // from roundingUnit
-    val subNxRounded = subRounder.io.inexact
-    val subUpRounded = subRounder.io.r_up
-    // out of roundingUint
-    subFracRounded := Mux(subUpRounded, subRounderInput + 1.U, subRounderInput)
-    val subCout = subUpRounded && Mux1H(float1HOut.tail(1), subIsOnesRounderInputMap).asBool
-    subExpRounded := Mux(subCout, 1.U, 0.U)
-
-    nv := isSNaNSrc && !s1_fpCanonicalNAN
-    dz := false.B
-    of := !expIsOnesSrc && ofRounded && !s1_fpCanonicalNAN
-    uf := !expIsOnesSrc && maybeSub && ufExpRounded && subNxRounded && !s1_fpCanonicalNAN
-    nx := !expIsOnesSrc && (
-      (!maybeSub && nxOfRounded) ||
-        (maybeSub && subNxRounded)
-      ) && !s1_fpCanonicalNAN
-
-    val result1H = Cat(
-      expIsOnesSrc,
-      !expIsOnesSrc && !maybeSub && ofRounded && (rmin || (rm === ROD)),
-      !expIsOnesSrc && !maybeSub && ofRounded && !(rmin || (rm === ROD)),
-      !expIsOnesSrc && !maybeSub && !ofRounded,
-      !expIsOnesSrc && maybeSub
-    )
-    def fpNarrowResultMapGen(fp: FloatFormat): Seq[UInt] ={
-      VecInit((0 to 4).map {
-        case 0 => signNonNan ## ~0.U(fp.expWidth.W) ## fracNotZeroSrc ## 0.U((fp.fracWidth - 1).W)  // INF or NaN->QNAN
-        case 1 => signNonNan ## fp.maxExp.U(fp.expWidth.W) ## ~0.U(fp.fracWidth.W)                  // of => GNF
-        case 2 => signNonNan ## (fp.maxExp + 1).U(fp.expWidth.W) ## 0.U(fp.fracWidth.W)             // of => INF
-        case 3 => signNonNan ## expRounded(fp.expWidth - 1, 0) ## fracRounded(fp.fracWidth - 1, 0)  // normal
-        case 4 => signNonNan ## subExpRounded(fp.expWidth - 1, 0) ## subFracRounded(fp.fracWidth - 1, 0) //sub or uf
-      })
-    }
-    val fpNarrowResultMap: Seq[UInt] = Seq(f16, f32).map(fp => Mux1H(result1H.asBools.reverse, fpNarrowResultMapGen(fp)))
-    resultNext := Mux1H(float1HOut.tail(1), fpNarrowResultMap)
   }.elsewhen(isFroundOrFroundnxReg) {
     val oldInputReg = Mux1H(float1HOut, fpParam.fpMap.map(fp => signSrc ## froundOldExp(fp.expWidth - 1, 0) ## froundOldFrac.head(fp.fracWidth)))
 
@@ -731,20 +616,32 @@ class INT2FP(width: Int) extends Module{
   val outSew1HReg = RegEnable(outSew1H, 0.U(4.W), fire)
   val float1HOut = Wire(UInt(3.W))
   float1HOut := outSew1HReg.head(3)
-  val srcMap = (0 to 3).map(i => src((1 << i) * 8 - 1, 0))
-  val intMap = srcMap.map(int => intExtend(int, hasSignIntNext && int.head(1).asBool))
-  val input = Mux1H(int1HSrcNext, intMap)
-  val signSrcNext = input.head(1).asBool
+  val intWidthMap = Seq(8, 16, 32, 64)
+  val srcMap = intWidthMap.map(width => src(width - 1, 0))
+  val signSrcNextMap = srcMap.map(int => hasSignIntNext && int.head(1).asBool)
+  val signSrcNext = Mux1H(int1HSrcNext, signSrcNextMap)
   val signSrc = RegEnable(signSrcNext, false.B, fire)
   val rm = RegEnable(rmNext, 0.U(3.W), fire)
   // src is int
-  val absIntSrcNext = Wire(UInt(64.W)) //cycle0
-  absIntSrcNext := Mux(signSrcNext, (~input.tail(1)).asUInt + 1.U, input.tail(1))
-  val isZeroIntSrcNext = !absIntSrcNext.orR
+  val absIntSrcRawNextMap = srcMap.zip(signSrcNextMap).map { case (int, sign) =>
+    val neg = (~int).asUInt + 1.U
+    Mux(sign, neg(int.getWidth - 1, 0), int)
+  }
+  val absIntSrcNextMap = absIntSrcRawNextMap.zip(intWidthMap).map { case (absInt, intWidth) =>
+    if (intWidth == 64) absInt else 0.U((64 - intWidth).W) ## absInt
+  }
+  val absIntSrcNext = Mux1H(int1HSrcNext, absIntSrcNextMap)
+  val isZeroIntSrcNext = Mux1H(int1HSrcNext, absIntSrcRawNextMap.map(absInt => !absInt.orR))
   val isZeroIntSrc = RegEnable(isZeroIntSrcNext, false.B, fire)
   //CLZ
-  val clzIn = absIntSrcNext.asUInt
-  val leadZerosNext = Lzc(clzIn).data
+  val leadZerosNextMap = absIntSrcRawNextMap.zip(intWidthMap).map { case (absInt, intWidth) =>
+    if (intWidth == 64) {
+      Lzc(absInt).data
+    } else {
+      ((64 - intWidth).U(6.W) + Lzc(absInt).data)(5, 0)
+    }
+  }
+  val leadZerosNext = Mux1H(int1HSrcNext, leadZerosNextMap)
   //exp
   val expAdderIn0Next = Wire(UInt(f64.expAdderWidth.W)) //13bits is enough
   val expAdderIn1Next = Wire(UInt(f64.expAdderWidth.W))
@@ -762,63 +659,16 @@ class INT2FP(width: Int) extends Module{
   //round
   val rounderMapIn = Wire(UInt(64.W))
   rounderMapIn := shiftLeft
-  val rounderMap =
-    fpParam.fpMap.map(fp => Seq(
-      rounderMapIn.head(fp.fracWidth),
-      rounderMapIn.tail(fp.fracWidth).head(1),
-      rounderMapIn.tail(fp.fracWidth + 1).orR,
-      rounderMapIn.head(fp.fracWidth).andR
-    )
-    ).transpose
-  val (rounderInputMap, rounerInMap, rounderStikyMap, isOnesRounderInputMap) = {
-    (rounderMap(0), rounderMap(1), rounderMap(2), rounderMap(3))
-  }
-  val rounderInput = Mux1H(float1HOut, rounderInputMap)
-  val rounder = Module(new RoundingUnit(64))
-  rounder.io.in := rounderInput
-  rounder.io.roundIn := Mux1H(float1HOut, rounerInMap)
-  rounder.io.stickyIn := Mux1H(float1HOut, rounderStikyMap)
-  rounder.io.signIn := signSrc
-  rounder.io.rm := rm
-  val exp = expReg + 1.U
-  val expIncrease = expReg + 2.U
-  val rounderInputIncrease = rounderInput + 1.U
-  // from rounder
-  val nxRounded = rounder.io.inexact
-  val upRounded = rounder.io.r_up
-  val cout = upRounded && Mux1H(float1HOut, isOnesRounderInputMap).asBool
-  val expRounded = Wire(UInt(f64.expWidth.W))
-  expRounded := Mux(cout, expIncrease, exp)
-  val fracRounded = Mux(upRounded, rounderInputIncrease, rounderInput)
   val rmin =
     rm === RTZ || (signSrc && rm === RUP) || (!signSrc && rm === RDN) //cycle1
   /** int->fp   any int/uint-> any fp
    */
-  // Mux(cout, exp > FP.maxExp -1, exp > FP.maxExp)
-  val ofRounded = !exp.head(1).asBool && Mux1H(float1HOut,
-    fpParam.fpMap.map(fp => Mux(cout,
-      exp(fp.expWidth - 1, 1).andR || exp(exp.getWidth - 2, fp.expWidth).orR,
-      exp(fp.expWidth - 1, 0).andR || exp(exp.getWidth - 2, fp.expWidth).orR)
-    )
-  )
   val nv, dz, of, uf, nx = Wire(Bool()) //cycle1
   val fflagsNext = Wire(UInt(5.W))
   val fflags = RegEnable(fflagsNext, 0.U(5.W), fireReg)
   val resultNext = Wire(UInt(64.W))
   val result = RegEnable(resultNext, 0.U(64.W), fireReg)
-  nv := false.B
-  dz := false.B
-  of := ofRounded
-  uf := false.B
-  nx := ofRounded || nxRounded
-
-  val result1H = Cat(
-    ofRounded && rmin,
-    ofRounded && !rmin,
-    isZeroIntSrc,
-    !ofRounded && !isZeroIntSrc
-  )
-  def int2FpResultMapGen(fp: FloatFormat): Seq[UInt] = {
+  def int2FpResultMapGen(fp: FloatFormat, expRounded: UInt, fracRounded: UInt): Seq[UInt] = {
     VecInit((0 to 3).map {
       case 0 => signSrc ## fp.maxExp.U(fp.expWidth.W) ## ~0.U(fp.fracWidth.W) //GNF
       case 1 => signSrc ## ~0.U(fp.expWidth.W) ## 0.U(fp.fracWidth.W) // INF
@@ -826,7 +676,57 @@ class INT2FP(width: Int) extends Module{
       case 3 => signSrc ## expRounded(fp.expWidth-1, 0) ## fracRounded(fp.fracWidth-1, 0) // normal
     })
   }
-  val int2FpResultMap: Seq[UInt] = fpParam.fpMap.map(fp => Mux1H(result1H.asBools.reverse, int2FpResultMapGen(fp)))
+
+  val exp = expReg + 1.U
+  val expIncrease = expReg + 2.U
+  val int2FpByFp = fpParam.fpMap.map { fp =>
+    val rounderInput = rounderMapIn.head(fp.fracWidth)
+    val rounderIn = rounderMapIn.tail(fp.fracWidth).head(1).asBool
+    val rounderSticky = rounderMapIn.tail(fp.fracWidth + 1).orR
+    val rounder = Module(new RoundingUnit(fp.fracWidth))
+    rounder.io.in := rounderInput
+    rounder.io.roundIn := rounderIn
+    rounder.io.stickyIn := rounderSticky
+    rounder.io.signIn := signSrc
+    rounder.io.rm := rm
+    val nxRounded = rounder.io.inexact
+    val upRounded = rounder.io.r_up
+    val cout = upRounded && rounderInput.andR
+    val expRounded = Wire(UInt(f64.expWidth.W))
+    expRounded := Mux(cout, expIncrease, exp)
+    val fracRounded = Mux(upRounded, rounderInput + 1.U, rounderInput)
+    // Mux(cout, exp > FP.maxExp -1, exp > FP.maxExp)
+    val ofRounded = if (fp.expWidth == f16.expWidth) {
+      !exp.head(1).asBool && Mux(cout,
+        exp(fp.expWidth - 1, 1).andR || exp(exp.getWidth - 2, fp.expWidth).orR,
+        exp(fp.expWidth - 1, 0).andR || exp(exp.getWidth - 2, fp.expWidth).orR
+      )
+    } else {
+      false.B
+    }
+    val normalResult = signSrc ## expRounded(fp.expWidth-1, 0) ## fracRounded(fp.fracWidth-1, 0)
+    val result = if (fp.expWidth != f16.expWidth) {
+      Mux(isZeroIntSrc, signSrc ## 0.U((fp.width - 1).W), normalResult)
+    } else {
+      val result1H = Cat(
+        ofRounded && rmin,
+        ofRounded && !rmin,
+        isZeroIntSrc,
+        !ofRounded && !isZeroIntSrc
+      )
+      Mux1H(result1H.asBools.reverse, int2FpResultMapGen(fp, expRounded, fracRounded))
+    }
+    (result, ofRounded, nxRounded)
+  }
+  val int2FpResultMap: Seq[UInt] = int2FpByFp.map(_._1)
+  val ofRounded = Mux1H(float1HOut, int2FpByFp.map(_._2)).asBool
+  val nxRounded = Mux1H(float1HOut, int2FpByFp.map(_._3)).asBool
+  nv := false.B
+  dz := false.B
+  of := ofRounded
+  uf := false.B
+  nx := ofRounded || nxRounded
+
   resultNext := Mux1H(float1HOut, int2FpResultMap)
   //output
   fflagsNext := Cat(nv, dz, of, uf, nx)
@@ -925,15 +825,9 @@ class Estimate7(width: Int) extends Module{
 
   val expNormaled = Mux(isSubnormalSrcNext, leadZerosNext(0), expSrcNext(0)) //only the last bit is needed
   val expNormaled0 = RegEnable(expNormaled(0), false.B, fire)
-  val fracSrcLeftNext = Wire(UInt(64.W))
-  fracSrcLeftNext := fracSrc << (64 - f64.fracWidth)
-  val fracSrcLeft = RegEnable(fracSrcLeftNext, 0.U(64.W), fire)
-  val leadZeros = RegEnable(leadZerosNext, fire)
-
-  val shiftLeft = Wire(UInt(64.W))
-  shiftLeft := (fracSrcLeft.asUInt << 1) << leadZeros //cycle1
-  val fracNormaled =  Wire(UInt(64.W))
-  fracNormaled := Mux(isSubnormalSrc, shiftLeft, fracSrcLeft) //cycle1
+  val fracSrcLeftNext = fracSrc << (64 - f64.fracWidth)
+  val fracNormaledNext = Mux(isSubnormalSrcNext, (fracSrcLeftNext.asUInt << 1) << leadZerosNext, fracSrcLeftNext)
+  val fracNormaled = RegEnable(fracNormaledNext, 0.U(64.W), fire)
   val rsqrt7Table = Module(new Rsqrt7Table)
   rsqrt7Table.src := expNormaled0 ## fracNormaled.head(6)
   val rec7Table = Module(new Rec7Table)
