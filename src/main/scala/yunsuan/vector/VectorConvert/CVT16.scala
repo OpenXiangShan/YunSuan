@@ -67,6 +67,7 @@ class CVT16BundleOutputS0(width: Int) extends Bundle {
   val intExp         = UInt(f16.expAdderWidth.W)
   val absIntSrc      = UInt(width.W)
   val intLeadZeros   = UInt(log2Up(width).W)
+  val intShiftLeft   = UInt(width.W)
   // est
   val isSubnormalRec0 = Bool()
   val isSubnormalRec1 = Bool()
@@ -183,6 +184,7 @@ class CVT16ModuleS0(width: Int = 16) extends Module {
   s0Out.intExp := intExp
   s0Out.absIntSrc := absIntSrc
   s0Out.intLeadZeros := intLeadZeros
+  s0Out.intShiftLeft := (absIntSrc << 1) << intLeadZeros
 
   // est
   val isNormalRec0 = expSrc(f16.expWidth - 1, 1).andR && !expSrc(0)
@@ -256,8 +258,7 @@ class CVT16ModuleS1(width: Int = 16) extends Module {
   val intSignSrc = s1In.intSignSrc
   val isZeroIntSrc = s1In.isZeroIntSrc
   val intExpInS0 = s1In.intExp
-  val absIntSrc = s1In.absIntSrc
-  val intLeadZeros = s1In.intLeadZeros
+  val intShiftLeft = s1In.intShiftLeft
 
   val estExpInS0 = s1In.estExp
   val expNormaled0 = s1In.estExpNormaled0
@@ -273,8 +274,6 @@ class CVT16ModuleS1(width: Int = 16) extends Module {
   val result = Wire(UInt(width.W))
   val fflags = Wire(Fflags())
 
-  val intParamMap = (0 to 1).map(i => (1 << i) * 8)
-
   val float1HOut = outSew1H(1)
 
   val fracNormaled = Wire(UInt(width.W))
@@ -283,15 +282,9 @@ class CVT16ModuleS1(width: Int = 16) extends Module {
   val inRounder = s1In.inRounder
   val sticky = s1In.sticky
 
-  val rounderMapIn = Wire(UInt(width.W))
-  rounderMapIn := shiftLeft
-
-  val isOnesRounderInput = shiftLeft.head(f16.fracWidth).andR
-
-  val selectInRounder = isFp2Int
-  val rounderInput = Mux(selectInRounder, inRounder.head(f16.width), shiftLeft(f16.width - 1, f16.width - f16.fracWidth))
-  val rounderRoundIn = Mux(selectInRounder, inRounder(0), shiftLeft(f16.width - f16.fracWidth - 1))
-  val rounderStickyIn = Mux(selectInRounder, sticky, shiftLeft(f16.width - f16.fracWidth - 2, 0).orR)
+  val rounderInput = inRounder.head(f16.width)
+  val rounderRoundIn = inRounder(0)
+  val rounderStickyIn = sticky
 
   val rounder = Module(new RoundingUnit(width))
   rounder.io.in := rounderInput
@@ -307,15 +300,10 @@ class CVT16ModuleS1(width: Int = 16) extends Module {
   val rounderInputIncrease = rounderInput + 1.U
 
   // for fp2int
-  // 4bit => u16, i16, u8, i8
-  val int1HOut = outSew1H(1, 0)
-  val hasSignInt1HOut = int1HOut.asBools.map(oh => Seq(oh && !hasSignInt, oh && hasSignInt)).flatten
-  val isOnesRounderInputMapFp2Int =
-    intParamMap.map(intType => Seq(intType, intType - 1)).flatten.map(intType => rounderInput.tail(f16.width - intType).andR)
-  val cout = upRounded && Mux(isFp2Int,
-    Mux1H(hasSignInt1HOut, isOnesRounderInputMapFp2Int),
-    isOnesRounderInput
-  ).asBool
+  // 2bit => u16, i16
+  val hasSignInt1HOut = Seq(!hasSignInt, hasSignInt)
+  val isOnesRounderInputMapFp2Int = Seq(rounderInput.andR, rounderInput.tail(1).andR)//Remove the sign bit
+  val cout = upRounded && Mux1H(hasSignInt1HOut, isOnesRounderInputMapFp2Int).asBool
   val expRounded = Wire(UInt(f16.expWidth.W))
   expRounded := Mux(cout, expIncrease, exp)
   val fracRounded = Mux(upRounded, rounderInputIncrease, rounderInput)
@@ -323,9 +311,6 @@ class CVT16ModuleS1(width: Int = 16) extends Module {
   val signNonNan = signSrc && !isNaN
 
   // for int2fp
-  val intShiftLeft = Wire(UInt(width.W))
-  intShiftLeft := (absIntSrc << 1) << intLeadZeros
-
   val intRounderInput = intShiftLeft.head(f16.fracWidth)
   val intRoundIn      = intShiftLeft.tail(f16.fracWidth).head(1)
   val intStickyIn     = intShiftLeft.tail(f16.fracWidth + 1).orR
@@ -446,27 +431,17 @@ class CVT16ModuleS1(width: Int = 16) extends Module {
     val isNotZeroRounded = resultRounded.orR
     val isZeroRounded = !isNotZeroRounded
     val normalResult = Mux(signSrc && isNotZeroRounded, (~resultRounded).asUInt + 1.U, resultRounded) // exclude 0
-    // i = log2(intType)
-    val ofExpRounded = !exp.head(1) && Mux1H(int1HOut,
-      (3 to 4).map(i =>
-        Mux1H(UIntToOH(hasSignInt ## cout), VecInit((0 to 3).map {
-          case 0 => exp(exp.getWidth - 2, i).orR                        // >= intType   unsign & non cout
-          case 1 => exp(exp.getWidth - 2, i).orR || exp(i-1, 0).andR    // >= intType-1 unsign & cout
-          case 2 => exp(exp.getWidth - 2, i).orR || exp(i-1, 0).andR    // >= intType-1 sign   & non cout
-          case 3 => exp(exp.getWidth - 2, i).orR || exp(i-1, 1).andR    // >= intType-2 sign   & cout
-        }))
-      )
-    )
-    val excludeFrac = Mux1H(int1HOut,
-      intParamMap.map(intType => resultRounded(intType - 1) && !resultRounded(intType - 2, 0).orR)) // 1000***000
-    // i=log2(intType)
-    val excludeExp = Mux1H(int1HOut,
-      (3 to 4).map(i => !exp.head(exp.getWidth - i).orR &&
-        Mux(cout,
-          exp(i-1, 1).andR && !exp(0), // == intType-2
-          exp(i-1, 0).andR             // == intType-1
-        )
-      )
+    val ofExpRounded = !exp.head(1) && Mux1H(UIntToOH(hasSignInt ## cout), VecInit(Seq(
+      exp(exp.getWidth - 2, log2Ceil(width)).orR,                                          // >= width   unsign & non cout
+      exp(exp.getWidth - 2, log2Ceil(width)).orR || exp(log2Ceil(width) - 1, 0).andR,      // >= width-1 unsign & cout
+      exp(exp.getWidth - 2, log2Ceil(width)).orR || exp(log2Ceil(width) - 1, 0).andR,      // >= width-1 sign   & non cout
+      exp(exp.getWidth - 2, log2Ceil(width)).orR || exp(log2Ceil(width) - 1, 1).andR       // >= width-2 sign   & cout
+    )))
+    val excludeFrac = resultRounded(width - 1) && !resultRounded(width - 2, 0).orR // 1000***000
+    val excludeExp = !exp.head(exp.getWidth - log2Ceil(width)).orR && Mux(
+      cout,
+      exp(log2Ceil(width) - 1, 1).andR && !exp(0), // == width-2
+      exp(log2Ceil(width) - 1, 0).andR             // == width-1
     )
     val toUnv = ofExpRounded || expIsOnes ||
       signSrc && !(isZero || isZeroRounded && !ofExpRounded) // exclude 0 & -0 after rounding
@@ -488,9 +463,9 @@ class CVT16ModuleS1(width: Int = 16) extends Module {
     )
     result := Mux1H(result1H, Seq(
       normalResult,
-      (~0.U(16.W)).asUInt,
-      0.U(16.W),
-      Mux1H(int1HOut, intParamMap.map(intType => signNonNan ## Fill(intType - 1, !signNonNan)))
+      (~0.U(width.W)).asUInt,
+      0.U(width.W),
+      signNonNan ## Fill(width - 1, !signNonNan)
     ))
   }
   fflags := Cat(nv, dz, of, uf, nx)
