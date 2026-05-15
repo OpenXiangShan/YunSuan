@@ -596,7 +596,7 @@ object Opcodes {
     def isFmin(implicit op: UInt): Bool = getSubOpcode === FMIN
     def isFmax(implicit op: UInt): Bool = getSubOpcode === FMAX
     def isFsgnj(implicit op: UInt): Bool = getSubOpcode === FSGNJ
-    def isFsgnjn(implicit op: UInt): Bool = getSubOpcode === FSGNJ
+    def isFsgnjn(implicit op: UInt): Bool = getSubOpcode === FSGNJN
     def isFsgnjx(implicit op: UInt): Bool = getSubOpcode === FSGNJX
     def isFminm(implicit op: UInt): Bool = getSubOpcode === FMINM
     def isFmaxm(implicit op: UInt): Bool = getSubOpcode === FMAXM
