@@ -24,11 +24,15 @@ object VectorCvt {
     val rm = Frm()
     val inSew1H  = Sew()
     val outSew1H = Sew()
+    val cvt64UseWidenSrc2 = Bool()
+    val cvt32UseWidenSrc2 = Bool()
   }
 
   class InData(width: Int) extends Bundle {
     val src2 = UInt(width.W)
-    val src1 = UInt(width.W)
+    val widenSrc2 = UInt(width.W)
+    val narrowSrc2 = UInt(width.W)
+    val narrowSrc1 = UInt(width.W)
   }
 
   class OutData(width: Int) extends Bundle {
@@ -44,11 +48,15 @@ class VectorCvtIO(width: Int) extends Bundle {
 
   def fire = in.fire
   def src2 = in.data.src2
-  def src1 = in.data.src1
+  def widenSrc2 = in.data.widenSrc2
+  def narrowSrc2 = in.data.narrowSrc2
+  def narrowSrc1 = in.data.narrowSrc1
   def opType = in.ctrl.opType
   def rm = in.ctrl.rm
   def inSew1H = in.ctrl.inSew1H
   def outSew1H = in.ctrl.outSew1H
+  def cvt64UseWidenSrc2 = in.ctrl.cvt64UseWidenSrc2
+  def cvt32UseWidenSrc2 = in.ctrl.cvt32UseWidenSrc2
 
   def resEx1 = out.ex1.res
   def fflagsE8Ex1 = out.ex1.fflagsE8
@@ -63,8 +71,30 @@ class VectorCvt(xlen :Int) extends Module{
   val io = IO(new VectorCvtIO(xlen))
   val in = io.in
   val out = io.out
-  val (fire, src2, src1, opType, rm, inSew1H, outSew1H) = (
-    in.fire, in.data.src2, in.data.src1, in.ctrl.opType, in.ctrl.rm, in.ctrl.inSew1H, in.ctrl.outSew1H
+  val (
+    fire,
+    src2,
+    widenSrc2,
+    narrowSrc2,
+    narrowSrc1,
+    opType,
+    rm,
+    inSew1H,
+    outSew1H,
+    cvt64UseWidenSrc2,
+    cvt32UseWidenSrc2,
+  ) = (
+    in.fire,
+    in.data.src2,
+    in.data.widenSrc2,
+    in.data.narrowSrc2,
+    in.data.narrowSrc1,
+    in.ctrl.opType,
+    in.ctrl.rm,
+    in.ctrl.inSew1H,
+    in.ctrl.outSew1H,
+    in.ctrl.cvt64UseWidenSrc2,
+    in.ctrl.cvt32UseWidenSrc2,
   )
   private val elemBitsE8 = 8
   private val elemBitsE16 = 16
@@ -121,10 +151,10 @@ class VectorCvt(xlen :Int) extends Module{
     fflagsE64: UInt
   ): Vec[UInt] = {
     Mux1H(Seq(
-      (outSew1H === SewOH.e8)  -> VecInit(stageOut.fflagsSeq ++ Seq.fill(xlenb - 4)(zeroFflags)),
-      (outSew1H === SewOH.e16) -> VecInit(Seq.fill(2)(stageOut.fflags64) ++ Seq.fill(2)(stageOut.fflags32) ++ Seq.fill(2)(stageOut.fflags16Slot0) ++ Seq.fill(2)(stageOut.fflags16Slot1)),
-      (outSew1H === SewOH.e32) -> VecInit(Seq.fill(4)(stageOut.fflags64) ++ Seq.fill(4)(stageOut.fflags32)),
-      (outSew1H === SewOH.e64) -> VecInit(Seq.fill(xlenb)(fflagsE64)),
+      outSew1H(0) -> VecInit(stageOut.fflagsSeq ++ Seq.fill(xlenb - 4)(zeroFflags)),
+      outSew1H(1) -> VecInit(Seq.fill(2)(stageOut.fflags64) ++ Seq.fill(2)(stageOut.fflags32) ++ Seq.fill(2)(stageOut.fflags16Slot0) ++ Seq.fill(2)(stageOut.fflags16Slot1)),
+      outSew1H(2) -> VecInit(Seq.fill(4)(stageOut.fflags64) ++ Seq.fill(4)(stageOut.fflags32)),
+      outSew1H(3) -> VecInit(Seq.fill(xlenb)(fflagsE64)),
     ))
   }
 
@@ -134,10 +164,10 @@ class VectorCvt(xlen :Int) extends Module{
     hi: CvtStageOut,
   ): Vec[UInt] = {
     Mux1H(Seq(
-      (outSew1H === SewOH.e8) -> VecInit(lo.fflagsSeq ++ hi.fflagsSeq),
-      (outSew1H === SewOH.e16) -> VecInit(Seq.fill(2)(lo.fflags64) ++ Seq.fill(2)(lo.fflags32) ++ Seq.fill(2)(hi.fflags64) ++ Seq.fill(2)(hi.fflags32)),
-      (outSew1H === SewOH.e32) -> VecInit(Seq.fill(4)(lo.fflags64) ++ Seq.fill(4)(hi.fflags64)),
-      (outSew1H === SewOH.e64) -> VecInit(Seq.fill(xlenb)(lo.fflags64)),
+      outSew1H(0) -> VecInit(lo.fflagsSeq ++ hi.fflagsSeq),
+      outSew1H(1) -> VecInit(Seq.fill(2)(lo.fflags64) ++ Seq.fill(2)(lo.fflags32) ++ Seq.fill(2)(hi.fflags64) ++ Seq.fill(2)(hi.fflags32)),
+      outSew1H(2) -> VecInit(Seq.fill(4)(lo.fflags64) ++ Seq.fill(4)(hi.fflags64)),
+      outSew1H(3) -> VecInit(Seq.fill(xlenb)(lo.fflags64)),
     ))
   }
 
@@ -165,10 +195,10 @@ class VectorCvt(xlen :Int) extends Module{
       packLowElems(elemBitsE32, normal.res64, normal.res32)
     )
     Mux1H(Seq(
-      (outSew1H === SewOH.e8)  -> resE8,
-      (outSew1H === SewOH.e16) -> resE16,
-      (outSew1H === SewOH.e32) -> resE32,
-      (outSew1H === SewOH.e64) -> resE64,
+      outSew1H(0) -> resE8,
+      outSew1H(1) -> resE16,
+      outSew1H(2) -> resE32,
+      outSew1H(3) -> resE64,
     ))
   }
 
@@ -193,7 +223,12 @@ class VectorCvt(xlen :Int) extends Module{
   val elementsE16 = Wire(Vec(4, UInt(16.W)))
   val elementsE32 = Wire(Vec(2, UInt(32.W)))
   val elementsE64 = Wire(Vec(1, UInt(64.W)))
+  val widenElementsE16 = Wire(Vec(4, UInt(16.W)))
   val src1ElementsE16 = Wire(Vec(4, UInt(16.W)))
+  val narrowSrc2ElementsE8 = Wire(Vec(8, UInt(8.W)))
+  val narrowSrc2ElementsE16 = Wire(Vec(4, UInt(16.W)))
+  val narrowSrc2ElementsE32 = Wire(Vec(2, UInt(32.W)))
+  val narrowSrc2ElementsE64 = Wire(Vec(1, UInt(64.W)))
   val narrowHiElementsE32 = Wire(Vec(2, UInt(32.W)))
   val narrowHiElementsE64 = Wire(Vec(1, UInt(64.W)))
 
@@ -201,31 +236,55 @@ class VectorCvt(xlen :Int) extends Module{
   elementsE16 := src2.asTypeOf(elementsE16)
   elementsE32 := src2.asTypeOf(elementsE32)
   elementsE64 := src2.asTypeOf(elementsE64)
-  src1ElementsE16 := src1.asTypeOf(src1ElementsE16)
-  narrowHiElementsE32 := src1.asTypeOf(narrowHiElementsE32)
-  narrowHiElementsE64 := src1.asTypeOf(narrowHiElementsE64)
+  widenElementsE16 := widenSrc2.asTypeOf(widenElementsE16)
+  src1ElementsE16 := narrowSrc1.asTypeOf(src1ElementsE16)
+  narrowSrc2ElementsE8 := narrowSrc2.asTypeOf(narrowSrc2ElementsE8)
+  narrowSrc2ElementsE16 := narrowSrc2.asTypeOf(narrowSrc2ElementsE16)
+  narrowSrc2ElementsE32 := narrowSrc2.asTypeOf(narrowSrc2ElementsE32)
+  narrowSrc2ElementsE64 := narrowSrc2.asTypeOf(narrowSrc2ElementsE64)
+  narrowHiElementsE32 := narrowSrc1.asTypeOf(narrowHiElementsE32)
+  narrowHiElementsE64 := narrowSrc1.asTypeOf(narrowHiElementsE64)
 
-  private val cvt64Input = elementsE64(0)
+  private val cvt64Input = Mux(cvt64UseWidenSrc2, widenSrc2, elementsE64(0))
   private val cvt32Input = Mux1H(Seq(
-    (inSew1H === SewOH.e8)  -> elementsE8(1),
-    (inSew1H === SewOH.e16) -> elementsE16(1),
-    (inSew1H === SewOH.e32) -> elementsE32(1),
-    (inSew1H === SewOH.e64) -> 0.U,
+    inSew1H(0) -> elementsE8(1),
+    inSew1H(1) -> Mux(cvt32UseWidenSrc2, widenElementsE16(1), elementsE16(1)),
+    inSew1H(2) -> elementsE32(1),
+    inSew1H(3) -> 0.U,
   ))
   private val cvt16Slot0Input = Mux1H(Seq(
-    (inSew1H === SewOH.e8)  -> elementsE8(2),
-    (inSew1H === SewOH.e16) -> elementsE16(2),
-    (inSew1H === SewOH.e32) -> 0.U,
-    (inSew1H === SewOH.e64) -> 0.U,
+    inSew1H(0) -> elementsE8(2),
+    inSew1H(1) -> elementsE16(2),
+    inSew1H(2) -> 0.U,
+    inSew1H(3) -> 0.U,
   ))
   private val cvt16Slot1Input = Mux1H(Seq(
-    (inSew1H === SewOH.e8)  -> elementsE8(3),
-    (inSew1H === SewOH.e16) -> elementsE16(3),
-    (inSew1H === SewOH.e32) -> 0.U,
-    (inSew1H === SewOH.e64) -> 0.U,
+    inSew1H(0) -> elementsE8(3),
+    inSew1H(1) -> elementsE16(3),
+    inSew1H(2) -> 0.U,
+    inSew1H(3) -> 0.U,
+  ))
+  private val narrowLoCvt64Input = narrowSrc2ElementsE64(0)
+  private val narrowLoCvt32Input = Mux1H(Seq(
+    inSew1H(0) -> narrowSrc2ElementsE8(1),
+    inSew1H(1) -> narrowSrc2ElementsE16(1),
+    inSew1H(2) -> narrowSrc2ElementsE32(1),
+    inSew1H(3) -> 0.U,
+  ))
+  private val narrowLoCvt16Slot0Input = Mux1H(Seq(
+    inSew1H(0) -> narrowSrc2ElementsE8(2),
+    inSew1H(1) -> narrowSrc2ElementsE16(2),
+    inSew1H(2) -> 0.U,
+    inSew1H(3) -> 0.U,
+  ))
+  private val narrowLoCvt16Slot1Input = Mux1H(Seq(
+    inSew1H(0) -> narrowSrc2ElementsE8(3),
+    inSew1H(1) -> narrowSrc2ElementsE16(3),
+    inSew1H(2) -> 0.U,
+    inSew1H(3) -> 0.U,
   ))
   private val narrowHiCvt64Input = narrowHiElementsE64(0)
-  private val narrowHiCvt32Input = Mux(inSew1H === SewOH.e16, src1ElementsE16(1), narrowHiElementsE32(1))
+  private val narrowHiCvt32Input = Mux(inSew1H(1), src1ElementsE16(1), narrowHiElementsE32(1))
   private val narrowHiCvt16Slot0Input = src1ElementsE16(2)
   private val narrowHiCvt16Slot1Input = src1ElementsE16(3)
 
@@ -236,10 +295,10 @@ class VectorCvt(xlen :Int) extends Module{
     cvt16Slot1.io.in -> cvt16Slot1Input,
   ).foreach { case (cvtIn, input) => connectCvt(cvtIn, input, fire && !isNarrow) }
   Seq(
-    src2NarrowCvt64.io.in -> cvt64Input,
-    src2NarrowCvt32.io.in -> cvt32Input,
-    src2NarrowCvt16Slot0.io.in -> cvt16Slot0Input,
-    src2NarrowCvt16Slot1.io.in -> cvt16Slot1Input,
+    src2NarrowCvt64.io.in -> narrowLoCvt64Input,
+    src2NarrowCvt32.io.in -> narrowLoCvt32Input,
+    src2NarrowCvt16Slot0.io.in -> narrowLoCvt16Slot0Input,
+    src2NarrowCvt16Slot1.io.in -> narrowLoCvt16Slot1Input,
     src1NarrowCvt64.io.in -> narrowHiCvt64Input,
     src1NarrowCvt32.io.in -> narrowHiCvt32Input,
     src1NarrowCvt16Slot0.io.in -> narrowHiCvt16Slot0Input,
@@ -264,7 +323,4 @@ class VectorCvt(xlen :Int) extends Module{
 
   out.ex1.res := genStageResult(outSew1HDelay1, isNarrowDelay1, normalEx1, narrowLoEx1, narrowHiEx1, 0.U(xlen.W))
   out.ex2.res := genStageResult(outSew1HDelay2, isNarrowDelay2, normalEx2, narrowLoEx2, narrowHiEx2, normalEx2.res64)
-
-  dontTouch(inSew1H)
-  dontTouch(outSew1H)
 }

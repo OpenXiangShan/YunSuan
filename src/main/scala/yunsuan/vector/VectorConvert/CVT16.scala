@@ -67,6 +67,7 @@ class CVT16BundleOutputS0(width: Int) extends Bundle {
   val intExp         = UInt(f16.expAdderWidth.W)
   val absIntSrc      = UInt(width.W)
   val intLeadZeros   = UInt(log2Up(width).W)
+  val intShiftLeft   = UInt(width.W)
   // est
   val isSubnormalRec0 = Bool()
   val isSubnormalRec1 = Bool()
@@ -183,6 +184,7 @@ class CVT16ModuleS0(width: Int = 16) extends Module {
   s0Out.intExp := intExp
   s0Out.absIntSrc := absIntSrc
   s0Out.intLeadZeros := intLeadZeros
+  s0Out.intShiftLeft := (absIntSrc << 1) << intLeadZeros
 
   // est
   val isNormalRec0 = expSrc(f16.expWidth - 1, 1).andR && !expSrc(0)
@@ -256,8 +258,7 @@ class CVT16ModuleS1(width: Int = 16) extends Module {
   val intSignSrc = s1In.intSignSrc
   val isZeroIntSrc = s1In.isZeroIntSrc
   val intExpInS0 = s1In.intExp
-  val absIntSrc = s1In.absIntSrc
-  val intLeadZeros = s1In.intLeadZeros
+  val intShiftLeft = s1In.intShiftLeft
 
   val estExpInS0 = s1In.estExp
   val expNormaled0 = s1In.estExpNormaled0
@@ -281,15 +282,9 @@ class CVT16ModuleS1(width: Int = 16) extends Module {
   val inRounder = s1In.inRounder
   val sticky = s1In.sticky
 
-  val rounderMapIn = Wire(UInt(width.W))
-  rounderMapIn := shiftLeft
-
-  val isOnesRounderInput = shiftLeft.head(f16.fracWidth).andR
-
-  val selectInRounder = isFp2Int
-  val rounderInput = Mux(selectInRounder, inRounder.head(f16.width), shiftLeft(f16.width - 1, f16.width - f16.fracWidth))
-  val rounderRoundIn = Mux(selectInRounder, inRounder(0), shiftLeft(f16.width - f16.fracWidth - 1))
-  val rounderStickyIn = Mux(selectInRounder, sticky, shiftLeft(f16.width - f16.fracWidth - 2, 0).orR)
+  val rounderInput = inRounder.head(f16.width)
+  val rounderRoundIn = inRounder(0)
+  val rounderStickyIn = sticky
 
   val rounder = Module(new RoundingUnit(width))
   rounder.io.in := rounderInput
@@ -308,10 +303,7 @@ class CVT16ModuleS1(width: Int = 16) extends Module {
   // 2bit => u16, i16
   val hasSignInt1HOut = Seq(!hasSignInt, hasSignInt)
   val isOnesRounderInputMapFp2Int = Seq(rounderInput.andR, rounderInput.tail(1).andR)//Remove the sign bit
-  val cout = upRounded && Mux(isFp2Int,
-    Mux1H(hasSignInt1HOut, isOnesRounderInputMapFp2Int),
-    isOnesRounderInput
-  ).asBool
+  val cout = upRounded && Mux1H(hasSignInt1HOut, isOnesRounderInputMapFp2Int).asBool
   val expRounded = Wire(UInt(f16.expWidth.W))
   expRounded := Mux(cout, expIncrease, exp)
   val fracRounded = Mux(upRounded, rounderInputIncrease, rounderInput)
@@ -319,9 +311,6 @@ class CVT16ModuleS1(width: Int = 16) extends Module {
   val signNonNan = signSrc && !isNaN
 
   // for int2fp
-  val intShiftLeft = Wire(UInt(width.W))
-  intShiftLeft := (absIntSrc << 1) << intLeadZeros
-
   val intRounderInput = intShiftLeft.head(f16.fracWidth)
   val intRoundIn      = intShiftLeft.tail(f16.fracWidth).head(1)
   val intStickyIn     = intShiftLeft.tail(f16.fracWidth + 1).orR
