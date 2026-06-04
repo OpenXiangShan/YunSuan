@@ -988,6 +988,8 @@ object Opcodes {
     val fmv_fp32_i    : Opcode = FpITypeI2fOtherInst(FP32, I64, FMVI2F, I2F, F)
     val fmv_fp64_i    : Opcode = FpITypeI2fOtherInst(FP64, I64, FMVI2F, I2F, F)
 
+    val vfcvt_fp16_si8 : Opcode = DvSvlS2v(FP16, I8,  S2F, I2F, V)
+    val vfcvt_fp16_ui8 : Opcode = DvSvlS2v(FP16, I8,  U2F, I2F, V)
     val vfcvt_fp16_si16: Opcode = DvSvlS2v(FP16, I16, S2F, I2F, V)
     val vfcvt_fp16_ui16: Opcode = DvSvlS2v(FP16, I16, U2F, I2F, V)
     val vfcvt_fp16_si32: Opcode = DvSvlS2v(FP16, I32, S2F, I2F, V)
@@ -1364,14 +1366,14 @@ object Opcodes {
     val vsadd_e16  = DvSvlS2vS1(SADD , CADDER, S2VDV, E16) + VxsatWen
     val vsadd_e32  = DvSvlS2vS1(SADD , CADDER, S2VDV, E32) + VxsatWen
     val vsadd_e64  = DvSvlS2vS1(SADD , CADDER, S2VDV, E64) + VxsatWen
-    val vssubu_e8  = DvSvlS2vS1(SSUBU, CADDER, S2VDV, E8)
-    val vssubu_e16 = DvSvlS2vS1(SSUBU, CADDER, S2VDV, E16)
-    val vssubu_e32 = DvSvlS2vS1(SSUBU, CADDER, S2VDV, E32)
-    val vssubu_e64 = DvSvlS2vS1(SSUBU, CADDER, S2VDV, E64)
-    val vssub_e8   = DvSvlS2vS1(SSUB , CADDER, S2VDV, E8)
-    val vssub_e16  = DvSvlS2vS1(SSUB , CADDER, S2VDV, E16)
-    val vssub_e32  = DvSvlS2vS1(SSUB , CADDER, S2VDV, E32)
-    val vssub_e64  = DvSvlS2vS1(SSUB , CADDER, S2VDV, E64)
+    val vssubu_e8  = DvSvlS2vS1(SSUBU, CADDER, S2VDV, E8)  + VxsatWen
+    val vssubu_e16 = DvSvlS2vS1(SSUBU, CADDER, S2VDV, E16) + VxsatWen
+    val vssubu_e32 = DvSvlS2vS1(SSUBU, CADDER, S2VDV, E32) + VxsatWen
+    val vssubu_e64 = DvSvlS2vS1(SSUBU, CADDER, S2VDV, E64) + VxsatWen
+    val vssub_e8   = DvSvlS2vS1(SSUB , CADDER, S2VDV, E8)  + VxsatWen
+    val vssub_e16  = DvSvlS2vS1(SSUB , CADDER, S2VDV, E16) + VxsatWen
+    val vssub_e32  = DvSvlS2vS1(SSUB , CADDER, S2VDV, E32) + VxsatWen
+    val vssub_e64  = DvSvlS2vS1(SSUB , CADDER, S2VDV, E64) + VxsatWen
 
     val vsll_e8   = DvSvlS2vS1(SLL, SHIFT, S2VDV, E8)
     val vsll_e16  = DvSvlS2vS1(SLL, SHIFT, S2VDV, E16)
