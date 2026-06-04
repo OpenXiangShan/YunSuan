@@ -988,6 +988,8 @@ object Opcodes {
     val fmv_fp32_i    : Opcode = FpITypeI2fOtherInst(FP32, I64, FMVI2F, I2F, F)
     val fmv_fp64_i    : Opcode = FpITypeI2fOtherInst(FP64, I64, FMVI2F, I2F, F)
 
+    val vfcvt_fp16_si8 : Opcode = DvSvlS2v(FP16, I8,  S2F, I2F, V)
+    val vfcvt_fp16_ui8 : Opcode = DvSvlS2v(FP16, I8,  U2F, I2F, V)
     val vfcvt_fp16_si16: Opcode = DvSvlS2v(FP16, I16, S2F, I2F, V)
     val vfcvt_fp16_ui16: Opcode = DvSvlS2v(FP16, I16, U2F, I2F, V)
     val vfcvt_fp16_si32: Opcode = DvSvlS2v(FP16, I32, S2F, I2F, V)
