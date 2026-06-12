@@ -119,7 +119,7 @@ class FixPoint extends Module with VIAlu.Config {
   ))
 
   out.res.narrowVd := nClipResult
-  out.res.vxsat := vxsatAdder
+  out.res.vxsat := Mux(isSat, vxsatAdder, 0.U)
   out.res.narrowVxsat := narrowVxsatMisc
 }
 
