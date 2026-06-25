@@ -162,8 +162,10 @@ class CVT16ModuleS0(width: Int = 16) extends Module {
   s0Out.hasSignInt := hasSignInt
 
   // int2fp
-  val int1HSrc = inSew1H(1, 0)
-  val intIn = int16Extend(src, hasSignInt && src(f16.width-1))
+  val intIn = Mux1H(Seq(
+    (inSew1H === SewOH.e8)  -> int16Extend(src(7, 0),  hasSignInt && src(7)).asUInt,
+    (inSew1H === SewOH.e16) -> int16Extend(src(15, 0), hasSignInt && src(15)).asUInt,
+  ))
   val intSignSrc = intIn(f16.width)
   val intDataSrc = intIn(f16.width - 1, 0)
   val absIntSrc = Mux(intSignSrc, (~intDataSrc).asUInt + 1.U, intDataSrc)

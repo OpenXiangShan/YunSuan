@@ -138,8 +138,16 @@ class CVT64NarrowConvert(width: Int = 64) extends Module {
   val outIsFp16Next = float1HOutNext(0)
   val outIsFp32Next = float1HOutNext(1)
   val isFpNarrowNext = FCvtOpcode.isF2F(opType) && outSew1H.asUInt < inSew1H.asUInt
+  val isInt2FpNext = FCvtOpcode.isI2F(opType)
   val isFp2IntNext = FCvtOpcode.isF2I(opType)
   val isFp64To16Next = FCvtOpcode.isF2F(opType) && inSew1H(3) && outSew1H(1)
+  val int2fp = Module(new INT2FP(width))
+  int2fp.io.fire := fire
+  int2fp.io.src := src
+  int2fp.io.rm := rmNext
+  int2fp.io.opType := opType
+  int2fp.io.inSew1H := inSew1H
+  int2fp.io.outSew1H := outSew1H
   val srcMap = (0 to 3).map(i => src((1 << i) * 8 - 1, 0))
   val floatMap = srcMap.zipWithIndex.map{ case (float, i) => floatExtend(float, i) }.drop(1)
   val expSrcNextMap = floatMap.map(_.tail(1).head(f64.expWidth))
@@ -166,6 +174,7 @@ class CVT64NarrowConvert(width: Int = 64) extends Module {
   val isNaNSrc = RegEnable(isNaNSrcNext, false.B, fire)
   val isSNaNSrc = RegEnable(isSNaNSrcNext, false.B, fire)
   val isFpNarrow = RegEnable(isFpNarrowNext, false.B, fire)
+  val isInt2Fp = RegEnable(isInt2FpNext, false.B, fire)
   val signSrc = RegEnable(signSrcNext, false.B, fire)
   val rm = RegEnable(rmNext, 0.U(3.W), fire)
   val hasSignInt = RegEnable(hasSignIntNext, false.B, fire)
@@ -345,8 +354,33 @@ class CVT64NarrowConvert(width: Int = 64) extends Module {
   val intNarrowResEx2 = RegEnable(fp2IntResult, 0.U(width.W), fireReg)
   val intNarrowFflagsEx2 = RegEnable(fp2IntFflags, 0.U.asTypeOf(Fflags()), fireReg)
   val isFpNarrowEx2 = RegEnable(isFpNarrow, false.B, fireReg)
-  io.out.ex1.res := Mux(isFpNarrow, fpNarrow.io.result, fp2IntResult)
-  io.out.ex1.fflags := Mux(isFpNarrow, fpNarrow.io.fflags, fp2IntFflags)
-  io.out.ex2.res := Mux(isFpNarrowEx2, fpNarrowResEx2, intNarrowResEx2)
-  io.out.ex2.fflags := Mux(isFpNarrowEx2, fpNarrowFflagsEx2, intNarrowFflagsEx2)
+  val isInt2FpEx2 = RegEnable(isInt2Fp, false.B, fireReg)
+  io.out.ex1.res := Mux(
+                      isInt2Fp,
+                      int2fp.io.resultEx1,
+                      Mux(
+                        isFpNarrow,
+                        fpNarrow.io.result,
+                        fp2IntResult))
+  io.out.ex1.fflags := Mux(
+                        isInt2Fp,
+                        int2fp.io.fflagsEx1,
+                        Mux(
+                          isFpNarrow,
+                          fpNarrow.io.fflags,
+                          fp2IntFflags))
+  io.out.ex2.res := Mux(
+                      isInt2FpEx2,
+                      int2fp.io.result,
+                      Mux(
+                        isFpNarrowEx2,
+                        fpNarrowResEx2,
+                        intNarrowResEx2))
+  io.out.ex2.fflags := Mux(
+                        isInt2FpEx2,
+                        int2fp.io.fflags,
+                        Mux(
+                          isFpNarrowEx2,
+                          fpNarrowFflagsEx2,
+                          intNarrowFflagsEx2))
 }

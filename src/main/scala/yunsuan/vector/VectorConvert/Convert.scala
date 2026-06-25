@@ -26,6 +26,7 @@ object VectorCvt {
     val outSew1H = Sew()
     val cvt64UseWidenSrc2 = Bool()
     val cvt32UseWidenSrc2 = Bool()
+    val cvt16UseWidenSrc2 = Bool()
   }
 
   class InData(width: Int) extends Bundle {
@@ -57,6 +58,7 @@ class VectorCvtIO(width: Int) extends Bundle {
   def outSew1H = in.ctrl.outSew1H
   def cvt64UseWidenSrc2 = in.ctrl.cvt64UseWidenSrc2
   def cvt32UseWidenSrc2 = in.ctrl.cvt32UseWidenSrc2
+  def cvt16UseWidenSrc2 = in.ctrl.cvt16UseWidenSrc2
 
   def resEx1 = out.ex1.res
   def fflagsE8Ex1 = out.ex1.fflagsE8
@@ -83,6 +85,7 @@ class VectorCvt(xlen :Int) extends Module{
     outSew1H,
     cvt64UseWidenSrc2,
     cvt32UseWidenSrc2,
+    cvt16UseWidenSrc2,
   ) = (
     in.fire,
     in.data.src2,
@@ -95,6 +98,7 @@ class VectorCvt(xlen :Int) extends Module{
     in.ctrl.outSew1H,
     in.ctrl.cvt64UseWidenSrc2,
     in.ctrl.cvt32UseWidenSrc2,
+    in.ctrl.cvt16UseWidenSrc2,
   )
   private val elemBitsE8 = 8
   private val elemBitsE16 = 16
@@ -223,6 +227,7 @@ class VectorCvt(xlen :Int) extends Module{
   val elementsE16 = Wire(Vec(4, UInt(16.W)))
   val elementsE32 = Wire(Vec(2, UInt(32.W)))
   val elementsE64 = Wire(Vec(1, UInt(64.W)))
+  val widenElementsE8 = Wire(Vec(8, UInt(8.W)))
   val widenElementsE16 = Wire(Vec(4, UInt(16.W)))
   val src1ElementsE16 = Wire(Vec(4, UInt(16.W)))
   val narrowSrc2ElementsE8 = Wire(Vec(8, UInt(8.W)))
@@ -236,6 +241,7 @@ class VectorCvt(xlen :Int) extends Module{
   elementsE16 := src2.asTypeOf(elementsE16)
   elementsE32 := src2.asTypeOf(elementsE32)
   elementsE64 := src2.asTypeOf(elementsE64)
+  widenElementsE8 := widenSrc2.asTypeOf(widenElementsE8)
   widenElementsE16 := widenSrc2.asTypeOf(widenElementsE16)
   src1ElementsE16 := narrowSrc1.asTypeOf(src1ElementsE16)
   narrowSrc2ElementsE8 := narrowSrc2.asTypeOf(narrowSrc2ElementsE8)
@@ -247,19 +253,19 @@ class VectorCvt(xlen :Int) extends Module{
 
   private val cvt64Input = Mux(cvt64UseWidenSrc2, widenSrc2, elementsE64(0))
   private val cvt32Input = Mux1H(Seq(
-    inSew1H(0) -> elementsE8(1),
+    inSew1H(0) -> Mux(cvt32UseWidenSrc2, widenElementsE8(1), elementsE8(1)),
     inSew1H(1) -> Mux(cvt32UseWidenSrc2, widenElementsE16(1), elementsE16(1)),
     inSew1H(2) -> elementsE32(1),
     inSew1H(3) -> 0.U,
   ))
   private val cvt16Slot0Input = Mux1H(Seq(
-    inSew1H(0) -> elementsE8(2),
+    inSew1H(0) -> Mux(cvt16UseWidenSrc2, widenElementsE8(2), elementsE8(2)),
     inSew1H(1) -> elementsE16(2),
     inSew1H(2) -> 0.U,
     inSew1H(3) -> 0.U,
   ))
   private val cvt16Slot1Input = Mux1H(Seq(
-    inSew1H(0) -> elementsE8(3),
+    inSew1H(0) -> Mux(cvt16UseWidenSrc2, widenElementsE8(3), elementsE8(3)),
     inSew1H(1) -> elementsE16(3),
     inSew1H(2) -> 0.U,
     inSew1H(3) -> 0.U,

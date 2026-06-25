@@ -38,7 +38,9 @@ class FPCVT(xlen :Int, isI2F: Boolean = false) extends Module{
 
   if (!isI2F) {
     val narrowCvt = Module(new CVT64NarrowConvert(xlen))
+    val fireReg = RegEnable(io.fire, false.B, io.fire)
     val isFpNarrowReg = RegEnable(isFpNarrow, false.B, io.fire)
+    val isFpNarrowEx2 = RegEnable(isFpNarrowReg, false.B, fireReg)
     narrowCvt.io.in.fire := io.fire && isFpNarrow
     narrowCvt.io.in.data.src := io.src
     narrowCvt.io.in.ctrl.opType := io.opType
@@ -46,8 +48,8 @@ class FPCVT(xlen :Int, isI2F: Boolean = false) extends Module{
     narrowCvt.io.in.ctrl.inSew1H := inSew1H
     narrowCvt.io.in.ctrl.outSew1H := outSew1H
     narrowCvt.io.in.ctrl.isScalarFpInst := true.B
-    io.fflags := Mux(isFpNarrowReg, narrowCvt.io.out.ex2.fflags, fcvt.io.out.ex2.fflags)
-    io.result := Mux(isFpNarrowReg, narrowCvt.io.out.ex2.res, fcvt.io.out.ex2.res)
+    io.fflags := Mux(isFpNarrowEx2, narrowCvt.io.out.ex2.fflags, fcvt.io.out.ex2.fflags)
+    io.result := Mux(isFpNarrowEx2, narrowCvt.io.out.ex2.res, fcvt.io.out.ex2.res)
   } else {
     io.fflags := fcvt.io.out.ex2.fflags
     io.result := fcvt.io.out.ex2.res

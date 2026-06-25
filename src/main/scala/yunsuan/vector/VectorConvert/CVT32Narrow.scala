@@ -253,6 +253,9 @@ class CVT32NarrowModuleS0(width: Int = 32) extends Module {
       ((width - intWidth).U(log2Up(width).W) + Lzc(absInt).data)(log2Up(width) - 1, 0)
     }
   }
+  val intShiftLeftMap = absIntSrcMap.zip(intLeadZerosMap).map { case (absInt, leadZeros) =>
+    (absInt << 1) << leadZeros
+  }
   val intExpBase = Mux1H(float1HOut, fpParam.fp16AndFp32Formats.map(fp => (fp.bias + 31).U(f32.expAdderWidth.W)))
   val intExpMap = intLeadZerosMap.map { leadZeros =>
     intExpBase + extend((~(false.B ## leadZeros)).asUInt, f32.expAdderWidth).asUInt
@@ -262,13 +265,14 @@ class CVT32NarrowModuleS0(width: Int = 32) extends Module {
   val isZeroIntSrc = Mux1H(int1HSrc, absIntSrcRawMap.map(absInt => !absInt.orR))
   val intLeadZeros = Mux1H(int1HSrc, intLeadZerosMap)
   val intExp = Mux1H(int1HSrc, intExpMap)
+  val intShiftLeft = Mux1H(int1HSrc, intShiftLeftMap)
 
   s0Out.intSignSrc := intSignSrc
   s0Out.isZeroIntSrc := isZeroIntSrc
   s0Out.intExp := intExp
   s0Out.absIntSrc := absIntSrc
   s0Out.intLeadZeros := intLeadZeros
-  s0Out.intShiftLeft := 0.U
+  s0Out.intShiftLeft := intShiftLeft
 
   val decodeFloatSrcRec = Mux1H(float1HSrc,
     expSrcMap.zip(fpParam.fp16AndFp32Formats.map(fp => fp.expWidth)).map { case (exp, expWidth) =>
@@ -369,11 +373,16 @@ class CVT32NarrowModuleS1(width: Int = 32) extends Module {
   val hasSignInt = s1In.hasSignInt
   val trunSticky = s1In.trunSticky
   val isFp2Int = s1In.isFp2Int
+  val isInt2Fp = s1In.isInt2Fp
   val float1HOut = outSew1H(2, 1)
   val int1HOut = outSew1H(2, 0)
   val intParamMap = (0 to 2).map(i => (1 << i) * 8)
   val inRounder = s1In.inRounder
   val sticky = s1In.sticky
+  val intSignSrc = s1In.intSignSrc
+  val isZeroIntSrc = s1In.isZeroIntSrc
+  val intExpInS0 = s1In.intExp
+  val intShiftLeft = s1In.intShiftLeft
   val rounderMap = fpParam.fp16AndFp32Formats.map(fp => Seq(
     fracSrcLeft.head(fp.fracWidth),
     fracSrcLeft.tail(fp.fracWidth).head(1),
@@ -413,6 +422,50 @@ class CVT32NarrowModuleS1(width: Int = 32) extends Module {
   io.s1Out.narrow.expIsOnes := expIsOnes
   io.s1Out.narrow.fracNotZero := fracNotZero
   io.s1Out.narrow.isSNaN := isSNaN
+
+  val intRoundMapIn = intShiftLeft
+  val intRounderMap = fpParam.fp16AndFp32Formats.map(fp => Seq(
+    intRoundMapIn.head(fp.fracWidth),
+    intRoundMapIn.tail(fp.fracWidth).head(1),
+    intRoundMapIn.tail(fp.fracWidth + 1).orR,
+    intRoundMapIn.head(fp.fracWidth).andR
+  )).transpose
+  val (intRounderInputMap, intRounderInMap, intRounderStickyMap, intIsOnesRounderInputMap) = {
+    (intRounderMap(0), intRounderMap(1), intRounderMap(2), intRounderMap(3))
+  }
+  val intRounderInput = Mux1H(float1HOut, intRounderInputMap)
+  val intRounder = Module(new RoundingUnit(width))
+  intRounder.io.in := intRounderInput
+  intRounder.io.roundIn := Mux1H(float1HOut, intRounderInMap)
+  intRounder.io.stickyIn := Mux1H(float1HOut, intRounderStickyMap)
+  intRounder.io.signIn := intSignSrc
+  intRounder.io.rm := rm
+  val intExp = intExpInS0 + 1.U
+  val intExpIncrease = intExpInS0 + 2.U
+  val intRounderInputIncrease = intRounderInput + 1.U
+  val intNxRounded = intRounder.io.inexact
+  val intUpRounded = intRounder.io.r_up
+  val intCout = intUpRounded && Mux1H(float1HOut, intIsOnesRounderInputMap).asBool
+  val intExpRounded = Mux(intCout, intExpIncrease, intExp)
+  val intFracRounded = Mux(intUpRounded, intRounderInputIncrease, intRounderInput)
+  val intRmin = rm === RTZ || (intSignSrc && rm === RUP) || (!intSignSrc && rm === RDN)
+  val intOfRounded = !intExp.head(1).asBool && Mux1H(float1HOut,
+    fpParam.fp16AndFp32Formats.map(fp => Mux(intCout,
+      intExp(fp.expWidth - 1, 1).andR || intExp(intExp.getWidth - 2, fp.expWidth).orR,
+      intExp(fp.expWidth - 1, 0).andR || intExp(intExp.getWidth - 2, fp.expWidth).orR
+    ))
+  )
+  val int2FpResultMap = fpParam.fp16AndFp32Formats.map { fp =>
+    Mux1H(Seq(
+      (intOfRounded && intRmin) -> (intSignSrc ## fp.maxExp.U(fp.expWidth.W) ## ~0.U(fp.fracWidth.W)),
+      (intOfRounded && !intRmin) -> (intSignSrc ## ~0.U(fp.expWidth.W) ## 0.U(fp.fracWidth.W)),
+      isZeroIntSrc -> (intSignSrc ## 0.U((fp.width - 1).W)),
+      (!intOfRounded && !isZeroIntSrc) -> (intSignSrc ## intExpRounded(fp.expWidth - 1, 0) ## intFracRounded(fp.fracWidth - 1, 0))
+    ))
+  }
+  val int2FpResult = Mux1H(float1HOut, int2FpResultMap)
+  val int2FpFflags = Cat(false.B, false.B, intOfRounded, false.B, intOfRounded || intNxRounded)
+
   val resultRounded = fracRounded
   val isZeroRounded = !resultRounded.orR
   val normalResult = Mux(signSrc && resultRounded.orR, (~resultRounded).asUInt + 1.U, resultRounded)
@@ -449,6 +502,6 @@ class CVT32NarrowModuleS1(width: Int = 32) extends Module {
     (!hasSignInt && toUnv && signSrc && !isNaN) -> 0.U(32.W),
     (hasSignInt && toInv) -> Mux1H(int1HOut, intParamMap.map(intType => signNonNan ## Fill(intType - 1, !signNonNan)))
   ))
-  io.s1Out.result := fp2IntResult
-  io.s1Out.fflags := Cat(fp2IntNv, false.B, false.B, false.B, fp2IntNx)
+  io.s1Out.result := Mux(isInt2Fp, int2FpResult, fp2IntResult)
+  io.s1Out.fflags := Mux(isInt2Fp, int2FpFflags, Cat(fp2IntNv, false.B, false.B, false.B, fp2IntNx))
 }
