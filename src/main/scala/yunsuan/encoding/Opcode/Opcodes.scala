@@ -1589,24 +1589,59 @@ object Opcodes {
     private val MSOF  = bb"110"
     private val IOTA  = bb"111"
 
-    val vcpop_m = Value(CPOP_M, DX, EX) + GpWen
-    val vfirst  = Value(FIRST , DX, EX) + GpWen
-    val vmsbf   = Value(MSBF  , DM, EX)
-    val vmsif   = Value(MSIF  , DM, EX)
-    val vmsof   = Value(MSOF  , DM, EX)
+    val vcpop_m = Value(CPOP_M, DX, EX) + GpWen + VlRen + Src2Vp
+    val vfirst  = Value(FIRST , DX, EX) + GpWen + VlRen + Src2Vp
+    val vmsbf   = Value(MSBF  , DM, EX) + VmWen + VlRen + Src2Vp
+    val vmsif   = Value(MSIF  , DM, EX) + VmWen + VlRen + Src2Vp
+    val vmsof   = Value(MSOF  , DM, EX) + VmWen + VlRen + Src2Vp
 
-    val vcpop_v_e8  = Value(CPOP_V, DV, E8 )
-    val vcpop_v_e16 = Value(CPOP_V, DV, E16)
-    val vcpop_v_e32 = Value(CPOP_V, DV, E32)
-    val vcpop_v_e64 = Value(CPOP_V, DV, E64)
-    val viota_e8    = Value(IOTA  , DV, E8 )
-    val viota_e16   = Value(IOTA  , DV, E16)
-    val viota_e32   = Value(IOTA  , DV, E32)
-    val viota_e64   = Value(IOTA  , DV, E64)
-    val vid_e8      = Value(ID    , DV, E8 )
-    val vid_e16     = Value(ID    , DV, E16)
-    val vid_e32     = Value(ID    , DV, E32)
-    val vid_e64     = Value(ID    , DV, E64)
+    val vcpop_v_e8  = Value(CPOP_V, DV, E8 ) + VpWen + VlRen + Src2Vp
+    val vcpop_v_e16 = Value(CPOP_V, DV, E16) + VpWen + VlRen + Src2Vp
+    val vcpop_v_e32 = Value(CPOP_V, DV, E32) + VpWen + VlRen + Src2Vp
+    val vcpop_v_e64 = Value(CPOP_V, DV, E64) + VpWen + VlRen + Src2Vp
+    val viota_e8    = Value(IOTA  , DV, E8 ) + VpWen + VlRen + Src2Vp
+    val viota_e16   = Value(IOTA  , DV, E16) + VpWen + VlRen + Src2Vp
+    val viota_e32   = Value(IOTA  , DV, E32) + VpWen + VlRen + Src2Vp
+    val viota_e64   = Value(IOTA  , DV, E64) + VpWen + VlRen + Src2Vp
+    val vid_e8      = Value(ID    , DV, E8 ) + VpWen + VlRen
+    val vid_e16     = Value(ID    , DV, E16) + VpWen + VlRen
+    val vid_e32     = Value(ID    , DV, E32) + VpWen + VlRen
+    val vid_e64     = Value(ID    , DV, E64) + VpWen + VlRen
+
+    def getOp(implicit op: UInt): UInt = op(6, 4)
+    def getDestMode(implicit op: UInt): UInt = op(3, 2)
+    def getSew(implicit op: UInt): UInt = op(1, 0)
+
+    def isVcpopV(implicit op: UInt): Bool = getOp === CPOP_V
+    def isVmsbf(implicit op: UInt): Bool = getOp === MSBF
+    def isVmsif(implicit op: UInt): Bool = getOp === MSIF
+    def isVmsof(implicit op: UInt): Bool = getOp === MSOF
+    def isViota(implicit op: UInt): Bool = getOp === IOTA
+    def isDestM(implicit op: UInt): Bool = isVmsbf || isVmsif || isVmsof
+    def isSourceE8(implicit op: UInt): Bool = getSew === E8
+    def isSourceE16(implicit op: UInt): Bool = getSew === E16
+    def isSourceE32(implicit op: UInt): Bool = getSew === E32
+    def isSourceE64(implicit op: UInt): Bool = getSew === E64
+
+    object LitUtil {
+      def getOp(implicit op: BitPat): BitPat = op(6, 4)
+      def isVfirst(implicit op: BitPat): Boolean = getOp.isOneOf(FIRST)
+      def isVmsbf(implicit op: BitPat): Boolean = getOp.isOneOf(MSBF)
+      def isVmsif(implicit op: BitPat): Boolean = getOp.isOneOf(MSIF)
+      def isVmsof(implicit op: BitPat): Boolean = getOp.isOneOf(MSOF)
+      def isVid(implicit op: BitPat): Boolean = getOp.isOneOf(ID)
+
+      def getLat(implicit op: BitPat): Int = {
+        if (isVid) 0
+        else if (isVfirst || isVmsbf || isVmsif || isVmsof) 1
+        else 2
+      }
+    }
+
+    override def getLat(opcode: Opcode): Int = {
+      require(this.all.contains(opcode))
+      LitUtil.getLat(opcode.encode)
+    }
   }
 
   object VMAluOpcode extends VMAluOpcode
