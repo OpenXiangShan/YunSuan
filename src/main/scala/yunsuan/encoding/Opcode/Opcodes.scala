@@ -227,7 +227,7 @@ abstract class Opcodes {
   }
 
   def DsS1a(bp1: BitPat, bp2: BitPat*)(implicit name: SourceName): Type = {
-    Value(bp1, bp2: _*)(name) + Src1Gp + VsWen
+    Value(bp1, bp2: _*)(name) + Src1Gp + VsWen + VlRen
   }
 
   def DsSvlS2vS1s(subOp: BitPat, opb: BitPat, res: BitPat, dtype: BitPat)(implicit name: SourceName): Type = {
