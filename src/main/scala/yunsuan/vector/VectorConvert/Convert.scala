@@ -12,6 +12,7 @@ class VectorCvtIO(width: Int) extends Bundle {
   val opType = Input(UInt(8.W))
   val sew = Input(UInt(2.W))
   val rm = Input(UInt(3.W))
+  val altfmt = Input(Bool())
   val isFpToVecInst = Input(Bool())
   val isFround = Input(UInt(2.W))
   val isFcvtmod = Input(Bool())
@@ -24,9 +25,14 @@ class VectorCvt(xlen :Int) extends Module{
 
   val io = IO(new VectorCvtIO(xlen))
   val (fire, src, opType, sew, rm, isFpToVecInst, isFround, isFcvtmod) = (io.fire, io.src, io.opType, io.sew, io.rm, io.isFpToVecInst, io.isFround, io.isFcvtmod)
+  val altfmt = io.altfmt
   val widen = opType(4, 3) // 0->single 1->widen 2->norrow => width of result
   val isVfnCvtBf16 = opType === VfcvtType.vfncvtbf16_ffw
+  val isVfnCvtBf16Sat = opType === VfcvtType.vfncvtbf16_sat_ffw
   val isVfwCvtBf16 = opType === VfcvtType.vfwcvtbf16_ffv
+  val isLowFp8Bf16Cvt = (isVfnCvtBf16 || isVfnCvtBf16Sat || isVfwCvtBf16) && sew === 0.U
+  val isVfnCvtFfq = opType === VfcvtType.vfncvt_ffq || opType === VfcvtType.vfncvt_sat_ffq
+  val isVfextVf2 = opType === VfcvtType.vfext_vf2
 
   // input width 8， 16， 32， 64
   val input1H = Wire(UInt(4.W))
@@ -49,7 +55,11 @@ class VectorCvt(xlen :Int) extends Module{
       BitPat("b0000")
     )
   )
-  input1H := Mux(isVfnCvtBf16, "b0100".U, Mux(isVfwCvtBf16, "b0010".U, commonInput1H))
+  input1H := Mux(isVfextVf2, "b0001".U,
+    Mux(isLowFp8Bf16Cvt && (isVfnCvtBf16 || isVfnCvtBf16Sat), "b0010".U,
+      Mux(isLowFp8Bf16Cvt && isVfwCvtBf16, "b0001".U,
+        Mux(isVfnCvtFfq, "b0100".U,
+          Mux(isVfnCvtBf16, "b0100".U, Mux(isVfwCvtBf16, "b0010".U, commonInput1H))))))
 
   // output width 8， 16， 32， 64
   val output1H = Wire(UInt(4.W))
@@ -72,7 +82,11 @@ class VectorCvt(xlen :Int) extends Module{
       BitPat("b0000")
     )
   )
-  output1H := Mux(isVfnCvtBf16, "b0010".U, Mux(isVfwCvtBf16, "b0100".U, commonOutput1H))
+  output1H := Mux(isVfextVf2, "b0001".U,
+    Mux(isLowFp8Bf16Cvt && (isVfnCvtBf16 || isVfnCvtBf16Sat), "b0001".U,
+      Mux(isLowFp8Bf16Cvt && isVfwCvtBf16, "b0010".U,
+        Mux(isVfnCvtFfq, "b0001".U,
+          Mux(isVfnCvtBf16, "b0010".U, Mux(isVfwCvtBf16, "b0100".U, commonOutput1H))))))
   dontTouch(input1H)
   dontTouch(output1H)
 
@@ -91,15 +105,15 @@ class VectorCvt(xlen :Int) extends Module{
   element64 := src.asTypeOf(element64)
 
   val in0 = element64(0)
-  val in1 = Mux1H(inputWidth1H, Seq(element8(1), element16(1), element32(1), 0.U))// input 0=> result 0 while norrow eg. 64b->32b
-  val in2 = Mux1H(inputWidth1H, Seq(element8(2), element16(2), 0.U, 0.U))
-  val in3 = Mux1H(inputWidth1H, Seq(element8(3), element16(3), 0.U, 0.U))
+  val in1 = Mux(isVfextVf2, src(7, 4), Mux1H(inputWidth1H, Seq(element8(1), element16(1), element32(1), 0.U)))// input 0=> result 0 while norrow eg. 64b->32b
+  val in2 = Mux(isVfextVf2, src(11, 8), Mux1H(inputWidth1H, Seq(element8(2), element16(2), 0.U, 0.U)))
+  val in3 = Mux(isVfextVf2, src(15, 12), Mux1H(inputWidth1H, Seq(element8(3), element16(3), 0.U, 0.U)))
 
 
-  val (result0, fflags0) = VCVT(64)(fire, in0, opType, sew, rm, input1H, output1H, isFpToVecInst, isFround, isFcvtmod)
-  val (result1, fflags1) = VCVT(32)(fire, in1, opType, sew, rm, input1H, output1H, isFpToVecInst, isFround, isFcvtmod)
-  val (result2, fflags2) = VCVT(16)(fire, in2, opType, sew, rm, input1H, output1H, isFpToVecInst, isFround, isFcvtmod)
-  val (result3, fflags3) = VCVT(16)(fire, in3, opType, sew, rm, input1H, output1H, isFpToVecInst, isFround, isFcvtmod)
+  val (result0, fflags0) = VCVT(64)(fire, in0, opType, sew, rm, altfmt, input1H, output1H, isFpToVecInst, isFround, isFcvtmod)
+  val (result1, fflags1) = VCVT(32)(fire, in1, opType, sew, rm, altfmt, input1H, output1H, isFpToVecInst, isFround, isFcvtmod)
+  val (result2, fflags2) = VCVT(16)(fire, in2, opType, sew, rm, altfmt, input1H, output1H, isFpToVecInst, isFround, isFcvtmod)
+  val (result3, fflags3) = VCVT(16)(fire, in3, opType, sew, rm, altfmt, input1H, output1H, isFpToVecInst, isFround, isFcvtmod)
 
   io.result := Mux1H(outputWidth1H, Seq(
     result3(7,0) ## result2(7,0) ## result1(7,0) ## result0(7,0),

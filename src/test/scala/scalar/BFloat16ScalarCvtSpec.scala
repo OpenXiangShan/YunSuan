@@ -16,6 +16,7 @@ class BFloat16ScalarCvtSpec extends AnyFlatSpec with ChiselScalatestTester with 
     dut.io.opType.poke(0.U)
     dut.io.sew.poke(0.U)
     dut.io.rm.poke(0.U)
+    dut.io.altfmt.poke(false.B)
     dut.io.isFpToVecInst.poke(true.B)
     dut.io.isFround.poke(0.U)
     dut.io.isFcvtmod.poke(false.B)

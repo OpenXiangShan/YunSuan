@@ -272,6 +272,7 @@ class SimTop() extends VPUTestModule {
     vcvt.io.sew := sew
     vcvt.io.opType := opcode
     vcvt.io.rm := rm
+    vcvt.io.altfmt := false.B
     vcvt.io.src := src1 // 128 bit->vcvt
     vcvt.io.isFpToVecInst := false.B
     vcvt.io.isFround := 0.U
@@ -297,6 +298,7 @@ class SimTop() extends VPUTestModule {
     fpcvt.io.sew := sew
     fpcvt.io.opType := opcode
     fpcvt.io.rm := rm
+    fpcvt.io.altfmt := false.B
     fpcvt.io.src := src1
     fpcvt.io.isFpToVecInst := true.B
     fpcvt.io.isFround := 0.U

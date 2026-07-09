@@ -7,7 +7,7 @@ import yunsuan.vector.VectorConvert.{VectorCvt, VectorCvtIO}
 
 class VFCVTTop(xlen :Int) extends Module{
   val io = IO(new VectorCvtIO(xlen))
-  val (src, opType, sew, rm) = (io.src, io.opType, io.sew, io.rm)
+  val (src, opType, sew, rm, altfmt) = (io.src, io.opType, io.sew, io.rm, io.altfmt)
   val vfcvtWrapper = Module(new VectorCvt(64))
 
   val inputNext = Wire(UInt(64.W))
@@ -18,6 +18,11 @@ class VFCVTTop(xlen :Int) extends Module{
   vfcvtWrapper.io.opType := opType
   vfcvtWrapper.io.sew := sew
   vfcvtWrapper.io.rm := rm
+  vfcvtWrapper.io.altfmt := altfmt
+  vfcvtWrapper.io.fire := io.fire
+  vfcvtWrapper.io.isFpToVecInst := io.isFpToVecInst
+  vfcvtWrapper.io.isFround := io.isFround
+  vfcvtWrapper.io.isFcvtmod := io.isFcvtmod
 
   val outputNext = Wire(UInt(64.W))
   val outputReg = RegNext(outputNext, 0.U)
