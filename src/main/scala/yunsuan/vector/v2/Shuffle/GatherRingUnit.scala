@@ -162,12 +162,13 @@ class GatherRingUnit(
       indexOrRes(i) := gatherMod.out.result(i)
       indexDone(i)  := true.B
     }.elsewhen (doPlace) {
-      // Place 时：优先用 prefillData，active 元素用 index 值
+      // Place 时：inactive/tail 取 oldTable，active 元素按优先级使用各填充源
       indexOrRes(i) := Mux1H(Seq(
         fillScala(i) -> scalaTableBytes(i % (xlen / MinDataWidth)),
         fillZeros(i) -> 0.U,
+        !in.place.bits.indexValid(i) -> in.oldTable(i),
         fillIdx(i)   -> in.place.bits.index(i),
-        // 默认：prefillData（包含 inactive/tail 打底值或 active 元素的 index）
+        // 默认：prefillData（active 元素 notfound 时的暂存 index）
         true.B       -> in.place.bits.prefillData(i),
       ))
       indexDone(i) := false.B

@@ -106,6 +106,26 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       val bytes = (0 until 16).map(i => if (i % 4 < 2) 0x10 + i else 0x7E)
       val exp = bytes.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
       runCycles(dut, initUnit, Cycle(Seq(pPlace(1, 0, t, idx, Seq.fill(16)(true), pf)), Wb(exp))) } }
+    it("oldTable for inactive elements") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      // inactive elements (indexValid=false) get oldTable data (undisturbed/agnostic)
+      val t = (0 until 16).map(i => 0x10 + i); val ot = (0 until 16).map(i => 0xAA + i)
+      val iv = (0 until 16).map(_ % 4 < 2)  // 0,1,4,5,8,9,12,13 active; rest inactive
+      val idx = (0 until 16).map(i => if (i % 4 < 2) i else 0)
+      val bytes = (0 until 16).map(i => if (i % 4 < 2) 0x10 + i else 0xAA + i)
+      val exp = bytes.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
+      initUnit(dut)
+      ot.zipWithIndex.foreach { case (v, i) => dut.in.oldTable(i).poke(v) }
+      dut.in.blockConfig.blockSize.poke(1)
+      dut.in.place.valid.poke(true); t.zipWithIndex.foreach { case (v, i) => dut.in.place.bits.table(i).poke(v) }
+      idx.zipWithIndex.foreach { case (v, i) => dut.in.place.bits.index(i).poke(v) }
+      iv.zipWithIndex.foreach { case (v, i) => dut.in.place.bits.indexValid(i).poke(v) }
+      (0 until 16).foreach(i => dut.in.place.bits.prefillData(i).poke(0))
+      dut.in.place.bits.tableIdx.poke(0); dut.in.place.bits.blockBase.poke(0)
+      (0 until 16).foreach(i => dut.in.place.bits.fillScala(i).poke(false))
+      (0 until 16).foreach(i => dut.in.place.bits.fillZeros(i).poke(false))
+      dut.in.willFlow.poke(false); dut.in.flowIn.valid.poke(false)
+      dut.clock.step()
+      dut.out.writeback.bits.dest.expect(exp) } }
   }
 
   // ═══ 测试 11-12: SEW=16/32 fillScala ════════════════
