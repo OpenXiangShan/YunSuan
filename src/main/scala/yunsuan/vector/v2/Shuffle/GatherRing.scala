@@ -59,19 +59,21 @@ class GatherRing(
   def loopbackLmul4(i: Int): Int  = (i / 4) * 4 + 3             // 0→3, 1→3, 2→3, 3→3, 4→7, ...
   def loopbackLmul8(i: Int): Int  = numUnits - 1                 // all → 7
 
-  // ── 环形 + 回环连线 ─────────────────────────────────
+  // ── 环形连线：顶层 MUX 选前驱或回环 ─────────────────
   for (i <- 0 until numUnits) {
-    // 物理前驱（线性链，U(N-1) 的前驱是 U(N-2)，U0 的前驱是 U(N-1)）
     val prevIdx = (i - 1 + numUnits) % numUnits
-    units(i).in.flowPrev := units(prevIdx).out.tableOut
-
-    // 回环源（3 选 1，按 LMUL 选择）
     val srcLmul2 = units(loopbackLmul2(i)).out.tableOut
     val srcLmul4 = units(loopbackLmul4(i)).out.tableOut
     val srcLmul8 = units(loopbackLmul8(i)).out.tableOut
 
-    // 暂用 LMUL=8（全阵列），后续根据 blockConfig.blockSize 动态选择
-    units(i).in.flowWrap := srcLmul8
+    // blockSize 决定回环源（3 选 1），非入口 Unit 走物理前驱
+    val blockWrapSrc = Mux1H(Seq(
+      (units(i).in.blockConfig.blockSize === 2.U) -> srcLmul2,
+      (units(i).in.blockConfig.blockSize === 4.U) -> srcLmul4,
+      (units(i).in.blockConfig.blockSize === 8.U) -> srcLmul8,
+    ))
+    val isEntry = (i.U - units(i).in.blockConfig.blockBase + numUnits.U) % numUnits.U === 0.U
+    units(i).in.flowIn := Mux(isEntry, blockWrapSrc, units(prevIdx).out.tableOut)
   }
 
   // ── E_table / E_index 优先编码器（7 组 × 2）─────────

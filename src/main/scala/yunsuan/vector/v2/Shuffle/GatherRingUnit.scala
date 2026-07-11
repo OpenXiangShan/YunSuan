@@ -25,8 +25,7 @@ class GatherRingUnit(
 
     // Table 输入 MUX（4 选 1，AND-OR 逻辑）
     val place      = Flipped(ValidIO(new PlaceRequest(NumElem, IndexWidth, MaxTableNum, TableIdxWidth)))
-    val flowPrev   = Input(new RingTable(NumElem, TableIdxWidth))  // 物理前驱
-    val flowWrap   = Input(new RingTable(NumElem, TableIdxWidth))  // 回环源
+    val flowIn     = Input(new RingTable(NumElem, TableIdxWidth))  // 环形流入（前驱或回环，由顶层 MUX 决定）
 
     // 外部控制
     val willFlow   = Input(Bool())
@@ -58,14 +57,11 @@ class GatherRingUnit(
   // ── Table 输入 MUX ──────────────────────────────────
   private val doPlace = in.place.valid
   private val doFlow  = in.willFlow
-  private val flowSrc = Mux(isEntry, in.flowWrap, in.flowPrev)
-
-  // 选择 table 数据：Place > Flow > Hold（AND-OR 互斥独热）
-  private val tableInData  = Mux(doPlace, in.place.bits.table, Mux(doFlow, flowSrc.data, 0.U.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))))
-  private val tableInValid = Mux(doPlace, true.B, Mux(doFlow, flowSrc.valid, false.B))
-  private val tableInIdx   = Mux(doPlace, in.place.bits.tableIdx, Mux(doFlow, flowSrc.idx, 0.U))
+  private val tableInData  = Mux(doPlace, in.place.bits.table, Mux(doFlow, in.flowIn.data, 0.U.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))))
+  private val tableInValid = Mux(doPlace, true.B, Mux(doFlow, in.flowIn.valid, false.B))
+  private val tableInIdx   = Mux(doPlace, in.place.bits.tableIdx, Mux(doFlow, in.flowIn.idx, 0.U))
   private val tableInTag   = Wire(new TableTag)
-  tableInTag := Mux(doPlace, 0.U.asTypeOf(new TableTag), flowSrc.tag)
+  tableInTag := Mux(doPlace, 0.U.asTypeOf(new TableTag), in.flowIn.tag)
 
   // ── 寄存器 ──────────────────────────────────────────
   private val tableReg    = Reg(Vec(NumElem, UInt(MinDataWidth.W)))
@@ -85,9 +81,9 @@ class GatherRingUnit(
   // ── hasTable 状态机 ─────────────────────────────────
   when (flush) {
     hasTable := false.B
-  }.elsewhen (doFlow && flowSrc.valid) {
+  }.elsewhen (doFlow && in.flowIn.valid) {
     hasTable := true.B
-  }.elsewhen (doFlow && !flowSrc.valid) {
+  }.elsewhen (doFlow && !in.flowIn.valid) {
     hasTable := false.B
   }.elsewhen (!doFlow && doPlace) {
     hasTable := true.B
@@ -105,7 +101,7 @@ class GatherRingUnit(
   }
 
   // ── Table 寄存器更新 ────────────────────────────────
-  when (doPlace || (doFlow && flowSrc.valid)) {
+  when (doPlace || (doFlow && in.flowIn.valid)) {
     tableReg   := tableInData
     tableValid := tableInValid
     tableIdx   := tableInIdx
@@ -118,7 +114,7 @@ class GatherRingUnit(
   when (doPlace) {
     tableTag.passedEntry := false.B
     tableTag.isFirst     := false.B  // 由顶层在 Place 时设置
-  }.elsewhen (doFlow && isEntry && flowSrc.valid) {
+  }.elsewhen (doFlow && isEntry && in.flowIn.valid) {
     tableTag.passedEntry := true.B
   }
 

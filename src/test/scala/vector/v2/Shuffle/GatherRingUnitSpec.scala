@@ -18,8 +18,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers {
   def initUnit: GatherRingUnit => Unit = { dut =>
     dut.in.blockConfig.blockBase.poke(0); dut.in.blockConfig.blockSize.poke(8)
     dut.in.willFlow.poke(false)
-    dut.in.flowPrev.valid.poke(false); dut.in.flowPrev.idx.poke(0); dut.in.flowPrev.data.foreach(_.poke(0)); dut.in.flowPrev.tag.isFirst.poke(false); dut.in.flowPrev.tag.passedEntry.poke(false)
-    dut.in.flowWrap.valid.poke(false); dut.in.flowWrap.idx.poke(0); dut.in.flowWrap.data.foreach(_.poke(0)); dut.in.flowWrap.tag.isFirst.poke(false); dut.in.flowWrap.tag.passedEntry.poke(false)
+    dut.in.flowIn.valid.poke(false); dut.in.flowIn.idx.poke(0); dut.in.flowIn.data.foreach(_.poke(0)); dut.in.flowIn.tag.isFirst.poke(false); dut.in.flowIn.tag.passedEntry.poke(false)
     dut.in.place.valid.poke(false); dut.out.writeback.ready.poke(false)
     dut.flush.poke(true); dut.clock.step(); dut.flush.poke(false); dut.clock.step()
   }
@@ -39,13 +38,12 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers {
   def pNoPlace: GatherRingUnit => Unit = _.in.place.valid.poke(false)
   def pNoFlow:  GatherRingUnit => Unit = _.in.willFlow.poke(false)
   def pFlow: GatherRingUnit => Unit = { dut => dut.in.willFlow.poke(true)
-    dut.in.flowPrev.valid.poke(true); dut.in.flowPrev.idx.poke(0); dut.in.flowPrev.data.foreach(_.poke(0)); dut.in.flowPrev.tag.isFirst.poke(false); dut.in.flowPrev.tag.passedEntry.poke(false)
-    dut.in.flowWrap.valid.poke(true); dut.in.flowWrap.idx.poke(0); dut.in.flowWrap.data.foreach(_.poke(0)); dut.in.flowWrap.tag.isFirst.poke(false); dut.in.flowWrap.tag.passedEntry.poke(false)
+    dut.in.flowIn.valid.poke(true); dut.in.flowIn.idx.poke(0); dut.in.flowIn.data.foreach(_.poke(0)); dut.in.flowIn.tag.isFirst.poke(false); dut.in.flowIn.tag.passedEntry.poke(false)
   }
   def pFlowTbl(tblIdx: Int, tbl: Seq[Int]): GatherRingUnit => Unit = { dut => dut.in.willFlow.poke(true)
-    dut.in.flowPrev.valid.poke(true); dut.in.flowPrev.idx.poke(tblIdx); dut.in.flowWrap.valid.poke(true); dut.in.flowWrap.idx.poke(tblIdx)
-    tbl.zipWithIndex.foreach { case (v, i) => dut.in.flowPrev.data(i).poke(v); dut.in.flowWrap.data(i).poke(v) }
-    dut.in.flowPrev.tag.isFirst.poke(false); dut.in.flowPrev.tag.passedEntry.poke(false); dut.in.flowWrap.tag.isFirst.poke(false); dut.in.flowWrap.tag.passedEntry.poke(false)
+    dut.in.flowIn.valid.poke(true); dut.in.flowIn.idx.poke(tblIdx)
+    tbl.zipWithIndex.foreach { case (v, i) => dut.in.flowIn.data(i).poke(v) }
+    dut.in.flowIn.tag.isFirst.poke(false); dut.in.flowIn.tag.passedEntry.poke(false)
   }
   def pScala(v: BigInt): GatherRingUnit => Unit = _.in.scalaTable.poke(v)
 
