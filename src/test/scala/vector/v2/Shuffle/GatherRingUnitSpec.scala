@@ -73,6 +73,18 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers {
     it("identity 16 elem") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
       val t = (0 until 16).map(i => 0x10 + i); val exp = BigInt("1F1E1D1C1B1A19181716151413121110", 16)
       runCycles(dut, initUnit, Cycle(Seq(pPlace(1,0,t,(0 until 16),Seq.fill(16)(true))), Wb(exp))) } }
+    it("reverse order gather") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      val t = (0 until 16).map(i => 0x10 + i)                           // table: 0x10..0x1F
+      val idx = (0 until 16).map(i => 15 - i)                            // index: 15,14,...,0
+      val bytes = (0 until 16).map(i => 0x10 + (15 - i))                 // expected: reversed
+      val exp = bytes.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
+      runCycles(dut, initUnit, Cycle(Seq(pPlace(1,0,t,idx,Seq.fill(16)(true))), Wb(exp))) } }
+    it("shuffled gather") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      val t = (0 until 16).map(i => 0x10 + i)                           // table: 0x10..0x1F
+      val perm = Seq(3,7,0,11,15,2,5,9,13,1,8,14,4,6,10,12)             // shuffled order
+      val bytes = perm.map(i => 0x10 + i)                                // expected: permuted
+      val exp = bytes.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
+      runCycles(dut, initUnit, Cycle(Seq(pPlace(1,0,t,perm,Seq.fill(16)(true))), Wb(exp))) } }
     it("mixed found/notfound") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
       val t = (0 until 16).map(i => 0xA0 + i); val idx = (0 until 16).map(i => if (i%2==0) i else 16+i); val pf = (0 until 16).map(i => if (i%2==0) 0 else 16+i)
       val bytes = (0 until 16).map(i => if (i%2==0) 0xA0+i else 16+i); val exp = bytes.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
@@ -124,21 +136,27 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers {
   // ═══ 测试 15-16: Multi-Table ═════════════════════════
   describe("Multi-Table") {
     it("LMUL=2 identity") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
-      val s0 = (0 until 16).map(i => 0x10 + i); val s1 = (0 until 16).map(i => 0xA0 + i); val exp = s0.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
-      runCycles(dut, initUnit, Cycle(Seq(pPlace(2,0,s0,(0 until 16),Seq.fill(16)(true))), Wb0), Cycle(Seq(pNoPlace,pFlowTbl(1,s1)), Wb(exp))) } }
+      val s0 = (0 until 16).map(i => 0x10 + i); val s1 = (0 until 16).map(i => 0xA0 + i)
+      val idx = (0 until 16).map(i => 15 - i)                               // reverse: all found in seg 0
+      val bytes = (0 until 16).map(i => 0x10 + (15 - i))
+      val exp = bytes.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
+      runCycles(dut, initUnit, Cycle(Seq(pPlace(2,0,s0,idx,Seq.fill(16)(true))), Wb0), Cycle(Seq(pNoPlace,pFlowTbl(1,s1)), Wb(exp))) } }
     it("LMUL=4 identity") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
-      val s = (0 until 16).map(i => 0x10 + i); val exp = s.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
-      runCycles(dut, initUnit, Cycle(Seq(pPlace(4,0,s,(0 until 16),Seq.fill(16)(true))), Wb0), Cycle(Seq(pNoPlace,pFlowTbl(1,s)), Wb0), Cycle(Seq(pNoPlace,pFlowTbl(2,s)), Wb0), Cycle(Seq(pNoPlace,pFlowTbl(3,s)), Wb(exp))) } }
+      val s = (0 until 16).map(i => 0x10 + i)
+      val perm = Seq(3,7,0,11,15,2,5,9,13,1,8,14,4,6,10,12)               // shuffled
+      val bytes = perm.map(i => 0x10 + i)
+      val exp = bytes.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
+      runCycles(dut, initUnit, Cycle(Seq(pPlace(4,0,s,perm,Seq.fill(16)(true))), Wb0), Cycle(Seq(pNoPlace,pFlowTbl(1,s)), Wb0), Cycle(Seq(pNoPlace,pFlowTbl(2,s)), Wb0), Cycle(Seq(pNoPlace,pFlowTbl(3,s)), Wb(exp))) } }
   }
 
   // ═══ 测试 17-18: Tag ═════════════════════════════════
   describe("Tags") {
     it("tableOut valid after Place") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
-      val e = Seq.fill(16)(0); val f = Seq.fill(16)(false)
-      runCycles(dut, initUnit, Cycle(Seq(pPlace(2,0,e,e,f)), noOp), Cycle(Seq(pNoPlace,pNoFlow), Seq(_.out.tableOut.valid.expect(true)))) } }
+      val t = (0 until 16).map(i => 0x10 + i); val idx = (0 until 16).map(i => 15 - i)
+      runCycles(dut, initUnit, Cycle(Seq(pPlace(2,0,t,idx,Seq.fill(16)(true))), noOp), Cycle(Seq(pNoPlace,pNoFlow), Seq(_.out.tableOut.valid.expect(true)))) } }
     it("passedEntry at entry unit after flow") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
-      val e = Seq.fill(16)(0); val f = Seq.fill(16)(false)
-      runCycles(dut, initUnit, Cycle(Seq(pPlace(2,0,e,e,f)), noOp), Cycle(Seq(pNoPlace,pFlowTbl(1,e)), Seq(_.out.tableOut.tag.passedEntry.expect(true)))) } }
+      val t = (0 until 16).map(i => 0x10 + i); val idx = (0 until 16).map(i => 15 - i)
+      runCycles(dut, initUnit, Cycle(Seq(pPlace(2,0,t,idx,Seq.fill(16)(true))), noOp), Cycle(Seq(pNoPlace,pFlowTbl(1,t)), Seq(_.out.tableOut.tag.passedEntry.expect(true)))) } }
   }
 
   // ═══ 测试 19: Reuse ═════════════════════════════════
