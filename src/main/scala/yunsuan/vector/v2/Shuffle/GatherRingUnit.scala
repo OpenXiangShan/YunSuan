@@ -130,7 +130,7 @@ class GatherRingUnit(
   // ── GatherBase 实例 ─────────────────────────────────
   private val gatherMod = Module(new GatherBase(vlen = vlen, dlen = dlen, maxTableNum = maxTableNum))
 
-  gatherMod.in.tableIdx := Mux(doPlace, in.place.bits.tableIdx, tableIdx)
+  gatherMod.in.tableIdx := tableInIdx
   gatherMod.in.table    := tableInData
   gatherMod.in.lmul     := 0.U.asTypeOf(new GatherLmulBundle)  // LMUL 不影响查找，indexValid 已处理越界
 

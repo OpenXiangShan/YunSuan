@@ -4,8 +4,9 @@ import chisel3._
 import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
+import org.scalatest.ParallelTestExecution
 
-class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers {
+class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution {
 
   val vlen = 128; val dlen = 128; val maxTableNum = 8
 
@@ -147,6 +148,26 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers {
       val bytes = perm.map(i => 0x10 + i)
       val exp = bytes.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
       runCycles(dut, initUnit, Cycle(Seq(pPlace(4,0,s,perm,Seq.fill(16)(true))), Wb0), Cycle(Seq(pNoPlace,pFlowTbl(1,s)), Wb0), Cycle(Seq(pNoPlace,pFlowTbl(2,s)), Wb0), Cycle(Seq(pNoPlace,pFlowTbl(3,s)), Wb(exp))) } }
+    it("LMUL=2 all indices in seg1") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      val s0 = (0 until 16).map(i => 0x10 + i); val s1 = (0 until 16).map(i => 0xA0 + i)
+      val shift = 16
+      // ALL indices point to seg1 (high=1), none found in seg0
+      val idx = (0 until 16).map(i => i + shift)
+      val pf  = (0 until 16).map(i => i + shift)
+      val s1Bytes = s1.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
+      runCycles(dut, initUnit,
+        Cycle(Seq(pPlace(2,0,s0,idx,Seq.fill(16)(true),pf)), Wb0),
+        Cycle(Seq(pNoPlace,pFlowTbl(1,s1)), Wb(s1Bytes))) } }
+    it("LMUL=2 zip interleave") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      val s0 = (0 until 16).map(i => 0x10 + i); val s1 = (0 until 16).map(i => 0xA0 + i)
+      // zip: even elements from seg0, odd from seg1
+      val idx = (0 until 16).map(i => if (i % 2 == 0) i / 2 else 16 + i / 2)
+      val pf  = idx  // prefill = index, placeholder for odd elements notfound in seg0
+      val zipBytes = (0 until 16).map(i => if (i % 2 == 0) s0(i / 2) else s1(i / 2))
+      val exp = zipBytes.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
+      runCycles(dut, initUnit,
+        Cycle(Seq(pPlace(2, 0, s0, idx, Seq.fill(16)(true), pf)), Wb0),
+        Cycle(Seq(pNoPlace, pFlowTbl(1, s1)), Wb(exp))) } }
   }
 
   // ═══ 测试 17-18: Tag ═════════════════════════════════
