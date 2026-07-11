@@ -29,6 +29,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   def eWb(valid: Boolean, dest: BigInt = 0): GatherRingUnit => Unit = { dut => dut.out.writeback.valid.expect(valid); if (valid) dut.out.writeback.bits.dest.expect(dest) }
 
   def pFlush: GatherRingUnit => Unit = _.flush.poke(true)
+  def pDrop: GatherRingUnit => Unit = { dut => dut.in.willFlow.poke(true); dut.in.flowIn.valid.poke(false) }
   def pPlace(blkSize: Int, tblIdx: Int, tbl: Seq[Int], idx: Seq[Int], iValid: Seq[Boolean],
              prefill: Seq[Int] = Seq.fill(16)(0), fScala: Seq[Boolean] = Seq.fill(16)(false), fZeros: Seq[Boolean] = Seq.fill(16)(false)): GatherRingUnit => Unit = { dut =>
     dut.in.blockConfig.blockSize.poke(blkSize); dut.in.place.valid.poke(true); dut.in.place.bits.blockBase.poke(0); dut.in.place.bits.tableIdx.poke(tblIdx)
@@ -98,6 +99,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       val t = (0 until 16).map(i => 0x10 + i); val idx = (0 until 16).map(i => if (i==15) 0 else i+1); val iv = (0 until 16).map(_ != 15); val fs = (0 until 16).map(_ == 15)
       val bytes = (0 until 16).map(i => if (i==15) 0x5A else 0x10+(i+1)); val exp = bytes.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
       runCycles(dut, initUnit, Cycle(Seq(pPlace(1,0,t,idx,iv,fScala=fs), pScala(BigInt("5A5A5A5A5A5A5A5A",16))), Wb(exp))) } }
+    it("prefillData for out-of-range indices") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      val t = (0 until 16).map(i => 0x10 + i)
+      val idx = (0 until 16).map(i => if (i % 4 < 2) i else 100 + i)
+      val pf  = (0 until 16).map(i => if (i % 4 >= 2) 0x7E else 0)
+      val bytes = (0 until 16).map(i => if (i % 4 < 2) 0x10 + i else 0x7E)
+      val exp = bytes.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
+      runCycles(dut, initUnit, Cycle(Seq(pPlace(1, 0, t, idx, Seq.fill(16)(true), pf)), Wb(exp))) } }
   }
 
   // ═══ 测试 11-12: SEW=16/32 fillScala ════════════════
@@ -132,6 +140,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       val t = (0 until 16).map(i => 0x10 + i); val fz = (0 until 16).map(_ >= 14); val idx = (0 until 16).map(i => if (i>=14) 0 else i+2); val iv = (0 until 16).map(_ < 14)
       val bytes = (0 until 16).map(i => if (i>=14) 0 else 0x10+(i+2)); val exp = bytes.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
       runCycles(dut, initUnit, Cycle(Seq(pPlace(1,0,t,idx,iv,fZeros=fz)), Wb(exp))) } }
+    it("fillZeros + fillScala mixed") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      val t = (0 until 16).map(i => 0x10 + i); val sb = 4
+      val fz = (0 until 16).map(_ < sb); val fs = (0 until 16).map(i => i >= sb && i < sb * 2); val iv = (0 until 16).map(_ >= sb * 2)
+      val idx = (0 until 16).map(i => if (i >= sb * 2) i - sb * 2 else 0)
+      val bytes = (0 until 16).map(i => if (i < sb) 0 else if (i < sb * 2) 0x5A else 0x10 + (i - sb * 2))
+      val exp = bytes.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
+      runCycles(dut, initUnit, Cycle(Seq(pPlace(1, 0, t, idx, iv, fScala = fs, fZeros = fz), pScala(BigInt("5A5A5A5A5A5A5A5A", 16))), Wb(exp))) } }
   }
 
   // ═══ 测试 15-16: Multi-Table ═════════════════════════
@@ -168,6 +183,25 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       runCycles(dut, initUnit,
         Cycle(Seq(pPlace(2, 0, s0, idx, Seq.fill(16)(true), pf)), Wb0),
         Cycle(Seq(pNoPlace, pFlowTbl(1, s1)), Wb(exp))) } }
+    it("LMUL=2 consecutive Places override") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      val s0 = (0 until 16).map(i => 0x10 + i); val s0b = (0 until 16).map(i => 0x30 + i)
+      val s0bBytes = s0b.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
+      runCycles(dut, initUnit,
+        Cycle(Seq(pPlace(2, 0, s0, (0 until 16), Seq.fill(16)(true))), Wb0),
+        Cycle(Seq(pPlace(2, 0, s0b, (0 until 16), Seq.fill(16)(true))), Wb0),
+        Cycle(Seq(pNoPlace, pFlowTbl(1, s0b)), Wb(s0bBytes))) } }
+    it("LMUL=4 distinct segments") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      val s0 = (0 until 16).map(i => 0x10 + i); val s1 = (0 until 16).map(i => 0xA0 + i)
+      val s2 = (0 until 16).map(i => 0x20 + i); val s3 = (0 until 16).map(i => 0x30 + i)
+      // 4 elements per segment: elem 0-3→s0, 4-7→s1, 8-11→s2, 12-15→s3
+      val idx = (0 until 16).map(i => (i % 4) + (i / 4) * 16)
+      val bytes = (0 until 16).map(i => (i / 4) match { case 0 => s0(i % 4); case 1 => s1(i % 4); case 2 => s2(i % 4); case 3 => s3(i % 4) })
+      val exp = bytes.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
+      runCycles(dut, initUnit,
+        Cycle(Seq(pPlace(4, 0, s0, idx, Seq.fill(16)(true), prefill = idx)), Wb0),
+        Cycle(Seq(pNoPlace, pFlowTbl(1, s1)), Wb0),
+        Cycle(Seq(pNoPlace, pFlowTbl(2, s2)), Wb0),
+        Cycle(Seq(pNoPlace, pFlowTbl(3, s3)), Wb(exp))) } }
   }
 
   // ═══ 测试 17-18: Tag ═════════════════════════════════
@@ -178,6 +212,9 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     it("passedEntry at entry unit after flow") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
       val t = (0 until 16).map(i => 0x10 + i); val idx = (0 until 16).map(i => 15 - i)
       runCycles(dut, initUnit, Cycle(Seq(pPlace(2,0,t,idx,Seq.fill(16)(true))), noOp), Cycle(Seq(pNoPlace,pFlowTbl(1,t)), Seq(_.out.tableOut.tag.passedEntry.expect(true)))) } }
+    it("tag.isFirst set on Place") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      val t = (0 until 16).map(i => 0x10 + i)
+      runCycles(dut, initUnit, Cycle(Seq(pPlace(2, 0, t, (0 until 16), Seq.fill(16)(true))), noOp), Cycle(Seq(pNoPlace, pNoFlow), Seq(_.out.tableOut.tag.isFirst.expect(false)))) } }
   }
 
   // ═══ 测试 19: Reuse ═════════════════════════════════
@@ -186,5 +223,34 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       val t1 = (0 until 16).map(i => 0x10 + i); val e1 = t1.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
       val t2 = (0 until 16).map(i => 0xA0 + i); val e2 = t2.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
       runCycles(dut, initUnit, Cycle(Seq(pPlace(1,0,t1,(0 until 16),Seq.fill(16)(true))), Wb(e1)), Cycle(Seq(pNoPlace,pNoFlow,pFlush), noOp), Cycle(Seq(pNoPlace,pNoFlow,_.flush.poke(false)), noOp), Cycle(Seq(pPlace(1,0,t2,(0 until 16),Seq.fill(16)(true))), Wb(e2))) } }
+    it("back-to-back without flush") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      val t1 = (0 until 16).map(i => 0x10 + i); val e1 = t1.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
+      val t2 = (0 until 16).map(i => 0xA0 + i); val e2 = t2.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
+      runCycles(dut, initUnit,
+        Cycle(Seq(pPlace(1, 0, t1, (0 until 16), Seq.fill(16)(true))), Wb(e1)),
+        Cycle(Seq(pPlace(1, 0, t2, (0 until 16), Seq.fill(16)(true))), Wb(e2))) } }
+  }
+
+  // ═══ SEW=64 ══════════════════════════════════════════
+  describe("SEW=64") {
+    it("identity 2 lanes") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      val t = (0 until 8).map(i => 0x00 + i) ++ (0 until 8).map(i => 0x10 + i)
+      val exp = BigInt("17161514131211100706050403020100", 16)
+      runCycles(dut, initUnit, Cycle(Seq(pPlace(1, 0, t, (0 until 16), Seq.fill(16)(true))), Wb(exp))) } }
+    it("vslide1up fillScala 8 bytes") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      val t = (0 until 16).map(i => 0x00 + i); val sb = 8
+      val idx = (0 until 16).map(i => if (i < sb) 0 else i - sb); val iv = (0 until 16).map(_ >= sb); val fs = (0 until 16).map(_ < sb)
+      val bytes = (0 until 16).map(i => if (i < sb) 0x5A else 0x00 + (i - sb))
+      val exp = bytes.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
+      runCycles(dut, initUnit, Cycle(Seq(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16))), Wb(exp))) } }
+  }
+
+  // ═══ Table Control ═══════════════════════════════════
+  describe("Table Control") {
+    it("hasTable dropped after invalid flow") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      val t = (0 until 16).map(i => 0x10 + i)
+      runCycles(dut, initUnit,
+        Cycle(Seq(pPlace(1, 0, t, (0 until 16), Seq.fill(16)(true))), H1 ++ Wb(t.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b)))),
+        Cycle(Seq(pNoPlace, pDrop), H0 ++ I1)) } }
   }
 }
