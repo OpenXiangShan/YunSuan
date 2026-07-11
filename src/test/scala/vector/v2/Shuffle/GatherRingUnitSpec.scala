@@ -215,6 +215,36 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     it("tag.isFirst set on Place") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
       val t = (0 until 16).map(i => 0x10 + i)
       runCycles(dut, initUnit, Cycle(Seq(pPlace(2, 0, t, (0 until 16), Seq.fill(16)(true))), noOp), Cycle(Seq(pNoPlace, pNoFlow), Seq(_.out.tableOut.tag.isFirst.expect(false)))) } }
+    it("flowIn.tag.passedEntry propagates") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      initUnit(dut)
+      val t = (0 until 16).map(i => 0x10 + i)
+      dut.in.blockConfig.blockSize.poke(2)
+      dut.in.place.valid.poke(true); t.zipWithIndex.foreach{case(v,i)=>dut.in.place.bits.table(i).poke(v)}
+      (0 until 16).foreach(i=>dut.in.place.bits.index(i).poke(i)); (0 until 16).foreach(i=>dut.in.place.bits.indexValid(i).poke(true))
+      dut.in.place.bits.tableIdx.poke(0); dut.in.place.bits.blockBase.poke(0)
+      dut.in.willFlow.poke(false); dut.in.flowIn.valid.poke(false)
+      dut.clock.step()
+      dut.in.place.valid.poke(false); dut.in.willFlow.poke(true)
+      dut.in.flowIn.valid.poke(true); dut.in.flowIn.idx.poke(1)
+      t.zipWithIndex.foreach{case(v,i)=>dut.in.flowIn.data(i).poke(v)}
+      dut.in.flowIn.tag.isFirst.poke(false); dut.in.flowIn.tag.passedEntry.poke(true)
+      dut.clock.step()
+      dut.out.tableOut.tag.passedEntry.expect(true) } }
+    it("flowIn.tag.isFirst propagates") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      initUnit(dut)
+      val t = (0 until 16).map(i => 0x10 + i)
+      dut.in.blockConfig.blockSize.poke(2)
+      dut.in.place.valid.poke(true); t.zipWithIndex.foreach{case(v,i)=>dut.in.place.bits.table(i).poke(v)}
+      (0 until 16).foreach(i=>dut.in.place.bits.index(i).poke(i)); (0 until 16).foreach(i=>dut.in.place.bits.indexValid(i).poke(true))
+      dut.in.place.bits.tableIdx.poke(0); dut.in.place.bits.blockBase.poke(0)
+      dut.in.willFlow.poke(false); dut.in.flowIn.valid.poke(false)
+      dut.clock.step()
+      dut.in.place.valid.poke(false); dut.in.willFlow.poke(true)
+      dut.in.flowIn.valid.poke(true); dut.in.flowIn.idx.poke(1)
+      t.zipWithIndex.foreach{case(v,i)=>dut.in.flowIn.data(i).poke(v)}
+      dut.in.flowIn.tag.isFirst.poke(true); dut.in.flowIn.tag.passedEntry.poke(false)
+      dut.clock.step()
+      dut.out.tableOut.tag.isFirst.expect(true) } }
   }
 
   // ═══ 测试 19: Reuse ═════════════════════════════════
@@ -252,5 +282,38 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       runCycles(dut, initUnit,
         Cycle(Seq(pPlace(1, 0, t, (0 until 16), Seq.fill(16)(true))), H1 ++ Wb(t.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b)))),
         Cycle(Seq(pNoPlace, pDrop), H0 ++ I1)) } }
+  }
+
+  // ═══ Block Config ════════════════════════════════════
+  describe("Block Config") {
+    it("non-zero blockBase places correctly") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      // unitIdx=0, blockBase=2, blockSize=4 => localPos=6, non-entry, non-ring-end
+      val t = (0 until 16).map(i => 0x10 + i)
+      initUnit(dut)
+      dut.in.blockConfig.blockBase.poke(2); dut.in.blockConfig.blockSize.poke(4)
+      dut.in.place.valid.poke(true); t.zipWithIndex.foreach{case(v,i)=>dut.in.place.bits.table(i).poke(v)}
+      (0 until 16).foreach(i=>dut.in.place.bits.index(i).poke(i)); (0 until 16).foreach(i=>dut.in.place.bits.indexValid(i).poke(true))
+      dut.in.place.bits.tableIdx.poke(0); dut.in.place.bits.blockBase.poke(2)
+      dut.clock.step()
+      dut.out.status.hasTable.expect(true); dut.out.status.hasIndex.expect(true)
+      dut.out.writeback.valid.expect(false) // counter=3, not done
+    } }
+    it("non-entry unit does not set passedEntry on flow") { simulate(new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)) { dut =>
+      // unitIdx=0, blockBase=2 => not the entry => passedEntry NOT set during flow
+      val t = (0 until 16).map(i => 0x10 + i)
+      initUnit(dut)
+      dut.in.blockConfig.blockBase.poke(2); dut.in.blockConfig.blockSize.poke(4)
+      dut.in.place.valid.poke(true); t.zipWithIndex.foreach{case(v,i)=>dut.in.place.bits.table(i).poke(v)}
+      (0 until 16).foreach(i=>dut.in.place.bits.index(i).poke(i)); (0 until 16).foreach(i=>dut.in.place.bits.indexValid(i).poke(true))
+      dut.in.place.bits.tableIdx.poke(0); dut.in.place.bits.blockBase.poke(2)
+      dut.clock.step()
+      // Flow through this non-entry unit
+      dut.in.place.valid.poke(false); dut.in.willFlow.poke(true)
+      dut.in.flowIn.valid.poke(true); dut.in.flowIn.idx.poke(1)
+      t.zipWithIndex.foreach{case(v,i)=>dut.in.flowIn.data(i).poke(v)}
+      dut.in.flowIn.tag.isFirst.poke(false); dut.in.flowIn.tag.passedEntry.poke(false)
+      dut.clock.step()
+      dut.out.tableOut.tag.passedEntry.expect(false) // should NOT be set (not entry)
+    } }
   }
 }
