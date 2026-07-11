@@ -117,16 +117,8 @@ class GatherRing(
   }
 
   // ── placeIdx 计算（同 robIdx 组内 pipe 顺序计数）────
-  // 对每个 pipe，统计 0..i-1 pipe 中同 robIdx 的 UOP 个数
-  private val placeIdx = Wire(Vec(numPipes, UInt(log2Ceil(numUnits).W)))
-  for (i <- 0 until numPipes) {
-    val sameRobIdx = Wire(Vec(i, Bool()))
-    for (j <- 0 until i) {
-      sameRobIdx(j) := pipeIn(j).valid && pipeIn(i).valid &&
-        pipeIn(j).bits.placeReq.robIdx === pipeIn(i).bits.placeReq.robIdx
-    }
-    placeIdx(i) := PopCount(sameRobIdx)
-  }
+  // 已移到 GatherRing 外部（Issue Queue 阶段计算），通过 pipeIn.bits.placeIdx 传入
+  // 此处直接使用外部预计算的值
 
   // ── 放置位置计算 + 分发到 Unit ──────────────────────
   // tablePos = (E_table - placeIdx + flow) % blockSize + blockBase
@@ -134,14 +126,15 @@ class GatherRing(
   // 暂用简化版
   for (p <- 0 until numPipes) {
     when (pipeIn(p).valid) {
-      val req = pipeIn(p).bits.placeReq
+      val req  = pipeIn(p).bits.placeReq
+      val pIdx = pipeIn(p).bits.placeIdx
       val blkBase = req.blockBase
       val blkSize = numUnits.U  // TODO: 从 VOQ 获取实际 blockSize
       val flow = Mux(willFlow, 1.U, 0.U)
 
       // 简化版：假设全空状态，E_table=E_index=0
-      val tPos = (0.U - placeIdx(p) + flow) % blkSize + blkBase
-      val iPos = (0.U + placeIdx(p)) % blkSize + blkBase
+      val tPos = (0.U - pIdx + flow) % blkSize + blkBase
+      val iPos = (0.U + pIdx) % blkSize + blkBase
 
       // 1-hot 解码，将 place 分发到目标 Unit
       for (u <- 0 until numUnits) {

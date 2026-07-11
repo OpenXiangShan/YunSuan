@@ -52,6 +52,9 @@ class GatherRingUnit(
   private val isEntry   = localPos === 0.U
   private val isRingEnd = localPos === (blockConfig.blockSize - 1.U)
 
+  // ── scalaTable 字节拆分 ──────────────────────────────
+  private val scalaTableBytes = in.scalaTable.asTypeOf(Vec(xlen / MinDataWidth, UInt(MinDataWidth.W)))
+
   // ── Table 输入 MUX ──────────────────────────────────
   private val doPlace = in.place.valid
   private val doFlow  = in.willFlow
@@ -137,7 +140,7 @@ class GatherRingUnit(
 
   for (i <- 0 until NumElem) {
     // 查询条件：有 index 且该元素尚未完成
-    val shouldQuery = hasIndex && (doPlace || !indexDone(i))
+    val shouldQuery = (hasIndex || doPlace) && (doPlace || !indexDone(i))
     gatherMod.in.indexValid(i) := shouldQuery && Mux(doPlace, in.place.bits.indexValid(i), true.B)
     gatherMod.in.index(i) := Mux(doPlace, in.place.bits.index(i), indexView(i))
   }
@@ -151,10 +154,10 @@ class GatherRingUnit(
   private val fillScala = Wire(Vec(NumElem, Bool()))
 
   for (i <- 0 until NumElem) {
-    fillRes(i)   := hasIndex && gatherMod.out.resultValid(i)
+    fillRes(i)   := (hasIndex || doPlace) && gatherMod.out.resultValid(i)
     fillIdx(i)   := doPlace && hasIndex && gatherMod.out.notfound(i)  // Place 时 notfound → 存 index
-    fillZeros(i) := doPlace && in.place.bits.indexValid(i) && in.place.bits.fillZeros(i)
-    fillScala(i) := doPlace && in.place.bits.indexValid(i) && in.place.bits.fillScala(i)
+    fillZeros(i) := doPlace && in.place.bits.fillZeros(i)
+    fillScala(i) := doPlace && in.place.bits.fillScala(i)
 
     when (flush) {
       indexOrRes(i) := 0.U
@@ -165,9 +168,9 @@ class GatherRingUnit(
     }.elsewhen (doPlace) {
       // Place 时：优先用 prefillData，active 元素用 index 值
       indexOrRes(i) := Mux1H(Seq(
-        fillIdx(i)   -> in.place.bits.index(i),
+        fillScala(i) -> scalaTableBytes(i % (xlen / MinDataWidth)),
         fillZeros(i) -> 0.U,
-        fillScala(i) -> in.scalaTable(i % (xlen / MinDataWidth)),
+        fillIdx(i)   -> in.place.bits.index(i),
         // 默认：prefillData（包含 inactive/tail 打底值或 active 元素的 index）
         true.B       -> in.place.bits.prefillData(i),
       ))

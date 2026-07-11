@@ -5,8 +5,8 @@ import chisel3.util.log2Ceil
 
 // 块配置：每个 Unit 需要知道的块信息
 class BlockConfig(val numUnits: Int) extends Bundle {
-  val blockBase = UInt(log2Ceil(numUnits).W)  // 块起始位置 (0..7)
-  val blockSize = UInt(log2Ceil(numUnits).W)  // 块大小 (1/2/4/8)
+  val blockBase = UInt(log2Ceil(numUnits).W)           // 块起始位置 (0..7)
+  val blockSize = UInt(log2Ceil(numUnits + 1).W)       // 块大小 (1/2/4/8)，需多 1 位表示 8
 }
 
 // Table 携带的控制标记
@@ -33,7 +33,6 @@ class UnitStatus extends Bundle {
 // 放置请求（从 Issue Queue 来，已过 VOQ 分配 + Wakeup 唤醒）
 // 使用 ValidIO[PlaceRequest] 提供 valid 信号，Bundle 内不包含 valid
 class PlaceRequest(val numElem: Int, val indexWidth: Int, val numUnits: Int, val tableIdxWidth: Int) extends Bundle {
-  val robIdx     = UInt(8.W)                     // 用于 placeIdx 分组计数
   val blockBase  = UInt(log2Ceil(numUnits).W)   // 块起始位置
   val tableIdx   = UInt(tableIdxWidth.W)         // 此 UOP 携带的 vs2 segment 编号
   val table      = Vec(numElem, UInt(8.W))       // table 数据
@@ -47,4 +46,5 @@ class PlaceRequest(val numElem: Int, val indexWidth: Int, val numUnits: Int, val
 // 每 pipe 的输入（已过 IndexGen + Mask 预处理）
 class GatherRingPipeInput(val numElem: Int, val indexWidth: Int, val numUnits: Int, val tableIdxWidth: Int) extends Bundle {
   val placeReq = new PlaceRequest(numElem, indexWidth, numUnits, tableIdxWidth)
+  val placeIdx = UInt(log2Ceil(numUnits).W)  // 外部预计算的放置序号（同 robIdx 组内 pipe 顺序）
 }
