@@ -20,6 +20,9 @@ class GatherRing(
   // Flush（选择性清空 robIdx 新于 flushRobIdx 的块）
   val flushRobIdx = IO(Input(UInt(8.W)))
 
+  // 块大小配置（从 Issue Queue / VOQ 传入）
+  val blockSizeCfg = IO(Input(UInt(log2Ceil(numUnits + 1).W)))
+
   // 多 pipe 输入（每 pipe 已过 IndexGen+Mask 预处理）
   val pipeIn = IO(Vec(numPipes, Flipped(ValidIO(new GatherRingPipeInput(NumElem, IndexWidth, MaxTableNum, TableIdxWidth)))))
 
@@ -44,11 +47,9 @@ class GatherRing(
   }
 
   // ── 每 Unit 的 block 配置 ───────────────────────────
-  // 暂用缺省配置（全阵列单指令模式），后续由 VOQ 动态分配时广播
-  // 当前实现：所有 Unit 默认 block_base=0, block_size=numUnits
   for (i <- 0 until numUnits) {
     units(i).in.blockConfig.blockBase := 0.U
-    units(i).in.blockConfig.blockSize := numUnits.U
+    units(i).in.blockConfig.blockSize := blockSizeCfg
   }
 
   // ── 回环源预计算（每 Unit 的 3 选 1 MUX 源）─────────
@@ -123,18 +124,20 @@ class GatherRing(
   // 此处直接使用外部预计算的值
 
   // ── 放置位置计算 + 分发到 Unit ──────────────────────
-  // tablePos = (E_table - placeIdx + flow) % blockSize + blockBase
-  // indexPos = E_index + placeIdx + blockBase
-  // 暂用简化版
+  // 先清零所有 place 信号，再聚合有效 pipe 的放置
+  for (u <- 0 until numUnits) {
+    units(u).in.place.valid := false.B
+    units(u).in.place.bits   := 0.U.asTypeOf(units(u).in.place.bits.cloneType)
+  }
+
   for (p <- 0 until numPipes) {
     when (pipeIn(p).valid) {
       val req  = pipeIn(p).bits.placeReq
       val pIdx = pipeIn(p).bits.placeIdx
       val blkBase = req.blockBase
-      val blkSize = numUnits.U  // TODO: 从 VOQ 获取实际 blockSize
+      val blkSize = blockSizeCfg
       val flow = Mux(willFlow, 1.U, 0.U)
 
-      // 简化版：假设全空状态，E_table=E_index=0
       val tPos = (0.U - pIdx + flow) % blkSize + blkBase
       val iPos = (0.U + pIdx) % blkSize + blkBase
 
@@ -144,15 +147,7 @@ class GatherRing(
         when (isTarget) {
           units(u).in.place.valid := true.B
           units(u).in.place.bits := req
-        }.otherwise {
-          units(u).in.place.valid := false.B
-          units(u).in.place.bits := 0.U.asTypeOf(req.cloneType)
         }
-      }
-    }.otherwise {
-      for (u <- 0 until numUnits) {
-        units(u).in.place.valid := false.B
-        units(u).in.place.bits := 0.U.asTypeOf(pipeIn(p).bits.placeReq.cloneType)
       }
     }
   }
