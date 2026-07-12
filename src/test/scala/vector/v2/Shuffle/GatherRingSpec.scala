@@ -133,32 +133,69 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
         (0 until 16).foreach(i=>req.fillZeros(i).poke(false)); (0 until 16).foreach(i=>req.fillScala(i).poke(false))
       }
       dut.clock.step()  // Place both segments
-      // KNOWN FAIL: same-cycle pipe collision on E_table — writeback not asserted
+      // KNOWN FAIL: same-cycle pipe collision
     } }
   }
 
-  // ═══ 阶段 B3: LMUL=2 zip ═════════════════════════════
+  // ═══ 阶段 C1: LMUL=4 ═════════════════════════════════
+  describe("LMUL=4") {
+    it("vrgather identity single pipe") { simulate(new GatherRing(vlen, dlen, xlen)) { dut =>
+      initDut(dut, blkSize = 4)
+      val t = (0 until 16).map(i => 0x30 + i)
+      val p = dut.pipeIn(0)
+      p.valid.poke(true); p.bits.placeIdx.poke(0)
+      val req = p.bits.placeReq
+      req.blockBase.poke(0); req.tableIdx.poke(0)
+      t.zipWithIndex.foreach{case(v,i)=>req.table(i).poke(v)}
+      (0 until 16).foreach(i=>req.index(i).poke(i)); (0 until 16).foreach(i=>req.indexValid(i).poke(true))
+      (0 until 16).foreach(i=>req.prefillData(i).poke(0))
+      (0 until 16).foreach(i=>req.fillZeros(i).poke(false)); (0 until 16).foreach(i=>req.fillScala(i).poke(false))
+      dut.clock.step()  // Place
+      for (c <- 1 to 6) { dut.pipeIn(0).valid.poke(false); dut.clock.step() }  // willFlow delay + 4 flow cycles
+      val exp = t.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
+      dut.writeback(0).valid.expect(true)
+      dut.writeback(0).bits.dest.expect(exp)
+    } }
+  }
+
+  // ═══ tableOut 数据验证 ═══════════════════════════════
+  describe("tableOut") {
+    it("table and index placed at separate units") { simulate(new GatherRing(vlen, dlen, xlen)) { dut =>
+      initDut(dut, blkSize = 2)
+      val s0 = (0 until 16).map(i => 0x10 + i)
+      val p = dut.pipeIn(0)
+      p.valid.poke(true); p.bits.placeIdx.poke(0)
+      val req = p.bits.placeReq
+      req.blockBase.poke(0); req.tableIdx.poke(0)
+      s0.zipWithIndex.foreach{case(v,i)=>req.table(i).poke(v)}
+      (0 until 16).foreach(i=>req.index(i).poke(i)); (0 until 16).foreach(i=>req.indexValid(i).poke(true))
+      (0 until 16).foreach(i=>req.prefillData(i).poke(0))
+      (0 until 16).foreach(i=>req.fillZeros(i).poke(false)); (0 until 16).foreach(i=>req.fillScala(i).poke(false))
+      dut.clock.step()  // Place: table@U1, index@U0
+      dut.unitStatus(1).hasTable.expect(true)
+      dut.unitStatus(0).hasIndex.expect(true)
+    } }
+  }
+
+  // ═══ B3: LMUL=2 zip [KNOWN FAIL: P6] ═════════════════
   describe("LMUL=2 zip") {
-    it("interleave seg0 and seg1") { simulate(new GatherRing(vlen, dlen, xlen)) { dut =>
+    it("interleave seg0 and seg1 [KNOWN FAIL]") { simulate(new GatherRing(vlen, dlen, xlen)) { dut =>
       initDut(dut, blkSize = 2)
       val s0 = (0 until 16).map(i => 0x10 + i)
       val s1 = (0 until 16).map(i => 0xA0 + i)
-      // zip: even elements seg0, odd elements seg1
       val idx = (0 until 16).map(i => if (i%2==0) i/2 else 16 + i/2)
       for (pipe <- 0 until 2) {
-        val p = dut.pipeIn(pipe)
-        p.valid.poke(true); p.bits.placeIdx.poke(pipe)
-        val req = p.bits.placeReq
-        req.blockBase.poke(0); req.tableIdx.poke(pipe)
+        val p = dut.pipeIn(pipe); p.valid.poke(true); p.bits.placeIdx.poke(pipe)
+        val req = p.bits.placeReq; req.blockBase.poke(0); req.tableIdx.poke(pipe)
         val tbl = if (pipe == 0) s0 else s1
         tbl.zipWithIndex.foreach{case(v,i)=>req.table(i).poke(v)}
         idx.zipWithIndex.foreach{case(v,i)=>req.index(i).poke(v)}
         (0 until 16).foreach(i=>req.indexValid(i).poke(true))
         (0 until 16).foreach(i=>req.prefillData(i).poke(idx(i)))
-        (0 until 16).foreach(i=>req.fillZeros(i).poke(false)); (0 until 16).foreach(i=>req.fillScala(i).poke(false))
+        (0 until 16).foreach(i=>req.fillZeros(i).poke(false))
+        (0 until 16).foreach(i=>req.fillScala(i).poke(false))
       }
-      dut.clock.step()  // Place both
-      // KNOWN FAIL: same-cycle pipe collision on E_table — writeback not asserted
+      dut.clock.step()
     } }
   }
 }
