@@ -133,7 +133,8 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
         (0 until 16).foreach(i=>req.fillZeros(i).poke(false)); (0 until 16).foreach(i=>req.fillScala(i).poke(false))
       }
       dut.clock.step()  // Place both segments
-      // KNOWN FAIL: same-cycle pipe collision
+      // KNOWN FAIL: same-cycle pipe collision — debug via unitStatus peek
+      // e.g. dut.unitStatus(0).hasTable.peek() to inspect state
     } }
   }
 
