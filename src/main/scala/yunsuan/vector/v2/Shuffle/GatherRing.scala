@@ -99,21 +99,69 @@ class GatherRing(
     })
   }
 
-  // ── will_flow 计算 ──────────────────────────────────
+  // ── will_flow 两阶段计算 ──────────────────────────
   // 填充阶段：首个 table (isFirst) 未到达最后 valid index
-  // 满配阶段：任一 table passedEntry 且未到环尾
-  // 暂用简化的全局 will_flow（需后续按分块细化）
+  // 满配阶段（环尾 hasIndex=true）：任一 table passedEntry 且未到环尾
   private val willFlow = RegInit(false.B)
 
-  // 简化版：有 table 在环内就流动
-  // 后续替换为两阶段逻辑
-  private val anyHasTable = Cat(units.map(_.out.status.hasTable)).orR
-  private val anyHasIndex = Cat(units.map(_.out.status.hasIndex)).orR
-  when (anyHasTable && anyHasIndex) {
-    willFlow := true.B
-  }.otherwise {
-    willFlow := false.B
-  }
+  // 信号向量化（避免重复 Cat）
+  private val hasIndexVec    = VecInit(units.map(_.out.status.hasIndex))
+  private val hasTableVec    = VecInit(units.map(_.out.status.hasTable))
+  private val isFirstVec     = VecInit(units.map(_.out.tableOut.tag.isFirst))
+  private val tableValidVec  = VecInit(units.map(_.out.tableOut.valid))
+
+  // ── E_table / E_index：按 blockSize 掩码，块外视为 full ──
+  private val hasTableInBlock = VecInit((0 until numUnits).map { j =>
+    Mux(j.U < blockSizeCfg, hasTableVec(j), true.B)
+  })
+  private val hasIndexInBlock = VecInit((0 until numUnits).map { j =>
+    Mux(j.U < blockSizeCfg, hasIndexVec(j), true.B)
+  })
+  private val E_table = priorityEncodeReverse(hasTableInBlock)
+  private val E_index = priorityEncodeForward(hasIndexInBlock)
+  private val passedEntryVec = VecInit(units.map(_.out.tableOut.tag.passedEntry))
+
+  // Phase detection：环尾 Unit 的 hasIndex=true → 满配阶段
+  private val isFullPhase = Mux1H(Seq(
+    (blockSizeCfg === 1.U) -> hasIndexVec(0),
+    (blockSizeCfg === 2.U) -> hasIndexVec(1),
+    (blockSizeCfg === 4.U) -> hasIndexVec(3),
+    (blockSizeCfg === 8.U) -> hasIndexVec(7),
+  ))
+
+  // ── 填充阶段 will_flow ─────────────────────────────
+  // firstTablePos：块内首个 table 的局部坐标（PriorityMux 从低到高扫描）
+  private val firstTablePos = PriorityMux(
+    (0 until numUnits).map { j =>
+      (j.U < blockSizeCfg && isFirstVec(j)) -> j.U(log2Ceil(numUnits).W)
+    } :+ (true.B -> 0.U(log2Ceil(numUnits).W))
+  )
+
+  // lastValidIdxPos：块内最后 valid index 的局部坐标（PriorityMux 从高到低扫描）
+  private val lastValidIdxPos = PriorityMux(
+    (0 until numUnits).reverse.map { j =>
+      (j.U < blockSizeCfg && hasIndexVec(j)) -> j.U(log2Ceil(numUnits).W)
+    } :+ (true.B -> 0.U(log2Ceil(numUnits).W))
+  )
+
+  private val anyHasIndexInBlock = VecInit(
+    (0 until numUnits).map(j => j.U < blockSizeCfg && hasIndexVec(j))
+  ).asUInt.orR
+
+  private val fillingWillFlow = anyHasIndexInBlock && (firstTablePos < lastValidIdxPos)
+
+  // ── 满配阶段 will_flow ─────────────────────────────
+  // 任一 table：valid && 未到环尾 && (已过入口 || 当前在入口)
+  private val fullWillFlow = VecInit(
+    (0 until numUnits).map { j =>
+      j.U < blockSizeCfg &&
+        tableValidVec(j) &&
+        (passedEntryVec(j) || j.U === 0.U) &&
+        j.U =/= (blockSizeCfg - 1.U)
+    }
+  ).asUInt.orR
+
+  willFlow := Mux(isFullPhase, fullWillFlow, fillingWillFlow)
 
   for (i <- 0 until numUnits) {
     units(i).in.willFlow := willFlow
@@ -138,15 +186,19 @@ class GatherRing(
       val blkSize = blockSizeCfg
       val flow = Mux(willFlow, 1.U, 0.U)
 
-      val tPos = (0.U - pIdx + flow) % blkSize + blkBase
-      val iPos = (0.U + pIdx) % blkSize + blkBase
+      val tPos = (E_table + 1.U - pIdx + flow) % blkSize + blkBase
+      val iPos = (E_index + pIdx) % blkSize + blkBase
+
+      // 标记首个 table（placeIdx==0 的 UOP 为块内第一个 table）
+      val reqWire = WireInit(req)
+      reqWire.isFirstTable := (pIdx === 0.U)
 
       // 1-hot 解码，将 place 分发到目标 Unit
       for (u <- 0 until numUnits) {
         val isTarget = tPos === u.U || iPos === u.U
         when (isTarget) {
           units(u).in.place.valid := true.B
-          units(u).in.place.bits := req
+          units(u).in.place.bits := reqWire
         }
       }
     }

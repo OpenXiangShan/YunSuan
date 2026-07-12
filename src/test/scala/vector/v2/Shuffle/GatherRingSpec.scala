@@ -92,7 +92,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
   // KNOWN ISSUE: simplified willFlow causes premature flow from empty units
   // Need proper two-phase willFlow before LMUL>1 tests can pass
   describe("LMUL=2") {
-    it("vrgather identity all-in-seg0 [KNOWN FAIL]") { simulate(new GatherRing(vlen, dlen, xlen)) { dut =>
+    it("vrgather identity all-in-seg0") { simulate(new GatherRing(vlen, dlen, xlen)) { dut =>
       initDut(dut, blkSize = 2)
       val s0 = (0 until 16).map(i => 0x10 + i)
       val p = dut.pipeIn(0)
@@ -103,12 +103,14 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
       (0 until 16).foreach(i=>req.index(i).poke(i)); (0 until 16).foreach(i=>req.indexValid(i).poke(true))
       (0 until 16).foreach(i=>req.prefillData(i).poke(0))
       (0 until 16).foreach(i=>req.fillZeros(i).poke(false)); (0 until 16).foreach(i=>req.fillScala(i).poke(false))
-      dut.clock.step()
-      // Flow from empty U1 causes hasTable drop → writeback blocked
+      dut.clock.step()  // Place (cycle 1)
+      // Flow cycles: willFlow reg has 1-cycle delay, writeback on cycle 3
       dut.pipeIn(0).valid.poke(false)
-      dut.clock.step()
-      // TODO: fix willFlow two-phase logic, then expect writeback
-      // dut.writeback(0).valid.expect(true)
+      dut.clock.step()  // cycle 2: willFlow reg updates
+      dut.clock.step()  // cycle 3: flow happens, counter→0, writeback
+      val exp = s0.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
+      dut.writeback(0).valid.expect(true)
+      dut.writeback(0).bits.dest.expect(exp)
     } }
   }
 }
