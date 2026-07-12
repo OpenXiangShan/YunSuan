@@ -146,7 +146,7 @@ class GatherRing(
     (0 until numUnits).map(j => j.U < blockSizeCfg && hasIndexVec(j))
   ).asUInt.orR
 
-  private val fillingWillFlow = anyHasIndexInBlock && (firstTablePos < lastValidIdxPos)
+  private val fillingWillFlow = anyHasIndexInBlock && (firstTablePos =/= lastValidIdxPos)
 
   // ── 满配阶段 will_flow ─────────────────────────────
   // 任一 table：valid && 未到环尾 && (已过入口 || 当前在入口)
@@ -189,14 +189,20 @@ class GatherRing(
 
       // 标记首个 table（placeIdx==0 的 UOP 为块内第一个 table）
       val reqWire = WireInit(req)
-      reqWire.isFirstTable := (pIdx === 0.U)
+      reqWire.isFirstTable := false.B  // default false，仅 table 目标置 true
 
-      // 1-hot 解码，将 place 分发到目标 Unit
+      // 1-hot 解码，分离 table 和 index 目标
       for (u <- 0 until numUnits) {
-        val isTarget = tPos === u.U || iPos === u.U
-        when (isTarget) {
+        val isTableTgt = tPos === u.U
+        val isIndexTgt = iPos === u.U
+        when (isTableTgt || isIndexTgt) {
           units(u).in.place.valid := true.B
           units(u).in.place.bits := reqWire
+          units(u).in.place.bits.isTableTarget := isTableTgt
+          units(u).in.place.bits.isIndexTarget := isIndexTgt
+          when (isTableTgt && pIdx === 0.U) {
+            units(u).in.place.bits.isFirstTable := true.B
+          }
         }
       }
     }

@@ -85,23 +85,28 @@ class GatherRingUnit(
     hasTable := true.B
   }.elsewhen (doFlow && !in.flowIn.valid) {
     hasTable := false.B
-  }.elsewhen (!doFlow && doPlace) {
+  }.elsewhen (doPlace && in.place.bits.isTableTarget) {
     hasTable := true.B
   }.elsewhen (!doFlow && !doPlace) {
-    // hold: 保持不变
+    // hold
   }
 
   // ── hasIndex 状态机 ─────────────────────────────────
   when (flush) {
     hasIndex := false.B
-  }.elsewhen (doPlace) {
+  }.elsewhen (doPlace && in.place.bits.isIndexTarget) {
     hasIndex := true.B
   }.otherwise {
     // hold
   }
 
   // ── Table 寄存器更新 ────────────────────────────────
-  when (doPlace || (doFlow && in.flowIn.valid)) {
+  when (doFlow && in.flowIn.valid) {
+    tableReg   := tableInData
+    tableValid := tableInValid
+    tableIdx   := tableInIdx
+    tableTag   := tableInTag
+  }.elsewhen (doPlace && in.place.bits.isTableTarget) {
     tableReg   := tableInData
     tableValid := tableInValid
     tableIdx   := tableInIdx

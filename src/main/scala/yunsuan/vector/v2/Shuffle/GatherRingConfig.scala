@@ -41,7 +41,9 @@ class PlaceRequest(val numElem: Int, val indexWidth: Int, val numUnits: Int, val
   val fillZeros  = Vec(numElem, Bool())          // 越界填 0
   val fillScala  = Vec(numElem, Bool())          // slide1 边界填 rs1
   val prefillData = Vec(numElem, UInt(indexWidth.W)) // mask/tail 打底数据
-  val isFirstTable = Bool()                      // 此 UOP 的 table 是否为块内首个（填充阶段追踪用）
+  val isFirstTable = Bool()                      // 此 UOP 的 table 是否为块内首个
+  val isTableTarget = Bool()                     // 此 Unit 是否为 table 放置目标
+  val isIndexTarget = Bool()                     // 此 Unit 是否为 index 放置目标（填充阶段追踪用）
 }
 
 // 每 pipe 的输入（已过 IndexGen + Mask 预处理）

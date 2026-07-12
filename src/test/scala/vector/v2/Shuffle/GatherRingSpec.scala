@@ -104,10 +104,10 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
       (0 until 16).foreach(i=>req.prefillData(i).poke(0))
       (0 until 16).foreach(i=>req.fillZeros(i).poke(false)); (0 until 16).foreach(i=>req.fillScala(i).poke(false))
       dut.clock.step()  // Place (cycle 1)
-      // Flow cycles: willFlow reg has 1-cycle delay, writeback on cycle 3
+      // Flow cycles: table@U1 flows to U0, counter→0 on cycle 3
       dut.pipeIn(0).valid.poke(false)
-      dut.clock.step()  // cycle 2: willFlow reg updates
-      dut.clock.step()  // cycle 3: flow happens, counter→0, writeback
+      dut.clock.step()  // cycle 2: willFlow triggers, table moves U1→U0
+      dut.clock.step()  // cycle 3: counter decrements, writeback
       val exp = s0.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
       dut.writeback(0).valid.expect(true)
       dut.writeback(0).bits.dest.expect(exp)
@@ -152,7 +152,8 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
       (0 until 16).foreach(i=>req.prefillData(i).poke(0))
       (0 until 16).foreach(i=>req.fillZeros(i).poke(false)); (0 until 16).foreach(i=>req.fillScala(i).poke(false))
       dut.clock.step()  // Place
-      for (c <- 1 to 6) { dut.pipeIn(0).valid.poke(false); dut.clock.step() }  // willFlow delay + 4 flow cycles
+      // table@U3, index@U0; need flow wrap + counter cycles
+      for (c <- 1 to 8) { dut.pipeIn(0).valid.poke(false); dut.clock.step() }
       val exp = t.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
       dut.writeback(0).valid.expect(true)
       dut.writeback(0).bits.dest.expect(exp)
