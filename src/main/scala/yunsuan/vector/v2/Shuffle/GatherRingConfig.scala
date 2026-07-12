@@ -30,24 +30,27 @@ class UnitStatus extends Bundle {
   val hasIndex = Bool()
 }
 
-// 放置请求（从 Issue Queue 来，已过 VOQ 分配 + Wakeup 唤醒）
-// 使用 ValidIO[PlaceRequest] 提供 valid 信号，Bundle 内不包含 valid
-class PlaceRequest(val numElem: Int, val indexWidth: Int, val numUnits: Int, val tableIdxWidth: Int) extends Bundle {
+// Table 放置请求（仅 table 相关字段，发往 tPos Unit）
+class PlaceTableRequest(val numElem: Int, val numUnits: Int, val tableIdxWidth: Int) extends Bundle {
   val blockBase  = UInt(log2Ceil(numUnits).W)   // 块起始位置
   val tableIdx   = UInt(tableIdxWidth.W)         // 此 UOP 携带的 vs2 segment 编号
   val table      = Vec(numElem, UInt(8.W))       // table 数据
+  val isFirstTable = Bool()                      // 此 UOP 的 table 是否为块内首个
+}
+
+// Index 放置请求（index / fill / prefillData，发往 iPos Unit）
+class PlaceIndexRequest(val numElem: Int, val indexWidth: Int, val numUnits: Int) extends Bundle {
+  val blockBase  = UInt(log2Ceil(numUnits).W)   // 块起始位置
   val index      = Vec(numElem, UInt(indexWidth.W))  // 预计算的 index bundle
   val indexValid = Vec(numElem, Bool())          // 逐元素是否需查找
   val fillZeros  = Vec(numElem, Bool())          // 越界填 0
   val fillScala  = Vec(numElem, Bool())          // slide1 边界填 rs1
   val prefillData = Vec(numElem, UInt(indexWidth.W)) // mask/tail 打底数据
-  val isFirstTable = Bool()                      // 此 UOP 的 table 是否为块内首个
-  val isTableTarget = Bool()                     // 此 Unit 是否为 table 放置目标
-  val isIndexTarget = Bool()                     // 此 Unit 是否为 index 放置目标（填充阶段追踪用）
 }
 
 // 每 pipe 的输入（已过 IndexGen + Mask 预处理）
 class GatherRingPipeInput(val numElem: Int, val indexWidth: Int, val numUnits: Int, val tableIdxWidth: Int) extends Bundle {
-  val placeReq = new PlaceRequest(numElem, indexWidth, numUnits, tableIdxWidth)
-  val placeIdx = UInt(log2Ceil(numUnits).W)  // 外部预计算的放置序号（同 robIdx 组内 pipe 顺序）
+  val placeTable = new PlaceTableRequest(numElem, numUnits, tableIdxWidth)
+  val placeIndex = new PlaceIndexRequest(numElem, indexWidth, numUnits)
+  val placeIdx   = UInt(log2Ceil(numUnits).W)  // 外部预计算的放置序号
 }

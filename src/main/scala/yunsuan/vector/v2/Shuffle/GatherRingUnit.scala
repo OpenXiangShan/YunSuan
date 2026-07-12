@@ -24,8 +24,9 @@ class GatherRingUnit(
     val blockConfig = Input(new BlockConfig(MaxTableNum))
 
     // Table 输入 MUX（4 选 1，AND-OR 逻辑）
-    val place      = Flipped(ValidIO(new PlaceRequest(NumElem, IndexWidth, MaxTableNum, TableIdxWidth)))
-    val flowIn     = Input(new RingTable(NumElem, TableIdxWidth))  // 环形流入（前驱或回环，由顶层 MUX 决定）
+    val placeTable = Flipped(ValidIO(new PlaceTableRequest(NumElem, MaxTableNum, TableIdxWidth)))
+    val placeIndex = Flipped(ValidIO(new PlaceIndexRequest(NumElem, IndexWidth, MaxTableNum)))
+    val flowIn     = Input(new RingTable(NumElem, TableIdxWidth))  // 环形流入
 
     // 外部控制
     val willFlow   = Input(Bool())
@@ -55,13 +56,18 @@ class GatherRingUnit(
   private val scalaTableBytes = in.scalaTable.asTypeOf(Vec(xlen / MinDataWidth, UInt(MinDataWidth.W)))
 
   // ── Table 输入 MUX ──────────────────────────────────
-  private val doPlace = in.place.valid
+  private val doPlaceTable = in.placeTable.valid
+  private val doPlaceIndex = in.placeIndex.valid
+  private val doPlace = doPlaceTable || doPlaceIndex
   private val doFlow  = in.willFlow
-  private val tableInData  = Mux(doPlace, in.place.bits.table, Mux(doFlow, in.flowIn.data, 0.U.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))))
-  private val tableInValid = Mux(doPlace, true.B, Mux(doFlow, in.flowIn.valid, false.B))
-  private val tableInIdx   = Mux(doPlace, in.place.bits.tableIdx, Mux(doFlow, in.flowIn.idx, 0.U))
+  private val tableInData  = Mux(doPlaceTable, in.placeTable.bits.table,
+                             Mux(doFlow, in.flowIn.data, 0.U.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))))
+  private val tableInValid = Mux(doPlaceTable, true.B,
+                             Mux(doFlow, in.flowIn.valid, false.B))
+  private val tableInIdx   = Mux(doPlaceTable, in.placeTable.bits.tableIdx,
+                             Mux(doFlow, in.flowIn.idx, 0.U))
   private val tableInTag   = Wire(new TableTag)
-  tableInTag := Mux(doPlace, 0.U.asTypeOf(new TableTag), in.flowIn.tag)
+  tableInTag := Mux(doPlaceTable, 0.U.asTypeOf(new TableTag), in.flowIn.tag)
 
   // ── 寄存器 ──────────────────────────────────────────
   private val tableReg    = Reg(Vec(NumElem, UInt(MinDataWidth.W)))
@@ -81,32 +87,32 @@ class GatherRingUnit(
   // ── hasTable 状态机 ─────────────────────────────────
   when (flush) {
     hasTable := false.B
+  }.elsewhen (doPlaceTable) {
+    hasTable := true.B
   }.elsewhen (doFlow && in.flowIn.valid) {
     hasTable := true.B
   }.elsewhen (doFlow && !in.flowIn.valid) {
     hasTable := false.B
-  }.elsewhen (doPlace && in.place.bits.isTableTarget) {
-    hasTable := true.B
-  }.elsewhen (!doFlow && !doPlace) {
+  }.elsewhen (!doFlow && !doPlaceTable) {
     // hold
   }
 
   // ── hasIndex 状态机 ─────────────────────────────────
   when (flush) {
     hasIndex := false.B
-  }.elsewhen (doPlace && in.place.bits.isIndexTarget) {
+  }.elsewhen (doPlaceIndex) {
     hasIndex := true.B
   }.otherwise {
     // hold
   }
 
   // ── Table 寄存器更新 ────────────────────────────────
-  when (doFlow && in.flowIn.valid) {
+  when (doPlaceTable) {
     tableReg   := tableInData
     tableValid := tableInValid
     tableIdx   := tableInIdx
     tableTag   := tableInTag
-  }.elsewhen (doPlace && in.place.bits.isTableTarget) {
+  }.elsewhen (doFlow && in.flowIn.valid) {
     tableReg   := tableInData
     tableValid := tableInValid
     tableIdx   := tableInIdx
@@ -116,9 +122,9 @@ class GatherRingUnit(
   }
 
   // ── Tag 更新：passedEntry / isFirst ─────────────────
-  when (doPlace) {
+  when (doPlaceTable) {
     tableTag.passedEntry := false.B
-    tableTag.isFirst     := in.place.bits.isFirstTable
+    tableTag.isFirst     := in.placeTable.bits.isFirstTable
   }.elsewhen (doFlow && isEntry && in.flowIn.valid) {
     tableTag.passedEntry := true.B
   }
@@ -126,7 +132,7 @@ class GatherRingUnit(
   // ── Counter ─────────────────────────────────────────
   when (flush) {
     counter := 0.U
-  }.elsewhen (doPlace) {
+  }.elsewhen (doPlaceIndex) {
     counter := blockConfig.blockSize - 1.U
   }.elsewhen (doFlow && hasTable) {
     counter := counter - 1.U
@@ -137,28 +143,25 @@ class GatherRingUnit(
 
   gatherMod.in.tableIdx := tableInIdx
   gatherMod.in.table    := tableInData
-  gatherMod.in.lmul     := 0.U.asTypeOf(new GatherLmulBundle)  // LMUL 不影响查找，indexValid 已处理越界
+  gatherMod.in.lmul     := 0.U.asTypeOf(new GatherLmulBundle)
 
   for (i <- 0 until NumElem) {
-    // 查询条件：有 index 且该元素尚未完成
-    val shouldQuery = (hasIndex || doPlace) && (doPlace || !indexDone(i))
-    gatherMod.in.indexValid(i) := shouldQuery && Mux(doPlace, in.place.bits.indexValid(i), true.B)
-    gatherMod.in.index(i) := Mux(doPlace, in.place.bits.index(i), indexView(i))
+    val shouldQuery = (hasIndex || doPlaceIndex) && (doPlaceIndex || !indexDone(i))
+    gatherMod.in.indexValid(i) := shouldQuery && Mux(doPlaceIndex, in.placeIndex.bits.indexValid(i), true.B)
+    gatherMod.in.index(i) := Mux(doPlaceIndex, in.placeIndex.bits.index(i), indexView(i))
   }
 
   // ── Index/Result 更新 ───────────────────────────────
-  // Inactive/tail 元素在 Place 时就确定最终值
-  // Active 元素：Place 时加载 index，后续 flow 命中后覆写为 result
   private val fillRes   = Wire(Vec(NumElem, Bool()))
   private val fillIdx   = Wire(Vec(NumElem, Bool()))
   private val fillZeros = Wire(Vec(NumElem, Bool()))
   private val fillScala = Wire(Vec(NumElem, Bool()))
 
   for (i <- 0 until NumElem) {
-    fillRes(i)   := (hasIndex || doPlace) && gatherMod.out.resultValid(i)
-    fillIdx(i)   := doPlace && hasIndex && gatherMod.out.notfound(i)  // Place 时 notfound → 存 index
-    fillZeros(i) := doPlace && in.place.bits.fillZeros(i)
-    fillScala(i) := doPlace && in.place.bits.fillScala(i)
+    fillRes(i)   := (hasIndex || doPlaceIndex) && gatherMod.out.resultValid(i)
+    fillIdx(i)   := doPlaceIndex && hasIndex && gatherMod.out.notfound(i)
+    fillZeros(i) := doPlaceIndex && in.placeIndex.bits.fillZeros(i)
+    fillScala(i) := doPlaceIndex && in.placeIndex.bits.fillScala(i)
 
     when (flush) {
       indexOrRes(i) := 0.U
@@ -166,19 +169,16 @@ class GatherRingUnit(
     }.elsewhen (fillRes(i)) {
       indexOrRes(i) := gatherMod.out.result(i)
       indexDone(i)  := true.B
-    }.elsewhen (doPlace) {
-      // Place 时：inactive/tail 取 oldTable，active 元素按优先级使用各填充源
+    }.elsewhen (doPlaceIndex) {
       indexOrRes(i) := Mux1H(Seq(
         fillScala(i) -> scalaTableBytes(i % (xlen / MinDataWidth)),
         fillZeros(i) -> 0.U,
-        !in.place.bits.indexValid(i) -> in.oldTable(i),
-        fillIdx(i)   -> in.place.bits.index(i),
-        // 默认：prefillData（active 元素 notfound 时的暂存 index）
-        true.B       -> in.place.bits.prefillData(i),
+        !in.placeIndex.bits.indexValid(i) -> in.oldTable(i),
+        fillIdx(i)   -> in.placeIndex.bits.index(i),
+        true.B       -> in.placeIndex.bits.prefillData(i),
       ))
       indexDone(i) := false.B
     }.elsewhen (counter === 0.U && doFlow) {
-      // 完成：indexDone 标记，不再更新
       indexDone(i) := true.B
     }
   }

@@ -14,17 +14,15 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
   def driveVrgatherIdentity(dut: GatherRing, pipe: Int, blkBase: Int, blkSize: Int,
                              table: Seq[Int], index: Seq[Int], indexValid: Seq[Boolean],
                              prefill: Seq[Int] = Seq.fill(16)(0)): Unit = {
-    val p = dut.pipeIn(pipe)
-    p.valid.poke(true)
-    val req = p.bits.placeReq
-    req.blockBase.poke(blkBase)
-    req.tableIdx.poke(0)
-    table.zipWithIndex.foreach { case (v, i) => req.table(i).poke(v) }
-    index.zipWithIndex.foreach { case (v, i) => req.index(i).poke(v) }
-    indexValid.zipWithIndex.foreach { case (v, i) => req.indexValid(i).poke(v) }
-    prefill.zipWithIndex.foreach { case (v, i) => req.prefillData(i).poke(v) }
-    (0 until 16).foreach { i => req.fillZeros(i).poke(false); req.fillScala(i).poke(false) }
-    p.bits.placeIdx.poke(0)
+    val p = dut.pipeIn(pipe); p.valid.poke(true); p.bits.placeIdx.poke(0)
+    val tb = p.bits.placeTable; val ix = p.bits.placeIndex
+    tb.blockBase.poke(blkBase); tb.tableIdx.poke(0); ix.blockBase.poke(blkBase); tb.tableIdx.poke(0)
+    table.zipWithIndex.foreach { case (v, i) => tb.table(i).poke(v) }
+    ix.blockBase.poke(blkBase)
+    index.zipWithIndex.foreach { case (v, i) => ix.index(i).poke(v) }
+    indexValid.zipWithIndex.foreach { case (v, i) => ix.indexValid(i).poke(v) }
+    prefill.zipWithIndex.foreach { case (v, i) => ix.prefillData(i).poke(v) }
+    (0 until 16).foreach { i => ix.fillZeros(i).poke(false); ix.fillScala(i).poke(false) }
   }
 
   def driveNoOp(dut: GatherRing, pipe: Int): Unit = {
@@ -72,14 +70,14 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
       val iv  = (0 until 16).map(_ >= offset)
       val p = dut.pipeIn(0)
       p.valid.poke(true); p.bits.placeIdx.poke(0)
-      val req = p.bits.placeReq
-      req.blockBase.poke(0); req.tableIdx.poke(0)
-      t.zipWithIndex.foreach{case(v,i)=>req.table(i).poke(v)}
-      idx.zipWithIndex.foreach{case(v,i)=>req.index(i).poke(v)}
-      iv.zipWithIndex.foreach{case(v,i)=>req.indexValid(i).poke(v)}
-      (0 until 16).foreach(i=>req.prefillData(i).poke(0))
-      fz.zipWithIndex.foreach{case(v,i)=>req.fillZeros(i).poke(v)}
-      (0 until 16).foreach(i=>req.fillScala(i).poke(false))
+      val tb = p.bits.placeTable; val ix = p.bits.placeIndex
+      tb.blockBase.poke(0); tb.tableIdx.poke(0); ix.blockBase.poke(0)
+      t.zipWithIndex.foreach{case(v,i)=>tb.table(i).poke(v)}
+      idx.zipWithIndex.foreach{case(v,i)=>ix.index(i).poke(v)}
+      iv.zipWithIndex.foreach{case(v,i)=>ix.indexValid(i).poke(v)}
+      (0 until 16).foreach(i=>ix.prefillData(i).poke(0))
+      fz.zipWithIndex.foreach{case(v,i)=>ix.fillZeros(i).poke(v)}
+      (0 until 16).foreach(i=>ix.fillScala(i).poke(false))
       dut.clock.step()
       val bytes = (0 until 16).map(i=>if(i<offset)0 else 0x10+(i-offset))
       val exp = bytes.foldRight(BigInt(0))((b,a)=>(a<<8)|BigInt(b))
@@ -97,12 +95,12 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
       val s0 = (0 until 16).map(i => 0x10 + i)
       val p = dut.pipeIn(0)
       p.valid.poke(true); p.bits.placeIdx.poke(0)
-      val req = p.bits.placeReq
-      req.blockBase.poke(0); req.tableIdx.poke(0)
-      s0.zipWithIndex.foreach{case(v,i)=>req.table(i).poke(v)}
-      (0 until 16).foreach(i=>req.index(i).poke(i)); (0 until 16).foreach(i=>req.indexValid(i).poke(true))
-      (0 until 16).foreach(i=>req.prefillData(i).poke(0))
-      (0 until 16).foreach(i=>req.fillZeros(i).poke(false)); (0 until 16).foreach(i=>req.fillScala(i).poke(false))
+      val tb = p.bits.placeTable; val ix = p.bits.placeIndex
+      tb.blockBase.poke(0); tb.tableIdx.poke(0); ix.blockBase.poke(0)
+      s0.zipWithIndex.foreach{case(v,i)=>tb.table(i).poke(v)}
+      (0 until 16).foreach(i=>ix.index(i).poke(i)); (0 until 16).foreach(i=>ix.indexValid(i).poke(true))
+      (0 until 16).foreach(i=>ix.prefillData(i).poke(0))
+      (0 until 16).foreach(i=>ix.fillZeros(i).poke(false)); (0 until 16).foreach(i=>ix.fillScala(i).poke(false))
       dut.clock.step()  // Place
       dut.pipeIn(0).valid.poke(false)
       dut.clock.step()  // willFlow delay
@@ -123,14 +121,14 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
       for (pipe <- 0 until 2) {
         val p = dut.pipeIn(pipe)
         p.valid.poke(true); p.bits.placeIdx.poke(pipe)
-        val req = p.bits.placeReq
-        req.blockBase.poke(0); req.tableIdx.poke(pipe)
+        val tb = p.bits.placeTable; val ix = p.bits.placeIndex
+        tb.blockBase.poke(0); tb.tableIdx.poke(pipe); ix.blockBase.poke(0)
         val tbl = if (pipe == 0) s0 else s1
-        tbl.zipWithIndex.foreach{case(v,i)=>req.table(i).poke(v)}
-        idx.zipWithIndex.foreach{case(v,i)=>req.index(i).poke(v)}
-        (0 until 16).foreach(i=>req.indexValid(i).poke(true))
-        pf.zipWithIndex.foreach{case(v,i)=>req.prefillData(i).poke(v)}
-        (0 until 16).foreach(i=>req.fillZeros(i).poke(false)); (0 until 16).foreach(i=>req.fillScala(i).poke(false))
+        tbl.zipWithIndex.foreach{case(v,i)=>tb.table(i).poke(v)}
+        idx.zipWithIndex.foreach{case(v,i)=>ix.index(i).poke(v)}
+        (0 until 16).foreach(i=>ix.indexValid(i).poke(true))
+        pf.zipWithIndex.foreach{case(v,i)=>ix.prefillData(i).poke(v)}
+        (0 until 16).foreach(i=>ix.fillZeros(i).poke(false)); (0 until 16).foreach(i=>ix.fillScala(i).poke(false))
       }
       dut.clock.step()  // Place both segments
       // KNOWN FAIL: same-cycle pipe collision — debug via unitStatus peek
@@ -145,12 +143,12 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
       val t = (0 until 16).map(i => 0x30 + i)
       val p = dut.pipeIn(0)
       p.valid.poke(true); p.bits.placeIdx.poke(0)
-      val req = p.bits.placeReq
-      req.blockBase.poke(0); req.tableIdx.poke(0)
-      t.zipWithIndex.foreach{case(v,i)=>req.table(i).poke(v)}
-      (0 until 16).foreach(i=>req.index(i).poke(i)); (0 until 16).foreach(i=>req.indexValid(i).poke(true))
-      (0 until 16).foreach(i=>req.prefillData(i).poke(0))
-      (0 until 16).foreach(i=>req.fillZeros(i).poke(false)); (0 until 16).foreach(i=>req.fillScala(i).poke(false))
+      val tb = p.bits.placeTable; val ix = p.bits.placeIndex
+      tb.blockBase.poke(0); tb.tableIdx.poke(0); ix.blockBase.poke(0)
+      t.zipWithIndex.foreach{case(v,i)=>tb.table(i).poke(v)}
+      (0 until 16).foreach(i=>ix.index(i).poke(i)); (0 until 16).foreach(i=>ix.indexValid(i).poke(true))
+      (0 until 16).foreach(i=>ix.prefillData(i).poke(0))
+      (0 until 16).foreach(i=>ix.fillZeros(i).poke(false)); (0 until 16).foreach(i=>ix.fillScala(i).poke(false))
       dut.clock.step()  // Place
       // KNOWN FAIL: counter timing with table/index separation for LMUL>2
     } }
@@ -163,12 +161,12 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
       val s0 = (0 until 16).map(i => 0x10 + i)
       val p = dut.pipeIn(0)
       p.valid.poke(true); p.bits.placeIdx.poke(0)
-      val req = p.bits.placeReq
-      req.blockBase.poke(0); req.tableIdx.poke(0)
-      s0.zipWithIndex.foreach{case(v,i)=>req.table(i).poke(v)}
-      (0 until 16).foreach(i=>req.index(i).poke(i)); (0 until 16).foreach(i=>req.indexValid(i).poke(true))
-      (0 until 16).foreach(i=>req.prefillData(i).poke(0))
-      (0 until 16).foreach(i=>req.fillZeros(i).poke(false)); (0 until 16).foreach(i=>req.fillScala(i).poke(false))
+      val tb = p.bits.placeTable; val ix = p.bits.placeIndex
+      tb.blockBase.poke(0); tb.tableIdx.poke(0); ix.blockBase.poke(0)
+      s0.zipWithIndex.foreach{case(v,i)=>tb.table(i).poke(v)}
+      (0 until 16).foreach(i=>ix.index(i).poke(i)); (0 until 16).foreach(i=>ix.indexValid(i).poke(true))
+      (0 until 16).foreach(i=>ix.prefillData(i).poke(0))
+      (0 until 16).foreach(i=>ix.fillZeros(i).poke(false)); (0 until 16).foreach(i=>ix.fillScala(i).poke(false))
       dut.clock.step()  // Place: table@U1, index@U0
       dut.unitStatus(1).hasTable.expect(true)
       dut.unitStatus(0).hasIndex.expect(true)
@@ -184,14 +182,14 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
       val idx = (0 until 16).map(i => if (i%2==0) i/2 else 16 + i/2)
       for (pipe <- 0 until 2) {
         val p = dut.pipeIn(pipe); p.valid.poke(true); p.bits.placeIdx.poke(pipe)
-        val req = p.bits.placeReq; req.blockBase.poke(0); req.tableIdx.poke(pipe)
+        val tb = p.bits.placeTable; val ix = p.bits.placeIndex; tb.blockBase.poke(0); tb.tableIdx.poke(pipe); ix.blockBase.poke(0)
         val tbl = if (pipe == 0) s0 else s1
-        tbl.zipWithIndex.foreach{case(v,i)=>req.table(i).poke(v)}
-        idx.zipWithIndex.foreach{case(v,i)=>req.index(i).poke(v)}
-        (0 until 16).foreach(i=>req.indexValid(i).poke(true))
-        (0 until 16).foreach(i=>req.prefillData(i).poke(idx(i)))
-        (0 until 16).foreach(i=>req.fillZeros(i).poke(false))
-        (0 until 16).foreach(i=>req.fillScala(i).poke(false))
+        tbl.zipWithIndex.foreach{case(v,i)=>tb.table(i).poke(v)}
+        idx.zipWithIndex.foreach{case(v,i)=>ix.index(i).poke(v)}
+        (0 until 16).foreach(i=>ix.indexValid(i).poke(true))
+        (0 until 16).foreach(i=>ix.prefillData(i).poke(idx(i)))
+        (0 until 16).foreach(i=>ix.fillZeros(i).poke(false))
+        (0 until 16).foreach(i=>ix.fillScala(i).poke(false))
       }
       dut.clock.step()
     } }

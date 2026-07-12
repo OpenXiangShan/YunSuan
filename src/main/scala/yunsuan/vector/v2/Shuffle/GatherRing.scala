@@ -170,39 +170,38 @@ class GatherRing(
   // 此处直接使用外部预计算的值
 
   // ── 放置位置计算 + 分发到 Unit ──────────────────────
-  // 先清零所有 place 信号，再聚合有效 pipe 的放置
+  // 先清零所有 place 信号
   for (u <- 0 until numUnits) {
-    units(u).in.place.valid := false.B
-    units(u).in.place.bits   := 0.U.asTypeOf(units(u).in.place.bits.cloneType)
+    units(u).in.placeTable.valid := false.B
+    units(u).in.placeTable.bits  := 0.U.asTypeOf(units(u).in.placeTable.bits.cloneType)
+    units(u).in.placeIndex.valid := false.B
+    units(u).in.placeIndex.bits  := 0.U.asTypeOf(units(u).in.placeIndex.bits.cloneType)
   }
 
   for (p <- 0 until numPipes) {
     when (pipeIn(p).valid) {
-      val req  = pipeIn(p).bits.placeReq
-      val pIdx = pipeIn(p).bits.placeIdx
-      val blkBase = req.blockBase
+      val tblReq = pipeIn(p).bits.placeTable
+      val idxReq = pipeIn(p).bits.placeIndex
+      val pIdx   = pipeIn(p).bits.placeIdx
+      val blkBase = tblReq.blockBase
       val blkSize = blockSizeCfg
       val flow = Mux(willFlow, 1.U, 0.U)
 
       val tPos = (E_table_reg + 1.U - pIdx + flow) % blkSize + blkBase
       val iPos = (E_index_reg + pIdx) % blkSize + blkBase
 
-      // 标记首个 table（placeIdx==0 的 UOP 为块内第一个 table）
-      val reqWire = WireInit(req)
-      reqWire.isFirstTable := false.B  // default false，仅 table 目标置 true
-
-      // 1-hot 解码，分离 table 和 index 目标
+      // 分发：table 仅发往 tPos，index 仅发往 iPos
       for (u <- 0 until numUnits) {
-        val isTableTgt = tPos === u.U
-        val isIndexTgt = iPos === u.U
-        when (isTableTgt || isIndexTgt) {
-          units(u).in.place.valid := true.B
-          units(u).in.place.bits := reqWire
-          units(u).in.place.bits.isTableTarget := isTableTgt
-          units(u).in.place.bits.isIndexTarget := isIndexTgt
-          when (isTableTgt && pIdx === 0.U) {
-            units(u).in.place.bits.isFirstTable := true.B
+        when (tPos === u.U) {
+          units(u).in.placeTable.valid := true.B
+          units(u).in.placeTable.bits  := tblReq
+          when (pIdx === 0.U) {
+            units(u).in.placeTable.bits.isFirstTable := true.B
           }
+        }
+        when (iPos === u.U) {
+          units(u).in.placeIndex.valid := true.B
+          units(u).in.placeIndex.bits  := idxReq
         }
       }
     }

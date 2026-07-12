@@ -20,7 +20,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     dut.in.blockConfig.blockBase.poke(0); dut.in.blockConfig.blockSize.poke(8)
     dut.in.willFlow.poke(false)
     dut.in.flowIn.valid.poke(false); dut.in.flowIn.idx.poke(0); dut.in.flowIn.data.foreach(_.poke(0)); dut.in.flowIn.tag.isFirst.poke(false); dut.in.flowIn.tag.passedEntry.poke(false)
-    dut.in.place.valid.poke(false); dut.out.writeback.ready.poke(false)
+    dut.in.placeTable.valid.poke(false); dut.in.placeIndex.valid.poke(false); dut.out.writeback.ready.poke(false)
     dut.flush.poke(true); dut.clock.step(); dut.flush.poke(false); dut.clock.step()
   }
 
@@ -32,12 +32,12 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   def pDrop: GatherRingUnit => Unit = { dut => dut.in.willFlow.poke(true); dut.in.flowIn.valid.poke(false) }
   def pPlace(blkSize: Int, tblIdx: Int, tbl: Seq[Int], idx: Seq[Int], iValid: Seq[Boolean],
              prefill: Seq[Int] = Seq.fill(16)(0), fScala: Seq[Boolean] = Seq.fill(16)(false), fZeros: Seq[Boolean] = Seq.fill(16)(false)): GatherRingUnit => Unit = { dut =>
-    dut.in.blockConfig.blockSize.poke(blkSize); dut.in.place.valid.poke(true); dut.in.place.bits.blockBase.poke(0); dut.in.place.bits.tableIdx.poke(tblIdx)
-    tbl.zipWithIndex.foreach { case (v, i) => dut.in.place.bits.table(i).poke(v) }; idx.zipWithIndex.foreach { case (v, i) => dut.in.place.bits.index(i).poke(v) }
-    iValid.zipWithIndex.foreach { case (v, i) => dut.in.place.bits.indexValid(i).poke(v) }; prefill.zipWithIndex.foreach { case (v, i) => dut.in.place.bits.prefillData(i).poke(v) }
-    fScala.zipWithIndex.foreach { case (v, i) => dut.in.place.bits.fillScala(i).poke(v) }; fZeros.zipWithIndex.foreach { case (v, i) => dut.in.place.bits.fillZeros(i).poke(v) }
+    dut.in.blockConfig.blockSize.poke(blkSize); dut.in.placeTable.valid.poke(true); dut.in.placeIndex.valid.poke(true); dut.in.placeTable.bits.blockBase.poke(0); dut.in.placeTable.bits.tableIdx.poke(tblIdx)
+    tbl.zipWithIndex.foreach { case (v, i) => dut.in.placeTable.bits.table(i).poke(v) }; idx.zipWithIndex.foreach { case (v, i) => dut.in.placeIndex.bits.index(i).poke(v) }
+    iValid.zipWithIndex.foreach { case (v, i) => dut.in.placeIndex.bits.indexValid(i).poke(v) }; prefill.zipWithIndex.foreach { case (v, i) => dut.in.placeIndex.bits.prefillData(i).poke(v) }
+    fScala.zipWithIndex.foreach { case (v, i) => dut.in.placeIndex.bits.fillScala(i).poke(v) }; fZeros.zipWithIndex.foreach { case (v, i) => dut.in.placeIndex.bits.fillZeros(i).poke(v) }
   }
-  def pNoPlace: GatherRingUnit => Unit = _.in.place.valid.poke(false)
+  def pNoPlace: GatherRingUnit => Unit = { dut => dut.in.placeTable.valid.poke(false); dut.in.placeIndex.valid.poke(false) }
   def pNoFlow:  GatherRingUnit => Unit = _.in.willFlow.poke(false)
   def pFlow: GatherRingUnit => Unit = { dut => dut.in.willFlow.poke(true)
     dut.in.flowIn.valid.poke(true); dut.in.flowIn.idx.poke(0); dut.in.flowIn.data.foreach(_.poke(0)); dut.in.flowIn.tag.isFirst.poke(false); dut.in.flowIn.tag.passedEntry.poke(false)
@@ -116,13 +116,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       initUnit(dut)
       ot.zipWithIndex.foreach { case (v, i) => dut.in.oldTable(i).poke(v) }
       dut.in.blockConfig.blockSize.poke(1)
-      dut.in.place.valid.poke(true); t.zipWithIndex.foreach { case (v, i) => dut.in.place.bits.table(i).poke(v) }
-      idx.zipWithIndex.foreach { case (v, i) => dut.in.place.bits.index(i).poke(v) }
-      iv.zipWithIndex.foreach { case (v, i) => dut.in.place.bits.indexValid(i).poke(v) }
-      (0 until 16).foreach(i => dut.in.place.bits.prefillData(i).poke(0))
-      dut.in.place.bits.tableIdx.poke(0); dut.in.place.bits.blockBase.poke(0)
-      (0 until 16).foreach(i => dut.in.place.bits.fillScala(i).poke(false))
-      (0 until 16).foreach(i => dut.in.place.bits.fillZeros(i).poke(false))
+      dut.in.placeTable.valid.poke(true); dut.in.placeIndex.valid.poke(true); t.zipWithIndex.foreach { case (v, i) => dut.in.placeTable.bits.table(i).poke(v) }
+      idx.zipWithIndex.foreach { case (v, i) => dut.in.placeIndex.bits.index(i).poke(v) }
+      iv.zipWithIndex.foreach { case (v, i) => dut.in.placeIndex.bits.indexValid(i).poke(v) }
+      (0 until 16).foreach(i => dut.in.placeIndex.bits.prefillData(i).poke(0))
+      dut.in.placeTable.bits.tableIdx.poke(0); dut.in.placeTable.bits.blockBase.poke(0)
+      (0 until 16).foreach(i => dut.in.placeIndex.bits.fillScala(i).poke(false))
+      (0 until 16).foreach(i => dut.in.placeIndex.bits.fillZeros(i).poke(false))
       dut.in.willFlow.poke(false); dut.in.flowIn.valid.poke(false)
       dut.clock.step()
       dut.out.writeback.bits.dest.expect(exp) } }
@@ -239,12 +239,12 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       initUnit(dut)
       val t = (0 until 16).map(i => 0x10 + i)
       dut.in.blockConfig.blockSize.poke(2)
-      dut.in.place.valid.poke(true); t.zipWithIndex.foreach{case(v,i)=>dut.in.place.bits.table(i).poke(v)}
-      (0 until 16).foreach(i=>dut.in.place.bits.index(i).poke(i)); (0 until 16).foreach(i=>dut.in.place.bits.indexValid(i).poke(true))
-      dut.in.place.bits.tableIdx.poke(0); dut.in.place.bits.blockBase.poke(0)
+      dut.in.placeTable.valid.poke(true); dut.in.placeIndex.valid.poke(true); t.zipWithIndex.foreach{case(v,i)=>dut.in.placeTable.bits.table(i).poke(v)}
+      (0 until 16).foreach(i=>dut.in.placeIndex.bits.index(i).poke(i)); (0 until 16).foreach(i=>dut.in.placeIndex.bits.indexValid(i).poke(true))
+      dut.in.placeTable.bits.tableIdx.poke(0); dut.in.placeTable.bits.blockBase.poke(0)
       dut.in.willFlow.poke(false); dut.in.flowIn.valid.poke(false)
       dut.clock.step()
-      dut.in.place.valid.poke(false); dut.in.willFlow.poke(true)
+      dut.in.placeTable.valid.poke(false); dut.in.placeIndex.valid.poke(false); dut.in.willFlow.poke(true)
       dut.in.flowIn.valid.poke(true); dut.in.flowIn.idx.poke(1)
       t.zipWithIndex.foreach{case(v,i)=>dut.in.flowIn.data(i).poke(v)}
       dut.in.flowIn.tag.isFirst.poke(false); dut.in.flowIn.tag.passedEntry.poke(true)
@@ -254,12 +254,12 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       initUnit(dut)
       val t = (0 until 16).map(i => 0x10 + i)
       dut.in.blockConfig.blockSize.poke(2)
-      dut.in.place.valid.poke(true); t.zipWithIndex.foreach{case(v,i)=>dut.in.place.bits.table(i).poke(v)}
-      (0 until 16).foreach(i=>dut.in.place.bits.index(i).poke(i)); (0 until 16).foreach(i=>dut.in.place.bits.indexValid(i).poke(true))
-      dut.in.place.bits.tableIdx.poke(0); dut.in.place.bits.blockBase.poke(0)
+      dut.in.placeTable.valid.poke(true); dut.in.placeIndex.valid.poke(true); t.zipWithIndex.foreach{case(v,i)=>dut.in.placeTable.bits.table(i).poke(v)}
+      (0 until 16).foreach(i=>dut.in.placeIndex.bits.index(i).poke(i)); (0 until 16).foreach(i=>dut.in.placeIndex.bits.indexValid(i).poke(true))
+      dut.in.placeTable.bits.tableIdx.poke(0); dut.in.placeTable.bits.blockBase.poke(0)
       dut.in.willFlow.poke(false); dut.in.flowIn.valid.poke(false)
       dut.clock.step()
-      dut.in.place.valid.poke(false); dut.in.willFlow.poke(true)
+      dut.in.placeTable.valid.poke(false); dut.in.placeIndex.valid.poke(false); dut.in.willFlow.poke(true)
       dut.in.flowIn.valid.poke(true); dut.in.flowIn.idx.poke(1)
       t.zipWithIndex.foreach{case(v,i)=>dut.in.flowIn.data(i).poke(v)}
       dut.in.flowIn.tag.isFirst.poke(true); dut.in.flowIn.tag.passedEntry.poke(false)
@@ -311,9 +311,9 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       val t = (0 until 16).map(i => 0x10 + i)
       initUnit(dut)
       dut.in.blockConfig.blockBase.poke(2); dut.in.blockConfig.blockSize.poke(4)
-      dut.in.place.valid.poke(true); t.zipWithIndex.foreach{case(v,i)=>dut.in.place.bits.table(i).poke(v)}
-      (0 until 16).foreach(i=>dut.in.place.bits.index(i).poke(i)); (0 until 16).foreach(i=>dut.in.place.bits.indexValid(i).poke(true))
-      dut.in.place.bits.tableIdx.poke(0); dut.in.place.bits.blockBase.poke(2)
+      dut.in.placeTable.valid.poke(true); dut.in.placeIndex.valid.poke(true); t.zipWithIndex.foreach{case(v,i)=>dut.in.placeTable.bits.table(i).poke(v)}
+      (0 until 16).foreach(i=>dut.in.placeIndex.bits.index(i).poke(i)); (0 until 16).foreach(i=>dut.in.placeIndex.bits.indexValid(i).poke(true))
+      dut.in.placeTable.bits.tableIdx.poke(0); dut.in.placeTable.bits.blockBase.poke(2)
       dut.clock.step()
       dut.out.status.hasTable.expect(true); dut.out.status.hasIndex.expect(true)
       dut.out.writeback.valid.expect(false) // counter=3, not done
@@ -323,12 +323,12 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       val t = (0 until 16).map(i => 0x10 + i)
       initUnit(dut)
       dut.in.blockConfig.blockBase.poke(2); dut.in.blockConfig.blockSize.poke(4)
-      dut.in.place.valid.poke(true); t.zipWithIndex.foreach{case(v,i)=>dut.in.place.bits.table(i).poke(v)}
-      (0 until 16).foreach(i=>dut.in.place.bits.index(i).poke(i)); (0 until 16).foreach(i=>dut.in.place.bits.indexValid(i).poke(true))
-      dut.in.place.bits.tableIdx.poke(0); dut.in.place.bits.blockBase.poke(2)
+      dut.in.placeTable.valid.poke(true); dut.in.placeIndex.valid.poke(true); t.zipWithIndex.foreach{case(v,i)=>dut.in.placeTable.bits.table(i).poke(v)}
+      (0 until 16).foreach(i=>dut.in.placeIndex.bits.index(i).poke(i)); (0 until 16).foreach(i=>dut.in.placeIndex.bits.indexValid(i).poke(true))
+      dut.in.placeTable.bits.tableIdx.poke(0); dut.in.placeTable.bits.blockBase.poke(2)
       dut.clock.step()
       // Flow through this non-entry unit
-      dut.in.place.valid.poke(false); dut.in.willFlow.poke(true)
+      dut.in.placeTable.valid.poke(false); dut.in.placeIndex.valid.poke(false); dut.in.willFlow.poke(true)
       dut.in.flowIn.valid.poke(true); dut.in.flowIn.idx.poke(1)
       t.zipWithIndex.foreach{case(v,i)=>dut.in.flowIn.data(i).poke(v)}
       dut.in.flowIn.tag.isFirst.poke(false); dut.in.flowIn.tag.passedEntry.poke(false)
