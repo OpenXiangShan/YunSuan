@@ -83,8 +83,6 @@ class GatherRing(
   // E_index: 顺序搜索（0, 1, 2, ..., N-1）
 
   def priorityEncodeReverse(statuses: Seq[Bool]): UInt = {
-    // 返回逆序第一个为 false 的索引（即第一个空位）
-    // 搜索顺序: 0, N-1, N-2, ..., 2, 1
     val n = statuses.size
     val searchOrder = 0 +: ((n - 1) to 1 by -1)
     PriorityMux(searchOrder.map { idx =>
@@ -93,33 +91,33 @@ class GatherRing(
   }
 
   def priorityEncodeForward(statuses: Seq[Bool]): UInt = {
-    // 返回顺序第一个为 false 的索引
     PriorityMux(statuses.zipWithIndex.map { case (s, i) =>
       (!s) -> i.U(log2Ceil(statuses.size).W)
     })
   }
 
   // ── will_flow 两阶段计算 ──────────────────────────
-  // 填充阶段：首个 table (isFirst) 未到达最后 valid index
-  // 满配阶段（环尾 hasIndex=true）：任一 table passedEntry 且未到环尾
   private val willFlow = RegInit(false.B)
 
-  // 信号向量化（避免重复 Cat）
+  // 信号向量化
   private val hasIndexVec    = VecInit(units.map(_.out.status.hasIndex))
   private val hasTableVec    = VecInit(units.map(_.out.status.hasTable))
   private val isFirstVec     = VecInit(units.map(_.out.tableOut.tag.isFirst))
   private val tableValidVec  = VecInit(units.map(_.out.tableOut.valid))
+  private val passedEntryVec = VecInit(units.map(_.out.tableOut.tag.passedEntry))
 
-  // ── E_table / E_index：按 blockSize 掩码，块外视为 full ──
+  // ── E_table / E_index 寄存器（Q25：从 hasTable/hasIndex 状态计算，寄存一拍）──
+  // 寄存器值在同周期内稳定，多 pipe 用同一 base 值 + placeIdx 偏移
   private val hasTableInBlock = VecInit((0 until numUnits).map { j =>
     Mux(j.U < blockSizeCfg, hasTableVec(j), true.B)
   })
   private val hasIndexInBlock = VecInit((0 until numUnits).map { j =>
     Mux(j.U < blockSizeCfg, hasIndexVec(j), true.B)
   })
-  private val E_table = priorityEncodeReverse(hasTableInBlock)
-  private val E_index = priorityEncodeForward(hasIndexInBlock)
-  private val passedEntryVec = VecInit(units.map(_.out.tableOut.tag.passedEntry))
+  private val E_table_reg = RegInit(0.U(log2Ceil(numUnits).W))
+  private val E_index_reg = RegInit(0.U(log2Ceil(numUnits).W))
+  E_table_reg := priorityEncodeReverse(hasTableInBlock)
+  E_index_reg := priorityEncodeForward(hasIndexInBlock)
 
   // Phase detection：环尾 Unit 的 hasIndex=true → 满配阶段
   private val isFullPhase = Mux1H(Seq(
@@ -186,8 +184,8 @@ class GatherRing(
       val blkSize = blockSizeCfg
       val flow = Mux(willFlow, 1.U, 0.U)
 
-      val tPos = (E_table + 1.U - pIdx + flow) % blkSize + blkBase
-      val iPos = (E_index + pIdx) % blkSize + blkBase
+      val tPos = (E_table_reg + 1.U - pIdx + flow) % blkSize + blkBase
+      val iPos = (E_index_reg + pIdx) % blkSize + blkBase
 
       // 标记首个 table（placeIdx==0 的 UOP 为块内第一个 table）
       val reqWire = WireInit(req)
