@@ -110,10 +110,10 @@ class GatherRingUnit(
     tableValid := false.B
   }
 
-  // ── Tag 更新：passedEntry ───────────────────────────
+  // ── Tag 更新：passedEntry / isFirst ─────────────────
   when (doPlace) {
     tableTag.passedEntry := false.B
-    tableTag.isFirst     := false.B  // 由顶层在 Place 时设置
+    tableTag.isFirst     := in.place.bits.isFirstTable
   }.elsewhen (doFlow && isEntry && in.flowIn.valid) {
     tableTag.passedEntry := true.B
   }
