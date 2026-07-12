@@ -15,16 +15,33 @@ import circt.stage._
 object GatherRingUnitCheck extends App {
 
   val vlen = 128
+
   val dlen = 128
+
   val maxTableNum = 8
 
   println("=== GatherRingUnit 功能检查 ===\n")
 
   (new ChiselStage).execute(
-    Array("--target", "systemverilog", "--target-dir", "build/vector/test"),
-    Seq(chisel3.stage.ChiselGeneratorAnnotation(() =>
-      new GatherRingUnit(vlen, dlen, maxTableNum, xlen = 64, unitIdx = 0)
-    ))
+    Array(
+      "--target",
+      "systemverilog",
+      "--target-dir",
+      "build/vector/test"
+    ),
+    Seq(
+      chisel3.stage
+        .ChiselGeneratorAnnotation(
+          () =>
+            new GatherRingUnit(
+              vlen,
+              dlen,
+              maxTableNum,
+              xlen = 64,
+              unitIdx = 0
+            )
+        )
+    )
   )
 
   println("Verilog 生成成功 — 模块可综合")
@@ -41,15 +58,24 @@ object GatherRingUnitCheck extends App {
 object GatherRingCheck extends App {
 
   val vlen = 128
+
   val dlen = 128
 
   println("=== GatherRing 集成检查 ===\n")
 
   (new ChiselStage).execute(
-    Array("--target", "systemverilog", "--target-dir", "build/vector/test"),
-    Seq(chisel3.stage.ChiselGeneratorAnnotation(() =>
-      new GatherRing(vlen, dlen, xlen = 64)
-    ))
+    Array(
+      "--target",
+      "systemverilog",
+      "--target-dir",
+      "build/vector/test"
+    ),
+    Seq(
+      chisel3.stage
+        .ChiselGeneratorAnnotation(
+          () => new GatherRing(vlen, dlen, xlen = 64)
+        )
+    )
   )
 
   println("Verilog 生成成功 — 顶层可综合")

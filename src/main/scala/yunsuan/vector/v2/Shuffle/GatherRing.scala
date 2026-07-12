@@ -6,8 +6,9 @@ import chisel3.util._
 class GatherRing(
   val vlen: Int,
   val dlen: Int,
-  xlen: Int = 64,
-) extends Module with GatherConfig {
+  xlen:     Int = 64
+) extends Module
+    with GatherConfig {
   require(isPow2(dlen) && dlen >= 64)
   require(isPow2(vlen) && vlen >= 64)
 
@@ -24,26 +25,50 @@ class GatherRing(
   val blockSizeCfg = IO(Input(UInt(log2Ceil(numUnits + 1).W)))
 
   // 多 pipe 输入（每 pipe 已过 IndexGen+Mask 预处理）
-  val pipeIn = IO(Vec(numPipes, Flipped(ValidIO(new GatherRingPipeInput(NumElem, IndexWidth, MaxTableNum, TableIdxWidth)))))
+  val pipeIn = IO(
+    Vec(
+      numPipes,
+      Flipped(
+        ValidIO(
+          new GatherRingPipeInput(
+            NumElem,
+            IndexWidth,
+            MaxTableNum,
+            TableIdxWidth
+          )
+        )
+      )
+    )
+  )
 
   // 写回总线（≤4 条）
-  val writeback = IO(Vec(numPipes, DecoupledIO(new Bundle {
-    val dest = UInt(dlen.W)
-  })))
+  val writeback = IO(
+    Vec(
+      numPipes,
+      DecoupledIO(new Bundle {
+        val dest = UInt(dlen.W)
+      })
+    )
+  )
 
   // 状态上报（给 VOQ/wakeup 做空位检测和 Gn 更新）
   val unitStatus = IO(Output(Vec(numUnits, new UnitStatus)))
 
   // ── 实例化 GatherRingUnit ───────────────────────────
-  private val units = Seq.tabulate(numUnits) { i =>
-    val u = Module(new GatherRingUnit(
-      vlen = vlen, dlen = dlen,
-      maxTableNum = numUnits,
-      xlen = xlen,
-      unitIdx = i,
-    ))
-    u.suggestName(s"ringUnit_$i")
-    u
+  private val units = Seq.tabulate(numUnits) {
+    i =>
+
+      val u = Module(
+        new GatherRingUnit(
+          vlen = vlen,
+          dlen = dlen,
+          maxTableNum = numUnits,
+          xlen = xlen,
+          unitIdx = i
+        )
+      )
+      u.suggestName(s"ringUnit_$i")
+      u
   }
 
   // ── 每 Unit 的 block 配置 ───────────────────────────
@@ -56,25 +81,33 @@ class GatherRing(
   // LMUL=2: 块内配对单元的另一端
   // LMUL=4: 块内四元组的最后一元
   // LMUL=8: 全局环尾 (U7)
-  def loopbackLmul2(i: Int): Int  = (i / 2) * 2 + (1 - i % 2)  // 0↔1, 2↔3, 4↔5, 6↔7
-  def loopbackLmul4(i: Int): Int  = (i / 4) * 4 + 3             // 0→3, 1→3, 2→3, 3→3, 4→7, ...
-  def loopbackLmul8(i: Int): Int  = numUnits - 1                 // all → 7
+  def loopbackLmul2(i: Int): Int = (i / 2) * 2 + (1 - i % 2) // 0↔1, 2↔3, 4↔5, 6↔7
+
+  def loopbackLmul4(i: Int): Int = (i / 4) * 4 + 3 // 0→3, 1→3, 2→3, 3→3, 4→7, ...
+
+  def loopbackLmul8(i: Int): Int = numUnits - 1 // all → 7
 
   // ── 环形连线：顶层 MUX 选前驱或回环 ─────────────────
   for (i <- 0 until numUnits) {
-    val prevIdx = (i - 1 + numUnits) % numUnits
+    val prevIdx  = (i - 1 + numUnits) % numUnits
     val srcLmul2 = units(loopbackLmul2(i)).out.tableOut
     val srcLmul4 = units(loopbackLmul4(i)).out.tableOut
     val srcLmul8 = units(loopbackLmul8(i)).out.tableOut
 
     // blockSize 决定回环源（3 选 1），非入口 Unit 走物理前驱
-    val blockWrapSrc = Mux1H(Seq(
-      (units(i).in.blockConfig.blockSize === 2.U) -> srcLmul2,
-      (units(i).in.blockConfig.blockSize === 4.U) -> srcLmul4,
-      (units(i).in.blockConfig.blockSize === 8.U) -> srcLmul8,
-    ))
+    val blockWrapSrc = Mux1H(
+      Seq(
+        (units(i).in.blockConfig.blockSize === 2.U) -> srcLmul2,
+        (units(i).in.blockConfig.blockSize === 4.U) -> srcLmul4,
+        (units(i).in.blockConfig.blockSize === 8.U) -> srcLmul8
+      )
+    )
     val isEntry = (i.U - units(i).in.blockConfig.blockBase + numUnits.U) % numUnits.U === 0.U
-    units(i).in.flowIn := Mux(isEntry, blockWrapSrc, units(prevIdx).out.tableOut)
+    units(i).in.flowIn := Mux(
+      isEntry,
+      blockWrapSrc,
+      units(prevIdx).out.tableOut
+    )
   }
 
   // ── E_table / E_index 优先编码器（7 组 × 2）─────────
@@ -83,18 +116,20 @@ class GatherRing(
   // E_index: 顺序搜索（0, 1, 2, ..., N-1）
 
   def priorityEncodeReverse(statuses: Seq[Bool]): UInt = {
-    val n = statuses.size
+    val n           = statuses.size
     val searchOrder = 0 +: ((n - 1) to 1 by -1)
-    PriorityMux(searchOrder.map { idx =>
-      (!statuses(idx)) -> idx.U(log2Ceil(n).W)
+    PriorityMux(searchOrder.map {
+      idx =>
+
+        (!statuses(idx)) -> idx.U(log2Ceil(n).W)
     })
   }
 
-  def priorityEncodeForward(statuses: Seq[Bool]): UInt = {
-    PriorityMux(statuses.zipWithIndex.map { case (s, i) =>
-      (!s) -> i.U(log2Ceil(statuses.size).W)
+  def priorityEncodeForward(statuses: Seq[Bool]): UInt =
+    PriorityMux(statuses.zipWithIndex.map {
+      case (s, i) =>
+        (!s) -> i.U(log2Ceil(statuses.size).W)
     })
-  }
 
   // ── will_flow 两阶段计算 ──────────────────────────
   private val willFlow = RegInit(false.B)
@@ -108,11 +143,23 @@ class GatherRing(
 
   // ── E_table / E_index 寄存器（Q25：从 hasTable/hasIndex 状态计算，寄存一拍）──
   // 寄存器值在同周期内稳定，多 pipe 用同一 base 值 + placeIdx 偏移
-  private val hasTableInBlock = VecInit((0 until numUnits).map { j =>
-    Mux(j.U < blockSizeCfg, hasTableVec(j), true.B)
+  private val hasTableInBlock = VecInit((0 until numUnits).map {
+    j =>
+
+      Mux(
+        j.U < blockSizeCfg,
+        hasTableVec(j),
+        true.B
+      )
   })
-  private val hasIndexInBlock = VecInit((0 until numUnits).map { j =>
-    Mux(j.U < blockSizeCfg, hasIndexVec(j), true.B)
+  private val hasIndexInBlock = VecInit((0 until numUnits).map {
+    j =>
+
+      Mux(
+        j.U < blockSizeCfg,
+        hasIndexVec(j),
+        true.B
+      )
   })
   private val E_table_reg = RegInit(0.U(log2Ceil(numUnits).W))
   private val E_index_reg = RegInit(0.U(log2Ceil(numUnits).W))
@@ -120,30 +167,38 @@ class GatherRing(
   E_index_reg := priorityEncodeForward(hasIndexInBlock)
 
   // Phase detection：环尾 Unit 的 hasIndex=true → 满配阶段
-  private val isFullPhase = Mux1H(Seq(
-    (blockSizeCfg === 1.U) -> hasIndexVec(0),
-    (blockSizeCfg === 2.U) -> hasIndexVec(1),
-    (blockSizeCfg === 4.U) -> hasIndexVec(3),
-    (blockSizeCfg === 8.U) -> hasIndexVec(7),
-  ))
+  private val isFullPhase = Mux1H(
+    Seq(
+      (blockSizeCfg === 1.U) -> hasIndexVec(0),
+      (blockSizeCfg === 2.U) -> hasIndexVec(1),
+      (blockSizeCfg === 4.U) -> hasIndexVec(3),
+      (blockSizeCfg === 8.U) -> hasIndexVec(7)
+    )
+  )
 
   // ── 填充阶段 will_flow ─────────────────────────────
   // firstTablePos：块内首个 table 的局部坐标（PriorityMux 从低到高扫描）
   private val firstTablePos = PriorityMux(
-    (0 until numUnits).map { j =>
-      (j.U < blockSizeCfg && isFirstVec(j)) -> j.U(log2Ceil(numUnits).W)
+    (0 until numUnits).map {
+      j =>
+
+        (j.U < blockSizeCfg && isFirstVec(j)) -> j.U(log2Ceil(numUnits).W)
     } :+ (true.B -> 0.U(log2Ceil(numUnits).W))
   )
 
   // lastValidIdxPos：块内最后 valid index 的局部坐标（PriorityMux 从高到低扫描）
   private val lastValidIdxPos = PriorityMux(
-    (0 until numUnits).reverse.map { j =>
-      (j.U < blockSizeCfg && hasIndexVec(j)) -> j.U(log2Ceil(numUnits).W)
+    (0 until numUnits).reverse.map {
+      j =>
+
+        (j.U < blockSizeCfg && hasIndexVec(j)) -> j.U(log2Ceil(numUnits).W)
     } :+ (true.B -> 0.U(log2Ceil(numUnits).W))
   )
 
   private val anyHasIndexInBlock = VecInit(
-    (0 until numUnits).map(j => j.U < blockSizeCfg && hasIndexVec(j))
+    (0 until numUnits).map(
+      j => j.U < blockSizeCfg && hasIndexVec(j)
+    )
   ).asUInt.orR
 
   private val fillingWillFlow = anyHasIndexInBlock && (firstTablePos =/= lastValidIdxPos)
@@ -151,15 +206,21 @@ class GatherRing(
   // ── 满配阶段 will_flow ─────────────────────────────
   // 任一 table：valid && 未到环尾 && (已过入口 || 当前在入口)
   private val fullWillFlow = VecInit(
-    (0 until numUnits).map { j =>
-      j.U < blockSizeCfg &&
+    (0 until numUnits).map {
+      j =>
+
+        j.U < blockSizeCfg &&
         tableValidVec(j) &&
         (passedEntryVec(j) || j.U === 0.U) &&
         j.U =/= (blockSizeCfg - 1.U)
     }
   ).asUInt.orR
 
-  willFlow := Mux(isFullPhase, fullWillFlow, fillingWillFlow)
+  willFlow := Mux(
+    isFullPhase,
+    fullWillFlow,
+    fillingWillFlow
+  )
 
   for (i <- 0 until numUnits) {
     units(i).in.willFlow := willFlow
@@ -179,27 +240,27 @@ class GatherRing(
   }
 
   for (p <- 0 until numPipes) {
-    when (pipeIn(p).valid) {
-      val tblReq = pipeIn(p).bits.placeTable
-      val idxReq = pipeIn(p).bits.placeIndex
-      val pIdx   = pipeIn(p).bits.placeIdx
+    when(pipeIn(p).valid) {
+      val tblReq  = pipeIn(p).bits.placeTable
+      val idxReq  = pipeIn(p).bits.placeIndex
+      val pIdx    = pipeIn(p).bits.placeIdx
       val blkBase = tblReq.blockBase
       val blkSize = blockSizeCfg
-      val flow = Mux(willFlow, 1.U, 0.U)
+      val flow    = Mux(willFlow, 1.U, 0.U)
 
       val tPos = (E_table_reg + 1.U - pIdx + flow) % blkSize + blkBase
-      val iPos = (E_index_reg + pIdx) % blkSize + blkBase
+      val iPos = (E_index_reg + pIdx)              % blkSize + blkBase
 
       // 分发：table 仅发往 tPos，index 仅发往 iPos
       for (u <- 0 until numUnits) {
-        when (tPos === u.U) {
+        when(tPos === u.U) {
           units(u).in.placeTable.valid := true.B
           units(u).in.placeTable.bits  := tblReq
-          when (pIdx === 0.U) {
+          when(pIdx === 0.U) {
             units(u).in.placeTable.bits.isFirstTable := true.B
           }
         }
-        when (iPos === u.U) {
+        when(iPos === u.U) {
           units(u).in.placeIndex.valid := true.B
           units(u).in.placeIndex.bits  := idxReq
         }
@@ -209,9 +270,9 @@ class GatherRing(
 
   // ── 辅助输入 ────────────────────────────────────────
   for (i <- 0 until numUnits) {
-    units(i).in.scalaTable := 0.U  // TODO: 从 pipe 传入
-    units(i).in.oldTable   := 0.U.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))  // TODO: vs3 数据
-    units(i).flush := false.B      // TODO: flush 逻辑
+    units(i).in.scalaTable := 0.U                                              // TODO: 从 pipe 传入
+    units(i).in.oldTable   := 0.U.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W))) // TODO: vs3 数据
+    units(i).flush         := false.B                                          // TODO: flush 逻辑
   }
 
   // ── 写回仲裁（集中式，≤4 总线，单元序号小的优先）────
@@ -236,7 +297,7 @@ class GatherRing(
     }
   }
   // 简化：只连第一个写回总线
-  when (writeback(0).ready) {
+  when(writeback(0).ready) {
     val sel = PriorityEncoderOH(wbValid)
     for (i <- 0 until numUnits) {
       units(i).out.writeback.ready := sel(i)
@@ -262,8 +323,15 @@ object GatherRingMain extends App {
   val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
 
   (new ChiselStage).execute(
-    Array("--target", "systemverilog", "--target-dir", "build/vector") ++ args,
-    chisel3.stage.ChiselGeneratorAnnotation(() => new GatherRing(vlen = 128, dlen = 128, xlen = 64)) +: firtoolAnno
+    Array(
+      "--target",
+      "systemverilog",
+      "--target-dir",
+      "build/vector"
+    ) ++ args,
+    chisel3.stage.ChiselGeneratorAnnotation(
+      () => new GatherRing(vlen = 128, dlen = 128, xlen = 64)
+    ) +: firtoolAnno
   )
 
   println("done")
