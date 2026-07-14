@@ -4,19 +4,17 @@ import _root_.circt.stage._
 import chisel3._
 import chisel3.util._
 import yunsuan.vector.Common._
+import yunsuan.vector.v2.Shuffle.GatherCommon._
 
-class GatherUnit(val vlen: Int, val dlen: Int, maxTableNum: Int, xlen: Int = 64) extends Module with GatherConfig {
-  require(isPow2(dlen) && dlen >= 64)
-  require(isPow2(vlen) && vlen >= 64)
-  require(isPow2(maxTableNum))
+class GatherUnit(implicit val param: Param) extends GatherModule {
 
-  override def desiredName: String = super.desiredName + s"_vlen${vlen}b_dlen${dlen}b_table${maxTableNum}"
+  override def desiredName: String = super.desiredName + s"_vlen${VLEN}b_dlen${DLEN}b_table${NumUnits}"
 
-  val vlWidth = log2Ceil(vlen + 1)
+  val vlWidth = log2Ceil(VLEN + 1)
 
   val ResWidth = MinDataWidth
 
-  val SplittedParts = 8 * vlen / dlen
+  val SplittedParts = 8 * VLEN / DLEN
 
   val flush = IO(Input(Bool()))
 
@@ -28,7 +26,7 @@ class GatherUnit(val vlen: Int, val dlen: Int, maxTableNum: Int, xlen: Int = 64)
             new Bundle {
               val isEntryUnit = Bool()
 
-              val info = new GatherInfoBundle(vlen, dlen)
+              val info = new GatherInfoBundle
 
               // used by vrgatherei16 e8
               // only lower half table will be used
@@ -52,7 +50,7 @@ class GatherUnit(val vlen: Int, val dlen: Int, maxTableNum: Int, xlen: Int = 64)
           }
         )
 
-        val scalaTable = Input(UInt(xlen.W))
+        val scalaTable = Input(UInt(XLEN.W))
 
         val compress   = Input(ValidIO(new GatherIndexBundle(NumElem, IndexWidth)))
         val gather     = Input(ValidIO(new GatherIndexBundle(NumElem, IndexWidth)))
@@ -75,7 +73,7 @@ class GatherUnit(val vlen: Int, val dlen: Int, maxTableNum: Int, xlen: Int = 64)
   val out = IO(
     DecoupledIO(
       new Bundle {
-        val dest = UInt(dlen.W)
+        val dest = UInt(DLEN.W)
       }
     )
   )
@@ -127,7 +125,7 @@ class GatherUnit(val vlen: Int, val dlen: Int, maxTableNum: Int, xlen: Int = 64)
 
   private val active = RegInit(false.B)
 
-  private val counter = RegInit(0.U(log2Up(maxTableNum).W))
+  private val counter = RegInit(0.U(log2Up(NumUnits).W))
 
   private val indexDone = Reg(Vec(NumElem, Bool()))
 
@@ -135,7 +133,7 @@ class GatherUnit(val vlen: Int, val dlen: Int, maxTableNum: Int, xlen: Int = 64)
 
   private val multiUop = RegInit(false.B)
 
-  private val gatherMod = Module(new GatherBase(vlen = vlen, dlen = dlen, maxTableNum))
+  private val gatherMod = Module(new GatherBase)
 
   private val acceptFirstUop = !active && in.ctrl.valid
 
@@ -148,13 +146,13 @@ class GatherUnit(val vlen: Int, val dlen: Int, maxTableNum: Int, xlen: Int = 64)
     counter :=
       Mux1H(
         Seq(
-          info.lmul.m8  -> (1.max(maxTableNum / 1) - 1).U,
-          info.lmul.m4  -> (1.max(maxTableNum / 2) - 1).U,
-          info.lmul.m2  -> (1.max(maxTableNum / 4) - 1).U,
-          info.lmul.m1  -> (1.max(maxTableNum / 8) - 1).U,
-          info.lmul.mf2 -> (1.max(maxTableNum / 16) - 1).U,
-          info.lmul.mf4 -> (1.max(maxTableNum / 32) - 1).U,
-          info.lmul.mf8 -> (1.max(maxTableNum / 64) - 1).U
+          info.lmul.m8  -> (1.max(NumUnits / 1) - 1).U,
+          info.lmul.m4  -> (1.max(NumUnits / 2) - 1).U,
+          info.lmul.m2  -> (1.max(NumUnits / 4) - 1).U,
+          info.lmul.m1  -> (1.max(NumUnits / 8) - 1).U,
+          info.lmul.mf2 -> (1.max(NumUnits / 16) - 1).U,
+          info.lmul.mf4 -> (1.max(NumUnits / 32) - 1).U,
+          info.lmul.mf8 -> (1.max(NumUnits / 64) - 1).U
         )
       )
   }.elsewhen(acceptNonFirstUop) {
@@ -216,7 +214,7 @@ class GatherUnit(val vlen: Int, val dlen: Int, maxTableNum: Int, xlen: Int = 64)
 
   when(in.ctrl.valid) {
     multiUop :=
-      ((vlen / dlen) match {
+      ((VLEN / DLEN) match {
         case 1 =>
           info.lmul match {
             case lmul => !(lmul.mf8 || lmul.mf4 || lmul.mf2 || lmul.m1)
@@ -287,7 +285,7 @@ class GatherUnit(val vlen: Int, val dlen: Int, maxTableNum: Int, xlen: Int = 64)
             fillVs3(i)   -> in.oldTable.dataVec(i),
             fillIdx(i)   -> gatherModIndex.index(i),
             fillRes(i)   -> gatherMod.out.result(i),
-            fillScala(i) -> scalaTable(i % (xlen / MinDataWidth)),
+            fillScala(i) -> scalaTable(i % (XLEN / MinDataWidth)),
             fillZeros(i) -> 0.U
           )
         )
@@ -308,23 +306,21 @@ class GatherUnit(val vlen: Int, val dlen: Int, maxTableNum: Int, xlen: Int = 64)
 
 /**
  * This module is used to produce bit vector that is compared to vl.
- * This module is full configurable that support different vlen, dlen and MinDataWidth
- * @param vlen
- * @param dlen
+ * This module is full configurable that support different VLEN, DLEN and MinDataWidth
+ * @param VLEN
+ * @param DLEN
  * @param MinDataWidth the min width of data. if we support int4, MinDataWidth should be 4
  */
 class VlCompareBitVecModule(
-  val vlen:     Int,
-  val dlen:     Int,
-  MinDataWidth: Int,
   compFunc:     (UInt, UInt) => Bool,
   postFixName:  String = ""
-) extends Module
-    with GatherConfig {
+)(
+  implicit val param: Param
+) extends GatherModule {
 
   override def desiredName: String = super.desiredName + postFixName
 
-  private val SplittedParts = 8 * vlen / dlen
+  private val SplittedParts = 8 * VLEN / DLEN
 
   val in = IO(
     Input(
@@ -375,7 +371,7 @@ class VlCompareBitVecModule(
 
 object VlCompareBitVecModule {
 
-  def apply(vlen: Int, dlen: Int, MinDataWidth: Int)(
+  def apply(VLEN: Int, DLEN: Int, MinDataWidth: Int)(
     vl:          UInt,
     sew:         GatherSewBundle,
     uopIdx:      UInt,
@@ -384,12 +380,9 @@ object VlCompareBitVecModule {
   ): Vec[Bool] = {
     val mod = Module(
       new VlCompareBitVecModule(
-        vlen,
-        dlen,
-        MinDataWidth,
         compFunc,
         postFixName
-      )
+      )(Param.default)
     )
     mod.in.vl     := vl
     mod.in.sew    := sew
@@ -399,9 +392,9 @@ object VlCompareBitVecModule {
 
 }
 
-class GatherMaskGenModule(vlen: Int, dlen: Int, MinDataWidth: Int = 8) extends Module {
+class GatherMaskGenModule(VLEN: Int, DLEN: Int, MinDataWidth: Int = 8) extends Module {
 
-  val NumElem = dlen / MinDataWidth
+  val NumElem = DLEN / MinDataWidth
 
   val in = IO(
     Input(
@@ -413,8 +406,8 @@ class GatherMaskGenModule(vlen: Int, dlen: Int, MinDataWidth: Int = 8) extends M
         val e64ei16 = Bool()
         val e32ei16 = Bool()
         val e8ei16  = Bool()
-        val mask    = UInt((dlen / MinDataWidth).W)
-        val uopIdx  = UInt(log2Ceil(vlen / dlen * 8).W)
+        val mask    = UInt((DLEN / MinDataWidth).W)
+        val uopIdx  = UInt(log2Ceil(VLEN / DLEN * 8).W)
       }
     )
   )
@@ -453,7 +446,7 @@ class GatherMaskGenModule(vlen: Int, dlen: Int, MinDataWidth: Int = 8) extends M
   out.mask := maskVec.asUInt
 }
 
-class MaskSelectAndDupModule(val vlen: Int, val dlen: Int, useEI16: Boolean = false) extends Module with GatherConfig {
+class MaskSelectAndDupModule(useEI16: Boolean = false)(implicit val param: Param) extends GatherModule {
 
   override def desiredName: String = super.desiredName +
     (if (useEI16) "EI16"
@@ -462,8 +455,8 @@ class MaskSelectAndDupModule(val vlen: Int, val dlen: Int, useEI16: Boolean = fa
   val in = IO(
     Input(
       new Bundle {
-        val mask   = UInt(dlen.W)
-        val uopIdx = UInt(log2Ceil(vlen / dlen * MaxLMUL).W)
+        val mask   = UInt(DLEN.W)
+        val uopIdx = UInt(log2Ceil(VLEN / DLEN * MaxLMUL).W)
         val sew    = new GatherSewBundle
         val ei16   = Option.when(useEI16)(Bool())
       }
@@ -473,22 +466,22 @@ class MaskSelectAndDupModule(val vlen: Int, val dlen: Int, useEI16: Boolean = fa
   val out = IO(
     Output(
       new Bundle {
-        val dupMask = UInt((dlen / MinDataWidth).W)
+        val dupMask = UInt((DLEN / MinDataWidth).W)
       }
     )
   )
 
   private val sew = in.sew
 
-  val e8Mask = in.mask.splitToVecByWidth(vlen / 8).takeAsVec(8)(in.uopIdx.tail(log2Ceil(vlen / dlen)))
+  val e8Mask = in.mask.splitToVecByWidth(VLEN / 8).takeAsVec(8)(in.uopIdx.tail(log2Ceil(VLEN / DLEN)))
 
-  val e16Mask = in.mask.splitToVecByWidth(vlen / 16).takeAsVec(8)(in.uopIdx.tail(log2Ceil(vlen / dlen)))
+  val e16Mask = in.mask.splitToVecByWidth(VLEN / 16).takeAsVec(8)(in.uopIdx.tail(log2Ceil(VLEN / DLEN)))
 
-  val e32Mask = in.mask.splitToVecByWidth(vlen / 32).takeAsVec(8)(in.uopIdx.tail(log2Ceil(vlen / dlen)))
+  val e32Mask = in.mask.splitToVecByWidth(VLEN / 32).takeAsVec(8)(in.uopIdx.tail(log2Ceil(VLEN / DLEN)))
 
-  val e64Mask = in.mask.splitToVecByWidth(vlen / 64).takeAsVec(8)(in.uopIdx.tail(log2Ceil(vlen / dlen)))
+  val e64Mask = in.mask.splitToVecByWidth(VLEN / 64).takeAsVec(8)(in.uopIdx.tail(log2Ceil(VLEN / DLEN)))
 
-  val dupMaskVec = Wire(Vec(dlen / MinDataWidth, Bool()))
+  val dupMaskVec = Wire(Vec(DLEN / MinDataWidth, Bool()))
 
   for (i <- dupMaskVec.indices) {
     if (!useEI16) {
@@ -520,8 +513,8 @@ class MaskSelectAndDupModule(val vlen: Int, val dlen: Int, useEI16: Boolean = fa
 
 object MaskSelectAndDup {
 
-  def apply(vlen: Int, dlen: Int)(mask: UInt, uopIdx: UInt, sew: GatherSewBundle): UInt = {
-    val mod = Module(new MaskSelectAndDupModule(vlen, dlen))
+  def apply(VLEN: Int, DLEN: Int)(mask: UInt, uopIdx: UInt, sew: GatherSewBundle): UInt = {
+    val mod = Module(new MaskSelectAndDupModule()(Param.default))
     mod.in.mask   := mask
     mod.in.uopIdx := uopIdx
     mod.in.sew    := sew
@@ -532,8 +525,8 @@ object MaskSelectAndDup {
 
 object MaskSelectAndDupEI16 {
 
-  def apply(vlen: Int, dlen: Int)(mask: UInt, uopIdx: UInt, sew: GatherSewBundle, ei16: Bool): UInt = {
-    val mod = Module(new MaskSelectAndDupModule(vlen, dlen, useEI16 = true))
+  def apply(VLEN: Int, DLEN: Int)(mask: UInt, uopIdx: UInt, sew: GatherSewBundle, ei16: Bool): UInt = {
+    val mod = Module(new MaskSelectAndDupModule(useEI16 = true)(Param.default))
     mod.in.mask     := mask
     mod.in.uopIdx   := uopIdx
     mod.in.sew      := sew
@@ -543,13 +536,13 @@ object MaskSelectAndDupEI16 {
 
 }
 
-class MaskDupModule(val vlen: Int, val dlen: Int) extends Module with GatherConfig {
+class MaskDupModule(implicit val param: Param) extends GatherModule {
 
   val in = IO(
     Input(
       new Bundle {
-        val mask   = UInt((dlen / MinDataWidth).W)
-        val uopIdx = UInt(log2Ceil(vlen / dlen * MaxLMUL).W)
+        val mask   = UInt((DLEN / MinDataWidth).W)
+        val uopIdx = UInt(log2Ceil(VLEN / DLEN * MaxLMUL).W)
         val sew    = new GatherSewBundle
       }
     )
@@ -558,7 +551,7 @@ class MaskDupModule(val vlen: Int, val dlen: Int) extends Module with GatherConf
   val out = IO(
     Output(
       new Bundle {
-        val dupMask = UInt((dlen / MinDataWidth).W)
+        val dupMask = UInt((DLEN / MinDataWidth).W)
       }
     )
   )
@@ -584,8 +577,8 @@ class MaskDupModule(val vlen: Int, val dlen: Int) extends Module with GatherConf
 
 object MaskDup {
 
-  def apply(vlen: Int, dlen: Int)(mask: UInt, uopIdx: UInt, sew: GatherSewBundle): UInt = {
-    val maskDupMod = Module(new MaskDupModule(vlen, dlen))
+  def apply(VLEN: Int, DLEN: Int)(mask: UInt, uopIdx: UInt, sew: GatherSewBundle): UInt = {
+    val maskDupMod = Module(new MaskDupModule()(Param.default))
     maskDupMod.in.mask   := mask
     maskDupMod.in.uopIdx := uopIdx
     maskDupMod.in.sew    := sew
@@ -594,13 +587,13 @@ object MaskDup {
 
 }
 
-class GatherInfoBundle(val vlen: Int, val dlen: Int) extends Bundle with GatherConfig {
+class GatherInfoBundle(implicit val param: Param) extends GatherBundle {
 
   val lmul = new GatherLmulBundle
 
   val sew = new GatherSewBundle
 
-  val uopIdx = UInt(log2Ceil(vlen / dlen * 8).W)
+  val uopIdx = UInt(log2Ceil(VLEN / DLEN * 8).W)
 
   // 1 -> ma, 0 -> mu
   val ma = Bool()
@@ -659,7 +652,7 @@ object MaskSelectAndDupModuleMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new MaskSelectAndDupModule(vlen = 128, dlen = 128, useEI16 = false)
+        () => new MaskSelectAndDupModule(useEI16 = false)(Param.default)
       ) +: firtoolAnno
   )
 
@@ -667,7 +660,7 @@ object MaskSelectAndDupModuleMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new MaskSelectAndDupModule(vlen = 128, dlen = 128, useEI16 = true)
+        () => new MaskSelectAndDupModule(useEI16 = true)(Param.default)
       ) +: firtoolAnno
   )
   println("done")
@@ -690,7 +683,7 @@ object GatherMaskGenModuleMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new GatherMaskGenModule(vlen = 128, dlen = 128, MinDataWidth = 8)
+        () => new GatherMaskGenModule(VLEN = 128, DLEN = 128, MinDataWidth = 8)
       ) +: firtoolAnno
   )
 
@@ -716,12 +709,9 @@ object VlCompareBitVecModuleMain extends App {
       .ChiselGeneratorAnnotation(
         () =>
           new VlCompareBitVecModule(
-            vlen = 128,
-            dlen = 128,
-            MinDataWidth = 8,
             (i, vl) => i < vl,
             "LessThanVl"
-          )
+          )(Param.default)
       ) +: firtoolAnno
   )
 
@@ -731,12 +721,9 @@ object VlCompareBitVecModuleMain extends App {
       .ChiselGeneratorAnnotation(
         () =>
           new VlCompareBitVecModule(
-            vlen = 128,
-            dlen = 128,
-            MinDataWidth = 8,
             (i, vl) => i === (vl - 1.U),
             "EqualVlM1"
-          )
+          )(Param.default)
       ) +: firtoolAnno
   )
 
@@ -760,7 +747,7 @@ object GatherUnitMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new GatherUnit(vlen = 128, dlen = 128, maxTableNum = 8)
+        () => new GatherUnit()(Param.default)
       ) +: firtoolAnno
   )
 

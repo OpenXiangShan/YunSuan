@@ -4,38 +4,17 @@ import _root_.circt.stage._
 import chisel3._
 import chisel3.util._
 import yunsuan.vector.Common.caseToUIntUtil
+import yunsuan.vector.v2.Shuffle.GatherCommon._
 
-class GatherBase(val vlen: Int, val dlen: Int, maxTableNum: Int) extends Module with GatherConfig {
-  require(isPow2(dlen) && dlen >= 64)
-  require(isPow2(maxTableNum))
+class GatherBase(implicit val param: Param) extends GatherModule {
 
-  override def desiredName: String = super.desiredName + s"_dlen${dlen}b_table${maxTableNum}"
+  override def desiredName: String = super.desiredName + s"_dlen${DLEN}b_table${NumUnits}"
 
   val LookUpIndexWidth = log2Ceil(NumElem)
 
-  val in = IO(
-    Input(
-      new Bundle {
-        val tableIdx   = UInt(log2Up(maxTableNum).W)
-        val table      = Vec(NumElem, UInt(MinDataWidth.W))
-        val indexValid = Vec(NumElem, Bool())
-        val index      = Vec(NumElem, UInt(IndexWidth.W))
-        val lmul       = new GatherLmulBundle
-      }
-    )
-  )
+  val in = IO(Input(new GatherBase.In))
 
-  val out = IO(
-    Output(
-      new Bundle {
-        // found
-        val resultValid = Vec(NumElem, Bool())
-        val result      = Vec(NumElem, UInt(MinDataWidth.W))
-        val inactive    = Vec(NumElem, Bool())
-        val notfound    = Vec(NumElem, Bool())
-      }
-    )
-  )
+  val out = IO(Output(new GatherBase.Out))
 
   val geRealVlmax = Wire(Vec(NumElem, Bool()))
 
@@ -96,25 +75,44 @@ class GatherIndexBundle(NumElem: Int, IndexWidth: Int) extends Bundle {
 
 }
 
-object GatherBaseMain extends App {
-  println("Generating the GatherBase hardware")
 
-  val firtoolOpts = Array(
-    "--target=systemverilog",
-    "-O=release",
-    "--disable-annotation-unknown",
-    "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
-  )
+object GatherBase {
+  class In(implicit val param: Param) extends GatherBundle {
+    val tableIdx   = UnitIdx()
+    val table      = Vec(NumElem, UInt(MinDataWidth.W))
+    val indexValid = Vec(NumElem, Bool())
+    val index      = Vec(NumElem, UInt(IndexWidth.W))
+    val lmul       = new GatherLmulBundle
+  }
 
-  val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
+  class Out(implicit val param: Param) extends GatherBundle {
+    // found
+    val resultValid = Vec(NumElem, Bool())
+    val result      = Vec(NumElem, UInt(MinDataWidth.W))
+    val inactive    = Vec(NumElem, Bool())
+    val notfound    = Vec(NumElem, Bool())
+  }
 
-  (new ChiselStage).execute(
-    Array("--target-dir", "build/vector") ++ args,
-    chisel3.stage
-      .ChiselGeneratorAnnotation(
-        () => new GatherBase(128, 128, 8)
-      ) +: firtoolAnno
-  )
+  def main(args: Array[String]): Unit = {
+    println("Generating the GatherBase hardware")
 
-  println("done")
+    val firtoolOpts = Array(
+      "--target=systemverilog",
+      "-O=release",
+      "--disable-annotation-unknown",
+      "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
+    )
+
+    val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
+
+    (new ChiselStage).execute(
+      Array("--target-dir", "build/vector") ++ args,
+      chisel3.stage
+        .ChiselGeneratorAnnotation(
+          () => new GatherBase()(Param.default)
+        ) +: firtoolAnno
+    )
+
+    println("done")
+  }
 }

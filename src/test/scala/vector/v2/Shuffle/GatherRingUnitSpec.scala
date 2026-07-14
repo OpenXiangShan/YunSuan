@@ -36,7 +36,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       dut.in.flowIn.tag.passedEntry.poke(false)
       dut.in.placeTable.valid.poke(false)
       dut.in.placeIndex.valid.poke(false)
-      dut.out.writeback.ready.poke(false)
+      dut.out.wb.ready.poke(false)
       dut.flush.poke(true)
       dut.clock.step()
       dut.flush.poke(false)
@@ -50,8 +50,8 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   def eWb(valid: Boolean, dest: BigInt = 0): GatherRingUnit => Unit = {
     dut =>
 
-      dut.out.writeback.valid.expect(valid)
-      if (valid) dut.out.writeback.bits.dest.expect(dest)
+      dut.out.wb.valid.expect(valid)
+      if (valid) dut.out.wb.bits.dest.expect(dest)
   }
 
   def pFlush: GatherRingUnit => Unit = _.flush.poke(true)
@@ -513,7 +513,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           dut.in.willFlow.poke(false)
           dut.in.flowIn.valid.poke(false)
           dut.clock.step()
-          dut.out.writeback.bits.dest.expect(exp)
+          dut.out.wb.bits.dest.expect(exp)
       }
     }
   }
@@ -1381,7 +1381,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           dut.clock.step()
           dut.out.status.hasTable.expect(true)
           dut.out.status.hasIndex.expect(true)
-          dut.out.writeback.valid.expect(false) // counter=3, not done
+          dut.out.wb.valid.expect(false) // counter=3, not done
       }
     }
     it("non-entry unit does not set passedEntry on flow") {

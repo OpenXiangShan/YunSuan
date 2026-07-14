@@ -6,19 +6,20 @@ import chisel3.util._
 import yunsuan.util.ModuleWrapper.ModuleMux1H
 import yunsuan.util.ModuleWrapper.ModuleVec
 import yunsuan.vector.Common._
+import yunsuan.vector.v2.Shuffle.GatherCommon._
 
-class GatherIndexGen(val vlen: Int, val dlen: Int, MinDataWidth: Int = 8) extends Module with GatherConfig {
-  require(isPow2(dlen) && dlen >= 64)
 
-  override def desiredName: String = super.desiredName + s"_${dlen}b"
+class GatherIndexGen(implicit val param: Param) extends GatherModule {
 
-  val E64Vlmax = dlen * 8 / 64
+  override def desiredName: String = super.desiredName + s"_${DLEN}b"
 
-  val E32Vlmax = dlen * 8 / 32
+  val E64Vlmax = DLEN * 8 / 64
 
-  val E16Vlmax = dlen * 8 / 16
+  val E32Vlmax = DLEN * 8 / 32
 
-  val E8Vlmax = dlen * 8 / 8
+  val E16Vlmax = DLEN * 8 / 16
+
+  val E8Vlmax = DLEN * 8 / 8
 
   val E64ValidBits = log2Ceil(E64Vlmax)
 
@@ -33,13 +34,13 @@ class GatherIndexGen(val vlen: Int, val dlen: Int, MinDataWidth: Int = 8) extend
       ValidIO(
         new Bundle {
           val isGatherEI16 = Bool()
-          val uopIdx       = UInt(log2Ceil(vlen / dlen * 8).W)
+          val uopIdx       = UInt(log2Ceil(VLEN / DLEN * 8).W)
           val lmul         = new GatherLmulBundle
           val sew          = new GatherSewBundle
           val ei           = new GatherSewBundle
           // Todo: if vrgatherei16, vs1 should be selected before the register of EXU
-          val vs1  = UInt(dlen.W)
-          val mask = UInt((dlen / MinDataWidth).W) // 1bit per MinWidth Data
+          val vs1  = UInt(DLEN.W)
+          val mask = UInt((DLEN / MinDataWidth).W) // 1bit per MinWidth Data
         }
       )
     )
@@ -76,28 +77,26 @@ class GatherIndexGen(val vlen: Int, val dlen: Int, MinDataWidth: Int = 8) extend
 
   val maskVf4 = in.bits.mask.toVf4Vec
 
-  def Index: UInt = UInt(IndexWidth.W)
+  val e64ei64MinSewIdx = Wire(Vec(DLEN / 64, Vec(64 / MinDataWidth, Index)))
 
-  val e64ei64MinSewIdx = Wire(Vec(dlen / 64, Vec(64 / MinDataWidth, Index)))
+  val e32ei32MinSewIdx = Wire(Vec(DLEN / 32, Vec(32 / MinDataWidth, Index)))
 
-  val e32ei32MinSewIdx = Wire(Vec(dlen / 32, Vec(32 / MinDataWidth, Index)))
+  val e16ei16MinSewIdx = Wire(Vec(DLEN / 16, Vec(16 / MinDataWidth, Index)))
 
-  val e16ei16MinSewIdx = Wire(Vec(dlen / 16, Vec(16 / MinDataWidth, Index)))
+  val e8ei8MinSewIdx = Wire(Vec(DLEN / 8, Vec(8 / MinDataWidth, Index)))
 
-  val e8ei8MinSewIdx = Wire(Vec(dlen / 8, Vec(8 / MinDataWidth, Index)))
-
-  // `dlen / 2` means that only half of vs1 is used.
+  // `DLEN / 2` means that only half of vs1 is used.
   // `16 / MinDataWidth * 2` means that each index will produce 2x MinDataWidth index.
-  val e64ei16MinSewIdx = Wire(Vec(dlen / 4 / 16, Vec(64 / MinDataWidth, Index)))
+  val e64ei16MinSewIdx = Wire(Vec(DLEN / 4 / 16, Vec(64 / MinDataWidth, Index)))
 
-  val e32ei16MinSewIdx = Wire(Vec(dlen / 2 / 16, Vec(32 / MinDataWidth, Index)))
+  val e32ei16MinSewIdx = Wire(Vec(DLEN / 2 / 16, Vec(32 / MinDataWidth, Index)))
 
-  val e8ei16MinSewIdx = Wire(Vec(dlen / 16, Vec(8 / MinDataWidth, Index)))
+  val e8ei16MinSewIdx = Wire(Vec(DLEN / 16, Vec(8 / MinDataWidth, Index)))
 
   /**
    * For example, if sew = 64,
    * {{{
-   *   for (i <- 0 until vlen / 64) {
+   *   for (i <- 0 until VLEN / 64) {
    *     for (j <- 0 until 64 / MinSEW) {
    *       e64MinSewIdx(i)(j) := Cat(e64Vs1(i).take(E64ValidBits), j.U((log2Ceil(64) - log2Ceil(MinSEW)).W))
    *     }
@@ -105,7 +104,7 @@ class GatherIndexGen(val vlen: Int, val dlen: Int, MinDataWidth: Int = 8) extend
    * }}}
    */
   def calculateMinSewIdx(eXXMinSewIdx: Vec[Vec[UInt]], eXXVs1: Vec[UInt], EXXValidBits: Int, sew: Int) =
-    for (i <- 0 until dlen / sew) {
+    for (i <- 0 until DLEN / sew) {
       for (j <- 0 until sew / MinDataWidth) {
         eXXMinSewIdx(i)(j) := Cat(eXXVs1(i).takeOrPad(EXXValidBits), j.U((log2Ceil(sew) - log2Ceil(MinDataWidth)).W))
       }
@@ -164,8 +163,8 @@ class GatherIndexGen(val vlen: Int, val dlen: Int, MinDataWidth: Int = 8) extend
 
   val e32ei16Idx = e32ei16MinSewIdx.flatten
 
-  // when sew is less than index width, pad to dlen / MinDataWidth
-  val e8ei16Idx = e8ei16MinSewIdx.flatten.padTo(dlen / MinDataWidth, 0.U)
+  // when sew is less than index width, pad to DLEN / MinDataWidth
+  val e8ei16Idx = e8ei16MinSewIdx.flatten.padTo(DLEN / MinDataWidth, 0.U)
 
   val e64ei64 = dontTouch(sew.e64 && ei.e64)
 
@@ -241,7 +240,7 @@ object GatherIndexGenMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new GatherIndexGen(dlen = 128, vlen = 128, MinDataWidth = 8)
+        () => new GatherIndexGen()(Param.default)
       ) +: firtoolAnno
   )
 

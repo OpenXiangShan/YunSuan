@@ -4,11 +4,12 @@ import _root_.circt.stage._
 import chisel3._
 import chisel3.util._
 import yunsuan.vector.Common._
+import yunsuan.vector.v2.Shuffle.GatherCommon.{GatherModule, Param}
 
-class SlideDownIndexGen(val vlen: Int, val dlen: Int) extends Module with GatherConfig {
-  require(isPow2(dlen) && dlen >= 64)
 
-  override def desiredName: String = super.desiredName + s"_${dlen}b"
+class SlideDownIndexGen(implicit val param: Param) extends GatherModule {
+
+  override def desiredName: String = super.desiredName + s"_${DLEN}b"
 
   val in = IO(
     Input(
@@ -18,7 +19,7 @@ class SlideDownIndexGen(val vlen: Int, val dlen: Int) extends Module with Gather
           val tableIdx     = UInt(TableIdxWidth.W)
           val lmul         = new GatherLmulBundle
           val sew          = new GatherSewBundle
-          // if slideNum is greater than or equal to dlen
+          // if slideNum is greater than or equal to DLEN
           val offsetOverflow = Bool()
           val offset         = UInt(IndexWidth.W)
           val vl             = UInt(VlWidth.W)
@@ -57,7 +58,7 @@ class SlideDownIndexGen(val vlen: Int, val dlen: Int) extends Module with Gather
     )
   ).ensuring(_.getWidth == IndexWidth)
 
-  private val iIsVlM1: Vec[Bool] = VlCompareBitVecModule(vlen, dlen, MinDataWidth)(
+  private val iIsVlM1: Vec[Bool] = VlCompareBitVecModule(VLEN, DLEN, MinDataWidth)(
     in.bits.vl,
     in.bits.sew,
     in.bits.tableIdx,
@@ -122,7 +123,7 @@ object SlideDownIndexGenMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new SlideDownIndexGen(128, 128)
+        () => new SlideDownIndexGen()(Param.default)
       ) +: firtoolAnno
   )
 
