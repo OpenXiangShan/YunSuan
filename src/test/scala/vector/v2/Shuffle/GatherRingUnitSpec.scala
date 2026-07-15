@@ -5,6 +5,7 @@ import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.ParallelTestExecution
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
+import yunsuan.vector.v2.Shuffle.GatherCommon.FakeRobPtr
 
 class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution {
 
@@ -12,9 +13,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   val dlen        = 128
   val maxTableNum = 8
 
-  case class Cycle(pokes: Seq[GatherRingUnit => Unit], expects: Seq[GatherRingUnit => Unit])
+  class Cycle(val pokes: (GatherRingUnit[FakeRobPtr] => Unit)*)(val expects: Seq[GatherRingUnit[FakeRobPtr] => Unit])
+  object Cycle {
+    def apply(pokes: (GatherRingUnit[FakeRobPtr] => Unit)*)(expects: Seq[GatherRingUnit[FakeRobPtr] => Unit]): Cycle =
+      new Cycle(pokes: _*)(expects)
+  }
 
-  def runCycles(dut: GatherRingUnit, init: GatherRingUnit => Unit, cycles: Cycle*): Unit = {
+  def runCycles(dut: GatherRingUnit[FakeRobPtr], init: GatherRingUnit[FakeRobPtr] => Unit, cycles: Cycle*): Unit = {
     init(dut)
     for (c <- cycles) {
       c.pokes.foreach(_(dut))
@@ -23,44 +28,44 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     }
   }
 
-  def initUnit: GatherRingUnit => Unit = {
+  def initUnit: GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
-      dut.in.blockConfig.blockBase.poke(0)
-      dut.in.blockConfig.blockSize.poke(8)
+      dut.in.placeIndex.bits.blockBase.poke(0)
+      dut.in.placeIndex.bits.blockSize.poke(8)
       dut.in.willFlow.poke(false)
-      dut.in.flowIn.valid.poke(false)
-      dut.in.flowIn.idx.poke(0)
-      dut.in.flowIn.data.foreach(_.poke(0))
-      dut.in.flowIn.tag.isFirst.poke(false)
-      dut.in.flowIn.tag.passedEntry.poke(false)
+      dut.in.flow.valid.poke(false)
+      dut.in.flow.bits.tableIdx.poke(0)
+      dut.in.flow.bits.data.foreach(_.poke(0))
+      dut.in.flow.bits.isFirstTable.poke(false)
+      dut.in.flow.bits.passedEntry.poke(false)
       dut.in.placeTable.valid.poke(false)
       dut.in.placeIndex.valid.poke(false)
-      dut.out.wb.ready.poke(false)
-      dut.flush.poke(true)
+      dut.in.wbReady.poke(false)
+      dut.in.flush.poke(true)
       dut.clock.step()
-      dut.flush.poke(false)
+      dut.in.flush.poke(false)
       dut.clock.step()
   }
 
-  def eHasTable(v: Boolean): GatherRingUnit => Unit = _.out.status.hasTable.expect(v)
+  def eHasTable(v: Boolean): GatherRingUnit[FakeRobPtr] => Unit = _.out.status.hasTable.expect(v)
 
-  def eHasIndex(v: Boolean): GatherRingUnit => Unit = _.out.status.hasIndex.expect(v)
+  def eHasIndex(v: Boolean): GatherRingUnit[FakeRobPtr] => Unit = _.out.status.hasIndex.expect(v)
 
-  def eWb(valid: Boolean, dest: BigInt = 0): GatherRingUnit => Unit = {
+  def eWb(valid: Boolean, dest: BigInt = 0): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
       dut.out.wb.valid.expect(valid)
-      if (valid) dut.out.wb.bits.dest.expect(dest)
+      if (valid) dut.out.wb.bits.data.expect(dest)
   }
 
-  def pFlush: GatherRingUnit => Unit = _.flush.poke(true)
+  def pFlush: GatherRingUnit[FakeRobPtr] => Unit = _.in.flush.poke(true)
 
-  def pDrop: GatherRingUnit => Unit = {
+  def pDrop: GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
       dut.in.willFlow.poke(true)
-      dut.in.flowIn.valid.poke(false)
+      dut.in.flow.valid.poke(false)
   }
 
   def pPlace(
@@ -69,16 +74,15 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     tbl:     Seq[Int],
     idx:     Seq[Int],
     iValid:  Seq[Boolean],
-    prefill: Seq[Int] = Seq.fill(16)(0),
+    prefill: Seq[Int] = Seq.fill(16)(0xFF),
     fScala:  Seq[Boolean] = Seq.fill(16)(false),
     fZeros:  Seq[Boolean] = Seq.fill(16)(false)
-  ): GatherRingUnit => Unit = {
+  ): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
-      dut.in.blockConfig.blockSize.poke(blkSize)
+      dut.in.placeIndex.bits.blockSize.poke(blkSize)
       dut.in.placeTable.valid.poke(true)
       dut.in.placeIndex.valid.poke(true)
-      dut.in.placeTable.bits.blockBase.poke(0)
       dut.in.placeTable.bits.tableIdx.poke(tblIdx)
       tbl.zipWithIndex.foreach {
         case (v, i) => dut.in.placeTable.bits.table(i).poke(v)
@@ -100,42 +104,42 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       }
   }
 
-  def pNoPlace: GatherRingUnit => Unit = {
+  def pNoPlace: GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
       dut.in.placeTable.valid.poke(false)
       dut.in.placeIndex.valid.poke(false)
   }
 
-  def pNoFlow: GatherRingUnit => Unit = _.in.willFlow.poke(false)
+  def pNoFlow: GatherRingUnit[FakeRobPtr] => Unit = _.in.willFlow.poke(false)
 
-  def pFlow: GatherRingUnit => Unit = {
+  def pFlow: GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
       dut.in.willFlow.poke(true)
-      dut.in.flowIn.valid.poke(true)
-      dut.in.flowIn.idx.poke(0)
-      dut.in.flowIn.data.foreach(_.poke(0))
-      dut.in.flowIn.tag.isFirst.poke(false)
-      dut.in.flowIn.tag.passedEntry.poke(false)
+      dut.in.flow.valid.poke(true)
+      dut.in.flow.bits.tableIdx.poke(0)
+      dut.in.flow.bits.data.foreach(_.poke(0))
+      dut.in.flow.bits.isFirstTable.poke(false)
+      dut.in.flow.bits.passedEntry.poke(false)
   }
 
-  def pFlowTbl(tblIdx: Int, tbl: Seq[Int]): GatherRingUnit => Unit = {
+  def pFlowTbl(tblIdx: Int, tbl: Seq[Int]): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
       dut.in.willFlow.poke(true)
-      dut.in.flowIn.valid.poke(true)
-      dut.in.flowIn.idx.poke(tblIdx)
+      dut.in.flow.valid.poke(true)
+      dut.in.flow.bits.tableIdx.poke(tblIdx)
       tbl.zipWithIndex.foreach {
-        case (v, i) => dut.in.flowIn.data(i).poke(v)
+        case (v, i) => dut.in.flow.bits.data(i).poke(v)
       }
-      dut.in.flowIn.tag.isFirst.poke(false)
-      dut.in.flowIn.tag.passedEntry.poke(false)
+      dut.in.flow.bits.isFirstTable.poke(false)
+      dut.in.flow.bits.passedEntry.poke(false)
   }
 
-  def pScala(v: BigInt): GatherRingUnit => Unit = _.in.scalaTable.poke(v)
+  def pScala(v: BigInt): GatherRingUnit[FakeRobPtr] => Unit = _.in.placeIndex.bits.scalarData.poke(v)
 
-  private val noOp    = Seq.empty[GatherRingUnit => Unit]
+  private val noOp    = Seq.empty[GatherRingUnit[FakeRobPtr] => Unit]
   private val H1      = Seq(eHasTable(true))
   private val H0      = Seq(eHasTable(false))
   private val I1      = Seq(eHasIndex(true))
@@ -148,13 +152,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   describe("FSM") {
     it("Place sets hasTable/hasIndex") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -163,20 +161,14 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pNoFlow), H0 ++ I0),
-            Cycle(Seq(pPlace(8, 0, e, e, f)), H1 ++ I1 ++ Wb0)
+            Cycle(pNoFlow)(H0 ++ I0),
+            Cycle(pPlace(8, 0, e, e, f))(H1 ++ I1 ++ Wb0),
           )
       }
     }
     it("Flow decrements counter") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -185,20 +177,14 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(2, 0, e, e, f)), Wb0),
-            Cycle(Seq(pNoPlace, pFlow), Wb(0))
+            Cycle(pPlace(2, 0, e, e, f))(Wb0),
+            Cycle(pNoPlace, pFlow)(Wb(0)),
           )
       }
     }
     it("Hold keeps state") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -207,20 +193,14 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(8, 0, e, e, f)), noOp),
-            Cycle(Seq(pNoPlace, pNoFlow), H1 ++ I1)
+            Cycle(pPlace(8, 0, e, e, f))(noOp),
+            Cycle(pNoPlace, pNoFlow)(H1 ++ I1),
           )
       }
     }
     it("Flush clears") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -229,8 +209,8 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(8, 0, e, e, f)), H1),
-            Cycle(Seq(pNoPlace, pNoFlow, pFlush), H0 ++ I0)
+            Cycle(pPlace(8, 0, e, e, f))(H1),
+            Cycle(pNoPlace, pNoFlow, pFlush)(H0 ++ I0),
           )
       }
     }
@@ -240,13 +220,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   describe("LMUL=1") {
     it("identity 16 elem") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -257,19 +231,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, 0 until 16, Seq.fill(16)(true))), Wb(exp))
+            Cycle(pPlace(1, 0, t, 0 until 16, Seq.fill(16)(true)))(Wb(exp)),
           )
       }
     }
     it("reverse order gather") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -288,19 +256,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, idx, Seq.fill(16)(true))), Wb(exp))
+            Cycle(pPlace(1, 0, t, idx, Seq.fill(16)(true)))(Wb(exp)),
           )
       }
     }
     it("shuffled gather") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -317,19 +279,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, perm, Seq.fill(16)(true))), Wb(exp))
+            Cycle(pPlace(1, 0, t, perm, Seq.fill(16)(true)))(Wb(exp)),
           )
       }
     }
     it("mixed found/notfound") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -351,19 +307,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, idx, Seq.fill(16)(true), pf)), Wb(exp))
+            Cycle(pPlace(1, 0, t, idx, Seq.fill(16)(true), pf))(Wb(exp)),
           )
       }
     }
     it("vslide1up SEW=8") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -384,19 +334,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16))), Wb(exp))
+            Cycle(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(Wb(exp)),
           )
       }
     }
     it("vslide1down SEW=8") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -417,19 +361,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16))), Wb(exp))
+            Cycle(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(Wb(exp)),
           )
       }
     }
     it("prefillData for out-of-range indices") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -451,69 +389,8 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, idx, Seq.fill(16)(true), pf)), Wb(exp))
+            Cycle(pPlace(1, 0, t, idx, Seq.fill(16)(true), pf))(Wb(exp)),
           )
-      }
-    }
-    it("oldTable for inactive elements") {
-      simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
-      ) {
-        dut =>
-          // inactive elements (indexValid=false) get oldTable data (undisturbed/agnostic)
-          val t = (0 until 16).map(
-            i => 0x10 + i
-          )
-          val ot = (0 until 16).map(
-            i => 0xaa + i
-          )
-          val iv = (0 until 16).map(_ % 4 < 2) // 0,1,4,5,8,9,12,13 active; rest inactive
-          val idx = (0 until 16).map(
-            i => if (i % 4 < 2) i else 0
-          )
-          val bytes = (0 until 16).map(
-            i => if (i % 4 < 2) 0x10 + i else 0xaa + i
-          )
-          val exp = bytes.foldRight(BigInt(0))(
-            (b, a) => (a << 8) | BigInt(b)
-          )
-          initUnit(dut)
-          ot.zipWithIndex.foreach {
-            case (v, i) => dut.in.oldTable(i).poke(v)
-          }
-          dut.in.blockConfig.blockSize.poke(1)
-          dut.in.placeTable.valid.poke(true)
-          dut.in.placeIndex.valid.poke(true)
-          t.zipWithIndex.foreach {
-            case (v, i) => dut.in.placeTable.bits.table(i).poke(v)
-          }
-          idx.zipWithIndex.foreach {
-            case (v, i) => dut.in.placeIndex.bits.index(i).poke(v)
-          }
-          iv.zipWithIndex.foreach {
-            case (v, i) => dut.in.placeIndex.bits.indexValid(i).poke(v)
-          }
-          (0 until 16).foreach(
-            i => dut.in.placeIndex.bits.prefillData(i).poke(0)
-          )
-          dut.in.placeTable.bits.tableIdx.poke(0)
-          dut.in.placeTable.bits.blockBase.poke(0)
-          (0 until 16).foreach(
-            i => dut.in.placeIndex.bits.fillScala(i).poke(false)
-          )
-          (0 until 16).foreach(
-            i => dut.in.placeIndex.bits.fillZeros(i).poke(false)
-          )
-          dut.in.willFlow.poke(false)
-          dut.in.flowIn.valid.poke(false)
-          dut.clock.step()
-          dut.out.wb.bits.dest.expect(exp)
       }
     }
   }
@@ -523,13 +400,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     val sb = 2
     it("vslide1up") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -550,19 +421,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16))), Wb(exp))
+            Cycle(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(Wb(exp)),
           )
       }
     }
     it("vslide1down") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -583,7 +448,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16))), Wb(exp))
+            Cycle(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(Wb(exp)),
           )
       }
     }
@@ -592,13 +457,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     val sb = 4
     it("vslide1up") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -619,19 +478,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16))), Wb(exp))
+            Cycle(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(Wb(exp)),
           )
       }
     }
     it("vslide1down") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -652,7 +505,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16))), Wb(exp))
+            Cycle(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(Wb(exp)),
           )
       }
     }
@@ -662,13 +515,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   describe("fillZeros") {
     it("vslideup offset=3") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -689,19 +536,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, idx, iv, fZeros = fz)), Wb(exp))
+            Cycle(pPlace(1, 0, t, idx, iv, fZeros = fz))(Wb(exp)),
           )
       }
     }
     it("vslidedown offset=2") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -722,19 +563,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, idx, iv, fZeros = fz)), Wb(exp))
+            Cycle(pPlace(1, 0, t, idx, iv, fZeros = fz))(Wb(exp)),
           )
       }
     }
     it("fillZeros + fillScala mixed") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -760,9 +595,8 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             dut,
             initUnit,
             Cycle(
-              Seq(pPlace(1, 0, t, idx, iv, fScala = fs, fZeros = fz), pScala(BigInt("5A5A5A5A5A5A5A5A", 16))),
-              Wb(exp)
-            )
+              pPlace(1, 0, t, idx, iv, fScala = fs, fZeros = fz), pScala(BigInt("5A5A5A5A5A5A5A5A", 16))
+            )(Wb(exp))
           )
       }
     }
@@ -772,13 +606,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   describe("Multi-Table") {
     it("LMUL=2 identity") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -800,20 +628,14 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(2, 0, s0, idx, Seq.fill(16)(true))), Wb0),
-            Cycle(Seq(pNoPlace, pFlowTbl(1, s1)), Wb(exp))
+            Cycle(pPlace(2, 0, s0, idx, Seq.fill(16)(true)))(Wb0),
+            Cycle(pNoPlace, pFlowTbl(1, s1))(Wb(exp)),
           )
       }
     }
     it("LMUL=4 identity") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -830,22 +652,16 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(4, 0, s, perm, Seq.fill(16)(true))), Wb0),
-            Cycle(Seq(pNoPlace, pFlowTbl(1, s)), Wb0),
-            Cycle(Seq(pNoPlace, pFlowTbl(2, s)), Wb0),
-            Cycle(Seq(pNoPlace, pFlowTbl(3, s)), Wb(exp))
+            Cycle(pPlace(4, 0, s, perm, Seq.fill(16)(true)))(Wb0),
+            Cycle(pNoPlace, pFlowTbl(1, s))(Wb0),
+            Cycle(pNoPlace, pFlowTbl(2, s))(Wb0),
+            Cycle(pNoPlace, pFlowTbl(3, s))(Wb(exp)),
           )
       }
     }
     it("LMUL=2 all indices in seg1") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -869,20 +685,14 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(2, 0, s0, idx, Seq.fill(16)(true), pf)), Wb0),
-            Cycle(Seq(pNoPlace, pFlowTbl(1, s1)), Wb(s1Bytes))
+            Cycle(pPlace(2, 0, s0, idx, Seq.fill(16)(true), pf))(Wb0),
+            Cycle(pNoPlace, pFlowTbl(1, s1))(Wb(s1Bytes)),
           )
       }
     }
     it("LMUL=2 zip interleave") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -906,20 +716,14 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(2, 0, s0, idx, Seq.fill(16)(true), pf)), Wb0),
-            Cycle(Seq(pNoPlace, pFlowTbl(1, s1)), Wb(exp))
+            Cycle(pPlace(2, 0, s0, idx, Seq.fill(16)(true), pf))(Wb0),
+            Cycle(pNoPlace, pFlowTbl(1, s1))(Wb(exp)),
           )
       }
     }
     it("LMUL=2 consecutive Places override") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -935,21 +739,15 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(2, 0, s0, 0 until 16, Seq.fill(16)(true))), Wb0),
-            Cycle(Seq(pPlace(2, 0, s0b, 0 until 16, Seq.fill(16)(true))), Wb0),
-            Cycle(Seq(pNoPlace, pFlowTbl(1, s0b)), Wb(s0bBytes))
+            Cycle(pPlace(2, 0, s0, 0 until 16, Seq.fill(16)(true)))(Wb0),
+            Cycle(pPlace(2, 0, s0b, 0 until 16, Seq.fill(16)(true)))(Wb0),
+            Cycle(pNoPlace, pFlowTbl(1, s0b))(Wb(s0bBytes)),
           )
       }
     }
     it("LMUL=4 distinct segments") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -985,21 +783,18 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             dut,
             initUnit,
             Cycle(
-              Seq(
-                pPlace(
-                  4,
-                  0,
-                  s0,
-                  idx,
-                  Seq.fill(16)(true),
-                  prefill = idx
-                )
-              ),
-              Wb0
-            ),
-            Cycle(Seq(pNoPlace, pFlowTbl(1, s1)), Wb0),
-            Cycle(Seq(pNoPlace, pFlowTbl(2, s2)), Wb0),
-            Cycle(Seq(pNoPlace, pFlowTbl(3, s3)), Wb(exp))
+              pPlace(
+                4,
+                0,
+                s0,
+                idx,
+                Seq.fill(16)(true),
+                prefill = idx
+              )
+            )(Wb0),
+            Cycle(pNoPlace, pFlowTbl(1, s1))(Wb0),
+            Cycle(pNoPlace, pFlowTbl(2, s2))(Wb0),
+            Cycle(pNoPlace, pFlowTbl(3, s3))(Wb(exp)),
           )
       }
     }
@@ -1009,13 +804,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   describe("Tags") {
     it("tableOut valid after Place") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -1028,20 +817,14 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(2, 0, t, idx, Seq.fill(16)(true))), noOp),
-            Cycle(Seq(pNoPlace, pNoFlow), Seq(_.out.tableOut.valid.expect(true)))
+            Cycle(pPlace(2, 0, t, idx, Seq.fill(16)(true)))(noOp),
+            Cycle(pNoPlace, pNoFlow)(Seq(_.out.flow.valid.expect(true))),
           )
       }
     }
     it("passedEntry at entry unit after flow") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -1054,20 +837,14 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(2, 0, t, idx, Seq.fill(16)(true))), noOp),
-            Cycle(Seq(pNoPlace, pFlowTbl(1, t)), Seq(_.out.tableOut.tag.passedEntry.expect(true)))
+            Cycle(pPlace(2, 0, t, idx, Seq.fill(16)(true)))(noOp),
+            Cycle(pNoPlace, pFlowTbl(1, t))(Seq(_.out.flow.bits.passedEntry.expect(true))),
           )
       }
     }
     it("tag.isFirst set on Place") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -1077,20 +854,14 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(2, 0, t, 0 until 16, Seq.fill(16)(true))), noOp),
-            Cycle(Seq(pNoPlace, pNoFlow), Seq(_.out.tableOut.tag.isFirst.expect(false)))
+            Cycle(pPlace(2, 0, t, 0 until 16, Seq.fill(16)(true)))(noOp),
+            Cycle(pNoPlace, pNoFlow)(Seq(_.out.flow.bits.isFirstTable.expect(false))),
           )
       }
     }
-    it("flowIn.tag.passedEntry propagates") {
+    it("flowIn.bits.passedEntry propagates") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -1098,7 +869,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           val t = (0 until 16).map(
             i => 0x10 + i
           )
-          dut.in.blockConfig.blockSize.poke(2)
+          dut.in.placeIndex.bits.blockSize.poke(2)
           dut.in.placeTable.valid.poke(true)
           dut.in.placeIndex.valid.poke(true)
           t.zipWithIndex.foreach {
@@ -1111,33 +882,26 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             i => dut.in.placeIndex.bits.indexValid(i).poke(true)
           )
           dut.in.placeTable.bits.tableIdx.poke(0)
-          dut.in.placeTable.bits.blockBase.poke(0)
           dut.in.willFlow.poke(false)
-          dut.in.flowIn.valid.poke(false)
+          dut.in.flow.valid.poke(false)
           dut.clock.step()
           dut.in.placeTable.valid.poke(false)
           dut.in.placeIndex.valid.poke(false)
           dut.in.willFlow.poke(true)
-          dut.in.flowIn.valid.poke(true)
-          dut.in.flowIn.idx.poke(1)
+          dut.in.flow.valid.poke(true)
+          dut.in.flow.bits.tableIdx.poke(1)
           t.zipWithIndex.foreach {
-            case (v, i) => dut.in.flowIn.data(i).poke(v)
+            case (v, i) => dut.in.flow.bits.data(i).poke(v)
           }
-          dut.in.flowIn.tag.isFirst.poke(false)
-          dut.in.flowIn.tag.passedEntry.poke(true)
+          dut.in.flow.bits.isFirstTable.poke(false)
+          dut.in.flow.bits.passedEntry.poke(true)
           dut.clock.step()
-          dut.out.tableOut.tag.passedEntry.expect(true)
+          dut.out.flow.bits.passedEntry.expect(true)
       }
     }
-    it("flowIn.tag.isFirst propagates") {
+    it("flowIn.bits.isFirstTable propagates") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -1145,7 +909,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           val t = (0 until 16).map(
             i => 0x10 + i
           )
-          dut.in.blockConfig.blockSize.poke(2)
+          dut.in.placeIndex.bits.blockSize.poke(2)
           dut.in.placeTable.valid.poke(true)
           dut.in.placeIndex.valid.poke(true)
           t.zipWithIndex.foreach {
@@ -1158,22 +922,21 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             i => dut.in.placeIndex.bits.indexValid(i).poke(true)
           )
           dut.in.placeTable.bits.tableIdx.poke(0)
-          dut.in.placeTable.bits.blockBase.poke(0)
           dut.in.willFlow.poke(false)
-          dut.in.flowIn.valid.poke(false)
+          dut.in.flow.valid.poke(false)
           dut.clock.step()
           dut.in.placeTable.valid.poke(false)
           dut.in.placeIndex.valid.poke(false)
           dut.in.willFlow.poke(true)
-          dut.in.flowIn.valid.poke(true)
-          dut.in.flowIn.idx.poke(1)
+          dut.in.flow.valid.poke(true)
+          dut.in.flow.bits.tableIdx.poke(1)
           t.zipWithIndex.foreach {
-            case (v, i) => dut.in.flowIn.data(i).poke(v)
+            case (v, i) => dut.in.flow.bits.data(i).poke(v)
           }
-          dut.in.flowIn.tag.isFirst.poke(true)
-          dut.in.flowIn.tag.passedEntry.poke(false)
+          dut.in.flow.bits.isFirstTable.poke(true)
+          dut.in.flow.bits.passedEntry.poke(false)
           dut.clock.step()
-          dut.out.tableOut.tag.isFirst.expect(true)
+          dut.out.flow.bits.isFirstTable.expect(true)
       }
     }
   }
@@ -1182,13 +945,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   describe("Reuse") {
     it("second instruction after flush") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -1207,22 +964,16 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t1, 0 until 16, Seq.fill(16)(true))), Wb(e1)),
-            Cycle(Seq(pNoPlace, pNoFlow, pFlush), noOp),
-            Cycle(Seq(pNoPlace, pNoFlow, _.flush.poke(false)), noOp),
-            Cycle(Seq(pPlace(1, 0, t2, 0 until 16, Seq.fill(16)(true))), Wb(e2))
+            Cycle(pPlace(1, 0, t1, 0 until 16, Seq.fill(16)(true)))(Wb(e1)),
+            Cycle(pNoPlace, pNoFlow, pFlush)(noOp),
+            Cycle(pNoPlace, pNoFlow, _.in.flush.poke(false))(noOp),
+            Cycle(pPlace(1, 0, t2, 0 until 16, Seq.fill(16)(true)))(Wb(e2)),
           )
       }
     }
     it("back-to-back without flush") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -1241,8 +992,8 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t1, 0 until 16, Seq.fill(16)(true))), Wb(e1)),
-            Cycle(Seq(pPlace(1, 0, t2, 0 until 16, Seq.fill(16)(true))), Wb(e2))
+            Cycle(pPlace(1, 0, t1, 0 until 16, Seq.fill(16)(true)))(Wb(e1)),
+            Cycle(pPlace(1, 0, t2, 0 until 16, Seq.fill(16)(true)))(Wb(e2)),
           )
       }
     }
@@ -1252,13 +1003,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   describe("SEW=64") {
     it("identity 2 lanes") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -1271,19 +1016,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, 0 until 16, Seq.fill(16)(true))), Wb(exp))
+            Cycle(pPlace(1, 0, t, 0 until 16, Seq.fill(16)(true)))(Wb(exp)),
           )
       }
     }
     it("vslide1up fillScala 8 bytes") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -1305,7 +1044,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(Seq(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16))), Wb(exp))
+            Cycle(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(Wb(exp)),
           )
       }
     }
@@ -1315,13 +1054,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   describe("Table Control") {
     it("hasTable dropped after invalid flow") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
 
@@ -1332,14 +1065,13 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             dut,
             initUnit,
             Cycle(
-              Seq(pPlace(1, 0, t, 0 until 16, Seq.fill(16)(true))),
-              H1 ++ Wb(
-                t.foldRight(BigInt(0))(
-                  (b, a) => (a << 8) | BigInt(b)
-                )
+              pPlace(1, 0, t, 0 until 16, Seq.fill(16)(true))
+            )(H1 ++ Wb(
+              t.foldRight(BigInt(0))(
+                (b, a) => (a << 8) | BigInt(b)
               )
-            ),
-            Cycle(Seq(pNoPlace, pDrop), H0 ++ I1)
+            )),
+            Cycle(pNoPlace, pDrop)(H0 ++ I1),
           )
       }
     }
@@ -1349,13 +1081,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   describe("Block Config") {
     it("non-zero blockBase places correctly") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
           // unitIdx=0, blockBase=2, blockSize=4 => localPos=6, non-entry, non-ring-end
@@ -1363,8 +1089,8 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             i => 0x10 + i
           )
           initUnit(dut)
-          dut.in.blockConfig.blockBase.poke(2)
-          dut.in.blockConfig.blockSize.poke(4)
+          dut.in.placeIndex.bits.blockBase.poke(2)
+          dut.in.placeIndex.bits.blockSize.poke(4)
           dut.in.placeTable.valid.poke(true)
           dut.in.placeIndex.valid.poke(true)
           t.zipWithIndex.foreach {
@@ -1377,7 +1103,6 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             i => dut.in.placeIndex.bits.indexValid(i).poke(true)
           )
           dut.in.placeTable.bits.tableIdx.poke(0)
-          dut.in.placeTable.bits.blockBase.poke(2)
           dut.clock.step()
           dut.out.status.hasTable.expect(true)
           dut.out.status.hasIndex.expect(true)
@@ -1386,13 +1111,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     }
     it("non-entry unit does not set passedEntry on flow") {
       simulate(
-        new GatherRingUnit(
-          vlen,
-          dlen,
-          maxTableNum,
-          xlen = 64,
-          unitIdx = 0
-        )
+        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.Param.default)
       ) {
         dut =>
           // unitIdx=0, blockBase=2 => not the entry => passedEntry NOT set during flow
@@ -1400,8 +1119,8 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             i => 0x10 + i
           )
           initUnit(dut)
-          dut.in.blockConfig.blockBase.poke(2)
-          dut.in.blockConfig.blockSize.poke(4)
+          dut.in.placeIndex.bits.blockBase.poke(2)
+          dut.in.placeIndex.bits.blockSize.poke(4)
           dut.in.placeTable.valid.poke(true)
           dut.in.placeIndex.valid.poke(true)
           t.zipWithIndex.foreach {
@@ -1414,21 +1133,20 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             i => dut.in.placeIndex.bits.indexValid(i).poke(true)
           )
           dut.in.placeTable.bits.tableIdx.poke(0)
-          dut.in.placeTable.bits.blockBase.poke(2)
           dut.clock.step()
           // Flow through this non-entry unit
           dut.in.placeTable.valid.poke(false)
           dut.in.placeIndex.valid.poke(false)
           dut.in.willFlow.poke(true)
-          dut.in.flowIn.valid.poke(true)
-          dut.in.flowIn.idx.poke(1)
+          dut.in.flow.valid.poke(true)
+          dut.in.flow.bits.tableIdx.poke(1)
           t.zipWithIndex.foreach {
-            case (v, i) => dut.in.flowIn.data(i).poke(v)
+            case (v, i) => dut.in.flow.bits.data(i).poke(v)
           }
-          dut.in.flowIn.tag.isFirst.poke(false)
-          dut.in.flowIn.tag.passedEntry.poke(false)
+          dut.in.flow.bits.isFirstTable.poke(false)
+          dut.in.flow.bits.passedEntry.poke(false)
           dut.clock.step()
-          dut.out.tableOut.tag.passedEntry.expect(false) // should NOT be set (not entry)
+          dut.out.flow.bits.passedEntry.expect(false) // should NOT be set (not entry)
       }
     }
   }

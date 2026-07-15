@@ -4,9 +4,7 @@ import chisel3._
 import chisel3.util._
 import yunsuan.vector.v2.Shuffle.GatherCommon._
 import yunsuan.vector.Common._
-import yunsuan.vector.v2.Shuffle.GatherRing.RingCtrl
 import yunsuan.vector.v2.Shuffle.GatherRingUnit.{PlaceIndexRequest, PlaceTableRequest, Status}
-import chisel3.experimental.BundleLiterals._
 
 class GatherRing[T <: Data](
   metaGen: => T
@@ -105,10 +103,6 @@ class GatherRing[T <: Data](
   private val isFirstVec     = VecInit(units.map(_.out.status.isFirstTable))
   private val passedEntryVec = VecInit(units.map(_.out.status.passedEntry))
 
-  private val ring2WillFlowVec = Cat(ring2Controllers.map(_.out.willFlow).reverse)
-  private val ring4WillFlowVec = Cat(ring4Controllers.map(_.out.willFlow).reverse)
-  private val ring8WillFlowVec = Cat(ring8Controllers.map(_.out.willFlow).reverse)
-  private val unitWillFlowVec = ring2WillFlowVec | ring4WillFlowVec | ring8WillFlowVec
 
   private val unitsControllers = units.indices.map(
     i => Seq(
@@ -132,9 +126,17 @@ class GatherRing[T <: Data](
 
   for (u <- 0 until NumUnits) {
     units(u).in.placeTable.valid := Cat(validMatrixPipeUnitTable.map(_(u))).orR
-    units(u).in.placeTable.bits  := Mux1H(validMatrixPipeUnitTable.map(_(u)), in.s1pipes)
+    units(u).in.placeTable.bits  := Mux1H(
+      validMatrixPipeUnitTable.map(_(u)),
+      in.s1pipes.map(s1 => PlaceTableRequest.fromPipeInS1(s1.bits))
+    )
     units(u).in.placeIndex.valid := Cat(validMatrixPipeUnitIndex.map(_(u))).orR
     units(u).in.placeIndex.bits  := Mux1H(validMatrixPipeUnitIndex.map(_(u)), in.s1pipes)
+  }
+
+  // out.metas: collect meta from each unit's wb
+  for (i <- 0 until NumUnits) {
+    out.metas(i) := units(i).out.wb.bits.meta
   }
 
   for (i <- 0 until NumUnits) {
@@ -153,6 +155,11 @@ class GatherRing[T <: Data](
       pipeIndexPos(i) := Mux1HValidIO((ring2Controllers ++ ring4Controllers ++ ring8Controllers).map(_.out.indexPos(i))).bits
     }
   }
+
+  private val ring2WillFlowVec = Cat(ring2Controllers.map(_.out.willFlow).reverse)
+  private val ring4WillFlowVec = Cat(ring4Controllers.map(_.out.willFlow).reverse)
+  private val ring8WillFlowVec = Cat(ring8Controllers.map(_.out.willFlow).reverse)
+  willFlowVecNext := ring2WillFlowVec | ring4WillFlowVec | ring8WillFlowVec
 
   // TODO: gate it
   willFlowVec := willFlowVecNext
@@ -264,14 +271,6 @@ object GatherRing {
   class PipeOut[T <: Data](metaGen: => T)(implicit val param: Param) extends GatherBundle {
     val data = UInt(DLEN.W)
     val meta = metaGen
-  }
-
-  class RingCtrl(size: Int) extends Bundle {
-    val tableValid = UInt(size.W)
-    val indexValid = UInt(size.W)
-
-    def allIndexValid: Bool = indexValid.andR
-    def indexCnt: UInt = PopCount(indexValid)
   }
 
   def main(args: Array[String]): Unit = {

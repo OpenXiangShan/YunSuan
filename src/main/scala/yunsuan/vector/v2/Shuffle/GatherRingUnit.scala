@@ -12,9 +12,9 @@ class GatherRingUnit[T <: Data](
 )(
   implicit val param: Param
 ) extends GatherModule {
-  
-  override def desiredName: String = 
-    super.desiredName + 
+
+  override def desiredName: String =
+    super.desiredName +
     s"_vlen${VLEN}b_dlen${DLEN}b_table${NumUnits}"
 
   val ResWidth = MinDataWidth
@@ -49,20 +49,20 @@ class GatherRingUnit[T <: Data](
   private val tableValid   = RegInit(false.B)
   private val tableData    = Reg(Vec(NumElem, UInt(MinDataWidth.W)))
   private val tableIdx     = Reg(UInt(TableIdxWidth.W))
-  private val isFirstTable = Reg(Bool())
-  private val passedEntry  = Reg(Bool())
+  private val isFirstTable = RegInit(false.B)
+  private val passedEntry  = RegInit(false.B)
 
   private val indexOrRes = Reg(Vec(NumElem, UInt(IndexWidth.max(ResWidth).W)))
   private val indexView  = WireInit(VecInit(indexOrRes.map(_.take(IndexWidth))))
   private val resView    = WireInit(VecInit(indexOrRes.map(_.take(ResWidth))))
 
-  private val meta      = Reg(metaGen)
+  private val meta      = RegInit(0.U.asTypeOf(metaGen))
 
   private val hasTable  = RegInit(false.B)
   private val hasIndex  = RegInit(false.B)
-  private val isEntry   = Reg(Bool())
+  private val isEntry   = RegInit(false.B)
   private val counter   = RegInit(0.U(log2Up(NumUnits).W))
-  private val indexDone = Reg(Vec(NumElem, Bool()))
+  private val indexDone = RegInit(VecInit.fill(NumElem)(false.B))
 
   // ── hasTable 状态机 ─────────────────────────────────
   when(flush) {
@@ -78,7 +78,7 @@ class GatherRingUnit[T <: Data](
   }
 
   // ── hasIndex 状态机 ─────────────────────────────────
-  when(flush) {
+  when(flush || in.wbReady && out.wb.valid) {
     hasIndex := false.B
   }.elsewhen(doPlaceIndex) {
     hasIndex := true.B
@@ -90,18 +90,23 @@ class GatherRingUnit[T <: Data](
     isEntry := isEntryNext
   }
 
-  private val isFirstTableNext = Mux(
-    doPlaceTable,
-    in.placeTable.isFirstTable,
-    in.flow.isFirstTable,
-  )
-  isFirstTable := isFirstTableNext
-
-  private val passedEntryNext = Mux1H(Seq(
+  private val isFirstTableNext = Mux1H(Seq(
     doPlaceTable -> in.placeTable.isFirstTable,
-    doFlow -> isEntryNext,
+    doFlow       -> in.flow.isFirstTable,
   ))
-  passedEntry := passedEntryNext
+  when(doPlaceTable || doFlow) {
+    isFirstTable := isFirstTableNext
+  }.otherwise {
+    // hold
+  }
+
+  when(doPlaceTable) {
+    passedEntry := in.placeTable.isFirstTable
+  }.elsewhen(doFlow) {
+    passedEntry := isEntryNext
+  }.otherwise {
+    // hold
+  }
 
   private val tableDataNext = Mux1H(Seq(
     doPlaceTable -> in.placeTable.table,
@@ -113,11 +118,11 @@ class GatherRingUnit[T <: Data](
 
   private val tableValidNext = Mux1H(Seq(
     doPlaceTable -> true.B,
-    doFlowTable -> true.B,
+    doFlowTable  -> true.B,
   ))
-  when (flush) {
+  when(flush) {
     tableValid := false.B
-  }.elsewhen (tableValid || tableValidNext) {
+  }.elsewhen(doPlaceTable || doFlowTable) {
     tableValid := tableValidNext
   }
 
@@ -164,29 +169,35 @@ class GatherRingUnit[T <: Data](
   private val fillIdx   = Wire(Vec(NumElem, Bool()))
   private val fillZeros = Wire(Vec(NumElem, Bool()))
   private val fillScala = Wire(Vec(NumElem, Bool()))
+  private val prefill   = Wire(Vec(NumElem, Bool()))
 
   for (i <- 0 until NumElem) {
+    prefill(i)   := !in.placeIndex.bits.indexValid(i)
+    fillScala(i) := doPlaceIndex && in.placeIndex.bits.fillScala(i)
+    fillZeros(i) := doPlaceIndex && in.placeIndex.bits.fillZeros(i)
     fillRes(i)   := (hasIndex || doPlaceIndex) && gatherMod.out.resultValid(i)
     fillIdx(i)   := doPlaceIndex && hasIndex && gatherMod.out.notfound(i)
-    fillZeros(i) := doPlaceIndex && in.placeIndex.bits.fillZeros(i)
-    fillScala(i) := doPlaceIndex && in.placeIndex.bits.fillScala(i)
 
     when(flush) {
       indexDone(i)  := false.B
+    }.elsewhen(doPlaceIndex) {
+      indexOrRes(i) := Mux1H(Seq(
+        prefill(i)   -> in.placeIndex.bits.prefillData(i),
+        fillScala(i) -> scalaTableBytes(i % (XLEN / MinDataWidth)),
+        fillZeros(i) -> 0.U,
+        fillIdx(i)   -> in.placeIndex.bits.index(i),
+        fillRes(i)   -> gatherMod.out.result(i),
+      ))
+      indexDone(i) := !fillIdx(i)
+      meta := in.placeIndex.meta
+    }.elsewhen(doFlow) {
+      indexOrRes(i) := Mux1H(Seq(
+        fillRes(i)   -> gatherMod.out.result(i),
+      ))
+      indexDone(i) := indexDone(i) | fillRes(i)
     }.elsewhen(fillRes(i)) {
       indexOrRes(i) := gatherMod.out.result(i)
       indexDone(i)  := true.B
-    }.elsewhen(doPlaceIndex) {
-      indexOrRes(i) := Mux1H(
-        Seq(
-          fillScala(i)                      -> scalaTableBytes(i % (XLEN / MinDataWidth)),
-          fillZeros(i)                      -> 0.U,
-          !in.placeIndex.bits.indexValid(i) -> in.placeIndex.bits.prefillData(i),
-          fillIdx(i)                        -> in.placeIndex.bits.index(i),
-        )
-      )
-      indexDone(i) := false.B
-      meta := in.placeIndex.meta
     }.elsewhen(counter === 0.U && doFlow) {
       indexDone(i) := true.B
     }
@@ -197,6 +208,7 @@ class GatherRingUnit[T <: Data](
   // 不依赖 out.ready
   out.wb.valid := hasIndex && counter === 0.U
   out.wb.bits.data := resView.asUInt
+  out.wb.bits.meta := meta
 
   // ── Table 输出（流向下一个 Unit）─────────────────────
   out.flow.valid := tableValid && hasTable
@@ -206,8 +218,14 @@ class GatherRingUnit[T <: Data](
   out.flow.passedEntry := passedEntry
 
   // ── 状态输出（给顶层做空位检测）─────────────────────
-  out.status.hasTable := hasTable
-  out.status.hasIndex := hasIndex
+  out.status.hasTable     := hasTable
+  out.status.hasIndex     := hasIndex
+  out.status.blockBase    := blockBase
+  out.status.blockSize    := blockSize
+  out.status.isEntry      := isEntry
+  out.status.isFirstTable := isFirstTable
+  out.status.passedEntry  := passedEntry
+  out.status.done         := indexDone.asUInt.andR
 }
 
 object GatherRingUnit {
@@ -249,6 +267,16 @@ object GatherRingUnit {
      * If the table is the first table of this block in [[GatherRing]]
      */
     val isFirstTable = Bool()
+  }
+
+  object PlaceTableRequest {
+    def fromPipeInS1[T <: Data](s1: GatherRing.PipeInS1[T])(implicit param: Param): PlaceTableRequest = {
+      val req = Wire(new PlaceTableRequest)
+      req.tableIdx := s1.tableIdx
+      req.table    := s1.table
+      req.isFirstTable := s1.placeIdx === 0.U
+      req
+    }
   }
 
   /**
