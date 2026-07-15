@@ -6,7 +6,7 @@ import yunsuan.vector.v2.Shuffle.GatherCommon._
 import yunsuan.vector.Common._
 
 
-class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val param: Param) extends GatherModule {
+class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val param: GatherParam) extends GatherModule {
   require(Seq(2, 4, 8).contains(size))
   require(blockBase % size == 0)
 
@@ -48,7 +48,7 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
 }
 
 object GatherRingBlockController {
-  class In(size: Int)(implicit val param: Param) extends GatherBundle {
+  class In(size: Int)(implicit val param: GatherParam) extends GatherBundle {
     val pipePlaceIdx: Vec[ValidIO[UInt]] = Vec(NumPipeIn, ValidIO(PipeInIdx()))
 
     val tableValid: UInt = UInt(size.W)
@@ -62,7 +62,7 @@ object GatherRingBlockController {
     }
   }
 
-  class Out(size: Int)(implicit val param: Param) extends GatherBundle {
+  class Out(size: Int)(implicit val param: GatherParam) extends GatherBundle {
     val tablePos: Vec[ValidIO[UInt]] = Vec(NumPipeIn, ValidIO(UnitIdx()))
     val indexPos: Vec[ValidIO[UInt]] = Vec(NumPipeIn, ValidIO(UnitIdx()))
     val willFlow: UInt = UInt(size.W)

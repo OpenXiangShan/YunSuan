@@ -17,7 +17,7 @@ object GatherCommon {
    * @param numUnits The number of all [[GatherRingUnit]] in [[GatherRing]]
    * @param unitIdx The index of this [[GatherRingUnit]] in [[GatherRing]]
    */
-  class Param(
+  class GatherParam(
     val numPipeIn : Int,
     val numPipeOut: Int,
     val vlen      : Int = 128,
@@ -28,12 +28,12 @@ object GatherCommon {
     require(isPow2(vlen) && vlen >= 128)
   }
 
-  object Param {
-    def default: Param = new Param(4, 4)
+  object GatherParam {
+    def default: GatherParam = new GatherParam(4, 4)
   }
 
   trait Config {
-    implicit val param: Param
+    implicit val param: GatherParam
 
     def XLEN: Int = param.xlen
 

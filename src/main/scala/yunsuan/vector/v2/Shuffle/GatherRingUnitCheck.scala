@@ -2,7 +2,7 @@ package yunsuan.vector.v2.Shuffle
 
 import chisel3._
 import circt.stage._
-import yunsuan.vector.v2.Shuffle.GatherCommon.{FakeRobPtr, Param}
+import yunsuan.vector.v2.Shuffle.GatherCommon.{FakeRobPtr, GatherParam}
 
 /**
  * GatherRingUnit 快速功能检查
@@ -37,7 +37,7 @@ object GatherRingUnitCheck extends App {
             new GatherRingUnit(
               unitIdx = 0,
               FakeRobPtr(),
-            )(Param.default)
+            )(GatherParam.default)
         )
     )
   )
@@ -71,7 +71,7 @@ object GatherRingCheck extends App {
     Seq(
       chisel3.stage
         .ChiselGeneratorAnnotation(
-          () => new GatherRing(UInt(9.W))(Param.default)
+          () => new GatherRing(UInt(9.W))(GatherParam.default)
         )
     )
   )

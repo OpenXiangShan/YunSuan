@@ -10,7 +10,7 @@ import yunsuan.vector.v2.Shuffle.GatherCommon._
  * This module is used to generate the indices for slideup instruction.
  * The unchanged part is handled in this module, but tail part is not handled.
  */
-class SlideUpIndexGen(implicit val param: Param) extends GatherModule {
+class SlideUpIndexGen(implicit val param: GatherParam) extends GatherModule {
 
   override def desiredName: String = super.desiredName + s"_${DLEN}b"
 
@@ -125,7 +125,7 @@ object SlideUpIndexGenMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new SlideUpIndexGen()(Param.default)
+        () => new SlideUpIndexGen()(GatherParam.default)
       ) +: firtoolAnno
   )
 

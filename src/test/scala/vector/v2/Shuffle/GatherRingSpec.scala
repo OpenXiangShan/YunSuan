@@ -68,7 +68,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
   // ═══ LMUL=1 ════════════════════════════════════════
   describe("LMUL=1") {
     it("vrgather identity via pipe 0") {
-      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.Param.default)) { dut =>
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val t = (0 until 16).map(i => 0x10 + i)
         pPipe(dut, 0, t, 0 until 16, Seq.fill(16)(true))
@@ -81,7 +81,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
     for (unit <- 0 until 8) {
       val u = unit
       it(s"vrgather identity on unit $u") {
-        simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.Param.default)) { dut =>
+        simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
           initDut(dut)
           val t = (0 until 16).map(i => 0x10 + i)
           pPipe(dut, 0, t, 0 until 16, Seq.fill(16)(true), blockBase = u)
@@ -93,7 +93,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
 
     // A4: vslideup SEW=8 offset=3 (fillZeros)
     it("vslideup offset=3 fillZeros") {
-      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.Param.default)) { dut =>
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val t   = (0 until 16).map(i => 0x10 + i)
         val fz  = (0 until 16).map(_ < 3)
@@ -111,7 +111,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
   // ═══ LMUL=2 ════════════════════════════════════════
   describe("LMUL=2") {
     it("vrgather identity all-in-seg0") {
-      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.Param.default)) { dut =>
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val s0 = (0 until 16).map(i => 0x10 + i)
         pPipe(dut, 0, s0, (0 until 16), Seq.fill(16)(true), blockSize = 2)
@@ -127,7 +127,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
 
     // B2: LMUL=2 cross-segment
     it("vrgather cross-segment [KNOWN FAIL]") {
-      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.Param.default)) { dut =>
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val s0 = (0 until 16).map(i => 0x10 + i)
         val s1 = (0 until 16).map(i => 0xa0 + i)
@@ -146,7 +146,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
   // ═══ LMUL=4 ════════════════════════════════════════
   describe("LMUL=4") {
     it("vrgather identity single pipe [KNOWN FAIL]") {
-      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.Param.default)) { dut =>
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val t = (0 until 16).map(i => 0x30 + i)
         pPipe(dut, 0, t, (0 until 16), Seq.fill(16)(true), blockSize = 4)
@@ -158,7 +158,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
   // ═══ tableOut ══════════════════════════════════════
   describe("tableOut") {
     it("table and index placed at separate units") {
-      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.Param.default)) { dut =>
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val s0 = (0 until 16).map(i => 0x10 + i)
         pPipe(dut, 0, s0, (0 until 16), Seq.fill(16)(true), blockSize = 2)
@@ -172,7 +172,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
   // ═══ LMUL=2 zip ════════════════════════════════════
   describe("LMUL=2 zip") {
     it("interleave seg0 and seg1 [KNOWN FAIL]") {
-      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.Param.default)) { dut =>
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val s0  = (0 until 16).map(i => 0x10 + i)
         val s1  = (0 until 16).map(i => 0xa0 + i)

@@ -4,10 +4,10 @@ import _root_.circt.stage._
 import chisel3._
 import chisel3.util._
 import yunsuan.vector.Common._
-import yunsuan.vector.v2.Shuffle.GatherCommon.{GatherModule, Param}
+import yunsuan.vector.v2.Shuffle.GatherCommon.{GatherModule, GatherParam}
 
 
-class SlideDownIndexGen(implicit val param: Param) extends GatherModule {
+class SlideDownIndexGen(implicit val param: GatherParam) extends GatherModule {
 
   override def desiredName: String = super.desiredName + s"_${DLEN}b"
 
@@ -123,7 +123,7 @@ object SlideDownIndexGenMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new SlideDownIndexGen()(Param.default)
+        () => new SlideDownIndexGen()(GatherParam.default)
       ) +: firtoolAnno
   )
 

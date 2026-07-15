@@ -10,7 +10,7 @@ class GatherRingUnit[T <: Data](
   val unitIdx: Int,
   metaGen    : => T,
 )(
-  implicit val param: Param
+  implicit val param: GatherParam
 ) extends GatherModule {
 
   override def desiredName: String =
@@ -229,7 +229,7 @@ class GatherRingUnit[T <: Data](
 }
 
 object GatherRingUnit {
-  class In[T <: Data](metaGen: => T)(implicit val param: Param) extends GatherBundle {
+  class In[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
     val flush = Bool()
     val placeTable = ValidIO(new PlaceTableRequest)
     val placeIndex = ValidIO(new PlaceIndexRequest(metaGen))
@@ -238,13 +238,13 @@ object GatherRingUnit {
     val wbReady = Bool()
   }
 
-  class Out[T <: Data](metaGen: => T)(implicit val param: Param) extends GatherBundle {
+  class Out[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
     val status = new Status
     val flow = ValidIO(new RingFlow)
     val wb = ValidIO(new Res(metaGen))
   }
 
-  class Res[T <: Data](metaGen: => T)(implicit val param: Param) extends GatherBundle {
+  class Res[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
     val data = UInt(DLEN.W)
     val meta = metaGen
   }
@@ -252,7 +252,7 @@ object GatherRingUnit {
   /**
    *  [[PlaceTableRequest]] is used as table placement bundle
    */
-  class PlaceTableRequest(implicit val param: Param) extends GatherBundle {
+  class PlaceTableRequest(implicit val param: GatherParam) extends GatherBundle {
     /**
      * the index of this table in v[vs2]
      */
@@ -270,7 +270,7 @@ object GatherRingUnit {
   }
 
   object PlaceTableRequest {
-    def fromPipeInS1[T <: Data](s1: GatherRing.PipeInS1[T])(implicit param: Param): PlaceTableRequest = {
+    def fromPipeInS1[T <: Data](s1: GatherRing.PipeInS1[T])(implicit param: GatherParam): PlaceTableRequest = {
       val req = Wire(new PlaceTableRequest)
       req.tableIdx := s1.tableIdx
       req.table    := s1.table
@@ -283,7 +283,7 @@ object GatherRingUnit {
    * [[PlaceIndexRequest]] is used as index placement bundle.
    * This bundle contains some control signals
    */
-  class PlaceIndexRequest[T <: Data](metaGen: => T)(implicit val param: Param) extends GatherBundle {
+  class PlaceIndexRequest[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
     /**
      * The start index of the block in [[GatherRing]]
      */
@@ -330,14 +330,14 @@ object GatherRingUnit {
     val meta = metaGen
   }
 
-  class RingFlow(implicit val param: Param) extends GatherBundle {
+  class RingFlow(implicit val param: GatherParam) extends GatherBundle {
     val data        = Vec(NumElem, Elem())
     val tableIdx    = UnitIdx()
     val isFirstTable = Bool()
     val passedEntry = Bool()
   }
 
-  class Status(implicit val param: Param) extends GatherBundle {
+  class Status(implicit val param: GatherParam) extends GatherBundle {
     val hasTable = Bool()
     val hasIndex = Bool()
     val blockBase = UnitIdx()
@@ -372,7 +372,7 @@ object GatherRingUnit {
         targetDir,
       ) ++ args,
       chisel3.stage.ChiselGeneratorAnnotation(
-        () => new GatherRingUnit(0, RobIdx)(Param.default)
+        () => new GatherRingUnit(0, RobIdx)(GatherParam.default)
       ) +: firtoolAnno
     )
 

@@ -9,7 +9,7 @@ import yunsuan.vector.Common._
 import yunsuan.vector.v2.Shuffle.GatherCommon._
 
 
-class GatherIndexGen(implicit val param: Param) extends GatherModule {
+class GatherIndexGen(implicit val param: GatherParam) extends GatherModule {
 
   override def desiredName: String = super.desiredName + s"_${DLEN}b"
 
@@ -240,7 +240,7 @@ object GatherIndexGenMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new GatherIndexGen()(Param.default)
+        () => new GatherIndexGen()(GatherParam.default)
       ) +: firtoolAnno
   )
 

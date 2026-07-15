@@ -6,7 +6,7 @@ import chisel3.util._
 import yunsuan.vector.Common.caseToUIntUtil
 import yunsuan.vector.v2.Shuffle.GatherCommon._
 
-class GatherBase(implicit val param: Param) extends GatherModule {
+class GatherBase(implicit val param: GatherParam) extends GatherModule {
 
   override def desiredName: String = super.desiredName + s"_dlen${DLEN}b_table${NumUnits}"
 
@@ -77,7 +77,7 @@ class GatherIndexBundle(NumElem: Int, IndexWidth: Int) extends Bundle {
 
 
 object GatherBase {
-  class In(implicit val param: Param) extends GatherBundle {
+  class In(implicit val param: GatherParam) extends GatherBundle {
     val tableIdx   = UnitIdx()
     val table      = Vec(NumElem, UInt(MinDataWidth.W))
     val indexValid = Vec(NumElem, Bool())
@@ -85,7 +85,7 @@ object GatherBase {
     val lmul       = new GatherLmulBundle
   }
 
-  class Out(implicit val param: Param) extends GatherBundle {
+  class Out(implicit val param: GatherParam) extends GatherBundle {
     // found
     val resultValid = Vec(NumElem, Bool())
     val result      = Vec(NumElem, UInt(MinDataWidth.W))
@@ -109,7 +109,7 @@ object GatherBase {
       Array("--target-dir", "build/vector") ++ args,
       chisel3.stage
         .ChiselGeneratorAnnotation(
-          () => new GatherBase()(Param.default)
+          () => new GatherBase()(GatherParam.default)
         ) +: firtoolAnno
     )
 

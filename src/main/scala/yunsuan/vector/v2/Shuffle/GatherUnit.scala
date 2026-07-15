@@ -6,7 +6,7 @@ import chisel3.util._
 import yunsuan.vector.Common._
 import yunsuan.vector.v2.Shuffle.GatherCommon._
 
-class GatherUnit(implicit val param: Param) extends GatherModule {
+class GatherUnit(implicit val param: GatherParam) extends GatherModule {
 
   override def desiredName: String = super.desiredName + s"_vlen${VLEN}b_dlen${DLEN}b_table${NumUnits}"
 
@@ -315,7 +315,7 @@ class VlCompareBitVecModule(
   compFunc:     (UInt, UInt) => Bool,
   postFixName:  String = ""
 )(
-  implicit val param: Param
+  implicit val param: GatherParam
 ) extends GatherModule {
 
   override def desiredName: String = super.desiredName + postFixName
@@ -382,7 +382,7 @@ object VlCompareBitVecModule {
       new VlCompareBitVecModule(
         compFunc,
         postFixName
-      )(Param.default)
+      )(GatherParam.default)
     )
     mod.in.vl     := vl
     mod.in.sew    := sew
@@ -446,7 +446,7 @@ class GatherMaskGenModule(VLEN: Int, DLEN: Int, MinDataWidth: Int = 8) extends M
   out.mask := maskVec.asUInt
 }
 
-class MaskSelectAndDupModule(useEI16: Boolean = false)(implicit val param: Param) extends GatherModule {
+class MaskSelectAndDupModule(useEI16: Boolean = false)(implicit val param: GatherParam) extends GatherModule {
 
   override def desiredName: String = super.desiredName +
     (if (useEI16) "EI16"
@@ -514,7 +514,7 @@ class MaskSelectAndDupModule(useEI16: Boolean = false)(implicit val param: Param
 object MaskSelectAndDup {
 
   def apply(VLEN: Int, DLEN: Int)(mask: UInt, uopIdx: UInt, sew: GatherSewBundle): UInt = {
-    val mod = Module(new MaskSelectAndDupModule()(Param.default))
+    val mod = Module(new MaskSelectAndDupModule()(GatherParam.default))
     mod.in.mask   := mask
     mod.in.uopIdx := uopIdx
     mod.in.sew    := sew
@@ -526,7 +526,7 @@ object MaskSelectAndDup {
 object MaskSelectAndDupEI16 {
 
   def apply(VLEN: Int, DLEN: Int)(mask: UInt, uopIdx: UInt, sew: GatherSewBundle, ei16: Bool): UInt = {
-    val mod = Module(new MaskSelectAndDupModule(useEI16 = true)(Param.default))
+    val mod = Module(new MaskSelectAndDupModule(useEI16 = true)(GatherParam.default))
     mod.in.mask     := mask
     mod.in.uopIdx   := uopIdx
     mod.in.sew      := sew
@@ -536,7 +536,7 @@ object MaskSelectAndDupEI16 {
 
 }
 
-class MaskDupModule(implicit val param: Param) extends GatherModule {
+class MaskDupModule(implicit val param: GatherParam) extends GatherModule {
 
   val in = IO(
     Input(
@@ -578,7 +578,7 @@ class MaskDupModule(implicit val param: Param) extends GatherModule {
 object MaskDup {
 
   def apply(VLEN: Int, DLEN: Int)(mask: UInt, uopIdx: UInt, sew: GatherSewBundle): UInt = {
-    val maskDupMod = Module(new MaskDupModule()(Param.default))
+    val maskDupMod = Module(new MaskDupModule()(GatherParam.default))
     maskDupMod.in.mask   := mask
     maskDupMod.in.uopIdx := uopIdx
     maskDupMod.in.sew    := sew
@@ -587,7 +587,7 @@ object MaskDup {
 
 }
 
-class GatherInfoBundle(implicit val param: Param) extends GatherBundle {
+class GatherInfoBundle(implicit val param: GatherParam) extends GatherBundle {
 
   val lmul = new GatherLmulBundle
 
@@ -652,7 +652,7 @@ object MaskSelectAndDupModuleMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new MaskSelectAndDupModule(useEI16 = false)(Param.default)
+        () => new MaskSelectAndDupModule(useEI16 = false)(GatherParam.default)
       ) +: firtoolAnno
   )
 
@@ -660,7 +660,7 @@ object MaskSelectAndDupModuleMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new MaskSelectAndDupModule(useEI16 = true)(Param.default)
+        () => new MaskSelectAndDupModule(useEI16 = true)(GatherParam.default)
       ) +: firtoolAnno
   )
   println("done")
@@ -711,7 +711,7 @@ object VlCompareBitVecModuleMain extends App {
           new VlCompareBitVecModule(
             (i, vl) => i < vl,
             "LessThanVl"
-          )(Param.default)
+          )(GatherParam.default)
       ) +: firtoolAnno
   )
 
@@ -723,7 +723,7 @@ object VlCompareBitVecModuleMain extends App {
           new VlCompareBitVecModule(
             (i, vl) => i === (vl - 1.U),
             "EqualVlM1"
-          )(Param.default)
+          )(GatherParam.default)
       ) +: firtoolAnno
   )
 
@@ -747,7 +747,7 @@ object GatherUnitMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new GatherUnit()(Param.default)
+        () => new GatherUnit()(GatherParam.default)
       ) +: firtoolAnno
   )
 

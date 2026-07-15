@@ -6,7 +6,7 @@ import yunsuan.vector.v2.Shuffle.GatherCommon._
 import yunsuan.vector.Common._
 
 
-class GatherRingController(implicit val param: Param) extends GatherModule {
+class GatherRingController(implicit val param: GatherParam) extends GatherModule {
   val in = IO(Input(new GatherRingController.In))
   val out = IO(Output(new GatherRingController.Out))
 
@@ -30,11 +30,11 @@ class GatherRingController(implicit val param: Param) extends GatherModule {
 }
 
 object GatherRingController {
-  class In(implicit val param: Param) extends GatherBundle {
+  class In(implicit val param: GatherParam) extends GatherBundle {
     val unitDone = UInt(NumUnits.W)
   }
 
-  class Out(implicit val param: Param) extends GatherBundle {
+  class Out(implicit val param: GatherParam) extends GatherBundle {
     val wbSelOH = Vec(NumPipeOut, UInt(NumUnits.W))
   }
 
