@@ -363,4 +363,146 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
       }
     }
   }
+
+  // ═══ Phase 4: Writeback mapping ═══════════════════
+
+  describe("Phase 4: Writeback") {
+    it("T9: U0+U2 done -> different pipes") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val index = Index.allInTable0(1)
+        val iValid = IndexValid.allTrue(1)
+        val pf = Prefill.default(1)
+        val golden = Res.gather(table, index, 0 until 1)
+
+        pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
+        pS0(dut, pipe = 2, blockBase = 2, blockSize = 1)
+        dut.clock.step()
+        pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 2)
+
+        pS1(dut, pipe = 0, table, index, iValid, pf, blockBase = 0)
+        pS1(dut, pipe = 2, table, index, iValid, pf, blockBase = 2)
+        dut.clock.step()
+        pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 2)
+
+        dut.clock.step()
+        eWb(dut, pipe = 0, golden)
+        eWb(dut, pipe = 2, golden)
+      }
+    }
+
+    it("T10: U0+U4 done -> same pipe arbitration") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val index = Index.allInTable0(1)
+        val iValid = IndexValid.allTrue(1)
+        val pf = Prefill.default(1)
+        val golden = Res.gather(table, index, 0 until 1)
+
+        pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
+        pS0(dut, pipe = 1, blockBase = 4, blockSize = 1)
+        dut.clock.step()
+        pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 1)
+
+        pS1(dut, pipe = 0, table, index, iValid, pf, blockBase = 0)
+        pS1(dut, pipe = 1, table, index, iValid, pf, blockBase = 4)
+        dut.clock.step()
+        pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 1)
+
+        dut.clock.step()
+        eWb(dut, pipe = 0, golden)
+      }
+    }
+  }
+
+  // ═══ Phase 5: Corner cases ═════════════════════════
+
+  describe("Phase 5: Corner cases") {
+    it("T11: back-to-back instructions") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val index = Index.allInTable0(1)
+        val iValid = IndexValid.allTrue(1)
+        val pf = Prefill.default(1)
+        val golden = Res.gather(table, index, 0 until 1)
+
+        pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
+        dut.clock.step(); pS0Off(dut, pipe = 0)
+        pS1(dut, pipe = 0, table, index, iValid, pf)
+        dut.clock.step(); pS1Off(dut, pipe = 0)
+        dut.clock.step()
+        eWb(dut, pipe = 0, golden)
+
+        pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
+        dut.clock.step(); pS0Off(dut, pipe = 0)
+        pS1(dut, pipe = 0, table, index, iValid, pf)
+        dut.clock.step(); pS1Off(dut, pipe = 0)
+        dut.clock.step()
+        eWb(dut, pipe = 0, golden)
+      }
+    }
+
+    it("T12: flush clears state") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(2)
+        val index = Index.allInTable0(1)
+        val iValid = IndexValid.allTrue(1)
+        val pf = Prefill.default(1)
+
+        pS0(dut, pipe = 0, blockBase = 0, blockSize = 2, placeIdx = 0)
+        pS0(dut, pipe = 1, blockBase = 0, blockSize = 2, placeIdx = 1)
+        dut.clock.step()
+        pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 1)
+        val seg0 = table.slice(0, 16); val seg1 = table.slice(16, 32)
+        pS1(dut, pipe = 0, seg0, index, iValid, pf, blockSize = 2, tableIdx = 0, placeIdx = 0)
+        pS1(dut, pipe = 1, seg1, index, iValid, pf, blockSize = 2, tableIdx = 1, placeIdx = 1)
+        dut.clock.step()
+        pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 1)
+
+        dut.in.flush.foreach(_.poke(true))
+        dut.clock.step()
+        dut.in.flush.foreach(_.poke(false))
+        dut.clock.step()
+
+        for (u <- 0 until 8) {
+          dut.out.unitStatus(u).hasTable.expect(false.B, s"unit $u hasTable after flush")
+          dut.out.unitStatus(u).hasIndex.expect(false.B, s"unit $u hasIndex after flush")
+        }
+      }
+    }
+
+    it("T13: wb.valid holds when wbReady=0") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val index = Index.allInTable0(1)
+        val iValid = IndexValid.allTrue(1)
+        val pf = Prefill.default(1)
+        val golden = Res.gather(table, index, 0 until 1)
+
+        pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
+        dut.clock.step(); pS0Off(dut, pipe = 0)
+        pS1(dut, pipe = 0, table, index, iValid, pf)
+        dut.clock.step(); pS1Off(dut, pipe = 0)
+
+        dut.clock.step()
+        dut.out.pipes(0).valid.expect(true.B, "wb.valid after placement")
+
+        dut.clock.step()
+        dut.out.pipes(0).valid.expect(true.B, "wb.valid holds cycle 1")
+
+        dut.clock.step()
+        dut.out.pipes(0).valid.expect(true.B, "wb.valid holds cycle 2")
+
+        dut.in.wbReady(0).poke(true)
+        dut.clock.step()
+        dut.in.wbReady(0).poke(false)
+        dut.out.pipes(0).valid.expect(true.B, "unitDone persists after wb (pipe valid stays)")
+      }
+    }
+  }
 }
