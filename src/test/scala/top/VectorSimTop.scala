@@ -442,7 +442,14 @@ class SimTop() extends VPUTestModule {
 
 
 object SimTop extends App {
-  (new ChiselStage).execute(args, Seq(
-    ChiselGeneratorAnnotation(() => new SimTop()), FirtoolOption("--lowering-options=explicitBitcast")
-  ))
+  val targetDir = args(args.indexWhere(_ == "-td") + 1)
+  ChiselStage.emitSystemVerilog(
+    new SimTop,
+    args = Array("--full-stacktrace"),
+    firtoolOpts = Array(
+      "--lowering-options=explicitBitcast",
+      "--split-verilog",
+      s"-o=${targetDir}"
+    )
+  )
 }

@@ -2,14 +2,14 @@ include Makefile.softfloat
 
 TOP ?= SimTop
 BUILD_DIR = ./build
-TOP_V = $(BUILD_DIR)/$(TOP).v
+TOP_V = $(BUILD_DIR)/$(TOP).sv
 
 SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 
 $(TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
-	mill YunSuan.test.runMain yunsuan.top.$(TOP) -td $(@D) --full-stacktrace --target verilog
+	mill YunSuan.test.runMain yunsuan.top.$(TOP) -td $(@D)
 
 .DEFUALT_GOAL = emu
 
@@ -48,17 +48,21 @@ VERILATOR_FLAGS = --top-module $(TOP) \
 	--assert \
 	--output-split 500 \
 	--output-split-cfuncs 500 \
-	-I$(abspath $(BUILD_DIR)) \
+	-I$(abspath $(BUILD_DIR)) -I$(abspath $(BUILD_DIR)/verification) \
 	$(VEXTRA_FLAGS)
 
 
 EMU_MK := $(BUILD_DIR)/emu-compile/V$(TOP).mk
 EMU = $(BUILD_DIR)/emu
 
+EMU_VFILES = \
+	$(addprefix $(BUILD_DIR)/, $(shell cat $(BUILD_DIR)/filelist.f)) \
+	$(shell find $(BUILD_DIR)/verification -name 'layers-*.sv')
+
 $(EMU_MK): $(TOP_V) | $(EMU_DEPS)
 	@mkdir -p $(@D)
 	verilator --cc --exe $(VERILATOR_FLAGS)  \
-		-o $(abspath $(EMU)) -Mdir $(@D) $^ $(EMU_DEPS)
+		-o $(abspath $(EMU)) -Mdir $(@D) $(EMU_VFILES) $(EMU_DEPS)
 
 $(EMU): $(EMU_MK) $(EMU_DEPS) $(EMU_HEADERS)
 	$(MAKE) VM_PARRLLEL_BUILDS=1 -C $(dir $(EMU_MK)) -j33 -f $(abspath $(EMU_MK))
