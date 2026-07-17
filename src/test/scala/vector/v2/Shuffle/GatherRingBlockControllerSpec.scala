@@ -49,9 +49,9 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
   // ══════════════════════════════════════════════════════
   describe("tableMap order") {
     it("size=2: order is [0, 1]") {
-      // All free → entryTable = tableMap(0) = 0
-      // tableValid=00, all free => first free at pos 0 → entryTable=0
-      // Place 1 table → next free at pos 1 → entryTable=1
+      // All free -> entryTable = tableMap(0) = 0
+      // tableValid=00, all free => first free at pos 0 -> entryTable=0
+      // Place 1 table -> next free at pos 1 -> entryTable=1
       simulateBlock(2, 0, 0, 0, boolSeq(4)) { (_, _, _) =>
         // tableMap verified implicitly via entryTable tests below
       }
@@ -70,23 +70,23 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
   //  Tests: entryTable placement
   // ══════════════════════════════════════════════════════
   describe("entryTable") {
-    it("all free → first table at blockBase") {
+    it("all free -> first table at blockBase") {
       simulateBlock(4, 0, 0, 0, boolSeq(4)) { (tablePos, _, _) =>
-        // entryTable = tableMap(0) = 0, placeIdx=0 → tablePos = 0|0 = 0
+        // entryTable = tableMap(0) = 0, placeIdx=0 -> tablePos = 0|0 = 0
         assert(tablePos(0)._2 == 0)
       }
     }
 
-    it("first position occupied → table goes to next in tableMap") {
-      // tableValid=0001 (unit 0 occupied), tableFree=1110 → PriorityEncoder=1
+    it("first position occupied -> table goes to next in tableMap") {
+      // tableValid=0001 (unit 0 occupied), tableFree=1110 -> PriorityEncoder=1
       // entryTable = tableMap(1) = 3
       simulateBlock(4, 0, 0x1, 0, boolSeq(4)) { (tablePos, _, _) =>
-        // entryTable=3, placeIdx=0 → 0|3 = 3
+        // entryTable=3, placeIdx=0 -> 0|3 = 3
         assert(tablePos(0)._2 == 3)
       }
     }
 
-    it("tableMap for size=8: first two occupied → third position") {
+    it("tableMap for size=8: first two occupied -> third position") {
       // tableValid=0000_0011 (units 0,1 occupied)
       // tableFree = ~permuted(0000_0011) = ~(bit1,bit2,...,bit7,bit0 oriented)
       // tableValid bits: [7:0] = 0x03 = b0000_0011
@@ -111,7 +111,7 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
     }
 
     it("table placement with placeIdx > 0") {
-      // placeIdx=1: entryTable - placeIdx = 0 - 1 → UInt wraps to max
+      // placeIdx=1: entryTable - placeIdx = 0 - 1 -> UInt wraps to max
       simulateBlock(4, 0, 0, 0, Seq((true, 1), (false, 0), (false, 0), (false, 0))) { (tablePos, _, _) =>
         // UInt subtraction wraps, masked by localIndexWidth
         val tp = tablePos(0)._2 & ((1 << log2Ceil(4)) - 1)
@@ -124,14 +124,14 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
   //  Tests: entryIndex placement
   // ══════════════════════════════════════════════════════
   describe("entryIndex") {
-    it("all free → first index at 0") {
+    it("all free -> first index at 0") {
       simulateBlock(4, 0, 0, 0, boolSeq(4)) { (_, indexPos, _) =>
         assert(indexPos(0)._2 == 0)
       }
     }
 
-    it("first position occupied → index shifted by willFlow") {
-      // indexValid=0x1, tableValid=0 → entryIndex=1, willFlow=1 → indexPos=2
+    it("first position occupied -> index shifted by willFlow") {
+      // indexValid=0x1, tableValid=0 -> entryIndex=1, willFlow=1 -> indexPos=2
       simulateBlock(4, 0, 0, 0x1, boolSeq(4)) { (_, indexPos, _) =>
         assert(indexPos(0)._2 == 2)
       }
@@ -156,41 +156,41 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
   //  Tests: willFlow
   // ══════════════════════════════════════════════════════
   describe("willFlow") {
-    it("empty block → no flow") {
+    it("empty block -> no flow") {
       simulateBlock(4, 0, 0, 0, boolSeq(4)) { (_, _, wf) =>
         assert(!wf, "empty block should not flow")
       }
     }
 
-    it("table only, no index → willFlow=true (block is active)") {
+    it("table only, no index -> willFlow=true (block is active)") {
       simulateBlock(4, 0, 0x1, 0, boolSeq(4)) { (_, _, wf) =>
         assert(wf, "table exists, block is active, need flow")
       }
     }
 
-    it("index only → willFlow reflects via indexPos shift") {
+    it("index only -> willFlow reflects via indexPos shift") {
       // out.willFlow is per-unit: tableValid(i) && globalWillFlow
       // With tableValid=0, out.willFlow=0 even though globalWillFlow=1
       // Verify via indexPos shift: entryIndex + willFlow + placeIdx
       simulateBlock(4, 0, 0, 0x1, boolSeq(4)) { (_, indexPos, _) =>
-        // entryIndex=1, global willFlow=1 → indexPos=2
+        // entryIndex=1, global willFlow=1 -> indexPos=2
         assert(indexPos(0)._2 == 2, "global willFlow=1 shifts index by +1")
       }
     }
 
-    it("table at head, index at tail → need flow") {
-      // table at pos 0, index at pos 3 → need flow to move table forward
+    it("table at head, index at tail -> need flow") {
+      // table at pos 0, index at pos 3 -> need flow to move table forward
       // tableValid=0001 (pos 0), indexValid=1000 (pos 3)
-      // tableLeastFreeOH: ~0001=1110 → pos 1
+      // tableLeastFreeOH: ~0001=1110 -> pos 1
       // rotateRight(1): pos 0
       // indexMostValidOH: Reverse(PriorityEncoderOH(Reverse(1000))) = Reverse(OH of pos 3) = pos 3
-      // overlap = pos0 & pos3 = 0 → willFlow = hasTable && true = true
+      // overlap = pos0 & pos3 = 0 -> willFlow = hasTable && true = true
       simulateBlock(4, 0, 0x1, 0x8, boolSeq(4)) { (_, _, wf) =>
         assert(wf, "table at head, index at tail should flow")
       }
     }
 
-    it("table at pos3, index at pos0 → need flow") {
+    it("table at pos3, index at pos0 -> need flow") {
       // table at pos3 needs to flow through ring loopback to reach index at pos0
       simulateBlock(4, 0, 0x8, 0x1, boolSeq(4)) { (_, _, wf) =>
         assert(wf, "table at pos3, index at pos0 should flow via loopback")

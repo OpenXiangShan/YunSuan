@@ -1155,7 +1155,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            // Place table+index, blockSize=1 → counter=0 immediately
+            // Place table+index, blockSize=1 -> counter=0 immediately
             Cycle(pPlace(tblSize, 0, table, index, indexValid, prefill))(eWb1(res)),
             // wbReady still false — wb.valid should HOLD
             Cycle(pNoPlace, pNoFlow)(eWb1(res)),

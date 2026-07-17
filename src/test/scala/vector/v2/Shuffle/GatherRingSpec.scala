@@ -121,7 +121,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
         pPipeOff(dut, 0)
         dut.clock.step()        // willFlow delay
         dut.clock.step()        // flow moves table to index
-        dut.clock.step()        // counter→0, writeback
+        dut.clock.step()        // counter->0, writeback
         val exp = s0.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
         eWb(dut, 0, exp)
       }

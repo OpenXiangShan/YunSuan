@@ -62,20 +62,30 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
   private val ring8WillFlowVec = Cat(ring8Controllers.map(_.out.willFlow).reverse)
   out.willFlow := VecInit((ring2WillFlowVec | ring4WillFlowVec | ring8WillFlowVec).asBools)
 
-  // ── Writeback arbitration ────────────────────────────
-  private val numElemInGroup = NumUnits / NumPipeOut
-  private val groupFrom: Seq[Int] = Seq.tabulate(NumPipeOut)(_ * numElemInGroup)
-  private val groupTo: Seq[Int] = groupFrom.map(begin => math.min(begin + numElemInGroup, NumUnits - 1))
-  private val groupedValids: Seq[UInt] = groupFrom.zip(groupTo).map { case(from, to) => in.unitDone(to, from) }
+  // ── Writeback arbitration (interleaved) ──────────────
+  // Pipe p serves units where unitIdx % NumPipeOut == p
+  private val pipeGroupSize = Seq.tabulate(NumPipeOut) { p =>
+    (NumUnits - p + NumPipeOut - 1) / NumPipeOut
+  }
 
-  private val localSelOH: Seq[UInt] = groupedValids.map(PriorityEncoderOH.apply)
+  private val pipeUnitDone = Seq.tabulate(NumPipeOut) { p =>
+    Cat(Seq.tabulate(pipeGroupSize(p)) { k =>
+      in.unitDone(p + k * NumPipeOut)
+    }.reverse)
+  }
 
-  out.wbSelOH := localSelOH.zipWithIndex.map {
-    case (oh, i) => Cat(
-      0.U((NumUnits - groupTo(i) - 1).W),
-      oh,
-      0.U(groupFrom(i).W)
-    )
+  private val localSelOH = pipeUnitDone.map(oh => PriorityEncoderOH(oh))
+
+  out.wbSelOH := Seq.tabulate(NumPipeOut) { p =>
+    val ohBits = localSelOH(p).asBools
+    VecInit.tabulate(NumUnits) { u =>
+      if (u % NumPipeOut == p) {
+        val k = u / NumPipeOut
+        ohBits(k)
+      } else {
+        false.B
+      }
+    }.asUInt
   }
 }
 
