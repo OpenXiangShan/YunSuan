@@ -20,7 +20,7 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
 
   val wbSelOH: Seq[UInt] = localSelOH.zipWithIndex.map {
     case (oh, i) => Cat(
-      0.U((NumUnits - groupTo(i)).W),
+      0.U((NumUnits - groupTo(i) - 1).W),
       oh,
       0.U(groupFrom(i).W)
     ).ensuring(_.getWidth == NumUnits)

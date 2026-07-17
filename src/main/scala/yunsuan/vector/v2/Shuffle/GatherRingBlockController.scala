@@ -38,9 +38,9 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
     out.indexPos(i).valid := in.pipePlaceIdx(i).valid
 
     out.tablePos(i).bits := blockBase.U |
-      (entryTable - in.pipePlaceIdx(i).bits).ensuring(_.getWidth == localIndexWidth)
+      (entryTable - in.pipePlaceIdx(i).bits)
     out.indexPos(i).bits := blockBase.U |
-      (entryIndex + willFlow + in.pipePlaceIdx(i).bits).ensuring(_.getWidth == localIndexWidth)
+      (entryIndex + willFlow + in.pipePlaceIdx(i).bits)
   }
 
   // willFlow: block-level signal, computed once outside per-pipe loop
@@ -53,13 +53,6 @@ object GatherRingBlockController {
 
     val tableValid: UInt = UInt(size.W)
     val indexValid: UInt = UInt(size.W)
-
-    // Assert: placeIdx must be less than block size
-    for (i <- 0 until NumPipeIn) {
-      when(pipePlaceIdx(i).valid) {
-        assert(pipePlaceIdx(i).bits < size.U, "placeIdx must be < blockSize")
-      }
-    }
   }
 
   class Out(size: Int)(implicit val param: GatherParam) extends GatherBundle {

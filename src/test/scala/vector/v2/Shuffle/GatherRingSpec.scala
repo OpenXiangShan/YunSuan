@@ -165,8 +165,8 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers with Parall
         val s0 = (0 until 16).map(i => 0x10 + i)
         pPipe(dut, 0, s0, (0 until 16), Seq.fill(16)(true), blockSize = 2)
         dut.clock.step()
-        dut.unitStatus(1).hasTable.expect(true)
-        dut.unitStatus(0).hasIndex.expect(true)
+        dut.out.unitStatus(1).hasTable.expect(true)
+        dut.out.unitStatus(0).hasIndex.expect(true)
       }
     }
   }

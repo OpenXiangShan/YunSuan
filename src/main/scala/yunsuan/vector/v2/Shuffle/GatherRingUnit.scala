@@ -341,6 +341,22 @@ object GatherRingUnit {
     val meta = metaGen
   }
 
+  object PlaceIndexRequest {
+    def fromPipeInS1[T <: Data](s1: GatherRing.PipeInS1[T])(implicit param: GatherParam): PlaceIndexRequest[T] = {
+      val req = Wire(new PlaceIndexRequest(s1.meta.cloneType))
+      req.blockBase   := s1.blockBase
+      req.blockSize   := s1.blockSize
+      req.index       := s1.index
+      req.indexValid  := s1.indexValid
+      req.fillZeros   := s1.fillZeros
+      req.fillScala   := s1.fillScala
+      req.prefillData := s1.prefillData
+      req.scalarData  := s1.scalarData
+      req.meta        := s1.meta
+      req
+    }
+  }
+
   class RingFlow(implicit val param: GatherParam) extends GatherBundle {
     val data        = Vec(NumElem, Elem())
     val tableIdx    = UnitIdx()

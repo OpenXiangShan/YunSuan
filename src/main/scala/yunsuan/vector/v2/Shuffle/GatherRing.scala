@@ -16,8 +16,6 @@ class GatherRing[T <: Data](
   val in = IO(Input(new GatherRing.In(metaGen)))
   val out = IO(Output(new GatherRing.Out(metaGen)))
 
-  val unitStatus = out.unitStatus
-
   /*********************** Module Definations *********************************/
 
   private val ring2Controllers = Seq.tabulate(NumUnits / 2)(i => Module(new GatherRingBlockController(2, 2 * i)))
@@ -46,7 +44,7 @@ class GatherRing[T <: Data](
     allocator.in.tableValid := Cat(ring2Units(i).map(_.out.status.hasTable).reverse)
     for (j <- allocator.in.pipePlaceIdx.indices) {
       allocator.in.pipePlaceIdx(j).valid :=
-        in.s0pipes(j).valid && in.s0pipes(j).bits.blockBase.drop(1) === allocator.blockBase.U.drop(1)
+        in.s0pipes(j).valid && in.s0pipes(j).bits.blockBase.drop(1) === allocator.blockBase.U(UnitIdx().getWidth.W).drop(1)
       allocator.in.pipePlaceIdx(j).bits := in.s0pipes(j).bits.placeIdx
     }
   }
@@ -57,7 +55,7 @@ class GatherRing[T <: Data](
     allocator.in.tableValid := Cat(ring4Units(i).map(_.out.status.hasTable).reverse)
     for (j <- allocator.in.pipePlaceIdx.indices) {
       allocator.in.pipePlaceIdx(j).valid :=
-        in.s0pipes(j).valid && in.s0pipes(j).bits.blockBase.drop(2) === allocator.blockBase.U.drop(2)
+        in.s0pipes(j).valid && in.s0pipes(j).bits.blockBase.drop(2) === allocator.blockBase.U(UnitIdx().getWidth.W).drop(2)
       allocator.in.pipePlaceIdx(j).bits := in.s0pipes(j).bits.placeIdx
     }
   }
@@ -98,19 +96,6 @@ class GatherRing[T <: Data](
   }
 
   // vectorized signals
-  private val hasIndexVec    = VecInit(units.map(_.out.status.hasIndex))
-  private val hasTableVec    = VecInit(units.map(_.out.status.hasTable))
-  private val isFirstVec     = VecInit(units.map(_.out.status.isFirstTable))
-  private val passedEntryVec = VecInit(units.map(_.out.status.passedEntry))
-
-
-  private val unitsControllers = units.indices.map(
-    i => Seq(
-      ring2Controllers(i / 2),
-      ring4Controllers(i / 4),
-      ring8Controllers(i / 8),
-    )
-  )
 
   for (i <- 0 until NumUnits) {
     units(i).in.willFlow := willFlowVec(i)
@@ -120,8 +105,8 @@ class GatherRing[T <: Data](
   private val validMatrixPipeUnitIndex = WireInit(VecInit.fill(NumPipeIn, NumUnits)(false.B))
 
   for (i <- 0 until NumPipeIn) {
-    validMatrixPipeUnitTable(pipeTablePos(i)) := in.s1pipes(i).valid
-    validMatrixPipeUnitIndex(pipeIndexPos(i)) := in.s1pipes(i).valid
+    validMatrixPipeUnitTable(i)(pipeTablePos(i)) := in.s1pipes(i).valid
+    validMatrixPipeUnitIndex(i)(pipeIndexPos(i)) := in.s1pipes(i).valid
   }
 
   for (u <- 0 until NumUnits) {
@@ -131,7 +116,10 @@ class GatherRing[T <: Data](
       in.s1pipes.map(s1 => PlaceTableRequest.fromPipeInS1(s1.bits))
     )
     units(u).in.placeIndex.valid := Cat(validMatrixPipeUnitIndex.map(_(u))).orR
-    units(u).in.placeIndex.bits  := Mux1H(validMatrixPipeUnitIndex.map(_(u)), in.s1pipes)
+    units(u).in.placeIndex.bits  := Mux1H(
+      validMatrixPipeUnitIndex.map(_(u)),
+      in.s1pipes.map(s1 => PlaceIndexRequest.fromPipeInS1(s1.bits))
+    )
   }
 
   // out.metas: collect meta from each unit's wb
@@ -141,6 +129,11 @@ class GatherRing[T <: Data](
 
   for (i <- 0 until NumUnits) {
     units(i).in.flush := in.flush(i)
+  }
+
+  // unitStatus output
+  for (i <- 0 until NumUnits) {
+    out.unitStatus(i) := units(i).out.status
   }
 
   /******************** Connections of ringControllers ************************/
@@ -159,12 +152,17 @@ class GatherRing[T <: Data](
   private val ring2WillFlowVec = Cat(ring2Controllers.map(_.out.willFlow).reverse)
   private val ring4WillFlowVec = Cat(ring4Controllers.map(_.out.willFlow).reverse)
   private val ring8WillFlowVec = Cat(ring8Controllers.map(_.out.willFlow).reverse)
-  willFlowVecNext := ring2WillFlowVec | ring4WillFlowVec | ring8WillFlowVec
+  willFlowVecNext := VecInit((ring2WillFlowVec | ring4WillFlowVec | ring8WillFlowVec).asBools)
 
   // TODO: gate it
   willFlowVec := willFlowVecNext
 
   /***************************** wb *******************************************/
+
+  // wbReady routing: pipe -> unit via wbSelOH
+  for (j <- 0 until NumUnits) {
+    units(j).in.wbReady := Mux1H(controller.out.wbSelOH.map(_(j)), in.wbReady)
+  }
 
   for (i <- 0 until NumPipeOut) {
     out.pipes(i).valid := controller.out.wbSelOH(i).orR
