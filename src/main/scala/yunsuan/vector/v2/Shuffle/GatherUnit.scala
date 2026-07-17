@@ -208,8 +208,6 @@ class GatherUnit(implicit val param: GatherParam) extends GatherModule {
       )
   }
 
-  gatherMod.in.lmul := info.lmul
-
   when(in.ctrl.valid) {
     multiUop :=
       ((VLEN / DLEN) match {

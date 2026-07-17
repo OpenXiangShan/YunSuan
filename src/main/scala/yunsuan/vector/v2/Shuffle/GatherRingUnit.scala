@@ -35,7 +35,6 @@ class GatherRingUnit[T <: Data](
     (blockSize & 8.U).orR -> (unitIdx % 8).U,
   ))
   private val isEntryNext = localPos === 0.U
-  private val isRingEnd   = localPos === (blockSize - 1.U)
 
   // ── scalaTable 字节拆分 ──────────────────────────────
   private val scalaTableBytes: Vec[UInt] = in.placeIndex.scalarData.splitToVecByWidth(MinDataWidth)
@@ -47,7 +46,6 @@ class GatherRingUnit[T <: Data](
   private val doFlowTable  = in.willFlow && in.flow.valid
 
   // ── 寄存器 ──────────────────────────────────────────
-  private val tableValid   = RegInit(false.B)
   private val tableData    = Reg(Vec(NumElem, UInt(MinDataWidth.W)))
   private val tableIdx     = Reg(UInt(TableIdxWidth.W))
   private val isFirstTable = RegInit(false.B)
@@ -70,20 +68,19 @@ class GatherRingUnit[T <: Data](
   // ── hasTable 状态机 ─────────────────────────────────
   when(flush) {
     hasTable := false.B
-  }.elsewhen(doPlaceTable) {
-    hasTable := true.B
-  }.elsewhen(doFlow && in.flow.valid) {
+  }.elsewhen(doPlaceTable || doFlowTable) {
     hasTable := true.B
   }.elsewhen(doFlow && !in.flow.valid) {
     hasTable := false.B
-  }.elsewhen(!doFlow && !doPlaceTable) {
+  }.otherwise {
     // hold
   }
 
   // ── hasIndex 状态机 ─────────────────────────────────
   when(doPlaceIndex) {
     hasIndex := true.B
-  }.elsewhen(flush || hasIndex && (counter === 0.U)) {
+  }.elsewhen(flush || (hasIndex && counter === 0.U && (hasWb || in.wbReady))) {
+    // hasWb || in.wbReady means already wb or wb now
     hasIndex := false.B
   }.otherwise {
     // hold
@@ -114,27 +111,17 @@ class GatherRingUnit[T <: Data](
   private val tableDataNext = Mux1H(Seq(
     doPlaceTable -> in.placeTable.table,
     doFlowTable -> in.flow.data,
-    (!doPlaceTable && !doFlowTable && tableValid) -> tableData,
+    (!doPlaceTable && !doFlowTable && hasTable) -> tableData,
   ))
   when (doPlaceTable || doFlowTable) {
     tableData := tableDataNext
-  }
-
-  private val tableValidNext = Mux1H(Seq(
-    doPlaceTable -> true.B,
-    doFlowTable  -> true.B,
-  ))
-  when(flush) {
-    tableValid := false.B
-  }.elsewhen(doPlaceTable || doFlowTable) {
-    tableValid := tableValidNext
   }
 
   private val tableIdxNext = Mux1H(Seq(
     doPlaceTable ->  in.placeTable.tableIdx,
     doFlowTable -> in.flow.tableIdx
   ))
-  when (tableValidNext) {
+  when (doPlaceTable || doFlowTable) {
     tableIdx := tableIdxNext
   }
 
@@ -142,7 +129,7 @@ class GatherRingUnit[T <: Data](
   when(flush) {
     counter := 0.U
   }.elsewhen(doPlaceIndex) {
-    when (doPlaceTable || tableValid) {
+    when (doPlaceTable || hasTable) {
       counter := blockSize - 1.U
     }.otherwise {
       counter := blockSize
@@ -162,10 +149,10 @@ class GatherRingUnit[T <: Data](
 
   gatherMod.in.tableIdx := tableIdxNext
   gatherMod.in.table    := tableDataNext
-  gatherMod.in.lmul     := 0.U.asTypeOf(new GatherLmulBundle)
 
   for (i <- 0 until NumElem) {
-    val shouldQuery = (hasIndex || doPlaceIndex) && (doPlaceIndex || !indexDone(i))
+    val shouldQuery = (hasIndex || doPlaceIndex) && (doPlaceIndex || !indexDone(i)) &&
+      (hasTable || doPlaceTable || doFlowTable)
     gatherMod.in.indexValid(i) := shouldQuery && Mux(
       doPlaceIndex,
       in.placeIndex.bits.indexValid(i),
@@ -228,7 +215,7 @@ class GatherRingUnit[T <: Data](
   out.wb.bits.meta := meta
 
   // ── Table 输出（流向下一个 Unit）─────────────────────
-  out.flow.valid := tableValid && hasTable
+  out.flow.valid := hasTable
   out.flow.data  := tableData
   out.flow.tableIdx := tableIdx
   out.flow.isFirstTable := isFirstTable
@@ -298,6 +285,7 @@ object GatherRingUnit {
       req.tableIdx := s1.tableIdx
       req.table    := s1.table
       req.isFirstTable := s1.placeIdx === 0.U
+      req.blockSize    := s1.blockSize
       req
     }
   }

@@ -1,7 +1,7 @@
 package yunsuan.vector.v2.Shuffle
 
 import chisel3._
-import chisel3.util.{isPow2, log2Ceil}
+import chisel3.util.{isPow2, log2Ceil, Mux1H}
 
 
 object GatherCommon {
@@ -79,6 +79,22 @@ object GatherCommon {
     def Index() = UInt(IndexWidth.W)
 
     def PipeInIdx() = UInt(log2Ceil(NumPipeIn).W)
+  }
+
+  /**
+   * Check if the index is greater than or equal to real vlmax for the given LMUL.
+   * Used by IndexGen modules to determine fillZeros for out-of-range indices.
+   */
+  def geRealVlmax(lmul: GatherLmulBundle, index: UInt): Bool = {
+    Mux1H(Seq(
+      lmul.mf8 -> (index.head(6) =/= 0.U),
+      lmul.mf4 -> (index.head(5) =/= 0.U),
+      lmul.mf2 -> (index.head(4) =/= 0.U),
+      lmul.m1  -> (index.head(3) =/= 0.U),
+      lmul.m2  -> (index.head(2) =/= 0.U),
+      lmul.m4  -> (index.head(1) =/= 0.U),
+      // m8: index never >= vlmax (vlmax covers full index space)
+    ))
   }
 
   class FakeRobPtr extends Bundle {

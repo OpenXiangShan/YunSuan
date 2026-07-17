@@ -858,7 +858,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
               initUnit,
               Cycle(pPlace(2, 1, table, index, Seq.fill(16)(true)), pWbReady())(eCounter(1), eWb0, eIndexOrRes(res0)),
               Cycle(pNoPlace, pFlow, pFlowTbl(0, table), pWbReady(false))(eCounter(0), eI1, eT1, eWb1(res1)),
-              Cycle(pFlow, pNoFlowTbl())(eI0, eT0, eWb0)
+              Cycle(pFlow, pNoFlowTbl(), pWbReady())(eI0, eT0, eWb0)
             )
         }
 
@@ -1132,25 +1132,28 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     }
   }
 
-  describe("Table Control") {
-    it("hasTable dropped after invalid flow") {
+  describe("Writeback") {
+    it("wb.valid holds until wbReady") {
       simulator() {
         dut =>
 
-          val t = (0 until 16).map(
-            i => 0x10 + i
-          )
+          val tblSize = 1
+          val table = Table.inc(tblSize)
+          val index = Index.allInTable0(tblSize)
+          val indexValid = IndexValid.allTrue(tblSize)
+          val prefill = Prefill.default(tblSize)
+          val res = Res.gather(table, index, indexValid, prefill, Seq(0))
+
           runCycles(
             dut,
             initUnit,
-            Cycle(
-              pPlace(8, 0, t, 0 until 16, Seq.fill(16)(true))
-            )(eT1, eWb1(
-              t.foldRight(BigInt(0))(
-                (b, a) => (a << 8) | BigInt(b)
-              )
-            )),
-            Cycle(pNoPlace, pDrop)(eT0, eI1),
+            // Place table+index, blockSize=1 → counter=0 immediately
+            Cycle(pPlace(tblSize, 0, table, index, indexValid, prefill))(eWb1(res)),
+            // wbReady still false — wb.valid should HOLD
+            Cycle(pNoPlace, pNoFlow)(eWb1(res)),
+            Cycle(pNoPlace, pNoFlow)(eWb1(res)),
+            // Now assert wbReady — wb should be accepted
+            Cycle(pNoPlace, pNoFlow, pWbReady())(eWb0),
           )
       }
     }

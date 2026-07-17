@@ -16,23 +16,6 @@ class GatherBase(implicit val param: GatherParam) extends GatherModule {
 
   val out = IO(Output(new GatherBase.Out))
 
-  val geRealVlmax = Wire(Vec(NumElem, Bool()))
-
-  for (i <- 0 until NumElem) {
-    geRealVlmax(i) :=
-      Mux1H(
-        Seq(
-          in.lmul.mf8 -> (in.index(i).head(6) =/= 0.U),
-          in.lmul.mf4 -> (in.index(i).head(5) =/= 0.U),
-          in.lmul.mf2 -> (in.index(i).head(4) =/= 0.U),
-          in.lmul.m1  -> (in.index(i).head(3) =/= 0.U),
-          in.lmul.m2  -> (in.index(i).head(2) =/= 0.U),
-          in.lmul.m4  -> (in.index(i).head(1) =/= 0.U)
-          // in m8 configuration, index will never greater than or equal to vlmax
-        )
-      )
-  }
-
   val found = Wire(Vec(NumElem, Bool()))
 
   val notfound = Wire(Vec(NumElem, Bool()))
@@ -82,7 +65,6 @@ object GatherBase {
     val table      = Vec(NumElem, UInt(MinDataWidth.W))
     val indexValid = Vec(NumElem, Bool())
     val index      = Vec(NumElem, UInt(IndexWidth.W))
-    val lmul       = new GatherLmulBundle
   }
 
   class Out(implicit val param: GatherParam) extends GatherBundle {
