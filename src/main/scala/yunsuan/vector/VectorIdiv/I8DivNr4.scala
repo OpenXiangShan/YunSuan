@@ -233,7 +233,9 @@ class IterBlockI8Nr4(bit_width: Int) extends Module {
   io.nxt_w_low := io.pre_w_low << 2
 
   val cons = Wire(UInt((bit_width+1).W))
-  val cons_index = Cat(0.U(1.W),io.pre_w(bit_width))+ 1.U
+  val cons_index = Wire(UInt(2.W))
+  cons_index := Cat(0.U(1.W),io.pre_w(bit_width)) + 1.U(2.W)
+  dontTouch(cons_index)  // For turning off Verilator WIDTHEXPAND
   cons := io.d_cons(cons_index)  // sign 1 pos dcons(1) sign 0 neg dcons(0)
 
   val tmp = Wire(UInt((bit_width+1).W))

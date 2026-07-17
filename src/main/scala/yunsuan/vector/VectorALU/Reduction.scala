@@ -613,7 +613,10 @@ class Reduction extends Module {
   val sum_vd = Wire(UInt(64.W))
   val max_vd = Wire(UInt(64.W))
   // stage 1
-  val logical_vd = Mux(alu_uop_reg_s1, vd_logical_alu, Cat(0.U((VLEN - 64).W), vd_logical(~vdType_reg_s1(1, 0))))
+  val vd_logical_index = Wire(UInt(2.W))
+  vd_logical_index := ~vdType_reg_s1(1, 0)
+  dontTouch(vd_logical_index)  // For turning off Verilator WIDTHEXPAND
+  val logical_vd = Mux(alu_uop_reg_s1, vd_logical_alu, Cat(0.U((VLEN - 64).W), vd_logical(vd_logical_index)))
   val red_vd = Wire(UInt(VLEN.W))
   // stage 2
   sum_vd := vd_sew64
