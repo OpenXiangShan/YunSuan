@@ -1,12 +1,14 @@
 package yunsuan.vector.v2.Shuffle
 
 import chisel3._
+import chisel3.experimental.SourceInfo
 import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.ParallelTestExecution
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
 import yunsuan.vector.v2.Shuffle.GatherCommon.FakeRobPtr
-import chisel3.simulator.ExpectationValueFormat
+import chisel3.simulator.{ChiselOptionsModifications, ExpectationValueFormat, FirtoolOptionsModifications, HasSimulator}
+import chisel3.testing.HasTestingDirectory
 
 class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution {
 
@@ -14,10 +16,10 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   val dlen        = 128
   val maxTableNum = 8
 
-  class Cycle(val pokes: (GatherRingUnit[FakeRobPtr] => Unit)*)(val expects: Seq[GatherRingUnit[FakeRobPtr] => Unit])
+  class Cycle(val pokes: (GatherRingUnit[FakeRobPtr] => Unit)*)(val expects: (GatherRingUnit[FakeRobPtr] => Unit)*)
   object Cycle {
-    def apply(pokes: (GatherRingUnit[FakeRobPtr] => Unit)*)(expects: Seq[GatherRingUnit[FakeRobPtr] => Unit]): Cycle =
-      new Cycle(pokes: _*)(expects)
+    def apply(pokes: (GatherRingUnit[FakeRobPtr] => Unit)*)(expects: (GatherRingUnit[FakeRobPtr] => Unit)*)(implicit sourceInfo: SourceInfo): Cycle =
+      new Cycle(pokes: _*)(expects: _*)
   }
 
   def runCycles(dut: GatherRingUnit[FakeRobPtr], init: GatherRingUnit[FakeRobPtr] => Unit, cycles: Cycle*): Unit = {
@@ -26,6 +28,18 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       c.pokes.foreach(_(dut))
       dut.clock.step()
       c.expects.foreach(_(dut))
+    }
+  }
+
+  def runCycles(duts: Seq[GatherRingUnit[FakeRobPtr]], init: GatherRingUnit[FakeRobPtr] => Unit, cycles: Seq[Cycle]*): Unit = {
+    duts.foreach(init(_))
+    for (c <- cycles) {
+      duts.zipWithIndex.foreach {
+        case (dut, i) =>
+          c(i).pokes.foreach(_(dut))
+          dut.clock.step()
+          c(i).expects.foreach(_(dut))
+      }
     }
   }
 
@@ -49,15 +63,34 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       dut.clock.step()
   }
 
-  def eHasTable(v: Boolean): GatherRingUnit[FakeRobPtr] => Unit = _.out.status.hasTable.expect(v)
+  def eHasTable(v: Boolean)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit = _.out.status.hasTable.expect(v.B, "hasTable mismatch")
 
-  def eHasIndex(v: Boolean): GatherRingUnit[FakeRobPtr] => Unit = _.out.status.hasIndex.expect(v)
+  def eHasIndex(v: Boolean)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit = _.out.status.hasIndex.expect(v.B, "hasIndex mismatch")
 
-  def eWb(valid: Boolean, dest: BigInt = 0): GatherRingUnit[FakeRobPtr] => Unit = {
+  def eWb(valid: Boolean, dest: BigInt = 0)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
-      dut.out.wb.valid.expect(valid)
+      dut.out.wb.valid.expect(valid.B, "wb.valid mismatch")
       if (valid) dut.out.wb.bits.data.expect(dest, ExpectationValueFormat.Hex)
+  }
+
+  def eCounter(value: BigInt)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit = {
+    dut => dut.out.status.counter.expect(value.U, "counter mismatch")
+  }
+
+  def eIndexOrRes(value: BigInt)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit = {
+    dut => dut.out.debug.foreach {
+      x =>
+        x.indexOrRes.expect(value.U, "indexOrRes mismatch")
+    }
+  }
+
+  def ePassedEntry(value: Boolean)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit = {
+    _.out.flow.bits.passedEntry.expect(value.B, "passedEntry mismatch")
+  }
+
+  def eFirstTable(value: Boolean)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit = {
+    _.out.status.isFirstTable.expect(value.B, "isFirstTable mismatch")
   }
 
   def pFlush: GatherRingUnit[FakeRobPtr] => Unit = _.in.flush.poke(true)
@@ -69,14 +102,17 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       dut.in.flow.valid.poke(false)
   }
 
-  def pPlaceTable(tblIdx: Int, tbl: Seq[Int]): GatherRingUnit[FakeRobPtr] => Unit = {
+  def pPlaceTable(blockSize: Int, tblIdx: Int, tbl: Seq[Int]): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
+      val isFirst = dut.unitIdx % blockSize == 0
       dut.in.placeTable.valid.poke(true)
       dut.in.placeTable.bits.tableIdx.poke(tblIdx)
-      tbl.zipWithIndex.foreach {
+      tbl.grouped(16).toSeq(tblIdx) .zipWithIndex.foreach {
         case (v, i) => dut.in.placeTable.bits.table(i).poke(v)
       }
+      dut.in.placeTable.bits.isFirstTable.poke(isFirst)
+      dut.in.placeTable.bits.blockSize.poke(blockSize)
   }
 
   def pPlaceIndex(
@@ -109,18 +145,18 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   }
 
   def pPlace(
-    blkSize: Int,
-    tblIdx:  Int,
-    tbl:     Seq[Int],
-    idx:     Seq[Int],
-    iValid:  Seq[Boolean],
-    prefill: Seq[Int] = Seq.fill(16)(0xFF),
-    fScala:  Seq[Boolean] = Seq.fill(16)(false),
-    fZeros:  Seq[Boolean] = Seq.fill(16)(false)
+    blkSize    : Int,
+    tblIdx     : Int,
+    tbl        : Seq[Int],
+    idx        : Seq[Int],
+    iValid     : Seq[Boolean],
+    prefill    : Seq[Int] = Seq.fill(16)(0xFF),
+    scalarValid: Seq[Boolean] = Seq.fill(16)(false),
+    zeroValid  : Seq[Boolean] = Seq.fill(16)(false),
   ): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
-      pPlaceTable(tblIdx, tbl)(dut)
-      pPlaceIndex(blkSize, idx, iValid, prefill, fScala, fZeros)(dut)
+      pPlaceTable(blkSize, tblIdx, tbl)(dut)
+      pPlaceIndex(blkSize, idx, iValid, prefill, scalarValid, zeroValid)(dut)
   }
 
   def pNoPlace: GatherRingUnit[FakeRobPtr] => Unit = {
@@ -136,91 +172,224 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     dut =>
 
       dut.in.willFlow.poke(true)
-      dut.in.flow.valid.poke(true)
-      dut.in.flow.bits.tableIdx.poke(0)
-      dut.in.flow.bits.data.foreach(_.poke(0))
-      dut.in.flow.bits.isFirstTable.poke(false)
-      dut.in.flow.bits.passedEntry.poke(false)
   }
 
-  def pFlowTbl(tblIdx: Int, tbl: Seq[Int]): GatherRingUnit[FakeRobPtr] => Unit = {
+  def pFlowTbl(tblIdx: Int, tbl: Seq[Int], passedEntry: Boolean = false, isFirstTable: Boolean = false): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
-      dut.in.willFlow.poke(true)
       dut.in.flow.valid.poke(true)
       dut.in.flow.bits.tableIdx.poke(tblIdx)
-      tbl.zipWithIndex.foreach {
+      tbl.grouped(16).toSeq(tblIdx).zipWithIndex.foreach {
         case (v, i) => dut.in.flow.bits.data(i).poke(v)
       }
-      dut.in.flow.bits.isFirstTable.poke(false)
-      dut.in.flow.bits.passedEntry.poke(false)
+      dut.in.flow.bits.isFirstTable.poke(isFirstTable)
+      dut.in.flow.bits.passedEntry.poke(passedEntry)
   }
+
+  def pNoFlowTbl(): GatherRingUnit[FakeRobPtr] => Unit = _.in.flow.valid.poke(false)
 
   def pScala(v: BigInt): GatherRingUnit[FakeRobPtr] => Unit = _.in.placeIndex.bits.scalarData.poke(v)
 
-  private val noOp    = Seq.empty[GatherRingUnit[FakeRobPtr] => Unit]
-  private val T1      = Seq(eHasTable(true))
-  private val T0      = Seq(eHasTable(false))
-  private val I1      = Seq(eHasIndex(true))
-  private val I0      = Seq(eHasIndex(false))
-  private val Wb0     = Seq(eWb(false))
+  def pScala(v: Seq[Int]): GatherRingUnit[FakeRobPtr] => Unit = {
+    _.in.placeIndex.bits.scalarData.poke(Int8SeqToBigInt(v))
+  }
 
-  def Wb(exp: BigInt) = Seq(eWb(true, exp))
+  def pWbReady(v: Boolean = true): GatherRingUnit[FakeRobPtr] => Unit = _.in.wbReady.poke(v)
 
-  // ═══ 测试 1-4: FSM 基础 ══════════════════════════════
+  private def eT1  (implicit sourceInfo: SourceInfo)    = eHasTable(true)
+  private def eT0  (implicit sourceInfo: SourceInfo)    = eHasTable(false)
+  private def eI1  (implicit sourceInfo: SourceInfo)    = eHasIndex(true)
+  private def eI0  (implicit sourceInfo: SourceInfo)    = eHasIndex(false)
+  private def eWb0 (implicit sourceInfo: SourceInfo)    = eWb(false)
+  private def eWb1(exp: BigInt)(implicit sourceInfo: SourceInfo) = eWb(true, exp)
+
+  def Int8SeqToBigInt(v: Seq[Int]): BigInt = {
+    v.foldRight(BigInt(0))(
+      (b, a) => (a << 8) | BigInt(b)
+    )
+  }
+
+  object Table {
+    def inc(numTable: Int = 1): Seq[Int] = Seq.tabulate(numTable * 16)(identity)
+  }
+
+  object Index {
+    def allInTable0(numTable: Int = 1) = Seq.tabulate(numTable * 16)(x => 15 - x % 16)
+
+    def allInTable1(numTable: Int = 1) = Seq.tabulate(numTable * 16)(x => 16 + 15 - x % 16)
+
+    def unzip2(numTable: Int = 1) = Seq.tabulate(numTable * 16)(x => x / 2 + (x % 2) * 16)
+
+    def unzip4(numTable: Int = 1) = Seq.tabulate(numTable * 16)(x => x / 4 + x % 4 * 16)
+
+    def slideup(sew: Int, numTable: Int = 1, slide: Int = 1) = Seq.tabulate(numTable * 16)(x => x - sew / 8 * slide)
+
+    def slidedown(sew: Int, numTable: Int = 1, slide: Int = 1) = Seq.tabulate(numTable * 16)(x => x + sew / 8 * slide)
+  }
+
+  object IndexValid {
+    def allTrue(numTable: Int = 1): Seq[Boolean] = Seq.fill(numTable * 16)(true)
+  }
+
+  object Prefill {
+    def default(numTable: Int = 1) = Seq.tabulate(numTable * 16)(0xff - _)
+  }
+
+  object ScalarTable {
+    def default(sew: Int) = {
+      sew match {
+        case 1 => Seq.tabulate(8)(x => x % 1 + 0xCA)
+        case 2 => Seq.tabulate(8)(x => x % 2 + 0xCA)
+        case 4 => Seq.tabulate(8)(x => x % 4 + 0xCA)
+        case 8 => Seq.tabulate(8)(x => x % 8 + 0xCA)
+      }
+    }
+  }
+
+  object Res {
+    def gather(table: Seq[Int], index: Seq[Int]): BigInt = {
+      index.map(idx => table(idx)).foldRight(BigInt(0))(
+        (b, a) => (a << 8) | BigInt(b)
+      )
+    }
+
+    def gather(table: Seq[Int], index: Seq[Int], indexValid: Seq[Boolean], prefill: Seq[Int]): BigInt = {
+      val tableRange = 0 until (table.size / 16)
+
+      gather(table, index, indexValid, prefill, tableRange)
+    }
+
+    def gather(
+      table: Seq[Int],
+      index: Seq[Int],
+      indexValid: Seq[Boolean] = Seq.fill(16)(true),
+      prefill: Seq[Int] = Prefill.default(1),
+      tableRange: Seq[Int] = Seq.tabulate(8)(identity),
+      scalarValid: Seq[Boolean] = Seq.fill(16)(false),
+      zeroValid: Seq[Boolean] = Seq.fill(16)(false),
+      scalarTable: Seq[Int] = ScalarTable.default(8),
+    ): BigInt = {
+      require(index.size == indexValid.size)
+      require(index.size == prefill.size)
+      require(scalarTable.size == 8)
+
+      index.indices.map(
+        i =>
+          if (indexValid(i)) {
+            if (tableRange.contains(i / 16))
+              table(index(i))
+            else
+              index(i)
+          }
+          else if (scalarValid(i)) {
+            scalarTable(i % scalarTable.size)
+          }
+          else if (zeroValid(i)) {
+            0
+          }
+          else
+            prefill(i)
+      ).foldRight(BigInt(0))(
+        (b, a) => (a << 8) | BigInt(b)
+      )
+    }
+  }
+
+  def simulator(unitIdx: Int = 0)(stimulus: GatherRingUnit[FakeRobPtr] => Unit)(
+    implicit hasSimulator:        HasSimulator,
+    testingDirectory:             HasTestingDirectory,
+    chiselOptsModifications:      ChiselOptionsModifications,
+    firtoolOptsModifications:     FirtoolOptionsModifications,
+    commonSettingsModifications:  svsim.CommonSettingsModifications,
+    backendSettingsModifications: svsim.BackendSettingsModifications
+  ): Unit = {
+    simulate(new GatherRingUnit(unitIdx = unitIdx, FakeRobPtr())(GatherCommon.GatherParam.debug))(stimulus)(
+      hasSimulator,
+      testingDirectory,
+      chiselOptsModifications,
+      firtoolOptsModifications,
+      commonSettingsModifications,
+      backendSettingsModifications,
+    )
+  }
+
   describe("FSM") {
-    it("Place sets hasTable/hasIndex") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+    it("Place sets hasTable and hasIndex seperately") {
+      simulator() {
         dut =>
 
-          val e = Seq.fill(16)(0)
-          val f = Seq.fill(16)(false)
+          val tblSize = 8
+          val table = Table.inc(tblSize)
+          val index = Index.allInTable0()
+          val indexValid = IndexValid.allTrue()
+          val prefill = Prefill.default()
+          val res = Res.gather(table, index, indexValid, prefill)
+
           runCycles(
             dut,
             initUnit,
-            Cycle(pNoFlow)(T0 ++ I0),
-            Cycle(pPlace(8, 0, e, e, f))(T1 ++ I1 ++ Wb0),
+            Cycle(pNoFlow)(eT0, eI0),
+            Cycle(pPlaceTable(tblSize, 0, table))(eT1, eI0, eWb0),
+            Cycle(pPlaceIndex(tblSize, index, indexValid, prefill))(eT1, eI1, eWb1(res)),
+          )
+      }
+    }
+    it("Place sets hasTable and hasIndex at the same time") {
+      simulator() {
+        dut =>
+
+          val tblSize = 8
+          val table = Table.inc(tblSize)
+          val index = Index.allInTable0()
+          val indexValid = IndexValid.allTrue()
+          val prefill = Prefill.default()
+          val res = Res.gather(table, index, indexValid, prefill)
+
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pNoFlow)(eT0, eI0),
+            Cycle(pPlace(tblSize, 0, table, index, indexValid, prefill))(eT1, eI1, eWb1(res)),
           )
       }
     }
     it("Flow decrements counter") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
-          val e = Seq.fill(16)(0)
-          val f = Seq.fill(16)(false)
+          val tblSize = 2
+          val table = Table.inc(tblSize)
+          val index = Index.unzip2(1)
+          val indexValid = IndexValid.allTrue()
+          val prefill = Prefill.default(1)
+          val res = Res.gather(table, index, indexValid, prefill, Seq(0))
+
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(2, 0, e, e, f))(Wb0),
-            Cycle(pNoPlace, pFlow)(Wb(0)),
+            Cycle(pPlace(tblSize, 0, table, index, indexValid, prefill))(eWb0, eCounter(1), eIndexOrRes(res)),
+            Cycle(pNoPlace, pFlow)(eWb0),
           )
       }
     }
     it("Hold keeps state") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
-          val e = Seq.fill(16)(0)
-          val f = Seq.fill(16)(false)
+          val table = Table.inc()
+          val index = Index.unzip2()
+          val indexValid = IndexValid.allTrue()
+          val prefill = Prefill.default()
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(8, 0, e, e, f))(noOp),
-            Cycle(pNoPlace, pNoFlow)(T1 ++ I1),
+            Cycle(pPlace(8, 0, table, index, indexValid))(eT1, eI1, eCounter(7)),
+            Cycle(pNoPlace, pNoFlow)(eT1, eI1),
           )
       }
     }
     it("Flush clears") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
           val e = Seq.fill(16)(0)
@@ -228,19 +397,16 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(8, 0, e, e, f))(T1),
-            Cycle(pNoPlace, pNoFlow, pFlush)(T0 ++ I0),
+            Cycle(pPlace(8, 0, e, e, f))(eT1, eI1),
+            Cycle(pNoPlace, pNoFlow, pFlush)(eT0, eI0),
           )
       }
     }
   }
 
-  // ═══ 测试 5-10: LMUL=1 运算 ═════════════════════════
-  describe("LMUL=1") {
+  describe("LMUL1") {
     it("identity 16 elem") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
           val t = (0 until 16).map(
@@ -250,14 +416,12 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, 0 until 16, Seq.fill(16)(true)))(Wb(exp)),
+            Cycle(pPlace(1, 0, t, 0 until 16, Seq.fill(16)(true)))(eWb1(exp)),
           )
       }
     }
     it("reverse order gather") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
           val t = (0 until 16).map(
@@ -275,14 +439,12 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, Seq.fill(16)(true)))(Wb(exp)),
+            Cycle(pPlace(1, 0, t, idx, Seq.fill(16)(true)))(eWb1(exp)),
           )
       }
     }
     it("shuffled gather") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
           val t = (0 until 16).map(
@@ -298,156 +460,195 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, perm, Seq.fill(16)(true)))(Wb(exp)),
+            Cycle(pPlace(1, 0, t, perm, Seq.fill(16)(true)))(eWb1(exp)),
           )
       }
     }
     it("mixed found/notfound") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
-          val t = (0 until 16).map(
-            i => 0xa0 + i
-          )
-          val idx = (0 until 16).map(
-            i => if (i % 2 == 0) i else 16 + i
-          )
-          val pf = (0 until 16).map(
-            i => if (i % 2 == 0) 0 else 16 + i
-          )
-          val bytes = (0 until 16).map(
-            i => if (i % 2 == 0) 0xa0 + i else 16 + i
-          )
-          val exp = bytes.foldRight(BigInt(0))(
-            (b, a) => (a << 8) | BigInt(b)
-          )
+          val table = Table.inc(2)
+          val index = Index.unzip2(1)
+          val prefill = Prefill.default(1)
+          val indexValid = IndexValid.allTrue(1)
+          val res = Res.gather(table, index, indexValid, prefill, 0 to 0)
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, Seq.fill(16)(true), pf))(Wb(exp)),
-          )
-      }
-    }
-    it("vslide1up SEW=8") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
-        dut =>
-
-          val t = (0 until 16).map(
-            i => 0x10 + i
-          )
-          val idx = (0 until 16).map(
-            i => if (i == 0) 0 else i - 1
-          )
-          val iv = (0 until 16).map(_ != 0)
-          val fs = (0 until 16).map(_ == 0)
-          val bytes = (0 until 16).map(
-            i => if (i == 0) 0x5a else 0x10 + (i - 1)
-          )
-          val exp = bytes.foldRight(BigInt(0))(
-            (b, a) => (a << 8) | BigInt(b)
-          )
-          runCycles(
-            dut,
-            initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(Wb(exp)),
-          )
-      }
-    }
-    it("vslide1down SEW=8") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
-        dut =>
-
-          val t = (0 until 16).map(
-            i => 0x10 + i
-          )
-          val idx = (0 until 16).map(
-            i => if (i == 15) 0 else i + 1
-          )
-          val iv = (0 until 16).map(_ != 15)
-          val fs = (0 until 16).map(_ == 15)
-          val bytes = (0 until 16).map(
-            i => if (i == 15) 0x5a else 0x10 + (i + 1)
-          )
-          val exp = bytes.foldRight(BigInt(0))(
-            (b, a) => (a << 8) | BigInt(b)
-          )
-          runCycles(
-            dut,
-            initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(Wb(exp)),
-          )
-      }
-    }
-    it("prefillData for out-of-range indices") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
-        dut =>
-
-          val t = (0 until 16).map(
-            i => 0x10 + i
-          )
-          val idx = (0 until 16).map(
-            i => if (i % 4 < 2) i else 100 + i
-          )
-          val pf = (0 until 16).map(
-            i => if (i % 4 >= 2) 0x7e else 0
-          )
-          val bytes = (0 until 16).map(
-            i => if (i % 4 < 2) 0x10 + i else 0x7e
-          )
-          val exp = bytes.foldRight(BigInt(0))(
-            (b, a) => (a << 8) | BigInt(b)
-          )
-          runCycles(
-            dut,
-            initUnit,
-            Cycle(pPlace(1, 0, t, idx, Seq.fill(16)(true), pf))(Wb(exp)),
+            Cycle(pPlace(1, 0, table, index, indexValid, prefill))(eWb0, eIndexOrRes(res)),
           )
       }
     }
   }
 
-  // ═══ 测试 11-12: SEW=16/32 fillScala ════════════════
+  describe("vslide1down") {
+    implicit var sew = 8
+    def sewByte = sew / 8
+    val table = Table.inc()
+    def index = Index.slidedown(sew)
+    def indexValid(vl: Int) = (0 until 16).map(_ / sewByte < vl)
+    val prefill = Prefill.default()
+    def scalarValid(vl: Int) = (0 until 16).map(_ / sewByte == vl)
+    val scalarTable = ScalarTable.default(1)
+    def res(vl: Int) = Res.gather(table, index, indexValid(vl), prefill, 0 to 0, scalarValid = scalarValid(vl), scalarTable = scalarTable)
+
+    it("SEW=8") {
+      sew = 8
+      simulator() {
+        dut =>
+
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pPlace(1, 0, table, index, indexValid(15), prefill = prefill, scalarValid = scalarValid(15)), pScala(scalarTable))(eWb1(res(15))),
+            Cycle(pPlace(1, 0, table, index, indexValid(14), prefill = prefill, scalarValid = scalarValid(14)), pScala(scalarTable), pWbReady())(eWb1(res(14))),
+            Cycle(pPlace(1, 0, table, index, indexValid(13), prefill = prefill, scalarValid = scalarValid(13)), pScala(scalarTable), pWbReady())(eWb1(res(13))),
+            Cycle(pPlace(1, 0, table, index, indexValid(12), prefill = prefill, scalarValid = scalarValid(12)), pScala(scalarTable), pWbReady())(eWb1(res(12))),
+            Cycle(pPlace(1, 0, table, index, indexValid(11), prefill = prefill, scalarValid = scalarValid(11)), pScala(scalarTable), pWbReady())(eWb1(res(11))),
+            Cycle(pPlace(1, 0, table, index, indexValid(10), prefill = prefill, scalarValid = scalarValid(10)), pScala(scalarTable), pWbReady())(eWb1(res(10))),
+            Cycle(pPlace(1, 0, table, index, indexValid( 9), prefill = prefill, scalarValid = scalarValid( 9)), pScala(scalarTable), pWbReady())(eWb1(res( 9))),
+            Cycle(pPlace(1, 0, table, index, indexValid( 8), prefill = prefill, scalarValid = scalarValid( 8)), pScala(scalarTable), pWbReady())(eWb1(res( 8))),
+            Cycle(pNoPlace, pWbReady())(eWb0)
+          )
+      }
+    }
+    it("SEW=16") {
+      sew = 16
+      simulator() {
+        dut =>
+
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pPlace(1, 0, table, index, indexValid(7), prefill = prefill, scalarValid = scalarValid(7)), pScala(scalarTable))(eWb1(res(7))),
+            Cycle(pPlace(1, 0, table, index, indexValid(6), prefill = prefill, scalarValid = scalarValid(6)), pScala(scalarTable), pWbReady())(eWb1(res(6))),
+            Cycle(pPlace(1, 0, table, index, indexValid(5), prefill = prefill, scalarValid = scalarValid(5)), pScala(scalarTable), pWbReady())(eWb1(res(5))),
+            Cycle(pPlace(1, 0, table, index, indexValid(4), prefill = prefill, scalarValid = scalarValid(4)), pScala(scalarTable), pWbReady())(eWb1(res(4))),
+            Cycle(pNoPlace, pWbReady())(eWb0)
+          )
+      }
+    }
+    it("SEW=32") {
+      sew = 32
+      simulator() {
+        dut =>
+
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pPlace(1, 0, table, index, indexValid(3), prefill = prefill, scalarValid = scalarValid(3)), pScala(scalarTable))(eWb1(res(3))),
+            Cycle(pPlace(1, 0, table, index, indexValid(2), prefill = prefill, scalarValid = scalarValid(2)), pScala(scalarTable), pWbReady())(eWb1(res(2))),
+            Cycle(pPlace(1, 0, table, index, indexValid(1), prefill = prefill, scalarValid = scalarValid(1)), pScala(scalarTable), pWbReady())(eWb1(res(1))),
+            Cycle(pNoPlace, pWbReady())(eWb0)
+          )
+      }
+    }
+    it("SEW=64") {
+      sew = 64
+      simulator() {
+        dut =>
+
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pPlace(1, 0, table, index, indexValid(1), prefill = prefill, scalarValid = scalarValid(1)), pScala(scalarTable))(eWb1(res(1))),
+            Cycle(pPlace(1, 0, table, index, indexValid(0), prefill = prefill, scalarValid = scalarValid(0)), pScala(scalarTable), pWbReady())(eWb1(res(0))),
+            Cycle(pNoPlace, pWbReady())(eWb0)
+          )
+      }
+
+    }
+  }
+
+  describe("vslide1up") {
+    implicit var sew = 8
+    def sewByte = sew / 8
+
+    val table = Table.inc()
+    def index = Index.slideup(sew)
+    def indexValid = (0 until 16).map(_ / sewByte != 0)
+    val prefill = Prefill.default()
+    def scalarValid = (0 until 16).map(_ / sewByte == 0)
+    val scalarTable = ScalarTable.default(1)
+    def res = Res.gather(table, index, indexValid, prefill, 0 to 0, scalarValid = scalarValid, scalarTable = scalarTable)
+
+    it("SEW=8") {
+      sew = 8
+      simulator() {
+        dut =>
+
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid), pScala(scalarTable))(eWb1(res)),
+          )
+      }
+    }
+    it("SEW=16") {
+      sew = 16
+      simulator() {
+        dut =>
+
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid), pScala(scalarTable))(eWb1(res)),
+          )
+      }
+    }
+    it("SEW=32") {
+      sew = 32
+      simulator() {
+        dut =>
+
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid), pScala(scalarTable))(eWb1(res)),
+          )
+      }
+    }
+    it("SEW=64") {
+      sew = 64
+      simulator() {
+        dut =>
+
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid), pScala(scalarTable))(eWb1(res)),
+          )
+      }
+    }
+  }
+
   describe("SEW=16 fillScala") {
     val sb = 2
     it("vslide1up") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
-          val t = (0 until 16).map(
+          val table = (0 until 16).map(
             i => 0x10 + i
           )
-          val idx = (0 until 16).map(
+          val index = (0 until 16).map(
             i => if (i < sb) 0 else i - sb
           )
-          val iv = (0 until 16).map(_ >= sb)
-          val fs = (0 until 16).map(_ < sb)
-          val bytes = (0 until 16).map(
-            i => if (i < sb) 0x5a else 0x10 + (i - sb)
-          )
-          val exp = bytes.foldRight(BigInt(0))(
-            (b, a) => (a << 8) | BigInt(b)
-          )
+          val indexValid = (0 until 16).map(_ >= sb)
+          val scalarValid = (0 until 16).map(_ < sb)
+          val prefill = Prefill.default()
+          val scalarTable = ScalarTable.default(2)
+          val res = Res.gather(table, index, indexValid, prefill, Seq(0), scalarValid = scalarValid, scalarTable = scalarTable)
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(Wb(exp)),
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid), pScala(scalarTable))(eWb1(res)),
           )
       }
     }
     it("vslide1down") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
           val t = (0 until 16).map(
@@ -467,17 +668,16 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(Wb(exp)),
+            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(eWb1(exp)),
           )
       }
     }
   }
+
   describe("SEW=32 fillScala") {
     val sb = 4
     it("vslide1up") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
           val t = (0 until 16).map(
@@ -497,14 +697,12 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(Wb(exp)),
+            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(eWb1(exp)),
           )
       }
     }
     it("vslide1down") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
           val t = (0 until 16).map(
@@ -524,18 +722,15 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(Wb(exp)),
+            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(eWb1(exp)),
           )
       }
     }
   }
 
-  // ═══ 测试 13-14: fillZeros ═══════════════════════════
   describe("fillZeros") {
     it("vslideup offset=3") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
           val t = (0 until 16).map(
@@ -555,14 +750,12 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, fZeros = fz))(Wb(exp)),
+            Cycle(pPlace(1, 0, t, idx, iv, zeroValid = fz))(eWb1(exp)),
           )
       }
     }
     it("vslidedown offset=2") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
           val t = (0 until 16).map(
@@ -582,14 +775,12 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, fZeros = fz))(Wb(exp)),
+            Cycle(pPlace(1, 0, t, idx, iv, zeroValid = fz))(eWb1(exp)),
           )
       }
     }
     it("fillZeros + fillScala mixed") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
           val t = (0 until 16).map(
@@ -614,217 +805,197 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             dut,
             initUnit,
             Cycle(
-              pPlace(1, 0, t, idx, iv, fScala = fs, fZeros = fz), pScala(BigInt("5A5A5A5A5A5A5A5A", 16))
-            )(Wb(exp))
+              pPlace(1, 0, t, idx, iv, scalarValid = fs, zeroValid = fz), pScala(BigInt("5A5A5A5A5A5A5A5A", 16))
+            )(eWb1(exp))
           )
       }
     }
   }
 
-  // ═══ 测试 15-16: Multi-Table ═════════════════════════
-  describe("Multi-Table") {
-    it("LMUL=2 identity") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
-        dut =>
+  describe("LMUL2") {
+    describe("all in table0") {
+      val table = Table.inc(2)
+      val index = Index.allInTable0(1)
+      it("case 0") {
+        simulator(unitIdx = 0) {
+          dut =>
 
-          val s0 = (0 until 16).map(
-            i => 0x10 + i
-          )
-          val s1 = (0 until 16).map(
-            i => 0xa0 + i
-          )
-          val idx = (0 until 16).map(
-            i => 15 - i
-          ) // reverse: all found in seg 0
-          val bytes = (0 until 16).map(
-            i => 0x10 + (15 - i)
-          )
-          val exp = bytes.foldRight(BigInt(0))(
-            (b, a) => (a << 8) | BigInt(b)
-          )
-          runCycles(
-            dut,
-            initUnit,
-            Cycle(pPlace(2, 0, s0, idx, Seq.fill(16)(true)))(Wb0),
-            Cycle(pNoPlace, pFlowTbl(1, s1))(Wb(exp)),
-          )
+            val res = Res.gather(table, index)
+            runCycles(
+              dut,
+              initUnit,
+              Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)))(eCounter(1), eWb1(res)),
+              Cycle(pNoPlace, pFlow, pFlowTbl(1, table), pWbReady())(eCounter(0), eI1, eT1, eWb0),
+              Cycle(pFlow, pNoFlowTbl(), pWbReady(false))(eI0, eT0, eWb0)
+            )
+        }
+
+        simulator(unitIdx = 1) {
+          dut =>
+
+            val res0 = Res.gather(table, index, tableRange = 1 to 1)
+            val res1 = Res.gather(table, index, tableRange = 0 to 0)
+
+            runCycles(
+              dut,
+              initUnit,
+              Cycle(pPlace(2, 1, table, index, Seq.fill(16)(true)))(eCounter(1), eWb0, eIndexOrRes(res0)),
+              Cycle(pNoPlace, pFlow, pFlowTbl(0, table))(eCounter(0), eI1, eT1, eWb1(res1)),
+              Cycle(pFlow, pNoFlowTbl(), pWbReady())(eI0, eT0, eWb0)
+            )
+        }
+      }
+
+      it("case 1") {
+        simulator(unitIdx = 0) {
+          dut =>
+
+            val res0 = Res.gather(table, index, tableRange = 1 to 1)
+            val res1 = Res.gather(table, index, tableRange = 0 to 0)
+
+            runCycles(
+              dut,
+              initUnit,
+              Cycle(pPlace(2, 1, table, index, Seq.fill(16)(true)), pWbReady())(eCounter(1), eWb0, eIndexOrRes(res0)),
+              Cycle(pNoPlace, pFlow, pFlowTbl(0, table), pWbReady(false))(eCounter(0), eI1, eT1, eWb1(res1)),
+              Cycle(pFlow, pNoFlowTbl())(eI0, eT0, eWb0)
+            )
+        }
+
+        simulator(unitIdx = 1) {
+          dut =>
+
+            val res = Res.gather(table, index)
+
+            runCycles(
+              dut,
+              initUnit,
+              Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)), pWbReady(false))(eCounter(1), eWb1(res)),
+              Cycle(pNoPlace, pFlow, pFlowTbl(1, table), pWbReady())(eCounter(0), eI1, eT1, eWb0),
+              Cycle(pFlow, pNoFlowTbl())(eI0, eT0, eWb0)
+            )
+        }
+      }
+
+      it("case 2") {
+        simulator(unitIdx = 0) {
+          dut =>
+
+            val res = Res.gather(table, index)
+            runCycles(
+              dut,
+              initUnit,
+              Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)))(eCounter(1), eWb1(res)),
+              Cycle(pNoPlace, pWbReady())(eWb0),
+              Cycle(pNoPlace, pFlow, pFlowTbl(1, table), pWbReady())(eCounter(0), eI1, eT1, eWb0),
+              Cycle(pFlow, pNoFlowTbl(), pWbReady(false))(eI0, eT0, eWb0)
+            )
+        }
+
+        simulator(unitIdx = 1) {
+          dut =>
+
+            val res0 = Res.gather(table, index, tableRange = 1 to 1)
+            val res1 = Res.gather(table, index, tableRange = 0 to 0)
+
+            runCycles(
+              dut,
+              initUnit,
+              Cycle()(eT0, eI0, eWb0),
+              Cycle(pPlace(2, 1, table, index, Seq.fill(16)(true)))(eCounter(1), eWb0, eIndexOrRes(res0)),
+              Cycle(pNoPlace, pFlow, pFlowTbl(0, table))(eCounter(0), eI1, eT1, eWb1(res1)),
+              Cycle(pFlow, pNoFlowTbl(), pWbReady())(eI0, eT0, eWb0)
+            )
+        }
       }
     }
-    it("LMUL=4 identity") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
-        dut =>
 
-          val s = (0 until 16).map(
-            i => 0x10 + i
-          )
-          val perm = Seq(3, 7, 0, 11, 15, 2, 5, 9, 13, 1, 8, 14, 4, 6, 10, 12) // shuffled
-          val bytes = perm.map(
-            i => 0x10 + i
-          )
-          val exp = bytes.foldRight(BigInt(0))(
-            (b, a) => (a << 8) | BigInt(b)
-          )
-          runCycles(
-            dut,
-            initUnit,
-            Cycle(pPlace(4, 0, s, perm, Seq.fill(16)(true)))(Wb0),
-            Cycle(pNoPlace, pFlowTbl(1, s))(Wb0),
-            Cycle(pNoPlace, pFlowTbl(2, s))(Wb0),
-            Cycle(pNoPlace, pFlowTbl(3, s))(Wb(exp)),
-          )
+    describe("all in table1") {
+      val table = Table.inc(2)
+      val index = Index.allInTable1(1)
+
+      it("case 0") {
+        simulator(unitIdx = 0) {
+          dut =>
+
+            val res0 = Res.gather(table, index, tableRange = Seq(0))
+            val res1 = Res.gather(table, index, tableRange = Seq(1))
+
+            runCycles(
+              dut,
+              initUnit,
+              Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)), pWbReady(false))(eCounter(1), eWb0, eIndexOrRes(res0)),
+              Cycle(pNoPlace, pFlow, pFlowTbl(1, table), pWbReady())(eCounter(0), eI1, eT1, eWb1(res1)),
+              Cycle(pFlow, pNoFlowTbl())(eI0, eT0, eWb0)
+            )
+        }
+
+        simulator(unitIdx = 1) {
+          dut =>
+
+            val res = Res.gather(table, index)
+            runCycles(
+              dut,
+              initUnit,
+              Cycle(pPlace(2, 1, table, index, Seq.fill(16)(true)), pWbReady())(eCounter(1), eWb1(res)),
+              Cycle(pNoPlace, pFlow, pFlowTbl(0, table), pWbReady())(eCounter(0), eI1, eT1, eWb0),
+              Cycle(pFlow, pNoFlowTbl())(eI0, eT0, eWb0)
+            )
+        }
       }
     }
-    it("LMUL=2 all indices in seg1") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
-        dut =>
 
-          val s0 = (0 until 16).map(
-            i => 0x10 + i
-          )
-          val s1 = (0 until 16).map(
-            i => 0xa0 + i
-          )
-          val shift = 16
-          // ALL indices point to seg1 (high=1), none found in seg0
-          val idx = (0 until 16).map(
-            i => i + shift
-          )
-          val pf = (0 until 16).map(
-            i => i + shift
-          )
-          val s1Bytes = s1.foldRight(BigInt(0))(
-            (b, a) => (a << 8) | BigInt(b)
-          )
-          runCycles(
-            dut,
-            initUnit,
-            Cycle(pPlace(2, 0, s0, idx, Seq.fill(16)(true), pf))(Wb0),
-            Cycle(pNoPlace, pFlowTbl(1, s1))(Wb(s1Bytes)),
-          )
-      }
-    }
     it("LMUL=2 zip interleave") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
-          val s0 = (0 until 16).map(
-            i => 0x10 + i
-          )
-          val s1 = (0 until 16).map(
-            i => 0xa0 + i
-          )
-          // zip: even elements from seg0, odd from seg1
-          val idx = (0 until 16).map(
+          val table = Table.inc(2)
+          // zip: even elements from table 0, odd from table 1
+          val index = (0 until 16).map(
             i => if (i % 2 == 0) i / 2 else 16 + i / 2
           )
-          val pf = idx // prefill = index, placeholder for odd elements notfound in seg0
-          val zipBytes = (0 until 16).map(
-            i => if (i % 2 == 0) s0(i / 2) else s1(i / 2)
-          )
-          val exp = zipBytes.foldRight(BigInt(0))(
-            (b, a) => (a << 8) | BigInt(b)
-          )
+          val res = Res.gather(table, index)
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(2, 0, s0, idx, Seq.fill(16)(true), pf))(Wb0),
-            Cycle(pNoPlace, pFlowTbl(1, s1))(Wb(exp)),
-          )
-      }
-    }
-    it("LMUL=2 consecutive Places override") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
-        dut =>
-
-          val s0 = (0 until 16).map(
-            i => 0x10 + i
-          )
-          val s0b = (0 until 16).map(
-            i => 0x30 + i
-          )
-          val s0bBytes = s0b.foldRight(BigInt(0))(
-            (b, a) => (a << 8) | BigInt(b)
-          )
-          runCycles(
-            dut,
-            initUnit,
-            Cycle(pPlace(2, 0, s0, 0 until 16, Seq.fill(16)(true)))(Wb0),
-            Cycle(pPlace(2, 0, s0b, 0 until 16, Seq.fill(16)(true)))(Wb0),
-            Cycle(pNoPlace, pFlowTbl(1, s0b))(Wb(s0bBytes)),
-          )
-      }
-    }
-    it("LMUL=4 distinct segments") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
-        dut =>
-
-          val s0 = (0 until 16).map(
-            i => 0x10 + i
-          )
-          val s1 = (0 until 16).map(
-            i => 0xa0 + i
-          )
-          val s2 = (0 until 16).map(
-            i => 0x20 + i
-          )
-          val s3 = (0 until 16).map(
-            i => 0x30 + i
-          )
-          // 4 elements per segment: elem 0-3→s0, 4-7→s1, 8-11→s2, 12-15→s3
-          val idx = (0 until 16).map(
-            i => (i % 4) + (i / 4) * 16
-          )
-          val bytes = (0 until 16).map(
-            i =>
-              (i / 4) match {
-                case 0 => s0(i % 4)
-                case 1 => s1(i % 4)
-                case 2 => s2(i % 4)
-                case 3 => s3(i % 4)
-              }
-          )
-          val exp = bytes.foldRight(BigInt(0))(
-            (b, a) => (a << 8) | BigInt(b)
-          )
-          runCycles(
-            dut,
-            initUnit,
-            Cycle(
-              pPlace(
-                4,
-                0,
-                s0,
-                idx,
-                Seq.fill(16)(true),
-                prefill = idx
-              )
-            )(Wb0),
-            Cycle(pNoPlace, pFlowTbl(1, s1))(Wb0),
-            Cycle(pNoPlace, pFlowTbl(2, s2))(Wb0),
-            Cycle(pNoPlace, pFlowTbl(3, s3))(Wb(exp)),
+            Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)))(eWb0),
+            Cycle(pNoPlace, pFlow, pFlowTbl(1, table))(eWb1(res)),
+            Cycle(pNoFlow, pNoFlowTbl, pWbReady())(eWb0),
           )
       }
     }
   }
 
-  // ═══ 测试 17-18: Tag ═════════════════════════════════
+  describe("LMUL4") {
+    val table = Table.inc(4)
+    val index = Index.unzip4(1)
+    val prefill = Prefill.default(1)
+    val indexValid = Seq.tabulate(16)(_ % 5 != 0)
+
+    it("unzip4") {
+      simulator() {
+        dut =>
+
+          val res0 = Res.gather(table, index, indexValid, prefill, Seq(0))
+          val res1 = Res.gather(table, index, indexValid, prefill, Seq(0, 1))
+          val res2 = Res.gather(table, index, indexValid, prefill, Seq(0, 1, 2))
+          val res3 = Res.gather(table, index, indexValid, prefill)
+
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pPlace(4, 0, table, index, indexValid, prefill = prefill))(eWb0, eIndexOrRes(res0)),
+            Cycle(pNoPlace, pFlow, pFlowTbl(1, table))(eWb0, eIndexOrRes(res1)),
+            Cycle(pNoPlace, pFlow, pFlowTbl(2, table))(eWb0, eIndexOrRes(res2)),
+            Cycle(pNoPlace, pFlow, pFlowTbl(3, table))(eWb1(res3)),
+          )
+      }
+    }
+  }
+
   describe("Tags") {
     it("tableOut valid after Place") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
           val t = (0 until 16).map(
@@ -836,35 +1007,28 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(2, 0, t, idx, Seq.fill(16)(true)))(noOp),
-            Cycle(pNoPlace, pNoFlow)(Seq(_.out.flow.valid.expect(true))),
+            Cycle(pPlace(2, 0, t, idx, Seq.fill(16)(true)))(),
+            Cycle(pNoPlace, pNoFlow)(_.out.flow.valid.expect(true)),
           )
       }
     }
     it("passedEntry at entry unit after flow") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
-          val t = (0 until 16).map(
-            i => 0x10 + i
-          )
-          val idx = (0 until 16).map(
-            i => 15 - i
-          )
+          val table = Table.inc(2)
+          val index = Index.allInTable0()
+          val indexValid = IndexValid.allTrue()
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(2, 0, t, idx, Seq.fill(16)(true)))(noOp),
-            Cycle(pNoPlace, pFlowTbl(1, t))(Seq(_.out.flow.bits.passedEntry.expect(true))),
+            Cycle(pPlace(2, 0, table, index, indexValid))(),
+            Cycle(pNoPlace, pFlowTbl(1, table))(ePassedEntry(true)),
           )
       }
     }
     it("tag.isFirst set on Place") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      def test(unitIdx: Int, isFirstTable: Boolean) = simulator(unitIdx) {
         dut =>
 
           val t = (0 until 16).map(
@@ -873,99 +1037,51 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(2, 0, t, 0 until 16, Seq.fill(16)(true)))(noOp),
-            Cycle(pNoPlace, pNoFlow)(Seq(_.out.flow.bits.isFirstTable.expect(false))),
+            Cycle(pPlace(2, 0, t, 0 until 16, Seq.fill(16)(true)))(),
+            Cycle(pNoPlace, pNoFlow)(eFirstTable(isFirstTable)),
           )
       }
+
+      test(0, true)
+      test(1, false)
     }
     it("flowIn.bits.passedEntry propagates") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
-          initUnit(dut)
-          val t = (0 until 16).map(
-            i => 0x10 + i
+          val table = Table.inc(2)
+          val index = Index.allInTable0()
+          val indexValid = IndexValid.allTrue()
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pPlace(2, 0, table, index, indexValid))(),
+            Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true))(ePassedEntry(true)),
           )
-          dut.in.placeIndex.bits.blockSize.poke(2)
-          dut.in.placeTable.valid.poke(true)
-          dut.in.placeIndex.valid.poke(true)
-          t.zipWithIndex.foreach {
-            case (v, i) => dut.in.placeTable.bits.table(i).poke(v)
-          }
-          (0 until 16).foreach(
-            i => dut.in.placeIndex.bits.index(i).poke(i)
-          )
-          (0 until 16).foreach(
-            i => dut.in.placeIndex.bits.indexValid(i).poke(true)
-          )
-          dut.in.placeTable.bits.tableIdx.poke(0)
-          dut.in.willFlow.poke(false)
-          dut.in.flow.valid.poke(false)
-          dut.clock.step()
-          dut.in.placeTable.valid.poke(false)
-          dut.in.placeIndex.valid.poke(false)
-          dut.in.willFlow.poke(true)
-          dut.in.flow.valid.poke(true)
-          dut.in.flow.bits.tableIdx.poke(1)
-          t.zipWithIndex.foreach {
-            case (v, i) => dut.in.flow.bits.data(i).poke(v)
-          }
-          dut.in.flow.bits.isFirstTable.poke(false)
-          dut.in.flow.bits.passedEntry.poke(true)
-          dut.clock.step()
-          dut.out.flow.bits.passedEntry.expect(true)
       }
     }
     it("flowIn.bits.isFirstTable propagates") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
-          initUnit(dut)
-          val t = (0 until 16).map(
-            i => 0x10 + i
+          val table = Table.inc(2)
+          val index = Index.allInTable0()
+          val indexValid = IndexValid.allTrue()
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pPlace(2, 0, table, index, indexValid))(),
+            Cycle(pNoPlace, pFlow, pFlowTbl(1, table, isFirstTable = true))(
+              _.out.flow.bits.isFirstTable.expect(true)
+            ),
           )
-          dut.in.placeIndex.bits.blockSize.poke(2)
-          dut.in.placeTable.valid.poke(true)
-          dut.in.placeIndex.valid.poke(true)
-          t.zipWithIndex.foreach {
-            case (v, i) => dut.in.placeTable.bits.table(i).poke(v)
-          }
-          (0 until 16).foreach(
-            i => dut.in.placeIndex.bits.index(i).poke(i)
-          )
-          (0 until 16).foreach(
-            i => dut.in.placeIndex.bits.indexValid(i).poke(true)
-          )
-          dut.in.placeTable.bits.tableIdx.poke(0)
-          dut.in.willFlow.poke(false)
-          dut.in.flow.valid.poke(false)
-          dut.clock.step()
-          dut.in.placeTable.valid.poke(false)
-          dut.in.placeIndex.valid.poke(false)
-          dut.in.willFlow.poke(true)
-          dut.in.flow.valid.poke(true)
-          dut.in.flow.bits.tableIdx.poke(1)
-          t.zipWithIndex.foreach {
-            case (v, i) => dut.in.flow.bits.data(i).poke(v)
-          }
-          dut.in.flow.bits.isFirstTable.poke(true)
-          dut.in.flow.bits.passedEntry.poke(false)
-          dut.clock.step()
-          dut.out.flow.bits.isFirstTable.expect(true)
       }
     }
   }
 
-  // ═══ 测试 19: Reuse ═════════════════════════════════
   describe("Reuse") {
     it("second instruction after flush") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
           val t1 = (0 until 16).map(
@@ -983,17 +1099,15 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t1, 0 until 16, Seq.fill(16)(true)))(Wb(e1)),
-            Cycle(pNoPlace, pNoFlow, pFlush)(noOp),
-            Cycle(pNoPlace, pNoFlow, _.in.flush.poke(false))(noOp),
-            Cycle(pPlace(1, 0, t2, 0 until 16, Seq.fill(16)(true)))(Wb(e2)),
+            Cycle(pPlace(1, 0, t1, 0 until 16, Seq.fill(16)(true)))(eWb1(e1)),
+            Cycle(pNoPlace, pNoFlow, pFlush)(),
+            Cycle(pNoPlace, pNoFlow, _.in.flush.poke(false))(),
+            Cycle(pPlace(1, 0, t2, 0 until 16, Seq.fill(16)(true)))(eWb1(e2)),
           )
       }
     }
     it("back-to-back without flush") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
           val t1 = (0 until 16).map(
@@ -1011,70 +1125,16 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t1, 0 until 16, Seq.fill(16)(true)))(Wb(e1)),
-            Cycle(pPlace(1, 0, t2, 0 until 16, Seq.fill(16)(true)))(Wb(e2)),
+            Cycle(pPlace(1, 0, t1, 0 until 16, Seq.fill(16)(true)))(eWb1(e1)),
+            Cycle(pPlace(1, 0, t2, 0 until 16, Seq.fill(16)(true)))(eWb1(e2)),
           )
       }
     }
   }
 
-  // ═══ SEW=64 ══════════════════════════════════════════
-  describe("SEW=64") {
-    it("identity 2 lanes") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
-        dut =>
-
-          val t = (0 until 8).map(
-            i => 0x00 + i
-          ) ++ (0 until 8).map(
-            i => 0x10 + i
-          )
-          val exp = BigInt("17161514131211100706050403020100", 16)
-          runCycles(
-            dut,
-            initUnit,
-            Cycle(pPlace(1, 0, t, 0 until 16, Seq.fill(16)(true)))(Wb(exp)),
-          )
-      }
-    }
-    it("vslide1up fillScala 8 bytes") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
-        dut =>
-
-          val t = (0 until 16).map(
-            i => 0x00 + i
-          )
-          val sb = 8
-          val idx = (0 until 16).map(
-            i => if (i < sb) 0 else i - sb
-          )
-          val iv = (0 until 16).map(_ >= sb)
-          val fs = (0 until 16).map(_ < sb)
-          val bytes = (0 until 16).map(
-            i => if (i < sb) 0x5a else 0x00 + (i - sb)
-          )
-          val exp = bytes.foldRight(BigInt(0))(
-            (b, a) => (a << 8) | BigInt(b)
-          )
-          runCycles(
-            dut,
-            initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, fScala = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(Wb(exp)),
-          )
-      }
-    }
-  }
-
-  // ═══ Table Control ═══════════════════════════════════
   describe("Table Control") {
     it("hasTable dropped after invalid flow") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
+      simulator() {
         dut =>
 
           val t = (0 until 16).map(
@@ -1084,88 +1144,14 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             dut,
             initUnit,
             Cycle(
-              pPlace(1, 0, t, 0 until 16, Seq.fill(16)(true))
-            )(T1 ++ Wb(
+              pPlace(8, 0, t, 0 until 16, Seq.fill(16)(true))
+            )(eT1, eWb1(
               t.foldRight(BigInt(0))(
                 (b, a) => (a << 8) | BigInt(b)
               )
             )),
-            Cycle(pNoPlace, pDrop)(T0 ++ I1),
+            Cycle(pNoPlace, pDrop)(eT0, eI1),
           )
-      }
-    }
-  }
-
-  // ═══ Block Config ════════════════════════════════════
-  describe("Block Config") {
-    it("non-zero blockBase places correctly") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
-        dut =>
-          // unitIdx=0, blockBase=2, blockSize=4 => localPos=6, non-entry, non-ring-end
-          val t = (0 until 16).map(
-            i => 0x10 + i
-          )
-          initUnit(dut)
-          dut.in.placeIndex.bits.blockBase.poke(2)
-          dut.in.placeIndex.bits.blockSize.poke(4)
-          dut.in.placeTable.valid.poke(true)
-          dut.in.placeIndex.valid.poke(true)
-          t.zipWithIndex.foreach {
-            case (v, i) => dut.in.placeTable.bits.table(i).poke(v)
-          }
-          (0 until 16).foreach(
-            i => dut.in.placeIndex.bits.index(i).poke(i)
-          )
-          (0 until 16).foreach(
-            i => dut.in.placeIndex.bits.indexValid(i).poke(true)
-          )
-          dut.in.placeTable.bits.tableIdx.poke(0)
-          dut.clock.step()
-          dut.out.status.hasTable.expect(true)
-          dut.out.status.hasIndex.expect(true)
-          dut.out.wb.valid.expect(false) // counter=3, not done
-      }
-    }
-    it("non-entry unit does not set passedEntry on flow") {
-      simulate(
-        new GatherRingUnit[FakeRobPtr](unitIdx = 0, metaGen = FakeRobPtr())(GatherCommon.GatherParam.default)
-      ) {
-        dut =>
-          // unitIdx=0, blockBase=2 => not the entry => passedEntry NOT set during flow
-          val t = (0 until 16).map(
-            i => 0x10 + i
-          )
-          initUnit(dut)
-          dut.in.placeIndex.bits.blockBase.poke(2)
-          dut.in.placeIndex.bits.blockSize.poke(4)
-          dut.in.placeTable.valid.poke(true)
-          dut.in.placeIndex.valid.poke(true)
-          t.zipWithIndex.foreach {
-            case (v, i) => dut.in.placeTable.bits.table(i).poke(v)
-          }
-          (0 until 16).foreach(
-            i => dut.in.placeIndex.bits.index(i).poke(i)
-          )
-          (0 until 16).foreach(
-            i => dut.in.placeIndex.bits.indexValid(i).poke(true)
-          )
-          dut.in.placeTable.bits.tableIdx.poke(0)
-          dut.clock.step()
-          // Flow through this non-entry unit
-          dut.in.placeTable.valid.poke(false)
-          dut.in.placeIndex.valid.poke(false)
-          dut.in.willFlow.poke(true)
-          dut.in.flow.valid.poke(true)
-          dut.in.flow.bits.tableIdx.poke(1)
-          t.zipWithIndex.foreach {
-            case (v, i) => dut.in.flow.bits.data(i).poke(v)
-          }
-          dut.in.flow.bits.isFirstTable.poke(false)
-          dut.in.flow.bits.passedEntry.poke(false)
-          dut.clock.step()
-          dut.out.flow.bits.passedEntry.expect(false) // should NOT be set (not entry)
       }
     }
   }

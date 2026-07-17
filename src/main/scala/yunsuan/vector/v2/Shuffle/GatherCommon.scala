@@ -23,6 +23,7 @@ object GatherCommon {
     val vlen      : Int = 128,
     val dlen      : Int = 128,
     val xlen      : Int = 64,
+    val debug     : Boolean = false,
   ) {
     require(isPow2(dlen) && dlen >= 64)
     require(isPow2(vlen) && vlen >= 128)
@@ -30,6 +31,8 @@ object GatherCommon {
 
   object GatherParam {
     def default: GatherParam = new GatherParam(4, 4)
+
+    def debug: GatherParam = new GatherParam(4, 4, debug = true)
   }
 
   trait Config {
@@ -48,6 +51,8 @@ object GatherCommon {
     def MaxLMUL: Int = 8
 
     def MinDataWidth = 8
+
+    def ResWidth = MinDataWidth
 
     def NumPipeIn = param.numPipeIn
 

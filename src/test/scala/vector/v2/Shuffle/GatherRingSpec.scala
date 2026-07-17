@@ -1,7 +1,9 @@
 package yunsuan.vector.v2.Shuffle
 
 import chisel3._
+import chisel3.simulator.{ChiselOptionsModifications, FirtoolOptionsModifications, HasSimulator}
 import chisel3.simulator.scalatest.ChiselSim
+import chisel3.testing.HasTestingDirectory
 import org.scalatest.ParallelTestExecution
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers

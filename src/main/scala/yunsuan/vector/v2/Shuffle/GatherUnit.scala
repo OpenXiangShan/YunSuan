@@ -12,8 +12,6 @@ class GatherUnit(implicit val param: GatherParam) extends GatherModule {
 
   val vlWidth = log2Ceil(VLEN + 1)
 
-  val ResWidth = MinDataWidth
-
   val SplittedParts = 8 * VLEN / DLEN
 
   val flush = IO(Input(Bool()))

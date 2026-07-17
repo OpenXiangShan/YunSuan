@@ -17,8 +17,6 @@ class GatherRingUnit[T <: Data](
     super.desiredName +
     s"_vlen${VLEN}b_dlen${DLEN}b_table${NumUnits}"
 
-  val ResWidth = MinDataWidth
-
   val in = IO(Input(new GatherRingUnit.In(metaGen)))
   val out = IO(Output(new GatherRingUnit.Out(metaGen)))
 
@@ -26,7 +24,10 @@ class GatherRingUnit[T <: Data](
 
   // ── 块内局部坐标 ────────────────────────────────────
   private val blockBase = in.placeIndex.bits.blockBase
-  private val blockSize = in.placeIndex.bits.blockSize
+  private val blockSize = Mux1H(Seq(
+    in.placeIndex.valid -> in.placeIndex.blockSize,
+    in.placeTable.valid -> in.placeTable.blockSize,
+  ))
   private val localPos = Mux1H(Seq(
     (blockSize & 1.U).orR -> 0.U,
     (blockSize & 2.U).orR -> (unitIdx % 2).U,
@@ -61,8 +62,10 @@ class GatherRingUnit[T <: Data](
   private val hasTable  = RegInit(false.B)
   private val hasIndex  = RegInit(false.B)
   private val isEntry   = RegInit(false.B)
-  private val counter   = RegInit(0.U(log2Up(NumUnits).W))
+  private val counter   = RegInit(0.U(log2Up(NumUnits + 1).W))
   private val indexDone = RegInit(VecInit.fill(NumElem)(false.B))
+  private val hasWb     = RegInit(false.B)
+  private val done      = indexDone.asUInt.andR
 
   // ── hasTable 状态机 ─────────────────────────────────
   when(flush) {
@@ -78,10 +81,10 @@ class GatherRingUnit[T <: Data](
   }
 
   // ── hasIndex 状态机 ─────────────────────────────────
-  when(flush || in.wbReady && out.wb.valid) {
-    hasIndex := false.B
-  }.elsewhen(doPlaceIndex) {
+  when(doPlaceIndex) {
     hasIndex := true.B
+  }.elsewhen(flush || hasIndex && (counter === 0.U)) {
+    hasIndex := false.B
   }.otherwise {
     // hold
   }
@@ -111,6 +114,7 @@ class GatherRingUnit[T <: Data](
   private val tableDataNext = Mux1H(Seq(
     doPlaceTable -> in.placeTable.table,
     doFlowTable -> in.flow.data,
+    (!doPlaceTable && !doFlowTable && tableValid) -> tableData,
   ))
   when (doPlaceTable || doFlowTable) {
     tableData := tableDataNext
@@ -138,9 +142,19 @@ class GatherRingUnit[T <: Data](
   when(flush) {
     counter := 0.U
   }.elsewhen(doPlaceIndex) {
-    counter := blockSize - 1.U
+    when (doPlaceTable || tableValid) {
+      counter := blockSize - 1.U
+    }.otherwise {
+      counter := blockSize
+    }
   }.elsewhen(doFlow && hasTable) {
     counter := counter - 1.U
+  }
+
+  when (doPlaceIndex) {
+    hasWb := false.B
+  }.elsewhen(hasIndex && out.wb.valid && in.wbReady) {
+    hasWb := true.B
   }
 
   // ── GatherBase 实例 ─────────────────────────────────
@@ -172,11 +186,14 @@ class GatherRingUnit[T <: Data](
   private val prefill   = Wire(Vec(NumElem, Bool()))
 
   for (i <- 0 until NumElem) {
-    prefill(i)   := !in.placeIndex.bits.indexValid(i)
+    // prefill: index invalid (but NOT overridden by fillScala/fillZeros)
+    prefill(i)   := !in.placeIndex.bits.indexValid(i) &&
+      !in.placeIndex.bits.fillScala(i) &&
+      !in.placeIndex.bits.fillZeros(i)
     fillScala(i) := doPlaceIndex && in.placeIndex.bits.fillScala(i)
     fillZeros(i) := doPlaceIndex && in.placeIndex.bits.fillZeros(i)
-    fillRes(i)   := (hasIndex || doPlaceIndex) && gatherMod.out.resultValid(i)
-    fillIdx(i)   := doPlaceIndex && hasIndex && gatherMod.out.notfound(i)
+    fillRes(i)   := (doPlaceIndex || hasIndex) && gatherMod.out.resultValid(i)
+    fillIdx(i)   := (doPlaceIndex || hasIndex) && gatherMod.out.notfound(i)
 
     when(flush) {
       indexDone(i)  := false.B
@@ -191,9 +208,9 @@ class GatherRingUnit[T <: Data](
       indexDone(i) := !fillIdx(i)
       meta := in.placeIndex.meta
     }.elsewhen(doFlow) {
-      indexOrRes(i) := Mux1H(Seq(
-        fillRes(i)   -> gatherMod.out.result(i),
-      ))
+      when (fillRes(i)) {
+        indexOrRes(i) := gatherMod.out.result(i)
+      }
       indexDone(i) := indexDone(i) | fillRes(i)
     }.elsewhen(fillRes(i)) {
       indexOrRes(i) := gatherMod.out.result(i)
@@ -206,7 +223,7 @@ class GatherRingUnit[T <: Data](
   // ── Writeback ───────────────────────────────────────
   // counter==0 时所有 table 已流过，可写回
   // 不依赖 out.ready
-  out.wb.valid := hasIndex && counter === 0.U
+  out.wb.valid := !hasWb && hasIndex && done
   out.wb.bits.data := resView.asUInt
   out.wb.bits.meta := meta
 
@@ -220,12 +237,17 @@ class GatherRingUnit[T <: Data](
   // ── 状态输出（给顶层做空位检测）─────────────────────
   out.status.hasTable     := hasTable
   out.status.hasIndex     := hasIndex
+  out.status.counter      := counter
   out.status.blockBase    := blockBase
   out.status.blockSize    := blockSize
   out.status.isEntry      := isEntry
   out.status.isFirstTable := isFirstTable
   out.status.passedEntry  := passedEntry
   out.status.done         := indexDone.asUInt.andR
+
+  out.debug.foreach {
+    debug => debug.indexOrRes := indexOrRes.asUInt
+  }
 }
 
 object GatherRingUnit {
@@ -242,11 +264,7 @@ object GatherRingUnit {
     val status = new Status
     val flow = ValidIO(new RingFlow)
     val wb = ValidIO(new Res(metaGen))
-  }
-
-  class Res[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
-    val data = UInt(DLEN.W)
-    val meta = metaGen
+    val debug = Option.when(param.debug)(new Debug)
   }
 
   /**
@@ -267,6 +285,11 @@ object GatherRingUnit {
      * If the table is the first table of this block in [[GatherRing]]
      */
     val isFirstTable = Bool()
+
+    /**
+     * The size of the block in [[GatherRing]], should be equal to [[PlaceIndexRequest]].blockSize if valid
+     */
+    val blockSize   = BlockSize()
   }
 
   object PlaceTableRequest {
@@ -290,7 +313,7 @@ object GatherRingUnit {
     val blockBase   = UnitIdx()
 
     /**
-     * The size of the block in [[GatherRing]]
+     * The size of the block in [[GatherRing]], should be equal to [[PlaceTableRequest]].blockSize if valid
      */
     val blockSize   = BlockSize()
 
@@ -340,12 +363,22 @@ object GatherRingUnit {
   class Status(implicit val param: GatherParam) extends GatherBundle {
     val hasTable = Bool()
     val hasIndex = Bool()
+    val counter = UInt(log2Ceil(NumUnits + 1).W)
     val blockBase = UnitIdx()
     val blockSize = BlockSize()
     val isEntry = Bool()
     val isFirstTable = Bool()
     val passedEntry = Bool()
     val done = Bool()
+  }
+
+  class Res[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
+    val data = UInt(DLEN.W)
+    val meta = metaGen
+  }
+
+  class Debug()(implicit val param: GatherParam) extends GatherBundle {
+    val indexOrRes = UInt(DLEN.W)
   }
 
   def main(args: Array[String]): Unit = {
