@@ -583,5 +583,56 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
         eWb(dut, pipe = 0, golden)
       }
     }
+
+    it("vslide1down fillScala SEW=8") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val sew = 8
+        val table = Table.inc(1)
+        val index = Index.slidedown(sew, numTable = 1)
+        val iValid = (0 until 16).map(_ != 15)
+        val sValid = (0 until 16).map(_ == 15)
+        val pf = Prefill.default(1)
+        val sTable = ScalarTable.default(sew)
+        val golden = Res.gather(table, index, iValid, pf, 0 until 1,
+          scalarValid = sValid, scalarTable = sTable)
+
+        pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
+        dut.clock.step(); pS0Off(dut, pipe = 0)
+        pS1(dut, pipe = 0, table, index, iValid, pf, fillScala = sValid,
+          scalarData = foldBytes(sTable))
+        dut.clock.step(); pS1Off(dut, pipe = 0)
+        dut.clock.step()
+
+        eWb(dut, pipe = 0, golden)
+      }
+    }
+
+    it("LMUL=4 identity, all 4 pipes used") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(4)
+        val index = Index.unzip4(1)
+        val iValid = IndexValid.allTrue(1)
+        val pf = Prefill.default(1)
+        val golden = Res.gather(table, index, 0 until 4)
+
+        for (p <- 0 until 4) {
+          pS0(dut, pipe = p, blockBase = 0, blockSize = 4, placeIdx = p)
+        }
+        dut.clock.step()
+        for (p <- 0 until 4) pS0Off(dut, pipe = p)
+        for (p <- 0 until 4) {
+          pS1(dut, pipe = p, table.slice(p * 16, (p + 1) * 16), index, iValid, pf,
+            blockSize = 4, tableIdx = p, placeIdx = p)
+        }
+        dut.clock.step()
+        for (p <- 0 until 4) pS1Off(dut, pipe = p)
+
+        for (_ <- 0 until 5) dut.clock.step()
+
+        eWb(dut, pipe = 0, golden)
+      }
+    }
   }
 }
