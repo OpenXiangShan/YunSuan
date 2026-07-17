@@ -21,7 +21,7 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   // size = 2, tableSeq should be Seq(0, 1)
   // size = 4, tableSeq should be Seq(0, 3, 2, 1)
   // size = 8, tableSeq should be Seq(0, 7, 6, ..., 1)
-  val tableMap = VecInit((0 +: Seq.tabulate(size - 1)(x => size - x)).map(_.U))
+  val tableMap = VecInit((0 +: Seq.tabulate(size - 1)(x => size - 1 - x)).map(_.U))
 
   val entryTable: UInt = tableMap(PriorityEncoder(tableFree))
   val entryIndex: UInt = PriorityEncoder(indexFree)
@@ -30,7 +30,9 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   // The least significant free position of tableValid less than the most significant valid position of indexValid
   val tableLeastFreeOH = PriorityEncoderOH(~in.tableValid)
   val indexMostValidOH = Reverse(PriorityEncoderOH(Reverse(in.indexValid)))
-  val willFlow = !(tableLeastFreeOH.rotateRight(1) & indexMostValidOH).orR
+  // Either one suffices: a uop entering GatherRing always carries both table and index groups
+  val willFlow = (in.tableValid.orR || in.indexValid.orR) &&
+    !(tableLeastFreeOH.rotateRight(1) & indexMostValidOH).orR
 
   // Per-pipe table/index position outputs
   for (i <- 0 until NumPipeIn) {

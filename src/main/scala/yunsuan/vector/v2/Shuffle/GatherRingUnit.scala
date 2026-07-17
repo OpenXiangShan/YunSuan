@@ -22,7 +22,7 @@ class GatherRingUnit[T <: Data](
 
   private val flush = in.flush
 
-  // ── 块内局部坐标 ────────────────────────────────────
+  // ── Local Position in Block ───────────────────────────
   private val blockBase = in.placeIndex.bits.blockBase
   private val blockSize = Mux1H(Seq(
     in.placeIndex.valid -> in.placeIndex.blockSize,
@@ -36,16 +36,16 @@ class GatherRingUnit[T <: Data](
   ))
   private val isEntryNext = localPos === 0.U
 
-  // ── scalaTable 字节拆分 ──────────────────────────────
+  // ── Scala Table Byte Split ───────────────────────────
   private val scalaTableBytes: Vec[UInt] = in.placeIndex.scalarData.splitToVecByWidth(MinDataWidth)
 
-  // ── Table 输入 MUX ──────────────────────────────────
+  // ── Table Input MUX ──────────────────────────────────
   private val doPlaceTable = in.placeTable.valid
   private val doPlaceIndex = in.placeIndex.valid
   private val doFlow       = in.willFlow
   private val doFlowTable  = in.willFlow && in.flow.valid
 
-  // ── 寄存器 ──────────────────────────────────────────
+  // ── Registers ────────────────────────────────────────
   private val tableData    = Reg(Vec(NumElem, UInt(MinDataWidth.W)))
   private val tableIdx     = Reg(UInt(TableIdxWidth.W))
   private val isFirstTable = RegInit(false.B)
@@ -65,7 +65,7 @@ class GatherRingUnit[T <: Data](
   private val hasWb     = RegInit(false.B)
   private val done      = indexDone.asUInt.andR
 
-  // ── hasTable 状态机 ─────────────────────────────────
+  // ── hasTable State Machine ───────────────────────────
   when(flush) {
     hasTable := false.B
   }.elsewhen(doPlaceTable || doFlowTable) {
@@ -76,7 +76,7 @@ class GatherRingUnit[T <: Data](
     // hold
   }
 
-  // ── hasIndex 状态机 ─────────────────────────────────
+  // ── hasIndex State Machine ───────────────────────────
   when(doPlaceIndex) {
     hasIndex := true.B
   }.elsewhen(flush || (hasIndex && counter === 0.U && (hasWb || in.wbReady))) {
@@ -144,7 +144,7 @@ class GatherRingUnit[T <: Data](
     hasWb := true.B
   }
 
-  // ── GatherBase 实例 ─────────────────────────────────
+  // ── GatherBase Instance ──────────────────────────────
   private val gatherMod = Module(new GatherBase)
 
   gatherMod.in.tableIdx := tableIdxNext
@@ -165,7 +165,7 @@ class GatherRingUnit[T <: Data](
     )
   }
 
-  // ── Index/Result 更新 ───────────────────────────────
+  // ── Index/Result Update ──────────────────────────────
   private val fillRes   = Wire(Vec(NumElem, Bool()))
   private val fillIdx   = Wire(Vec(NumElem, Bool()))
   private val fillZeros = Wire(Vec(NumElem, Bool()))
@@ -208,20 +208,20 @@ class GatherRingUnit[T <: Data](
   }
 
   // ── Writeback ───────────────────────────────────────
-  // counter==0 时所有 table 已流过，可写回
-  // 不依赖 out.ready
+  // All tables have flowed through when counter==0, ready to writeback.
+  // Does not depend on out.ready
   out.wb.valid := !hasWb && hasIndex && done
   out.wb.bits.data := resView.asUInt
   out.wb.bits.meta := meta
 
-  // ── Table 输出（流向下一个 Unit）─────────────────────
+  // ── Table Output (to next Unit) ──────────────────────
   out.flow.valid := hasTable
   out.flow.data  := tableData
   out.flow.tableIdx := tableIdx
   out.flow.isFirstTable := isFirstTable
   out.flow.passedEntry := passedEntry
 
-  // ── 状态输出（给顶层做空位检测）─────────────────────
+  // ── Status Output (for top-level vacancy detection) ───
   out.status.hasTable     := hasTable
   out.status.hasIndex     := hasIndex
   out.status.counter      := counter
