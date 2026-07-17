@@ -335,7 +335,7 @@ class VectorIntAdder() extends Module {
     Seq(is_bitwise_logical_and, is_bitwise_logical_nand, is_bitwise_logical_andn, is_bitwise_logical_or, is_bitwise_logical_nor, is_bitwise_logical_orn, is_bitwise_logical_xor,
       is_bitwise_logical_xnor, is_shift_left_logical, is_shift_right_logical, is_shift_right_arithmetic, is_scaling_shift_right_logical, is_scaling_shift_right_arithmetic),
     Seq(bitwise_logical_and_out, bitwise_logical_nand_out, bitwise_logical_andn_out, bitwise_logical_or_out, bitwise_logical_nor_out, bitwise_logical_orn_out,
-      bitwise_logical_xor_out, bitwise_logical_xnor_out, shift_left_logical_out, shift_right_logical_out, shift_right_arithmetic_out)
+      bitwise_logical_xor_out, bitwise_logical_xnor_out, shift_left_logical_out, shift_right_logical_out, shift_right_arithmetic_out, scaling_shift_right_logical_out, scaling_shift_right_arithmetic_out)
   )
 
   val basic_out_temp = Cat(Fill(2, temp_0), basic_out.head(8), Fill(2, temp_0), basic_out(55, 48), Fill(2, temp_0), basic_out(47, 40),
