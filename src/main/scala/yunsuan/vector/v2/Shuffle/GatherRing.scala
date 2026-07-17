@@ -18,10 +18,6 @@ class GatherRing[T <: Data](
 
   /*********************** Module Definations *********************************/
 
-  private val ring2Controllers = Seq.tabulate(NumUnits / 2)(i => Module(new GatherRingBlockController(2, 2 * i)))
-  private val ring4Controllers = Seq.tabulate(NumUnits / 4)(i => Module(new GatherRingBlockController(4, 4 * i)))
-  private val ring8Controllers = Seq.tabulate(NumUnits / 8)(i => Module(new GatherRingBlockController(8, 8 * i)))
-
   private val units = Seq.tabulate(NumUnits) {
     i => Module(new GatherRingUnit(unitIdx = i, metaGen)(param)).suggestName(s"ringUnit_$i")
   }
@@ -34,45 +30,17 @@ class GatherRing[T <: Data](
   val pipeTablePos = Reg(Vec(NumPipeIn, UnitIdx()))
   val pipeIndexPos = Reg(Vec(NumPipeIn, UnitIdx()))
 
-  val willFlowVecNext: Vec[Bool] = Wire(chiselTypeOf(willFlowVec))
+  /******************** Connections of controller *****************************/
 
-  /******************** Connections of ringControllers ************************/
+  controller.in.s0pipes  := in.s0pipes
+  controller.in.hasTable := VecInit(units.map(_.out.status.hasTable))
+  controller.in.hasIndex := VecInit(units.map(_.out.status.hasIndex))
+  controller.in.unitDone := Cat(units.map(_.out.status.done).reverse)
 
-  private val ring2Units: Seq[Seq[GatherRingUnit[T]]] = units.grouped(2).toSeq
-  for ((allocator, i) <- ring2Controllers.zipWithIndex) {
-    allocator.in.indexValid := Cat(ring2Units(i).map(_.out.status.hasIndex).reverse)
-    allocator.in.tableValid := Cat(ring2Units(i).map(_.out.status.hasTable).reverse)
-    for (j <- allocator.in.pipePlaceIdx.indices) {
-      allocator.in.pipePlaceIdx(j).valid :=
-        in.s0pipes(j).valid && in.s0pipes(j).bits.blockBase.drop(1) === allocator.blockBase.U(UnitIdx().getWidth.W).drop(1)
-      allocator.in.pipePlaceIdx(j).bits := in.s0pipes(j).bits.placeIdx
-    }
-  }
-
+  // Flow loopback connections (ring topology)
+  private val ring2Units = units.grouped(2).toSeq
   private val ring4Units = units.grouped(4).toSeq
-  for ((allocator, i) <- ring4Controllers.zipWithIndex) {
-    allocator.in.indexValid := Cat(ring4Units(i).map(_.out.status.hasIndex).reverse)
-    allocator.in.tableValid := Cat(ring4Units(i).map(_.out.status.hasTable).reverse)
-    for (j <- allocator.in.pipePlaceIdx.indices) {
-      allocator.in.pipePlaceIdx(j).valid :=
-        in.s0pipes(j).valid && in.s0pipes(j).bits.blockBase.drop(2) === allocator.blockBase.U(UnitIdx().getWidth.W).drop(2)
-      allocator.in.pipePlaceIdx(j).bits := in.s0pipes(j).bits.placeIdx
-    }
-  }
-
   private val ring8Units = units.grouped(8).toSeq
-  for ((allocator, i) <- ring8Controllers.zipWithIndex) {
-    allocator.in.indexValid := Cat(ring8Units(i).map(_.out.status.hasIndex).reverse)
-    allocator.in.tableValid := Cat(ring8Units(i).map(_.out.status.hasTable).reverse)
-    for (j <- allocator.in.pipePlaceIdx.indices) {
-      // FIXME: if there are more than one ring8
-      allocator.in.pipePlaceIdx(j).valid := in.s0pipes(j).valid.ensuring(ring8Units.size == 1)
-      allocator.in.pipePlaceIdx(j).bits := in.s0pipes(j).bits.placeIdx
-    }
-  }
-
-  /*********************** Connections of units *******************************/
-
   private val ring2TailUnits = ring2Units.map(_.last)
   private val ring4TailUnits = ring4Units.map(_.last)
   private val ring8TailUnits = ring8Units.map(_.last)
@@ -94,8 +62,6 @@ class GatherRing[T <: Data](
 
     units(i).in.flow := Mux1HValidIO(flowSources)
   }
-
-  // vectorized signals
 
   for (i <- 0 until NumUnits) {
     units(i).in.willFlow := willFlowVec(i)
@@ -136,26 +102,20 @@ class GatherRing[T <: Data](
     out.unitStatus(i) := units(i).out.status
   }
 
-  /******************** Connections of ringControllers ************************/
+  /******************** Connections of controller ****************************/
 
-  controller.in.unitDone := Cat(units.map(_.out.status.done))
+  // No dedicated connection needed — controller reads unit status directly via in.hasTable/in.hasIndex/in.unitDone
 
   /************************* Reg Updates **************************************/
 
   for (i <- 0 until NumPipeIn) {
     when (in.s0pipes(i).valid) {
-      pipeTablePos(i) := Mux1HValidIO((ring2Controllers ++ ring4Controllers ++ ring8Controllers).map(_.out.tablePos(i))).bits
-      pipeIndexPos(i) := Mux1HValidIO((ring2Controllers ++ ring4Controllers ++ ring8Controllers).map(_.out.indexPos(i))).bits
+      pipeTablePos(i) := controller.out.pipeTablePos(i).bits
+      pipeIndexPos(i) := controller.out.pipeIndexPos(i).bits
     }
   }
 
-  private val ring2WillFlowVec = Cat(ring2Controllers.map(_.out.willFlow).reverse)
-  private val ring4WillFlowVec = Cat(ring4Controllers.map(_.out.willFlow).reverse)
-  private val ring8WillFlowVec = Cat(ring8Controllers.map(_.out.willFlow).reverse)
-  willFlowVecNext := VecInit((ring2WillFlowVec | ring4WillFlowVec | ring8WillFlowVec).asBools)
-
-  // TODO: gate it
-  willFlowVec := willFlowVecNext
+  willFlowVec := controller.out.willFlow
 
   /***************************** wb *******************************************/
 
