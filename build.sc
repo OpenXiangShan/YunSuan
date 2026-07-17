@@ -10,11 +10,11 @@ import publish._
 import scalalib._
 
 object ivys{
-  val sv = "2.13.15"
-  val chisel3 = ivy"org.chipsalliance::chisel:6.6.0"
-  val chisel3Plugin = ivy"org.chipsalliance:::chisel-plugin:6.6.0"
-  val chiseltest = ivy"edu.berkeley.cs::chiseltest:6.0.0"
-  val scalatest = ivy"org.scalatest::scalatest:3.2.19"
+  val sv = "2.13.17"
+  val chisel3 = mvn"org.chipsalliance::chisel:7.13.0"
+  val chisel3Plugin = mvn"org.chipsalliance:::chisel-plugin:7.13.0"
+  val chiseltest = mvn"edu.berkeley.cs::chiseltest:6.0.0"
+  val scalatest = mvn"org.scalatest::scalatest:3.2.20"
 }
 
 trait YSModule extends ScalaModule with PublishModule {
@@ -45,11 +45,13 @@ trait YSModule extends ScalaModule with PublishModule {
 }
 
 trait CommonYunSuan extends YSModule with SbtModule { m =>
-    override def millSourcePath = os.pwd
+  val pwd = os.Path(sys.env("MILL_WORKSPACE_ROOT"))
+
+  override def millSourcePath = pwd
 
   override def forkArgs = Seq("-Xmx128G", "-Xss256m")
 
-  val resourcesPATH = os.pwd.toString() + "/src/main/resources"
+  val resourcesPATH = pwd.toString() + "/src/main/resources"
   val envPATH = sys.env("PATH") + ":" + resourcesPATH
   override def forkEnv = Map("PATH" -> envPATH)
 
@@ -58,7 +60,7 @@ trait CommonYunSuan extends YSModule with SbtModule { m =>
   override def moduleDeps = super.moduleDeps ++ Seq(
   )
 
-  object test extends SbtModuleTests with TestModule.ScalaTest {
+  object test extends SbtTests with TestModule.ScalaTest {
 
     override def forkArgs = m.forkArgs
 

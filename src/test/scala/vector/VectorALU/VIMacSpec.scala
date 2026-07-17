@@ -123,12 +123,8 @@ trait VIMacBehavior {
           genVAluOutput("h9187c29d03a9d5081b4a371d4524d9b9"), // vwmulsu 1329
         )
 
-        fork {
-          dut.io.in.enqueueSeq(inputSeq)
-        }.fork {
-          dut.io.out.expectDequeueSeq(outputSeq)
-        }.join()
-        dut.clock.step(1)
+        implicit val clock = dut.clock
+        DecoupledDriver.drive(dut.io.in, dut.io.out, inputSeq, outputSeq)
       }
     }
   }
@@ -233,12 +229,8 @@ trait VIMacBehavior {
           genVAluOutput("h0000000000007fff0000000000000000", vxsat=true), // handmade
         )
 
-        fork {
-          dut.io.in.enqueueSeq(inputSeq)
-        }.fork {
-          dut.io.out.expectDequeueSeq(outputSeq)
-        }.join()
-        dut.clock.step(1)
+        implicit val clock = dut.clock
+        DecoupledDriver.drive(dut.io.in, dut.io.out, inputSeq, outputSeq)
       }
     }
   }

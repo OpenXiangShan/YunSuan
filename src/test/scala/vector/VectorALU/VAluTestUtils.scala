@@ -140,6 +140,7 @@ object dataType {
 
 object TestHarnessAlu {
   def test_init(dut: VIAluWrapper): Unit = {
+    implicit val clock = dut.clock
     dut.clock.setTimeout(2000)
     dut.io.in.initSource()
     dut.io.out.initSink()
@@ -148,12 +149,14 @@ object TestHarnessAlu {
 }
 object TestHarnessIMac {
   def test_init(dut: VIMacWrapper): Unit = {
+    implicit val clock = dut.clock
     dut.clock.setTimeout(20000)
     dut.io.in.initSource()
     dut.io.out.initSink()
     dut.io.out.ready.poke(true.B)
   }
   def test_init_64b(dut: VIMac64bWrapper): Unit = {
+    implicit val clock = dut.clock
     dut.clock.setTimeout(20000)
     dut.io.in.initSource()
     dut.io.out.initSink()
@@ -163,9 +166,43 @@ object TestHarnessIMac {
 
 object TestHarnessPerm {
   def test_init(dut: VPermWrapper): Unit = {
+    implicit val clock = dut.clock
     dut.clock.setTimeout(20000)
     dut.io.in.initSource()
     dut.io.out.initSink()
     dut.io.out.ready.poke(true.B)
+  }
+}
+
+object DecoupledDriver {
+  import chisel3.util.DecoupledIO
+  def drive[T <: Data](
+    in:  DecoupledIO[T],
+    out: DecoupledIO[T],
+    inputs:  Seq[T],
+    outputs: Seq[T],
+    preSteps: Int = 0
+  )(implicit clock: chisel3.Clock): Unit = {
+    val inIt  = inputs.iterator
+    val outIt = outputs.iterator
+    def pokeIn(): Unit = {
+      if (inIt.hasNext) {
+        in.bits.poke(inIt.next())
+        in.valid.poke(true.B)
+      } else {
+        in.valid.poke(false.B)
+      }
+    }
+    pokeIn()
+    clock.step(1)
+    for (_ <- 0 until preSteps) { pokeIn(); clock.step(1) }
+    while (outIt.hasNext) {
+      if (out.valid.peek().litToBoolean) {
+        out.bits.expect(outIt.next())
+      }
+      pokeIn()
+      clock.step(1)
+    }
+    in.valid.poke(false.B)
   }
 }
