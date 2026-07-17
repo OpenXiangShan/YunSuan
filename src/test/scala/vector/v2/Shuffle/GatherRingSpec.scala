@@ -145,7 +145,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
 
   // ═══ Phase 1: Sanity — single unit, no flow ════════
 
-  describe("Phase 1: Sanity") {
+  describe("Scaling") {
     it("LMUL=1, unit 0") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
@@ -221,7 +221,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
 
   // ═══ Phase 2: Flow — LMUL=2 ════════════════════════
 
-  describe("Phase 2: Flow") {
+  describe("Flow") {
     it("LMUL=2 identity") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
@@ -318,7 +318,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
 
   // ═══ Phase 3: LMUL=4 / LMUL=8 ══════════════════════
 
-  describe("Phase 3: LMUL=4/8") {
+  describe("Scaling (LMUL>2)") {
     it("LMUL=4 identity") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
@@ -399,7 +399,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
 
   // ═══ Phase 4: Writeback mapping ═══════════════════
 
-  describe("Phase 4: Writeback") {
+  describe("Writeback") {
     it("U0+U2 done -> different pipes") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
@@ -452,7 +452,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
 
   // ═══ Phase 5: Corner cases ═════════════════════════
 
-  describe("Phase 5: Corner cases") {
+  describe("Fill + Robustness") {
     it("back-to-back instructions") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
