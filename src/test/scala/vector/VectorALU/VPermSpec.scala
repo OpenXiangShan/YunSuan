@@ -137,12 +137,8 @@ trait VPermBehavior {
 
         )
 
-        fork {
-          dut.io.in.enqueueSeq(inputSeq)
-        }.fork {
-          dut.io.out.expectDequeueSeq(outputSeq)
-        }.join()
-        dut.clock.step(1)
+        implicit val clock = dut.clock
+        DecoupledDriver.drive(dut.io.in, dut.io.out, inputSeq, outputSeq)
       }
     }
   }

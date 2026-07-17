@@ -123,12 +123,8 @@ trait VAluBehavior {
 
         )
 
-        fork {
-          dut.io.in.enqueueSeq(inputSeq)
-        }.fork {
-          dut.io.out.expectDequeueSeq(outputSeq)
-        }.join()
-        dut.clock.step(1)
+        implicit val clock = dut.clock
+        DecoupledDriver.drive(dut.io.in, dut.io.out, inputSeq, outputSeq)
       }
     }
   }
@@ -203,12 +199,8 @@ trait VAluBehavior {
           genVAluOutput("h8e388b608e3803557c0434e87c03acf0"), //vwsubu.wv 402
         )
 
-        fork {
-          dut.io.in.enqueueSeq(inputSeq)
-        }.fork {
-          dut.io.out.expectDequeueSeq(outputSeq)
-        }.join()
-        dut.clock.step(1)
+        implicit val clock = dut.clock
+        DecoupledDriver.drive(dut.io.in, dut.io.out, inputSeq, outputSeq)
       }
     }
   }
@@ -304,12 +296,8 @@ trait VAluBehavior {
           genVAluOutput("h2468acf12468acf02468acf12468acf0"), //vsbc 428
         )
 
-        fork {
-          dut.io.in.enqueueSeq(inputSeq)
-        }.fork {
-          dut.io.out.expectDequeueSeq(outputSeq)
-        }.join()
-        dut.clock.step(1)
+        implicit val clock = dut.clock
+        DecoupledDriver.drive(dut.io.in, dut.io.out, inputSeq, outputSeq)
       }
     }
   }
@@ -451,12 +439,8 @@ trait VAluBehavior {
           genVAluOutput("hfffffffffffffffffffffffffffff005"), //vmsbc.vv 1793
         )
 
-        fork {
-          dut.io.in.enqueueSeq(inputSeq)
-        }.fork {
-          dut.io.out.expectDequeueSeq(outputSeq)
-        }.join()
-        dut.clock.step(1)
+        implicit val clock = dut.clock
+        DecoupledDriver.drive(dut.io.in, dut.io.out, inputSeq, outputSeq)
       }
     }
   }
@@ -633,12 +617,8 @@ trait VAluBehavior {
           genVAluOutput("hff808080fe7f8033f4fdf4ddeff8df80", vxsat=true), //vnclip 3681
         )
 
-        fork {
-          dut.io.in.enqueueSeq(inputSeq)
-        }.fork {
-          dut.io.out.expectDequeueSeq(outputSeq)
-        }.join()
-        dut.clock.step(1)
+        implicit val clock = dut.clock
+        DecoupledDriver.drive(dut.io.in, dut.io.out, inputSeq, outputSeq)
       }
     }
   }
@@ -824,12 +804,8 @@ trait VAluBehavior {
           genVAluOutput("hffffffff3b2af8886789a3356789a210", vxsat=false), //vnclip.wv 5683 some change
         )
 
-        fork {
-          dut.io.in.enqueueSeq(inputSeq)
-        }.fork {
-          dut.io.out.expectDequeueSeq(outputSeq)
-        }.join()
-        dut.clock.step(1)
+        implicit val clock = dut.clock
+        DecoupledDriver.drive(dut.io.in, dut.io.out, inputSeq, outputSeq)
       }
     }
   }
@@ -865,12 +841,8 @@ trait VAluBehavior {
           genVAluOutput("h81b4e73681b4e7182468acf02468acf0"), //vsub 701
         )
 
-        fork {
-          dut.io.in.enqueueSeq(inputSeq)
-        }.fork {
-          dut.io.out.expectDequeueSeq(outputSeq)
-        }.join()
-        dut.clock.step(1)
+        implicit val clock = dut.clock
+        DecoupledDriver.drive(dut.io.in, dut.io.out, inputSeq, outputSeq)
       }
     }
   }
@@ -989,12 +961,8 @@ trait VAluBehavior {
           genVAluOutput("h3a06ca553a06c91827d273dd27d27280"),
  
         )
-        fork{
-          dut.io.in.enqueueSeq(inputSeq)
-        }.fork{
-          dut.clock.step(2)
-          dut.io.out.expectDequeueSeq(outputSeq)
-        }.join()
+        implicit val clock = dut.clock
+        DecoupledDriver.drive(dut.io.in, dut.io.out, inputSeq, outputSeq)
 
 
 //        dut.io.in.enqueueSeq(inputSeq)
