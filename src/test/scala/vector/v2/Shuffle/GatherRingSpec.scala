@@ -1,6 +1,8 @@
 package yunsuan.vector.v2.Shuffle
 
 import chisel3._
+import chisel3.experimental.SourceInfo
+import chisel3.simulator.ExpectationValueFormat
 import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.ParallelTestExecution
 import org.scalatest.funspec.AnyFunSpec
@@ -70,9 +72,9 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
     dut.in.s1pipes(pipe).valid.poke(false)
   }
 
-  def eWb(dut: GatherRing[FakeRobPtr], pipe: Int, dest: BigInt): Unit = {
-    dut.out.pipes(pipe).valid.expect(true)
-    dut.out.pipes(pipe).bits.data.expect(dest)
+  def eWb(dut: GatherRing[FakeRobPtr], pipe: Int, dest: BigInt)(implicit sourceInfo: SourceInfo): Unit = {
+    dut.out.pipes(pipe).valid.expect(true.B, s"pipe $pipe wb.valid")
+    dut.out.pipes(pipe).bits.data.expect(dest, ExpectationValueFormat.Hex)
   }
 
   // ═══ Test Objects (reuse from GatherRingUnitSpec) ═══
@@ -86,6 +88,9 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
 
   object Index {
     def allInTable0(numTable: Int = 1) = Seq.tabulate(numTable * 16)(x => 15 - x % 16)
+    def allInTable1(numTable: Int = 1) = Seq.tabulate(numTable * 16)(x => 16 + 15 - x % 16)
+    def unzip2(numTable: Int = 1) = Seq.tabulate(numTable * 16)(x => x / 2 + (x % 2) * 16)
+    def unzip4(numTable: Int = 1) = Seq.tabulate(numTable * 16)(x => x / 4 + x % 4 * 16)
   }
 
   object IndexValid {
@@ -193,24 +198,166 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
         val pf = Prefill.default(1)
         val golden = Res.gather(table, index, 0 until 2)
 
-        // s0: route both tables (same blockSize, different placeIdx)
         pS0(dut, pipe = 0, blockBase = 0, blockSize = 2, placeIdx = 0)
         pS0(dut, pipe = 1, blockBase = 0, blockSize = 2, placeIdx = 1)
         dut.clock.step()
         pS0Off(dut, pipe = 0)
         pS0Off(dut, pipe = 1)
 
-        // s1: deliver seg0 (pipe0, tableIdx=0) and seg1 (pipe1, tableIdx=1)
-        pS1(dut, pipe = 0, table, index, iValid, pf, blockSize = 2, tableIdx = 0, placeIdx = 0)
-        pS1(dut, pipe = 1, table, index, iValid, pf, blockSize = 2, tableIdx = 1, placeIdx = 1)
+        val seg0 = table.slice(0, 16)
+        val seg1 = table.slice(16, 32)
+        pS1(dut, pipe = 0, seg0, index, iValid, pf, blockSize = 2, tableIdx = 0, placeIdx = 0)
+        pS1(dut, pipe = 1, seg1, index, iValid, pf, blockSize = 2, tableIdx = 1, placeIdx = 1)
         dut.clock.step()
         pS1Off(dut, pipe = 0)
         pS1Off(dut, pipe = 1)
 
-        // counter=1 -> flow -> counter=0 -> done -> wb
         dut.clock.step()
         dut.clock.step()
         dut.clock.step()
+
+        eWb(dut, pipe = 0, golden)
+      }
+    }
+
+    it("T5: LMUL=2, all indices in seg1") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(2)
+        val index = Index.allInTable1(1) // indices 16-31, in seg1 range
+        val iValid = IndexValid.allTrue(1)
+        val pf = Prefill.default(1)
+        val golden = Res.gather(table, index, 0 until 2)
+
+        pS0(dut, pipe = 0, blockBase = 0, blockSize = 2, placeIdx = 0)
+        pS0(dut, pipe = 1, blockBase = 0, blockSize = 2, placeIdx = 1)
+        dut.clock.step()
+        pS0Off(dut, pipe = 0)
+        pS0Off(dut, pipe = 1)
+
+        val seg0 = table.slice(0, 16)
+        val seg1 = table.slice(16, 32)
+        pS1(dut, pipe = 0, seg0, index, iValid, pf, blockSize = 2, tableIdx = 0, placeIdx = 0)
+        pS1(dut, pipe = 1, seg1, index, iValid, pf, blockSize = 2, tableIdx = 1, placeIdx = 1)
+        dut.clock.step()
+        pS1Off(dut, pipe = 0)
+        pS1Off(dut, pipe = 1)
+
+        dut.clock.step()
+        dut.clock.step()
+        dut.clock.step()
+
+        eWb(dut, pipe = 0, golden)
+      }
+    }
+
+    it("T6: LMUL=2 zip interleave") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(2)
+        val index = Index.unzip2(1)
+        val iValid = IndexValid.allTrue(1)
+        val pf = Prefill.default(1)
+        val golden = Res.gather(table, index, 0 until 2)
+
+        pS0(dut, pipe = 0, blockBase = 0, blockSize = 2, placeIdx = 0)
+        pS0(dut, pipe = 1, blockBase = 0, blockSize = 2, placeIdx = 1)
+        dut.clock.step()
+        pS0Off(dut, pipe = 0)
+        pS0Off(dut, pipe = 1)
+
+        val seg0 = table.slice(0, 16)
+        val seg1 = table.slice(16, 32)
+        pS1(dut, pipe = 0, seg0, index, iValid, pf, blockSize = 2, tableIdx = 0, placeIdx = 0)
+        pS1(dut, pipe = 1, seg1, index, iValid, pf, blockSize = 2, tableIdx = 1, placeIdx = 1)
+        dut.clock.step()
+        pS1Off(dut, pipe = 0)
+        pS1Off(dut, pipe = 1)
+
+        dut.clock.step()
+        dut.clock.step()
+        dut.clock.step()
+
+        eWb(dut, pipe = 0, golden)
+      }
+    }
+  }
+
+  // ═══ Phase 3: LMUL=4 / LMUL=8 ══════════════════════
+
+  describe("Phase 3: LMUL=4/8") {
+    it("T7: LMUL=4 identity") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(4)
+        val index = Index.unzip4(1)
+        val iValid = IndexValid.allTrue(1)
+        val pf = Prefill.default(1)
+        val golden = Res.gather(table, index, 0 until 4)
+
+        // s0: route 4 segments
+        for (p <- 0 until 4) {
+          pS0(dut, pipe = p, blockBase = 0, blockSize = 4, placeIdx = p)
+        }
+        dut.clock.step()
+        for (p <- 0 until 4) pS0Off(dut, pipe = p)
+
+        // s1: deliver 4 segments
+        for (p <- 0 until 4) {
+          val seg = table.slice(p * 16, (p + 1) * 16)
+          pS1(dut, pipe = p, seg, index, iValid, pf, blockSize = 4, tableIdx = p, placeIdx = p)
+        }
+        dut.clock.step()
+        for (p <- 0 until 4) pS1Off(dut, pipe = p)
+
+        // flow + wb
+        for (_ <- 0 until 5) dut.clock.step()
+
+        eWb(dut, pipe = 0, golden)
+      }
+    }
+
+    it("T8: LMUL=8 identity (2 batches)") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(8)
+        val index = Index.allInTable0(1)
+        val iValid = IndexValid.allTrue(1)
+        val pf = Prefill.default(1)
+        val golden = Res.gather(table, index, 0 until 8)
+
+        // s0: route batch 1 (placeIdx 0-3)
+        for (p <- 0 until 4) {
+          pS0(dut, pipe = p, blockBase = 0, blockSize = 8, placeIdx = p)
+        }
+        dut.clock.step()
+        for (p <- 0 until 4) pS0Off(dut, pipe = p)
+
+        // s1: deliver batch 1
+        for (p <- 0 until 4) {
+          val seg = table.slice(p * 16, (p + 1) * 16)
+          pS1(dut, pipe = p, seg, index, iValid, pf, blockSize = 8, tableIdx = p, placeIdx = p)
+        }
+        dut.clock.step()
+        for (p <- 0 until 4) pS1Off(dut, pipe = p)
+
+        // s0: route batch 2 (placeIdx 4-7)
+        for (p <- 0 until 4) {
+          pS0(dut, pipe = p, blockBase = 0, blockSize = 8, placeIdx = p + 4)
+        }
+        dut.clock.step()
+        for (p <- 0 until 4) pS0Off(dut, pipe = p)
+
+        // s1: deliver batch 2
+        for (p <- 0 until 4) {
+          val seg = table.slice((p + 4) * 16, (p + 5) * 16)
+          pS1(dut, pipe = p, seg, index, iValid, pf, blockSize = 8, tableIdx = p + 4, placeIdx = p + 4)
+        }
+        dut.clock.step()
+        for (p <- 0 until 4) pS1Off(dut, pipe = p)
+
+        // flow + wb
+        for (_ <- 0 until 9) dut.clock.step()
 
         eWb(dut, pipe = 0, golden)
       }
