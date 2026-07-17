@@ -48,6 +48,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
     prefill:    Seq[Int],
     fillZeros:  Seq[Boolean] = Seq.fill(16)(false),
     fillScala:  Seq[Boolean] = Seq.fill(16)(false),
+    scalarData: BigInt = BigInt(0),
     placeIdx:   Int = 0,
     blockBase:  Int = 0,
     blockSize:  Int = 1,
@@ -59,6 +60,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
     s1.bits.blockBase.poke(blockBase)
     s1.bits.blockSize.poke(blockSize)
     s1.bits.tableIdx.poke(tableIdx)
+    s1.bits.scalarData.poke(scalarData)
     index.zipWithIndex.foreach { case (v, i) => s1.bits.index(i).poke(v) }
     indexValid.zipWithIndex.foreach { case (v, i) => s1.bits.indexValid(i).poke(v) }
     prefill.zipWithIndex.foreach { case (v, i) => s1.bits.prefillData(i).poke(v) }
@@ -91,6 +93,8 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
     def allInTable1(numTable: Int = 1) = Seq.tabulate(numTable * 16)(x => 16 + 15 - x % 16)
     def unzip2(numTable: Int = 1) = Seq.tabulate(numTable * 16)(x => x / 2 + (x % 2) * 16)
     def unzip4(numTable: Int = 1) = Seq.tabulate(numTable * 16)(x => x / 4 + x % 4 * 16)
+    def slideup(sew: Int, numTable: Int = 1, slide: Int = 1) = Seq.tabulate(numTable * 16)(x => x - sew / 8 * slide)
+    def slidedown(sew: Int, numTable: Int = 1, slide: Int = 1) = Seq.tabulate(numTable * 16)(x => x + sew / 8 * slide)
   }
 
   object IndexValid {
@@ -101,6 +105,15 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
     def default(numTable: Int = 1) = Seq.tabulate(numTable * 16)(0xff - _)
   }
 
+  object ScalarTable {
+    def default(sew: Int) = sew match {
+      case 8  => Seq.tabulate(8)(x => x + 0xCA)
+      case 16 => Seq.tabulate(8)(x => (x % 2) + 0xCA)
+      case 32 => Seq.tabulate(8)(x => (x % 4) + 0xCA)
+      case 64 => Seq.tabulate(8)(x => (x % 8) + 0xCA)
+    }
+  }
+
   object Res {
     def gather(table: Seq[Int], index: Seq[Int], tableRange: Seq[Int]): BigInt = {
       index.indices.map { i =>
@@ -108,12 +121,32 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
         else index(i)
       }.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
     }
+
+    def gather(
+      table:       Seq[Int],
+      index:       Seq[Int],
+      indexValid:  Seq[Boolean],
+      prefill:     Seq[Int],
+      tableRange:  Seq[Int],
+      zeroValid:   Seq[Boolean] = Seq.fill(16)(false),
+      scalarValid: Seq[Boolean] = Seq.fill(16)(false),
+      scalarTable: Seq[Int] = ScalarTable.default(8)
+    ): BigInt = {
+      index.indices.map { i =>
+        if (indexValid(i)) {
+          if (tableRange.contains(index(i) / 16)) table(index(i))
+          else index(i)
+        } else if (scalarValid(i)) scalarTable(i % scalarTable.size)
+        else if (zeroValid(i)) 0
+        else prefill(i)
+      }.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
+    }
   }
 
   // ═══ Phase 1: Sanity — single unit, no flow ════════
 
   describe("Phase 1: Sanity") {
-    it("T1: LMUL=1, unit 0") {
+    it("LMUL=1, unit 0") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val table = Table.inc(1)
@@ -134,7 +167,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
       }
     }
 
-    it("T2: LMUL=1, unit 4") {
+    it("LMUL=1, unit 4") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val table = Table.inc(1)
@@ -156,7 +189,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
       }
     }
 
-    it("T3: two LMUL=1 in parallel (U0 + U2)") {
+    it("two LMUL=1 in parallel (U0 + U2)") {
       // U0 -> pipe0, U2 -> pipe2 (interleaved: 0%4=0, 2%4=2)
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
@@ -189,7 +222,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
   // ═══ Phase 2: Flow — LMUL=2 ════════════════════════
 
   describe("Phase 2: Flow") {
-    it("T4: LMUL=2 identity") {
+    it("LMUL=2 identity") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val table = Table.inc(2)
@@ -220,7 +253,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
       }
     }
 
-    it("T5: LMUL=2, all indices in seg1") {
+    it("LMUL=2, all indices in seg1") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val table = Table.inc(2)
@@ -251,7 +284,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
       }
     }
 
-    it("T6: LMUL=2 zip interleave") {
+    it("LMUL=2 zip interleave") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val table = Table.inc(2)
@@ -286,7 +319,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
   // ═══ Phase 3: LMUL=4 / LMUL=8 ══════════════════════
 
   describe("Phase 3: LMUL=4/8") {
-    it("T7: LMUL=4 identity") {
+    it("LMUL=4 identity") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val table = Table.inc(4)
@@ -317,7 +350,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
       }
     }
 
-    it("T8: LMUL=8 identity (2 batches)") {
+    it("LMUL=8 identity (2 batches)") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val table = Table.inc(8)
@@ -367,7 +400,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
   // ═══ Phase 4: Writeback mapping ═══════════════════
 
   describe("Phase 4: Writeback") {
-    it("T9: U0+U2 done -> different pipes") {
+    it("U0+U2 done -> different pipes") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val table = Table.inc(1)
@@ -392,7 +425,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
       }
     }
 
-    it("T10: U0+U4 done -> same pipe arbitration") {
+    it("U0+U4 done -> same pipe arbitration") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val table = Table.inc(1)
@@ -420,7 +453,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
   // ═══ Phase 5: Corner cases ═════════════════════════
 
   describe("Phase 5: Corner cases") {
-    it("T11: back-to-back instructions") {
+    it("back-to-back instructions") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val table = Table.inc(1)
@@ -445,7 +478,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
       }
     }
 
-    it("T12: flush clears state") {
+    it("flush clears state") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val table = Table.inc(2)
@@ -475,7 +508,7 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
       }
     }
 
-    it("T13: wb.valid holds when wbReady=0") {
+    it("wb.valid holds when wbReady=0") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val table = Table.inc(1)
@@ -502,6 +535,52 @@ class GatherRingSpec extends AnyFunSpec with ChiselSim with Matchers /* with Par
         dut.clock.step()
         dut.in.wbReady(0).poke(false)
         dut.out.pipes(0).valid.expect(true.B, "unitDone persists after wb (pipe valid stays)")
+      }
+    }
+
+    it("vslideup offset=3 fillZeros") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val sew = 8
+        val table = Table.inc(1)
+        val index = Index.slideup(sew, numTable = 1, slide = 3)
+        val iValid = (0 until 16).map(_ >= 3)
+        val zValid = (0 until 16).map(_ < 3)
+        val pf = Prefill.default(1)
+        val golden = Res.gather(table, index, iValid, pf, 0 until 1,
+          zeroValid = zValid)
+
+        pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
+        dut.clock.step(); pS0Off(dut, pipe = 0)
+        pS1(dut, pipe = 0, table, index, iValid, pf, fillZeros = zValid)
+        dut.clock.step(); pS1Off(dut, pipe = 0)
+        dut.clock.step()
+
+        eWb(dut, pipe = 0, golden)
+      }
+    }
+
+    it("vslide1up fillScala SEW=8") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val sew = 8
+        val table = Table.inc(1)
+        val index = Index.slideup(sew, numTable = 1)
+        val iValid = (0 until 16).map(_ != 0)
+        val sValid = (0 until 16).map(_ == 0)
+        val pf = Prefill.default(1)
+        val sTable = ScalarTable.default(sew)
+        val golden = Res.gather(table, index, iValid, pf, 0 until 1,
+          scalarValid = sValid, scalarTable = sTable)
+
+        pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
+        dut.clock.step(); pS0Off(dut, pipe = 0)
+        pS1(dut, pipe = 0, table, index, iValid, pf, fillScala = sValid,
+          scalarData = foldBytes(sTable))
+        dut.clock.step(); pS1Off(dut, pipe = 0)
+        dut.clock.step()
+
+        eWb(dut, pipe = 0, golden)
       }
     }
   }
