@@ -132,12 +132,8 @@ trait VIMac64bBehavior {
           genVIMac64bOutput("hef483c6e772141b8"), // vmulhsu 6369
         )
 
-        fork {
-          dut.io.in.enqueueSeq(inputSeq)
-        }.fork {
-          dut.io.out.expectDequeueSeq(outputSeq)
-        }.join()
-        dut.clock.step(1)
+        implicit val clock = dut.clock
+        DecoupledDriver.drive(dut.io.in, dut.io.out, inputSeq, outputSeq)
       }
     }
   }
@@ -211,12 +207,8 @@ trait VIMac64bBehavior {
           genVIMac64bOutput("h3e234c9b6f8f5b28"), // vsmul 1567
         )
 
-        fork {
-          dut.io.in.enqueueSeq(inputSeq)
-        }.fork {
-          dut.io.out.expectDequeueSeq(outputSeq)
-        }.join()
-        dut.clock.step(1)
+        implicit val clock = dut.clock
+        DecoupledDriver.drive(dut.io.in, dut.io.out, inputSeq, outputSeq)
       }
     }
   }
@@ -310,12 +302,8 @@ trait VIMac64bBehavior {
           genVIMac64bOutput("hb1a95423acced1aa"), // vwmaccus 1315
         )
 
-        fork {
-          dut.io.in.enqueueSeq(inputSeq)
-        }.fork {
-          dut.io.out.expectDequeueSeq(outputSeq)
-        }.join()
-        dut.clock.step(1)
+        implicit val clock = dut.clock
+        DecoupledDriver.drive(dut.io.in, dut.io.out, inputSeq, outputSeq)
       }
     }
   }
