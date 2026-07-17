@@ -9,8 +9,16 @@ import org.scalatest.matchers.must.Matchers
 import yunsuan.vector.v2.Shuffle.GatherCommon.FakeRobPtr
 import chisel3.simulator.{ChiselOptionsModifications, ExpectationValueFormat, FirtoolOptionsModifications, HasSimulator}
 import chisel3.testing.HasTestingDirectory
+import svsim.verilator.Backend.CompilationSettings.CoverageSettings
 
 class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution {
+
+  // Enable Verilator coverage (line, toggle, user) — writes coverage.dat after simulation
+  override implicit def backendSettingsModifications: svsim.BackendSettingsModifications = {
+    case conf: svsim.verilator.Backend.CompilationSettings =>
+      conf.withCoverageSettings(new CoverageSettings(line = true, toggle = true, user = true))
+    case conf => conf
+  }
 
   val vlen        = 128
   val dlen        = 128
