@@ -70,7 +70,7 @@ class CompressIndexGen(implicit val param: GatherParam) extends GatherModule {
   out.uopIdx   := uopIdxReg
 
   for (i <- out.index.index.indices) {
-    out.index.indexValid(i) := geLeadingSumsVec(i).last // if index < popcount(mask)
+    out.index.indexValid(i) := !geLeadingSumsVec(i).last // if index < popcount(mask)
     out.index.index(i)      := Cat(geLeadingSumsSum(i), i.U(dlenbBits.W))
     out.index.fillZeros(i)  := false.B
     out.index.fillScala(i)  := false.B
