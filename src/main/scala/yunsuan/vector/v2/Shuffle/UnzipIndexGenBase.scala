@@ -6,26 +6,17 @@ import chisel3.util._
 import chisel3.util.experimental.decode.DecodeBundle
 import chisel3.util.experimental.decode.DecodeField
 import chisel3.util.experimental.decode.DecodePattern
-import chisel3.util.experimental.decode.DecodeTable
+import chisel3.util.experimental.decode.{DecodeBundle, DecodeField, DecodePattern, DecodeTable}
+import yunsuan.vector.v2.Shuffle.GatherCommon._
 
-class UnzipIndexGenBase(vlen: Int, dlen: Int, printDetail: Boolean = false) extends Module {
+class UnzipIndexGenBase(printDetail: Boolean = false)(implicit val param: GatherParam) extends GatherModule {
 
-  val vlenb = vlen / 8
+  override def desiredName: String = super.desiredName + s"_${DLEN}b"
 
-  val dlenb = dlen / 8
+  val in = IO(Input(new UnzipIndexGenBase.In))
+  val out = IO(Output(new UnzipIndexGenBase.Out))
 
-  val MinDataWidth = 8
-
-  val NumElem = dlen / MinDataWidth
-
-  val IndexWidth = log2Ceil(dlen)
-
-  val VlWidth = log2Ceil(vlen) + 1
-
-  val SplittedParts = vlen / dlen * 8
-
-  val in = IO(Input(new UnzipIndexGenBase.In(dlen, vlen)))
-  val out = IO(Output(new UnzipIndexGenBase.Out(dlen)))
+  val SplittedParts = VLEN / DLEN * 8
 
   val sews = Seq(8, 16, 32, 64)
 
@@ -34,14 +25,14 @@ class UnzipIndexGenBase(vlen: Int, dlen: Int, printDetail: Boolean = false) exte
 }
 
 object UnzipIndexGenBase {
-  class In(dlen: Int, vlen: Int) extends Bundle {
-    val zipNum = UInt(3.W) // hold 1-7, represent 2-8
+  class In(implicit val param: GatherParam) extends GatherBundle {
+    val zipNum = UInt(3.W)
     val sew    = new GatherSewBundle
-    val uopIdx = UInt(log2Up(vlen / dlen * 8).W)
+    val uopIdx = UInt(log2Up(VLEN / DLEN * 8).W)
   }
 
-  class Out(dlen: Int) extends Bundle {
-    val index = Vec(dlen / 8, ValidIO(UInt(log2Ceil(dlen).W)))
+  class Out(implicit val param: GatherParam) extends GatherBundle {
+    val index = Vec(NumElem, ValidIO(UInt(IndexWidth.W)))
   }
 
   def main(args: Array[String]): Unit = {
@@ -63,7 +54,7 @@ object UnzipIndexGenBase {
       Array("--target-dir", "build/vector") ++ args,
       chisel3.stage
         .ChiselGeneratorAnnotation(
-          () => new UnzipIndexGenDecodeTable(vlen = 128, dlen = 128, printDetail = true)
+          () => new UnzipIndexGenDecodeTable(printDetail = true)(GatherParam.default)
         ) +: firtoolAnno
     )
 
@@ -71,15 +62,15 @@ object UnzipIndexGenBase {
   }
 }
 
-class UnzipIndexGenDecodeTable(vlen: Int, dlen: Int, printDetail: Boolean = false)
-    extends UnzipIndexGenBase(vlen, dlen, printDetail) {
+class UnzipIndexGenDecodeTable(printDetail: Boolean = false)(implicit param: GatherParam)
+    extends UnzipIndexGenBase(printDetail) {
 
-  override def desiredName: String = super.desiredName + s"_${dlen}b"
+  private val vlenb = VLENB
 
   val patterns: Seq[UnzipnSewUopIdxPattern] = for {
     (unzipn, _) <- unzipns.zipWithIndex
     (sew, _)    <- sews.zipWithIndex
-    uopIdx      <- 0 to 7
+    uopIdx      <- 0 until SplittedParts
   } yield {
     new UnzipnSewUopIdxPattern(unzipn, sew, uopIdx, SplittedParts)
   }

@@ -46,7 +46,7 @@ class UnzipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Par
 
   describe("UnzipIndexGen") {
     it("unzipn=2, SEW=32, uopIdx=0") {
-      simulate(new UnzipIndexGenDecodeTable(vlen = 128, dlen = 128)) { dut =>
+      simulate(new UnzipIndexGenDecodeTable()(GatherParam.default)) { dut =>
         val golden = goldenUnzip(unzipn = 2, sew = 32, uopIdx = 0)
         pUnzip(dut, unzipn = 2, sew = 32, uopIdx = 0)
         dut.clock.step()
@@ -56,7 +56,7 @@ class UnzipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Par
       }
     }
     it("unzipn=4, SEW=16, uopIdx=0") {
-      simulate(new UnzipIndexGenDecodeTable(vlen = 128, dlen = 128)) { dut =>
+      simulate(new UnzipIndexGenDecodeTable()(GatherParam.default)) { dut =>
         val golden = goldenUnzip(unzipn = 4, sew = 16, uopIdx = 0)
         pUnzip(dut, unzipn = 4, sew = 16, uopIdx = 0)
         dut.clock.step()
@@ -66,7 +66,7 @@ class UnzipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Par
       }
     }
     it("unzipn=2, SEW=8, uopIdx=0") {
-      simulate(new UnzipIndexGenDecodeTable(vlen = 128, dlen = 128)) { dut =>
+      simulate(new UnzipIndexGenDecodeTable()(GatherParam.default)) { dut =>
         val golden = goldenUnzip(unzipn = 2, sew = 8, uopIdx = 0)
         pUnzip(dut, unzipn = 2, sew = 8, uopIdx = 0)
         dut.clock.step()
@@ -76,7 +76,7 @@ class UnzipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Par
       }
     }
     it("unzipn=8, SEW=64, uopIdx=0") {
-      simulate(new UnzipIndexGenDecodeTable(vlen = 128, dlen = 128)) { dut =>
+      simulate(new UnzipIndexGenDecodeTable()(GatherParam.default)) { dut =>
         val golden = goldenUnzip(unzipn = 8, sew = 64, uopIdx = 0)
         pUnzip(dut, unzipn = 8, sew = 64, uopIdx = 0)
         dut.clock.step()
