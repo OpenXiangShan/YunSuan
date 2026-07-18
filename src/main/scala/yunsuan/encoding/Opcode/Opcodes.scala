@@ -1946,6 +1946,10 @@ object Opcodes {
     private val MV_X2VS = bb"101"
     // uop of vmv.x.s, vfmv.f.s
     private val MV_VS2X = bb"110"
+    // uop of MRF to VRF
+    private val MV_M2V  = bb"011"
+    // uop of VRF to MRF
+    private val MV_V2M  = bb"100"
 
     private val TAIL = bb"111"
 
@@ -1976,6 +1980,8 @@ object Opcodes {
     val vmv_vs2x_e32  = DaS2s(MV_VS2X , E32)
     val vmv_vs2x_e64  = DaS2s(MV_VS2X , E64)
     val vtail         = Value(TAIL    , EX ) + VpWen
+    val VMV_M2V       = Value(MV_M2V  , EX)
+    val VMV_V2M       = Value(MV_V2M  , EX)
 
     protected def getSubOp(implicit op: UInt): UInt = op(4, 2)
     protected def getSubOp(op: BitPat): BitPat = op(4, 2)
@@ -1983,7 +1989,7 @@ object Opcodes {
     def getElemWidth(implicit op: UInt): UInt = op(1, 0)
 
     def isVS2X(implicit op: UInt): Bool = getSubOp.isOneOf(MV_VS2X)
-    def isX2VS(implicit op: UInt): Bool = getSubOp.isOneOf(MV_X2VS)
+    def isX2VS(implicit op: UInt): Bool = getSubOp.isOneOf(MV_X2VS) || getSubOp.isOneOf(MV_M2V) || getSubOp.isOneOf(MV_V2M)
     def isNR(implicit op: UInt): Bool = getSubOp.isOneOf(MV_NR)
     def isVmerge(implicit op: UInt): Bool = getSubOp.isOneOf(MERGE_VV, MERGE_VX)
     def isVmergeVX(implicit op: UInt): Bool = getSubOp.isOneOf(MERGE_VX)
