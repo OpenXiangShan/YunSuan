@@ -49,7 +49,7 @@ class CompressIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with 
 
   describe("CompressIndexGen") {
     it("all bytes active") {
-      simulate(new CompressIndexGen(vlen = 128, dlen = 128)) { dut =>
+      simulate(new CompressIndexGen()(GatherParam.default)) { dut =>
         val mask = (BigInt(1) << numElem) - 1  // 0xFFFF
         pCompress(dut, mask, uopIdx = 0)
         dut.clock.step()  // 1-cycle pipeline: in registered -> out
@@ -62,7 +62,7 @@ class CompressIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with 
       }
     }
     it("alternating mask") {
-      simulate(new CompressIndexGen(vlen = 128, dlen = 128)) { dut =>
+      simulate(new CompressIndexGen()(GatherParam.default)) { dut =>
         val mask = BigInt("5555", 16)  // 0b0101010101010101
         val (golden, count) = goldenCompress(mask, uopIdx = 0)
         pCompress(dut, mask, uopIdx = 0)
@@ -77,7 +77,7 @@ class CompressIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with 
       }
     }
     it("no bytes active") {
-      simulate(new CompressIndexGen(vlen = 128, dlen = 128)) { dut =>
+      simulate(new CompressIndexGen()(GatherParam.default)) { dut =>
         pCompress(dut, BigInt(0), uopIdx = 0)
         dut.clock.step()  // 1-cycle pipeline
         dut.out.valid.expect(true.B)  // valid reg stays set for at least 1 cycle

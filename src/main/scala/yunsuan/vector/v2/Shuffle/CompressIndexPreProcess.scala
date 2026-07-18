@@ -5,36 +5,25 @@ import chisel3._
 import chisel3.util._
 import yunsuan.vector.Common._
 import yunsuan.vector.VectorShuffle.RotateUp
+import yunsuan.vector.v2.Shuffle.GatherCommon._
 
-class CompressIndexGen(vlen: Int, dlen: Int) extends Module {
-  require(isPow2(vlen) && vlen >= 64)
-  require(isPow2(dlen) && dlen >= 64)
-  require(vlen >= dlen)
+class CompressIndexGen(implicit val param: GatherParam) extends GatherModule {
+  require(isPow2(VLEN) && VLEN >= 64)
+  require(isPow2(DLEN) && DLEN >= 64)
+  require(VLEN >= DLEN)
 
-  override def desiredName: String = super.desiredName + s"_${vlen}b"
+  override def desiredName: String = super.desiredName + s"_${VLEN}b"
 
-  private val dlenb = dlen / 8
-
-  private val vlenb = vlen / 8
-
+  private val dlenb = DLENB
   private val dlenbBits = log2Ceil(dlenb)
+  private val SplittedParts = 8 * VLEN / DLEN
+  private val vlWidth = log2Ceil(VLEN + 1)
 
-  private val MinDataWidth = 8
+  val in = IO(Input(new CompressIndexGen.In))
+  val out = IO(Output(new CompressIndexGen.Out))
 
-  private val NumElem = dlen / MinDataWidth
-
-  private val IndexWidth = log2Ceil(vlen)
-
-  private val SplittedParts = 8 * vlen / dlen
-
-  private val vlWidth = log2Ceil(vlen + 1)
-
-  val in = IO(Input(new CompressIndexGen.In(vlen, dlen)))
-  val out = IO(Output(new CompressIndexGen.Out(vlen, dlen)))
-
-  val indexPreProcess = Module(new CompressIndexPreProcess(vlen = vlen, dlen = dlen))
-
-  val dataPreProcess = Module(new CompressDataPreProcess(vlen = vlen, dlen = dlen))
+  val indexPreProcess = Module(new CompressIndexPreProcess)
+  val dataPreProcess = Module(new CompressDataPreProcess)
 
   private val vs3Reg = RegEnable(in.vs3, in.valid)
 
@@ -94,56 +83,42 @@ class CompressIndexGen(vlen: Int, dlen: Int) extends Module {
 }
 
 object CompressIndexGen {
-  class In(vlen: Int, dlen: Int) extends Bundle {
-    private val MinDataWidth = 8
-    private val SplittedParts = 8 * vlen / dlen
+  class In(implicit val param: GatherParam) extends GatherBundle {
     val valid    = Bool()
-    val uopIdx   = UInt(log2Ceil(SplittedParts).W)
-    val byteMask = UInt(vlen.W)
-    val data     = Vec(dlen / MinDataWidth, UInt(MinDataWidth.W))
-    val vs3      = UInt(dlen.W)
+    val uopIdx   = UInt(log2Ceil(8 * VLEN / DLEN).W)
+    val byteMask = UInt(VLEN.W)
+    val data     = Vec(NumElem, UInt(MinDataWidth.W))
+    val vs3      = UInt(DLEN.W)
   }
 
-  class Out(vlen: Int, dlen: Int) extends Bundle {
-    private val MinDataWidth = 8
-    private val SplittedParts = 8 * vlen / dlen
+  class Out(implicit val param: GatherParam) extends GatherBundle {
     val valid    = Bool()
-    val validVec = Vec(SplittedParts, Bool())
-    val uopIdx   = UInt(log2Ceil(SplittedParts).W)
-    val data     = Vec(dlen / MinDataWidth, UInt(MinDataWidth.W))
-    val vs3      = UInt(dlen.W)
-    val index    = new GatherIndexBundle(dlen / MinDataWidth, log2Ceil(vlen))
-    val count1s  = UInt(log2Ceil(vlen + 1).W)
+    val validVec = Vec(8 * VLEN / DLEN, Bool())
+    val uopIdx   = UInt(log2Ceil(8 * VLEN / DLEN).W)
+    val data     = Vec(NumElem, UInt(MinDataWidth.W))
+    val vs3      = UInt(DLEN.W)
+    val index    = new GatherIndexBundle(NumElem, IndexWidth)
+    val count1s  = UInt(VlWidth.W)
   }
 }
 
-class CompressIndexPreProcess(vlen: Int, dlen: Int) extends Module {
-  require(isPow2(vlen) && vlen >= 64)
-  require(isPow2(dlen) && dlen >= 64)
-  require(vlen >= dlen)
+class CompressIndexPreProcess(implicit val param: GatherParam) extends GatherModule {
+  require(isPow2(VLEN) && VLEN >= 64)
+  require(isPow2(DLEN) && DLEN >= 64)
+  require(VLEN >= DLEN)
 
-  override def desiredName: String = super.desiredName + s"_${vlen}b"
+  override def desiredName: String = super.desiredName + s"_${VLEN}b"
 
-  private val dlenb = dlen / 8
-
-  private val vlenb = vlen / 8
-
+  private val dlenb = DLENB
   private val dlenbBits = log2Ceil(dlenb)
-
-  private val MinDataWidth = 8
-
-  private val NumElem = vlen / MinDataWidth
-
-  private val IndexWidth = log2Ceil(vlen)
-
-  private val SplittedParts = 8 * vlen / dlen
+  private val SplittedParts = 8 * VLEN / DLEN
 
   val in = IO(
     Input(
       new Bundle {
         val valid    = Bool()
         val groupSel = UInt(log2Ceil(SplittedParts).W)
-        val byteMask = UInt(vlen.W)
+        val byteMask = UInt(VLEN.W)
       }
     )
   )
@@ -178,28 +153,18 @@ class CompressIndexPreProcess(vlen: Int, dlen: Int) extends Module {
   }
 }
 
-class CompressDataPreProcess(vlen: Int, dlen: Int) extends Module {
+class CompressDataPreProcess(implicit val param: GatherParam) extends GatherModule {
 
-  private val dlenb = dlen / 8
-
-  private val vlenb = vlen / 8
-
-  private val dlenbBits = log2Ceil(dlenb)
-
-  private val MinDataWidth = 8
-
-  private val NumElem = vlen / MinDataWidth
-
-  private val IndexWidth = log2Ceil(vlen)
-
-  private val SplittedParts = 8 * vlen / dlen
+  private val dlenb = DLENB
+  private val NumElemVLEN = VLEN / MinDataWidth
+  private val SplittedParts = 8 * VLEN / DLEN
 
   val in = IO(
     Input(
       new Bundle {
         val groupSel = UInt(log2Ceil(SplittedParts).W)
-        val byteMask = UInt(vlen.W)
-        val data     = Vec(NumElem, UInt(MinDataWidth.W))
+        val byteMask = UInt(VLEN.W)
+        val data     = Vec(NumElemVLEN, UInt(MinDataWidth.W))
       }
     )
   )
@@ -207,7 +172,7 @@ class CompressDataPreProcess(vlen: Int, dlen: Int) extends Module {
   val out = IO(
     Output(
       new Bundle {
-        val data = Vec(NumElem, ValidIO(UInt(MinDataWidth.W)))
+        val data = Vec(NumElemVLEN, ValidIO(UInt(MinDataWidth.W)))
       }
     )
   )
@@ -215,11 +180,11 @@ class CompressDataPreProcess(vlen: Int, dlen: Int) extends Module {
   // 8 Mux 1
   private val selectedByteMask: UInt = in.byteMask.splitToVecN(SplittedParts)(in.groupSel)
 
-  private val compressData = Wire(Vec(NumElem, UInt(MinDataWidth.W)))
+  private val compressData = Wire(Vec(NumElemVLEN, UInt(MinDataWidth.W)))
 
-  private val compressDataValid = Wire(Vec(NumElem, Bool()))
+  private val compressDataValid = Wire(Vec(NumElemVLEN, Bool()))
 
-  private val selectMatrix = Wire(Vec(NumElem, Vec(NumElem, Bool())))
+  private val selectMatrix = Wire(Vec(NumElemVLEN, Vec(NumElemVLEN, Bool())))
 
   // leading one account
   private val loaVec = (0 until NumElem).map(
@@ -243,28 +208,19 @@ class CompressDataPreProcess(vlen: Int, dlen: Int) extends Module {
   }
 }
 
-class CompressDataPreProcess2(vlen: Int, dlen: Int) extends Module {
+class CompressDataPreProcess2(implicit val param: GatherParam) extends GatherModule {
 
-  private val dlenb = dlen / 8
-
-  private val vlenb = vlen / 8
-
+  private val dlenb = DLENB
   private val dlenbBits = log2Ceil(dlenb)
-
-  private val MinDataWidth = 8
-
-  private val NumElem = vlen / MinDataWidth
-
-  private val IndexWidth = log2Ceil(vlen)
-
-  private val SplittedParts = 8 * vlen / dlen
+  private val SplittedParts = 8 * VLEN / DLEN
+  private val NumElemVLEN = VLEN / MinDataWidth
 
   val in = IO(
     Input(
       new Bundle {
         val groupSel = UInt(log2Ceil(SplittedParts).W)
-        val byteMask = UInt(vlen.W)
-        val data     = Vec(NumElem, UInt(MinDataWidth.W))
+        val byteMask = UInt(VLEN.W)
+        val data     = Vec(NumElemVLEN, UInt(MinDataWidth.W))
       }
     )
   )
@@ -272,7 +228,7 @@ class CompressDataPreProcess2(vlen: Int, dlen: Int) extends Module {
   val out = IO(
     Output(
       new Bundle {
-        val data = Vec(NumElem, ValidIO(UInt(MinDataWidth.W)))
+        val data = Vec(NumElemVLEN, ValidIO(UInt(MinDataWidth.W)))
       }
     )
   )
@@ -280,11 +236,11 @@ class CompressDataPreProcess2(vlen: Int, dlen: Int) extends Module {
   // 8 Mux 1
   private val selectedByteMask: UInt = in.byteMask.splitToVecN(SplittedParts)(in.groupSel)
 
-  private val compressData = Wire(Vec(NumElem, UInt(MinDataWidth.W)))
+  private val compressData = Wire(Vec(NumElemVLEN, UInt(MinDataWidth.W)))
 
-  private val compressDataValid = Wire(Vec(NumElem, Bool()))
+  private val compressDataValid = Wire(Vec(NumElemVLEN, Bool()))
 
-  private val selectMatrix = Wire(Vec(NumElem, Vec(NumElem, Bool())))
+  private val selectMatrix = Wire(Vec(NumElemVLEN, Vec(NumElemVLEN, Bool())))
 
   // leading zero account
   private val lzaVec = (0 until NumElem).map(
@@ -326,7 +282,7 @@ object CompressIndexGenMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new CompressIndexGen(vlen = 128, dlen = 128)
+        () => new CompressIndexGen()(GatherParam.default)
       ) +: firtoolAnno
   )
 
@@ -349,7 +305,7 @@ object CompressPreProcessMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new CompressIndexPreProcess(vlen = 128, dlen = 128)
+        () => new CompressIndexPreProcess()(GatherParam.default)
       ) +: firtoolAnno
   )
 
@@ -372,7 +328,7 @@ object CompressDataPreProcessMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new CompressDataPreProcess(vlen = 128, dlen = 128)
+        () => new CompressDataPreProcess()(GatherParam.default)
       ) +: firtoolAnno
   )
 
@@ -380,7 +336,7 @@ object CompressDataPreProcessMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new CompressDataPreProcess2(vlen = 128, dlen = 128)
+        () => new CompressDataPreProcess2()(GatherParam.default)
       ) +: firtoolAnno
   )
 
