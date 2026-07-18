@@ -180,4 +180,101 @@ class SlideDownIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with
       }
     }
   }
+
+  // ── ISA cross-validation ───────────────────────────────────────────
+
+  def toSewElems(value: BigInt, sew: Int, nElems: Int): Seq[Int] = {
+    (0 until nElems).map(i => ((value >> (i * sew)) & ((BigInt(1) << sew) - 1)).toInt)
+  }
+
+  def sewTo8b(vs2Sew: Seq[Int], sew: Int): Seq[Int] = {
+    val sewb = sew / 8
+    vs2Sew.flatMap(v => (0 until sewb).map(b => (v >> (b * 8)) & 0xff))
+  }
+
+  def eightBToSew(bytes: Seq[Int], sew: Int): Seq[Int] = {
+    val sewb = sew / 8
+    bytes.grouped(sewb).map(g => g.zipWithIndex.foldLeft(0) { case (a, (b, i)) => a | (b << (i * 8)) }).toSeq
+  }
+
+  /** ISA-level vslidedown: vd[i] = i+off<vlmax ? vs2[i+off] : 0, for i<vl */
+  def isaVslidedown(vs2Sew: Seq[Int], offset: Int, vl: Int, vlmaxSew: Int): Seq[Int] = {
+    vs2Sew.zipWithIndex.map { case (v, i) =>
+      if (i < vl) {
+        val src = i + offset
+        if (src < vlmaxSew) vs2Sew(src) else 0
+      } else 0
+    }
+  }
+
+  def crossValidateSlideDown(sew: Int, offset: Int, lmulFrac: Int, vl: Int): Unit = {
+    val sewb = sew / 8
+    val nSewElems = dlen / sew
+    val vlmaxSew = lmulFrac * vlen / 64 / sewb
+    val e8Off = offset << sewShift(sew)
+    val vs2Sew = (0 until vlmaxSew).map(i => (i * 0x11 + 0xAB) & ((1 << sew) - 1))
+
+    val simpleGold = isaVslidedown(vs2Sew, offset, vl, vlmaxSew)
+
+    val slideDown8b = goldenSlideDown(tableIdx = 0, offset, sew, lmulFrac)
+    val table = sewTo8b(vs2Sew, sew)
+    val nChunks = lmulFrac * 128 / 128
+    val tableRange = 0 until nChunks
+    val complexGold8b = (0 until numElem).map { i =>
+      val (idx, valid, fillZ, _) = slideDown8b(i)
+      if (fillZ) 0
+      else if (valid && tableRange.contains(idx / numElem)) table(idx)
+      else 0
+    }
+    val complexGold = eightBToSew(complexGold8b, sew).take(nSewElems)
+
+    val matchOk = (0 until vl).forall(i => simpleGold(i) == complexGold(i))
+    assert(matchOk,
+      s"\nSEW=$sew offset=$offset LMUL=f$lmulFrac vl=$vl vlmax=$vlmaxSew" +
+      s"\n  simple:  ${simpleGold.take(vl).mkString(",")}" +
+      s"\n  complex: ${complexGold.take(vl).mkString(",")}")
+  }
+
+  /** ISA-level vslide1down: vd[i]=vs2[i+1] for i<vl-1, vd[vl-1]=scalar */
+  def isaVslide1down(vs2Sew: Seq[Int], vl: Int, scalar: Int): Seq[Int] = {
+    vs2Sew.zipWithIndex.map { case (v, i) =>
+      if (i < vl) {
+        if (i == vl - 1) scalar else vs2Sew(i + 1)
+      } else 0
+    }
+  }
+
+  def crossValidateSlide1Down(sew: Int, vl: Int): Unit = {
+    val sewb = sew / 8
+    val nSewElems = dlen / sew
+    val vs2Sew = (0 until nSewElems).map(i => (i * 0x11 + 0xAB) & ((1 << sew) - 1))
+    val scalar = 0xCA
+
+    val simpleGold = isaVslide1down(vs2Sew, vl, scalar)
+
+    val slide1Down8b = goldenSlide1Down(tableIdx = 0, sew, vl)
+    val table = sewTo8b(vs2Sew, sew)
+    val tableRange = 0 until (128 / 128)
+    val complexGold8b = (0 until numElem).map { i =>
+      val (idx, valid, _, fillS) = slide1Down8b(i)
+      if (fillS) scalar & 0xff
+      else if (valid && tableRange.contains(idx / numElem)) table(idx)
+      else 0
+    }
+    val complexGold = eightBToSew(complexGold8b, sew).take(nSewElems)
+
+    val matchOk = (0 until vl).forall(i => (simpleGold(i) & ((1 << sew) - 1)) == (complexGold(i) & ((1 << sew) - 1)))
+    assert(matchOk,
+      s"\nSEW=$sew vl=$vl" +
+      s"\n  simple:  ${simpleGold.take(vl).mkString(",")}" +
+      s"\n  complex: ${complexGold.take(vl).mkString(",")}")
+  }
+
+  describe("cross-validate ISA") {
+    it("vslidedown SEW=8 offset=3 LMUL=m1 vl=13") { crossValidateSlideDown(8, 3, 8, 13) }
+    it("vslidedown SEW=32 offset=1 LMUL=m2 vl=2") { crossValidateSlideDown(32, 1, 16, 2) }
+    it("vslidedown SEW=16 offset=2 LMUL=m4 vl=5") { crossValidateSlideDown(16, 2, 32, 5) }
+    it("vslide1down SEW=8 vl=16") { crossValidateSlide1Down(8, 16) }
+    it("vslide1down SEW=32 vl=4") { crossValidateSlide1Down(32, 4) }
+  }
 }

@@ -190,4 +190,103 @@ class GatherIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       }
     }
   }
+
+  // ── ISA cross-validation ───────────────────────────────────────────
+
+  /** Convert DLEN-bit BigInt to Seq of SEW-width elements (little-endian within DLEN) */
+  def toSewElems(value: BigInt, sew: Int): Seq[Int] = {
+    val nElems = dlen / sew
+    (0 until nElems).map { i =>
+      ((value >> (i * sew)) & ((BigInt(1) << sew) - 1)).toInt
+    }
+  }
+
+  /** Convert Seq of SEW-width elements back to DLEN-bit BigInt */
+  def fromSewElems(elems: Seq[Int], sew: Int): BigInt = {
+    elems.zipWithIndex.foldLeft(BigInt(0)) { case (acc, (v, i)) =>
+      acc | (BigInt(v & ((1 << sew) - 1)) << (i * sew))
+    }
+  }
+
+  /** Flatten SEW-level vs2 values to 8b table */
+  def sewTo8b(vs2Sew: Seq[Int], sew: Int): Seq[Int] = {
+    val sewb = sew / 8
+    vs2Sew.flatMap { v =>
+      (0 until sewb).map { b => (v >> (b * 8)) & 0xff }
+    }
+  }
+
+  /** Assemble 8b results back to SEW-level */
+  def eightBToSew(bytes: Seq[Int], sew: Int): Seq[Int] = {
+    val sewb = sew / 8
+    bytes.grouped(sewb).map { group =>
+      group.zipWithIndex.foldLeft(0) { case (acc, (b, i)) => acc | (b << (i * 8)) }
+    }.toSeq
+  }
+
+  /** ISA-level vrgather golden: vd[i] = (i<vl && idx<vlmax) ? vs2[idx] : 0 */
+  def isaVrgather(vs2Sew: Seq[Int], vs1Sew: Seq[Int], vl: Int, vlmax: Int): Seq[Int] = {
+    vs1Sew.zipWithIndex.map { case (idx, i) =>
+      if (i < vl && idx < vlmax) vs2Sew(idx) else 0
+    }
+  }
+
+  /** Cross-validate: ISA golden vs goldenGather + Res.gather */
+  def crossValidateVrgather(sew: Int, lmulFrac: Int, vl: Int): Unit = {
+    val sewb = sew / 8
+    val nSewElems = dlen / sew
+    val vlmaxSew = lmulFrac * vlen / 64 / sewb  // vlmax in SEW elements
+    val vlmax8b = lmulFrac * vlen / 64
+
+    // Generate test data: vs2 with known pattern, vs1 with random indices
+    val vs2Sew = (0 until nSewElems).map(i => (i * 0x11 + 0xAB) & ((1 << sew) - 1))
+    val vs1Sew = (0 until nSewElems).map { i =>
+      if (i < vl) {
+        // indices that span both within and beyond vlmax
+        val raw = (i * 3 + 1) % (vlmaxSew + 2)
+        if (raw >= vlmaxSew) vlmaxSew + 1 else raw
+      } else 0
+    }
+
+    // Path 1: ISA-level simple golden
+    val simpleGold = isaVrgather(vs2Sew, vs1Sew, vl, vlmaxSew)
+
+    // Path 2: 8b-pipeline complex golden
+    // Pack vs1 as DLEN-bit BigInt (SEW-level indices packed in little-endian)
+    val vs1BigInt = fromSewElems(vs1Sew, sew)
+    val eightBIndices = goldenGather(vs1BigInt, sew, sew, lmulFrac, uopIdx = 0)
+
+    val table = sewTo8b(vs2Sew, sew)
+    val tableRange = 0 until (lmulFrac * vlen / dlen)  // number of DLEN chunks
+    val complexGold8b = (0 until numElem).map { i =>
+      val (idx, valid, fillZ, _) = eightBIndices(i)
+      if (valid && tableRange.contains(idx / numElem)) table(idx)
+      else if (fillZ) 0
+      else 0  // prefill=0 for simplicity
+    }
+
+    // Reassemble to SEW
+    val complexGold = eightBToSew(complexGold8b, sew).take(nSewElems)
+
+    // Compare only elements within vl (tail elements differ due to prefill vs zero)
+    val matchOk = (0 until vl).forall(i => simpleGold(i) == complexGold(i))
+    assert(matchOk,
+      s"\nSEW=$sew LMUL=lmulFrac=$lmulFrac vl=$vl vlmax=$vlmaxSew" +
+      s"\n  simple:  ${simpleGold.take(vl).mkString(",")}" +
+      s"\n  complex: ${complexGold.take(vl).mkString(",")}")
+  }
+
+  describe("cross-validate ISA") {
+    val sewLmulVls = Seq(
+      (8, 8, 16), (8, 8, 8), (8, 4, 5), (8, 4, 8),
+      (16, 8, 8), (16, 8, 4), (16, 4, 2), (16, 4, 4),
+      (32, 8, 4), (32, 8, 2), (32, 4, 1),
+      (64, 8, 2), (64, 8, 1), (64, 4, 1),
+    )
+    for ((sew, lmulFrac, vl) <- sewLmulVls) {
+      it(s"vrgather SEW=$sew LMUL=f$lmulFrac vl=$vl") {
+        crossValidateVrgather(sew, lmulFrac, vl)
+      }
+    }
+  }
 }
