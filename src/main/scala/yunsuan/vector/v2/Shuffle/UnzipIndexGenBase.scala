@@ -3,9 +3,6 @@ package yunsuan.vector.v2.Shuffle
 import _root_.circt.stage._
 import chisel3._
 import chisel3.util._
-import chisel3.util.experimental.decode.DecodeBundle
-import chisel3.util.experimental.decode.DecodeField
-import chisel3.util.experimental.decode.DecodePattern
 import chisel3.util.experimental.decode.{DecodeBundle, DecodeField, DecodePattern, DecodeTable}
 import yunsuan.vector.v2.Shuffle.GatherCommon._
 
@@ -54,7 +51,7 @@ object UnzipIndexGenBase {
       Array("--target-dir", "build/vector") ++ args,
       chisel3.stage
         .ChiselGeneratorAnnotation(
-          () => new UnzipIndexGenDecodeTable(printDetail = true)(GatherParam.default)
+          () => new UnzipIndexGenDecodeTable()(GatherParam.default)
         ) +: firtoolAnno
     )
 
@@ -62,9 +59,10 @@ object UnzipIndexGenBase {
   }
 }
 
-class UnzipIndexGenDecodeTable(printDetail: Boolean = false)(implicit param: GatherParam)
-    extends UnzipIndexGenBase(printDetail) {
+class UnzipIndexGenDecodeTable()(implicit param: GatherParam)
+    extends UnzipIndexGenBase(param.debug) {
 
+  private val debug = param.debug
   private val vlenb = VLENB
 
   val patterns: Seq[UnzipnSewUopIdxPattern] = for {
@@ -95,15 +93,15 @@ class UnzipIndexGenDecodeTable(printDetail: Boolean = false)(implicit param: Gat
     val uopIdx = pattern.uopIdx
     if (sew != lastSew) {
       lastSew = sew
-      if (printDetail) println()
-      if (printDetail) println(s"unzipn = $unzipn, sew = $sew")
+      if (debug) println()
+      if (debug) println(s"unzipn = $unzipn, sew = $sew")
     }
     if (uopIdx != lastUopIdx) {
       lastUopIdx = uopIdx
     }
     for ((field, elemIdx) <- fields.zipWithIndex) {
       val index = field.calculateIndex(pattern, elemIdx, vlenb, NumElem)
-      if (printDetail)
+      if (debug)
         index.foreach(
           i => print(f"${i}%2x ")
         )
