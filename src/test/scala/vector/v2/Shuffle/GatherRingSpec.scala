@@ -31,6 +31,7 @@ class GatherRingSpec
     }
     dut.in.flush.foreach(_.poke(false))
     dut.clock.step()
+
   }
 
   // s0: placement routing
@@ -164,9 +165,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, 0 until 1)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -180,9 +184,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, 0 until 1)
           pS0(dut, pipe = 0, blockBase = 4, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf, blockBase = 4)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -197,12 +204,15 @@ class GatherRingSpec
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           pS0(dut, pipe = 2, blockBase = 2, blockSize = 1)
           dut.clock.step()
+
           pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 2)
           pS1(dut, pipe = 0, table, index, iValid, pf, blockBase = 0)
           pS1(dut, pipe = 2, table, index, iValid, pf, blockBase = 2)
           dut.clock.step()
+
           pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 2)
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
           eWb(dut, pipe = 2, golden)
         }
@@ -220,13 +230,16 @@ class GatherRingSpec
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 2, placeIdx = 0)
           pS0(dut, pipe = 1, blockBase = 0, blockSize = 2, placeIdx = 1)
           dut.clock.step()
+
           pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 1)
           val seg0 = table.slice(0, 16); val seg1 = table.slice(16, 32)
           pS1(dut, pipe = 0, seg0, index, iValid, pf, blockSize = 2, tableIdx = 0, placeIdx = 0)
           pS1(dut, pipe = 1, seg1, index, iValid, pf, blockSize = 2, tableIdx = 1, placeIdx = 1)
           dut.clock.step()
+
           pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 1)
           dut.clock.step(); dut.clock.step(); dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -241,13 +254,16 @@ class GatherRingSpec
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 2, placeIdx = 0)
           pS0(dut, pipe = 1, blockBase = 0, blockSize = 2, placeIdx = 1)
           dut.clock.step()
+
           pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 1)
           val seg0 = table.slice(0, 16); val seg1 = table.slice(16, 32)
           pS1(dut, pipe = 0, seg0, index, iValid, pf, blockSize = 2, tableIdx = 0, placeIdx = 0)
           pS1(dut, pipe = 1, seg1, index, iValid, pf, blockSize = 2, tableIdx = 1, placeIdx = 1)
           dut.clock.step()
+
           pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 1)
           dut.clock.step(); dut.clock.step(); dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -262,13 +278,16 @@ class GatherRingSpec
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 2, placeIdx = 0)
           pS0(dut, pipe = 1, blockBase = 0, blockSize = 2, placeIdx = 1)
           dut.clock.step()
+
           pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 1)
           val seg0 = table.slice(0, 16); val seg1 = table.slice(16, 32)
           pS1(dut, pipe = 0, seg0, index, iValid, pf, blockSize = 2, tableIdx = 0, placeIdx = 0)
           pS1(dut, pipe = 1, seg1, index, iValid, pf, blockSize = 2, tableIdx = 1, placeIdx = 1)
           dut.clock.step()
+
           pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 1)
           dut.clock.step(); dut.clock.step(); dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -283,13 +302,16 @@ class GatherRingSpec
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 2, placeIdx = 0)
           pS0(dut, pipe = 1, blockBase = 0, blockSize = 2, placeIdx = 1)
           dut.clock.step()
+
           pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 1)
           val seg0 = table.slice(0, 16); val seg1 = table.slice(16, 32)
           pS1(dut, pipe = 0, seg0, index, iValid, pf, blockSize = 2, tableIdx = 0, placeIdx = 0)
           pS1(dut, pipe = 1, seg1, index, iValid, pf, blockSize = 2, tableIdx = 1, placeIdx = 1)
           dut.clock.step()
+
           pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 1)
           for (_ <- 0 until 4) dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -304,6 +326,7 @@ class GatherRingSpec
           pS0(dut, pipe = 0, blockBase = 2, blockSize = 2, placeIdx = 0)
           pS0(dut, pipe = 1, blockBase = 2, blockSize = 2, placeIdx = 1)
           dut.clock.step()
+
           pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 1)
           val seg0 = table.slice(0, 16); val seg1 = table.slice(16, 32)
           pS1(dut, pipe = 0, seg0, index, iValid, pf, blockSize = 2, tableIdx = 0,
@@ -311,8 +334,10 @@ class GatherRingSpec
           pS1(dut, pipe = 1, seg1, index, iValid, pf, blockSize = 2, tableIdx = 1,
             placeIdx = 1, blockBase = 2)
           dut.clock.step()
+
           pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 1)
           dut.clock.step(); dut.clock.step(); dut.clock.step()
+
           eWb(dut, pipe = 2, golden)
         }
       }
@@ -328,14 +353,17 @@ class GatherRingSpec
           val golden = Res.gather(table, index, 0 until 4)
           for (p <- 0 until 4) { pS0(dut, pipe = p, blockBase = 0, blockSize = 4, placeIdx = p) }
           dut.clock.step()
+
           for (p <- 0 until 4) pS0Off(dut, pipe = p)
           for (p <- 0 until 4) {
             pS1(dut, pipe = p, table.slice(p * 16, (p + 1) * 16), index, iValid, pf,
               blockSize = 4, tableIdx = p, placeIdx = p)
           }
           dut.clock.step()
+
           for (p <- 0 until 4) pS1Off(dut, pipe = p)
           for (_ <- 0 until 5) dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -351,23 +379,28 @@ class GatherRingSpec
           val golden = Res.gather(table, index, 0 until 8)
           for (p <- 0 until 4) { pS0(dut, pipe = p, blockBase = 0, blockSize = 8, placeIdx = p) }
           dut.clock.step()
+
           for (p <- 0 until 4) pS0Off(dut, pipe = p)
           for (p <- 0 until 4) {
             pS1(dut, pipe = p, table.slice(p * 16, (p + 1) * 16), index, iValid, pf,
               blockSize = 8, tableIdx = p, placeIdx = p)
           }
           dut.clock.step()
+
           for (p <- 0 until 4) pS1Off(dut, pipe = p)
           for (p <- 0 until 4) { pS0(dut, pipe = p, blockBase = 0, blockSize = 8, placeIdx = p + 4) }
           dut.clock.step()
+
           for (p <- 0 until 4) pS0Off(dut, pipe = p)
           for (p <- 0 until 4) {
             pS1(dut, pipe = p, table.slice((p + 4) * 16, (p + 5) * 16), index, iValid, pf,
               blockSize = 8, tableIdx = p + 4, placeIdx = p + 4)
           }
           dut.clock.step()
+
           for (p <- 0 until 4) pS1Off(dut, pipe = p)
           for (_ <- 0 until 9) dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -386,9 +419,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, 0 until 1)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -403,9 +439,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1, zeroValid = zValid)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf, fillZeros = zValid)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -419,9 +458,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -435,9 +477,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -455,9 +500,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1, zeroValid = zValid)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf, fillZeros = zValid)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -473,9 +521,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1, zeroValid = zValid)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf, fillZeros = zValid)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -491,9 +542,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1, zeroValid = zValid)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf, fillZeros = zValid)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -511,9 +565,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1, zeroValid = zValid)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf, fillZeros = zValid)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -529,9 +586,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1, zeroValid = zValid)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf, fillZeros = zValid)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -547,9 +607,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalarData = foldBytes(sTable))
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -561,9 +624,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalarData = foldBytes(sTable))
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -575,9 +641,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalarData = foldBytes(sTable))
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -589,9 +658,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalarData = foldBytes(sTable))
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -605,9 +677,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1, scalarValid = sValid, scalarTable = sTable)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf, fillScala = sValid, scalarData = foldBytes(sTable))
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -623,9 +698,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalarData = foldBytes(sTable))
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -639,9 +717,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1, scalarValid = sValid, scalarTable = sTable)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf, fillScala = sValid, scalarData = foldBytes(sTable))
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -656,9 +737,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -671,9 +755,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -687,9 +774,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -702,9 +792,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1, zeroValid = zValid)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf, fillZeros = zValid)
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -717,9 +810,12 @@ class GatherRingSpec
           val golden = Res.gather(table, index, iValid, pf, 0 until 1, scalarValid = sValid, scalarTable = sTable)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf, fillScala = sValid, scalarData = foldBytes(sTable))
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -740,9 +836,12 @@ class GatherRingSpec
             zeroValid = zValid, scalarValid = sValid, scalarTable = sTable)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
+
           pS1(dut, pipe = 0, table, index, iValid, pf, fillZeros = zValid, fillScala = sValid, scalarData = foldBytes(sTable))
           dut.clock.step(); pS1Off(dut, pipe = 0)
+
           dut.clock.step()
+
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -759,10 +858,13 @@ class GatherRingSpec
         pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
         pS0(dut, pipe = 2, blockBase = 2, blockSize = 1)
         dut.clock.step(); pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 2)
+
         pS1(dut, pipe = 0, table, index, iValid, pf, blockBase = 0)
         pS1(dut, pipe = 2, table, index, iValid, pf, blockBase = 2)
         dut.clock.step(); pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 2)
+
         dut.clock.step()
+
         eWb(dut, pipe = 0, golden); eWb(dut, pipe = 2, golden)
       }
     }
@@ -775,13 +877,15 @@ class GatherRingSpec
         pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
         pS0(dut, pipe = 1, blockBase = 4, blockSize = 1)
         dut.clock.step(); pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 1)
+
         pS1(dut, pipe = 0, table, idx0, iValid, pf, blockBase = 0)
         pS1(dut, pipe = 1, table, idx4, iValid, pf, blockBase = 4)
         dut.clock.step(); pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 1)
-        dut.clock.step()
+
         eWb(dut, pipe = 0, golden0)
         dut.in.wbReady(0).poke(true)
         dut.clock.step()
+
         dut.in.wbReady(0).poke(false)
         eWb(dut, pipe = 0, golden4)
       }
@@ -793,16 +897,22 @@ class GatherRingSpec
         val iValid = IndexValid.allTrue(1); val pf = Prefill.default(1)
         pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
         dut.clock.step(); pS0Off(dut, pipe = 0)
+
         pS1(dut, pipe = 0, table, index, iValid, pf)
         dut.clock.step(); pS1Off(dut, pipe = 0)
+
         dut.clock.step()
+
         dut.out.pipes(0).valid.expect(true.B)
         dut.clock.step()
+
         dut.out.pipes(0).valid.expect(true.B)
         dut.clock.step()
+
         dut.out.pipes(0).valid.expect(true.B)
         dut.in.wbReady(0).poke(true)
         dut.clock.step()
+
         dut.in.wbReady(0).poke(false)
         dut.out.pipes(0).valid.expect(false.B)
       }
@@ -817,12 +927,15 @@ class GatherRingSpec
         pS0(dut, pipe = 0, blockBase = 0, blockSize = 2, placeIdx = 0)
         pS0(dut, pipe = 1, blockBase = 0, blockSize = 2, placeIdx = 1)
         dut.clock.step(); pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 1)
+
         val seg0 = table.slice(0, 16); val seg1 = table.slice(16, 32)
         pS1(dut, pipe = 0, seg0, index, iValid, pf, blockSize = 2, tableIdx = 0, placeIdx = 0)
         pS1(dut, pipe = 1, seg1, index, iValid, pf, blockSize = 2, tableIdx = 1, placeIdx = 1)
         dut.clock.step(); pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 1)
+
         dut.out.pipes(0).valid.expect(false.B)
         for (_ <- 0 until 2) dut.clock.step()
+
         eWb(dut, pipe = 0, golden)
       }
     }
@@ -832,21 +945,52 @@ class GatherRingSpec
     it("back-to-back") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
-        val table = Table.inc(1); val index = Index.allInTable0(1)
-        val iValid = IndexValid.allTrue(1); val pf = Prefill.default(1)
-        val golden = Res.gather(table, index, 0 until 1)
-        pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
-        dut.clock.step(); pS0Off(dut, pipe = 0)
-        pS1(dut, pipe = 0, table, index, iValid, pf)
-        dut.clock.step(); pS1Off(dut, pipe = 0)
+        val table = Table.inc(1); val iValid = IndexValid.allTrue(1); val pf = Prefill.default(1)
+
+        val idx0 = Index.allInTable0(1)
+        val idx1 = (0 until 16).map(x => (x + 4) % 16)
+        val idx2 = (0 until 16).map(x => (x + 8) % 16)
+        val idx3 = (0 until 16).map(x => (x + 12) % 16)
+
+        val idx = Seq(idx0, idx1, idx2, idx3)
+        val golden = idx.map(i => Res.gather(table, i, 0 until 1))
+
+        // cycle 0
+
+        for (p <- 0 until 4) pS0(dut, pipe = p, blockBase = p * 2, blockSize = 1)
         dut.clock.step()
-        eWb(dut, pipe = 0, golden)
-        pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
-        dut.clock.step(); pS0Off(dut, pipe = 0)
-        pS1(dut, pipe = 0, table, index, iValid, pf)
-        dut.clock.step(); pS1Off(dut, pipe = 0)
+
+        // cycle 1: r1 s0 placed
+
+        for (p <- 0 until 4) pS0Off(dut, pipe = p)
+        for (p <- 0 until 4) pS1(dut, pipe = p, table, idx(p), iValid, pf, blockBase = p * 2)
+        for (p <- 0 until 4) pS0(dut, pipe = p, blockBase = p * 2 + 1, blockSize = 1)
         dut.clock.step()
-        eWb(dut, pipe = 0, golden)
+
+        // cycle 2: r1 s1 delivered, r2 s0 placed
+
+        for (p <- 0 until 4) pS1Off(dut, pipe = p)
+        for (p <- 0 until 4) pS0Off(dut, pipe = p)
+        eWb(dut, pipe = 0, golden(0)); eWb(dut, pipe = 2, golden(1))
+        for (p <- 0 until 4) pS1(dut, pipe = p, table, idx(p), iValid, pf, blockBase = p * 2 + 1)
+        dut.in.wbReady(0).poke(true); dut.in.wbReady(2).poke(true)
+        dut.clock.step()
+
+        // cycle 3: r1 wb accepted, r2 s1 delivered
+
+        dut.in.wbReady(0).poke(false); dut.in.wbReady(2).poke(false)
+        for (p <- 0 until 4) pS1Off(dut, pipe = p)
+        eWb(dut, pipe = 0, golden(2)); eWb(dut, pipe = 2, golden(3))
+        eWb(dut, pipe = 1, golden(0)); eWb(dut, pipe = 3, golden(1))
+        dut.in.wbReady(0).poke(true); dut.in.wbReady(2).poke(true)
+        dut.in.wbReady(1).poke(true); dut.in.wbReady(3).poke(true)
+        dut.clock.step()
+
+        // cycle 4: r1 done, r2 wb accepted
+
+        dut.in.wbReady(0).poke(false); dut.in.wbReady(2).poke(false)
+        dut.in.wbReady(1).poke(false); dut.in.wbReady(3).poke(false)
+        eWb(dut, pipe = 1, golden(2)); eWb(dut, pipe = 3, golden(3))
       }
     }
     it("flush") {
@@ -857,14 +1001,18 @@ class GatherRingSpec
         pS0(dut, pipe = 0, blockBase = 0, blockSize = 2, placeIdx = 0)
         pS0(dut, pipe = 1, blockBase = 0, blockSize = 2, placeIdx = 1)
         dut.clock.step(); pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 1)
+
         val seg0 = table.slice(0, 16); val seg1 = table.slice(16, 32)
         pS1(dut, pipe = 0, seg0, index, iValid, pf, blockSize = 2, tableIdx = 0, placeIdx = 0)
         pS1(dut, pipe = 1, seg1, index, iValid, pf, blockSize = 2, tableIdx = 1, placeIdx = 1)
         dut.clock.step(); pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 1)
+
         dut.in.flush.foreach(_.poke(true))
         dut.clock.step()
+
         dut.in.flush.foreach(_.poke(false))
         dut.clock.step()
+
         for (u <- 0 until 8) {
           dut.out.unitStatus(u).hasTable.expect(false.B)
           dut.out.unitStatus(u).hasIndex.expect(false.B)

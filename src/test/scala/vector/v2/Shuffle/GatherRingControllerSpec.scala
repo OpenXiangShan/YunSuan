@@ -6,7 +6,9 @@ import org.scalatest.ParallelTestExecution
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
 
-class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution {
+import yunsuan.util.Cli.EmitFst
+
+class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution with EmitFst {
 
   // ══════════════════════════════════════════════════════
   //  Helper

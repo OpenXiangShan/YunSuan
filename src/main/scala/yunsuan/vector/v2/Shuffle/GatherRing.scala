@@ -110,8 +110,15 @@ class GatherRing[T <: Data](
 
   for (i <- 0 until NumPipeIn) {
     when (in.s0pipes(i).valid) {
-      pipeTablePos(i) := controller.out.pipeTablePos(i).bits
-      pipeIndexPos(i) := controller.out.pipeIndexPos(i).bits
+      val isSingle = (in.s0pipes(i).bits.blockSize & 1.U).orR
+      pipeTablePos(i) := Mux(isSingle,
+        in.s0pipes(i).bits.blockBase,
+        controller.out.pipeTablePos(i).bits,
+      )
+      pipeIndexPos(i) := Mux(isSingle,
+        in.s0pipes(i).bits.blockBase,
+        controller.out.pipeIndexPos(i).bits,
+      )
     }
   }
 

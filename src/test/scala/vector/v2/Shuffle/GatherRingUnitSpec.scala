@@ -12,7 +12,9 @@ import svsim.verilator.Backend.CompilationSettings.CoverageSettings
 import yunsuan.vector.v2.Shuffle.GatherCommon.FakeRobPtr
 import yunsuan.vector.v2.Shuffle.{GatherCommon, GatherRingUnit}
 
-class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution {
+import yunsuan.util.Cli.EmitFst
+
+class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution with EmitFst {
 
   // Enable Verilator coverage (line, toggle, user) — writes coverage.dat after simulation
   override implicit def backendSettingsModifications: svsim.BackendSettingsModifications = {
