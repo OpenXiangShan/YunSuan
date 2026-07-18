@@ -24,28 +24,51 @@ class UnzipIndexGenBase(vlen: Int, dlen: Int, printDetail: Boolean = false) exte
 
   val SplittedParts = vlen / dlen * 8
 
-  val in = IO(
-    Input(
-      new Bundle {
-        val zipNum = UInt(3.W) // hold 1-7, represent 2-8
-        val sew    = new GatherSewBundle
-        val uopIdx = UInt(log2Up(SplittedParts).W)
-      }
-    )
-  )
-
-  val out = IO(
-    Output(
-      new Bundle {
-        val index = Vec(NumElem, ValidIO(UInt(IndexWidth.W)))
-      }
-    )
-  )
+  val in = IO(Input(new UnzipIndexGenBase.In(dlen, vlen)))
+  val out = IO(Output(new UnzipIndexGenBase.Out(dlen)))
 
   val sews = Seq(8, 16, 32, 64)
 
   val unzipns = Seq(2, 3, 4, 5, 6, 7, 8)
 
+}
+
+object UnzipIndexGenBase {
+  class In(dlen: Int, vlen: Int) extends Bundle {
+    val zipNum = UInt(3.W) // hold 1-7, represent 2-8
+    val sew    = new GatherSewBundle
+    val uopIdx = UInt(log2Up(vlen / dlen * 8).W)
+  }
+
+  class Out(dlen: Int) extends Bundle {
+    val index = Vec(dlen / 8, ValidIO(UInt(log2Ceil(dlen).W)))
+  }
+
+  def main(args: Array[String]): Unit = {
+    import _root_.circt.stage._
+
+    println("Generating the UnzipIndexGen hardware")
+
+    val firtoolOpts = Array(
+      "--target",
+      "systemverilog",
+      "-O=release",
+      "--disable-annotation-unknown",
+      "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
+    )
+
+    val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
+
+    (new ChiselStage).execute(
+      Array("--target-dir", "build/vector") ++ args,
+      chisel3.stage
+        .ChiselGeneratorAnnotation(
+          () => new UnzipIndexGenDecodeTable(vlen = 128, dlen = 128, printDetail = true)
+        ) +: firtoolAnno
+    )
+
+    println("done")
+  }
 }
 
 class UnzipIndexGenDecodeTable(vlen: Int, dlen: Int, printDetail: Boolean = false)
@@ -147,28 +170,4 @@ class UnzipIndexField(elemIdx: Int, indexWidth: Int, vlenb: Int, NumElem: Int)
     Option.when(i < unzipn * vlenb)(index)
   }
 
-}
-
-object UnzipIndexGenMain extends App {
-  println("Generating the UnzipIndexGen hardware")
-
-  val firtoolOpts = Array(
-    "--target",
-    "systemverilog",
-    "-O=release",
-    "--disable-annotation-unknown",
-    "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
-  )
-
-  val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
-
-  (new ChiselStage).execute(
-    Array("--target-dir", "build/vector") ++ args,
-    chisel3.stage
-      .ChiselGeneratorAnnotation(
-        () => new UnzipIndexGenDecodeTable(vlen = 128, dlen = 128, printDetail = true)
-      ) +: firtoolAnno
-  )
-
-  println("done")
 }

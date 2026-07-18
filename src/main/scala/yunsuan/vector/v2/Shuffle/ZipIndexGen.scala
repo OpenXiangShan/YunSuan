@@ -23,28 +23,59 @@ class ZipIndexGenBase(vlen: Int, dlen: Int, printDetail: Boolean = false) extend
 
   val SplittedParts = vlen / dlen * 8
 
-  val in = IO(
-    Input(
-      new Bundle {
-        val zipNum = UInt(3.W) // hold 1-7, represent 2-8
-        val sew    = new GatherSewBundle
-        val uopIdx = UInt(log2Up(SplittedParts).W)
-      }
-    )
-  )
-
-  val out = IO(
-    Output(
-      new Bundle {
-        val index = Vec(NumElem, ValidIO(UInt(IndexWidth.W)))
-      }
-    )
-  )
+  val in = IO(Input(new ZipIndexGenBase.In(dlen, vlen)))
+  val out = IO(Output(new ZipIndexGenBase.Out(dlen)))
 
   val sews = Seq(8, 16, 32, 64)
 
   val zipns = Seq(2, 3, 4, 5, 6, 7, 8)
 
+}
+
+object ZipIndexGenBase {
+  class In(dlen: Int, vlen: Int) extends Bundle {
+    val zipNum = UInt(3.W) // hold 1-7, represent 2-8
+    val sew    = new GatherSewBundle
+    val uopIdx = UInt(log2Up(vlen / dlen * 8).W)
+  }
+
+  class Out(dlen: Int) extends Bundle {
+    val index = Vec(dlen / 8, ValidIO(UInt(log2Ceil(dlen).W)))
+  }
+
+  def main(args: Array[String]): Unit = {
+    import _root_.circt.stage._
+
+    println("Generating the ZipIndexGen hardware")
+
+    val firtoolOpts = Array(
+      "--target",
+      "systemverilog",
+      "-O=release",
+      "--disable-annotation-unknown",
+      "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
+    )
+
+    val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
+
+    (new ChiselStage).execute(
+      Array("--target-dir", "build/vector") ++ args,
+      chisel3.stage
+        .ChiselGeneratorAnnotation(
+          () => new ZipIndexGenDecodeTable(vlen = 128, dlen = 128, printDetail = true)
+        ) +: firtoolAnno
+    )
+
+    (new ChiselStage).execute(
+      Array("--target-dir", "build/vector") ++ args,
+      chisel3.stage
+        .ChiselGeneratorAnnotation(
+          () => new ZipIndexGenHandWrite(vlen = 128, dlen = 128, printDetail = true)
+        ) +: firtoolAnno
+    )
+
+    println("done")
+  }
 }
 
 class ZipIndexGenHandWrite(vlen: Int, dlen: Int, printDetail: Boolean = false)
@@ -79,9 +110,9 @@ class ZipIndexGenHandWrite(vlen: Int, dlen: Int, printDetail: Boolean = false)
 
   private val sewOH = in.sew.toOH
 
-  val selectedIndexValid = Mux1H(sewOH, indexValids(in.zipNum))(in.uopIdx)
+  val selectedIndexValid = Mux1H(sewOH, indexValids(in.zipNum - 1.U))(in.uopIdx)
 
-  val selectedIndex = Mux1H(sewOH, indices(in.zipNum)).suggestName("index")(in.uopIdx).suggestName("index")
+  val selectedIndex = Mux1H(sewOH, indices(in.zipNum - 1.U)).suggestName("index")(in.uopIdx).suggestName("index")
 
   for (i <- out.index.indices) {
     out.index(i).valid := selectedIndexValid(i)
@@ -190,36 +221,4 @@ class ZipIndexField(elemIdx: Int, indexWidth: Int, vlenb: Int, NumElem: Int) ext
     Option.when(i < zipn * vlenb)(index)
   }
 
-}
-
-object ZipIndexGenMain extends App {
-  println("Generating the ZipIndexGen hardware")
-
-  val firtoolOpts = Array(
-    "--target",
-    "systemverilog",
-    "-O=release",
-    "--disable-annotation-unknown",
-    "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
-  )
-
-  val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
-
-  (new ChiselStage).execute(
-    Array("--target-dir", "build/vector") ++ args,
-    chisel3.stage
-      .ChiselGeneratorAnnotation(
-        () => new ZipIndexGenDecodeTable(vlen = 128, dlen = 128, printDetail = true)
-      ) +: firtoolAnno
-  )
-
-  (new ChiselStage).execute(
-    Array("--target-dir", "build/vector") ++ args,
-    chisel3.stage
-      .ChiselGeneratorAnnotation(
-        () => new ZipIndexGenHandWrite(vlen = 128, dlen = 128, printDetail = true)
-      ) +: firtoolAnno
-  )
-
-  println("done")
 }

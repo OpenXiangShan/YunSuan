@@ -29,31 +29,8 @@ class CompressIndexGen(vlen: Int, dlen: Int) extends Module {
 
   private val vlWidth = log2Ceil(vlen + 1)
 
-  val in = IO(
-    Input(
-      new Bundle {
-        val valid    = Bool()
-        val uopIdx   = UInt(log2Ceil(SplittedParts).W)
-        val byteMask = UInt(vlen.W)
-        val data     = Vec(NumElem, UInt(MinDataWidth.W))
-        val vs3      = UInt(dlen.W)
-      }
-    )
-  )
-
-  val out = IO(
-    Output(
-      new Bundle {
-        val valid    = Bool()
-        val validVec = Vec(SplittedParts, Bool())
-        val uopIdx   = UInt(log2Ceil(SplittedParts).W)
-        val data     = Vec(NumElem, UInt(MinDataWidth.W))
-        val vs3      = UInt(dlen.W)
-        val index    = new GatherIndexBundle(NumElem, IndexWidth)
-        val count1s  = UInt(vlWidth.W)
-      }
-    )
-  )
+  val in = IO(Input(new CompressIndexGen.In(vlen, dlen)))
+  val out = IO(Output(new CompressIndexGen.Out(vlen, dlen)))
 
   val indexPreProcess = Module(new CompressIndexPreProcess(vlen = vlen, dlen = dlen))
 
@@ -114,6 +91,30 @@ class CompressIndexGen(vlen: Int, dlen: Int) extends Module {
   out.data    := RotateUp(VecInit(preProcessedDataReg.map(_.bits)), lzaForDataRotateLZA(uopIdxReg))
   out.vs3     := vs3Reg
   out.count1s := leadingSumsReg.last
+}
+
+object CompressIndexGen {
+  class In(vlen: Int, dlen: Int) extends Bundle {
+    private val MinDataWidth = 8
+    private val SplittedParts = 8 * vlen / dlen
+    val valid    = Bool()
+    val uopIdx   = UInt(log2Ceil(SplittedParts).W)
+    val byteMask = UInt(vlen.W)
+    val data     = Vec(dlen / MinDataWidth, UInt(MinDataWidth.W))
+    val vs3      = UInt(dlen.W)
+  }
+
+  class Out(vlen: Int, dlen: Int) extends Bundle {
+    private val MinDataWidth = 8
+    private val SplittedParts = 8 * vlen / dlen
+    val valid    = Bool()
+    val validVec = Vec(SplittedParts, Bool())
+    val uopIdx   = UInt(log2Ceil(SplittedParts).W)
+    val data     = Vec(dlen / MinDataWidth, UInt(MinDataWidth.W))
+    val vs3      = UInt(dlen.W)
+    val index    = new GatherIndexBundle(dlen / MinDataWidth, log2Ceil(vlen))
+    val count1s  = UInt(log2Ceil(vlen + 1).W)
+  }
 }
 
 class CompressIndexPreProcess(vlen: Int, dlen: Int) extends Module {

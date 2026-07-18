@@ -13,6 +13,9 @@ class GatherIndexGen(implicit val param: GatherParam) extends GatherModule {
 
   override def desiredName: String = super.desiredName + s"_${DLEN}b"
 
+  val in = IO(Input(ValidIO(new GatherIndexGen.In)))
+  val out = IO(Output(new GatherIndexGen.Out))
+
   val E64Vlmax = DLEN * 8 / 64
 
   val E32Vlmax = DLEN * 8 / 32
@@ -28,32 +31,6 @@ class GatherIndexGen(implicit val param: GatherParam) extends GatherModule {
   val E16ValidBits = log2Ceil(E16Vlmax)
 
   val E8ValidBits = log2Ceil(E8Vlmax)
-
-  val in = IO(
-    Input(
-      ValidIO(
-        new Bundle {
-          val isGatherEI16 = Bool()
-          val uopIdx       = UInt(log2Ceil(VLEN / DLEN * 8).W)
-          val lmul         = new GatherLmulBundle
-          val sew          = new GatherSewBundle
-          val ei           = new GatherSewBundle
-          // Todo: if vrgatherei16, vs1 should be selected before the register of EXU
-          val vs1  = UInt(DLEN.W)
-          val mask = UInt((DLEN / MinDataWidth).W) // 1bit per MinWidth Data
-        }
-      )
-    )
-  )
-
-  val out = IO(
-    Output(
-      new Bundle {
-        val gather     = ValidIO(new GatherIndexBundle(NumElem, IndexWidth))
-        val gatherei16 = ValidIO(new Bundle {})
-      }
-    )
-  )
 
   val sew = in.bits.sew
 
@@ -223,26 +200,47 @@ class GatherIndexGen(implicit val param: GatherParam) extends GatherModule {
   }
 }
 
-object GatherIndexGenMain extends App {
-  println("Generating the GatherIndexGen hardware")
+object GatherIndexGen {
+  class In(implicit val param: GatherParam) extends GatherBundle {
+    val isGatherEI16 = Bool()
+    val uopIdx       = UInt(log2Ceil(VLEN / DLEN * 8).W)
+    val lmul         = new GatherLmulBundle
+    val sew          = new GatherSewBundle
+    val ei           = new GatherSewBundle
+    // Todo: if vrgatherei16, vs1 should be selected before the register of EXU
+    val vs1  = UInt(DLEN.W)
+    val mask = UInt(NumElem.W) // 1bit per MinWidth Data
+  }
 
-  val firtoolOpts = Array(
-    "--target",
-    "systemverilog",
-    "-O=release",
-    "--disable-annotation-unknown",
-    "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
-  )
+  class Out(implicit val param: GatherParam) extends GatherBundle {
+    val gather     = ValidIO(new GatherIndexBundle(NumElem, IndexWidth))
+    val gatherei16 = ValidIO(new Bundle {})
+  }
 
-  val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
+  def main(args: Array[String]): Unit = {
+    import _root_.circt.stage._
 
-  (new ChiselStage).execute(
-    Array("--target-dir", "build/vector") ++ args,
-    chisel3.stage
-      .ChiselGeneratorAnnotation(
-        () => new GatherIndexGen()(GatherParam.default)
-      ) +: firtoolAnno
-  )
+    println("Generating the GatherIndexGen hardware")
 
-  println("done")
+    val firtoolOpts = Array(
+      "--target",
+      "systemverilog",
+      "-O=release",
+      "--disable-annotation-unknown",
+      "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
+    )
+
+    val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
+
+    (new ChiselStage).execute(
+      Array("--target-dir", "build/vector") ++ args,
+      chisel3.stage
+        .ChiselGeneratorAnnotation(
+          () => new GatherIndexGen()(GatherParam.default)
+        ) +: firtoolAnno
+    )
+
+    println("done")
+  }
 }
+

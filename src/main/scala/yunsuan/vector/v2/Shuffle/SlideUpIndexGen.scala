@@ -14,30 +14,8 @@ class SlideUpIndexGen(implicit val param: GatherParam) extends GatherModule {
 
   override def desiredName: String = super.desiredName + s"_${DLEN}b"
 
-  val in = IO(
-    Input(
-      ValidIO(
-        new Bundle {
-          val isSlide1Up = Bool()
-          val tableIdx   = UInt(TableIdxWidth.W)
-          val sew        = new GatherSewBundle
-          // if slideNum is greater than or equal to DLEN
-          val offsetOverflow = Bool()
-          val offset         = UInt(IndexWidth.W)
-          val vl             = UInt(VlWidth.W)
-        }
-      )
-    )
-  )
-
-  val out = IO(
-    Output(
-      new Bundle {
-        val slideup  = ValidIO(new GatherIndexBundle(NumElem, IndexWidth))
-        val slide1up = ValidIO(new GatherIndexBundle(NumElem, IndexWidth))
-      }
-    )
-  )
+  val in = IO(Input(ValidIO(new SlideUpIndexGen.In)))
+  val out = IO(Output(new SlideUpIndexGen.Out))
 
   val sew = in.bits.sew
 
@@ -69,7 +47,7 @@ class SlideUpIndexGen(implicit val param: GatherParam) extends GatherModule {
     0.U,
     sew,
     in.bits.tableIdx,
-    (i, vl) => i === vl,
+    (i, _) => i === 0.U,
     "EqualZero"
   )
 
@@ -108,26 +86,44 @@ class SlideUpIndexGen(implicit val param: GatherParam) extends GatherModule {
   }
 }
 
-object SlideUpIndexGenMain extends App {
-  println("Generating the SlideIndexGen hardware")
+object SlideUpIndexGen {
+  class In(implicit val param: GatherParam) extends GatherBundle {
+    val isSlide1Up     = Bool()
+    val tableIdx       = UInt(TableIdxWidth.W)
+    val sew            = new GatherSewBundle
+    val offsetOverflow = Bool()
+    val offset         = UInt(IndexWidth.W)
+    val vl             = UInt(VlWidth.W)
+  }
 
-  val firtoolOpts = Array(
-    "--target",
-    "systemverilog",
-    "-O=release",
-    "--disable-annotation-unknown",
-    "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
-  )
+  class Out(implicit val param: GatherParam) extends GatherBundle {
+    val slideup  = ValidIO(new GatherIndexBundle(NumElem, IndexWidth))
+    val slide1up = ValidIO(new GatherIndexBundle(NumElem, IndexWidth))
+  }
 
-  val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
+  def main(args: Array[String]): Unit = {
+    import _root_.circt.stage._
 
-  (new ChiselStage).execute(
-    Array("--target-dir", "build/vector") ++ args,
-    chisel3.stage
-      .ChiselGeneratorAnnotation(
-        () => new SlideUpIndexGen()(GatherParam.default)
-      ) +: firtoolAnno
-  )
+    println("Generating the SlideIndexGen hardware")
 
-  println("done")
+    val firtoolOpts = Array(
+      "--target",
+      "systemverilog",
+      "-O=release",
+      "--disable-annotation-unknown",
+      "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
+    )
+
+    val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
+
+    (new ChiselStage).execute(
+      Array("--target-dir", "build/vector") ++ args,
+      chisel3.stage
+        .ChiselGeneratorAnnotation(
+          () => new SlideUpIndexGen()(GatherParam.default)
+        ) +: firtoolAnno
+    )
+
+    println("done")
+  }
 }

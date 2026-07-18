@@ -4,38 +4,15 @@ import _root_.circt.stage._
 import chisel3._
 import chisel3.util._
 import yunsuan.vector.Common._
-import yunsuan.vector.v2.Shuffle.GatherCommon.{GatherModule, GatherParam}
+import yunsuan.vector.v2.Shuffle.GatherCommon._
 
 
 class SlideDownIndexGen(implicit val param: GatherParam) extends GatherModule {
 
   override def desiredName: String = super.desiredName + s"_${DLEN}b"
 
-  val in = IO(
-    Input(
-      ValidIO(
-        new Bundle {
-          val isSlide1Down = Bool()
-          val tableIdx     = UInt(TableIdxWidth.W)
-          val lmul         = new GatherLmulBundle
-          val sew          = new GatherSewBundle
-          // if slideNum is greater than or equal to DLEN
-          val offsetOverflow = Bool()
-          val offset         = UInt(IndexWidth.W)
-          val vl             = UInt(VlWidth.W)
-        }
-      )
-    )
-  )
-
-  val out = IO(
-    Output(
-      new Bundle {
-        val slideDown  = ValidIO(new GatherIndexBundle(NumElem, IndexWidth))
-        val slide1Down = ValidIO(new GatherIndexBundle(NumElem, IndexWidth))
-      }
-    )
-  )
+  val in = IO(Input(ValidIO(new SlideDownIndexGen.In)))
+  val out = IO(Output(new SlideDownIndexGen.Out))
 
   val lmul = in.bits.lmul
 
@@ -62,7 +39,7 @@ class SlideDownIndexGen(implicit val param: GatherParam) extends GatherModule {
     in.bits.vl,
     in.bits.sew,
     in.bits.tableIdx,
-    (i, vl) => Mux(vl === 0.U, false.B, i === (vl - 1.U)),
+    (i, vl) => i === (vl - 1.U),
     "EqualVlM1"
   )
 
@@ -107,25 +84,44 @@ class SlideDownIndexGen(implicit val param: GatherParam) extends GatherModule {
   }
 }
 
-object SlideDownIndexGenMain extends App {
-  println("Generating the SlideDownIndexGen hardware")
+object SlideDownIndexGen {
+  class In(implicit val param: GatherParam) extends GatherBundle {
+    val isSlide1Down   = Bool()
+    val tableIdx       = UInt(TableIdxWidth.W)
+    val lmul           = new GatherLmulBundle
+    val sew            = new GatherSewBundle
+    val offsetOverflow = Bool()
+    val offset         = UInt(IndexWidth.W)
+    val vl             = UInt(VlWidth.W)
+  }
 
-  val firtoolOpts = Array(
-    "--target=systemverilog",
-    "-O=release",
-    "--disable-annotation-unknown",
-    "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
-  )
+  class Out(implicit val param: GatherParam) extends GatherBundle {
+    val slideDown  = ValidIO(new GatherIndexBundle(NumElem, IndexWidth))
+    val slide1Down = ValidIO(new GatherIndexBundle(NumElem, IndexWidth))
+  }
 
-  val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
+  def main(args: Array[String]): Unit = {
+    import _root_.circt.stage._
 
-  (new ChiselStage).execute(
-    Array("--target-dir", "build/vector") ++ args,
-    chisel3.stage
-      .ChiselGeneratorAnnotation(
-        () => new SlideDownIndexGen()(GatherParam.default)
-      ) +: firtoolAnno
-  )
+    println("Generating the SlideDownIndexGen hardware")
 
-  println("done")
+    val firtoolOpts = Array(
+      "--target=systemverilog",
+      "-O=release",
+      "--disable-annotation-unknown",
+      "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
+    )
+
+    val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
+
+    (new ChiselStage).execute(
+      Array("--target-dir", "build/vector") ++ args,
+      chisel3.stage
+        .ChiselGeneratorAnnotation(
+          () => new SlideDownIndexGen()(GatherParam.default)
+        ) +: firtoolAnno
+    )
+
+    println("done")
+  }
 }
