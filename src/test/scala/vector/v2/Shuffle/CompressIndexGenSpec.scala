@@ -5,6 +5,7 @@ import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.ParallelTestExecution
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
+import yunsuan.vector.v2.Shuffle.GatherCommon.GatherParam
 
 class CompressIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution {
 

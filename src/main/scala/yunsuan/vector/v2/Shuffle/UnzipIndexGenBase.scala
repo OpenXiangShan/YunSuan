@@ -112,7 +112,7 @@ class UnzipIndexGenDecodeTable(printDetail: Boolean = false)(implicit param: Gat
 
   val decodeTable = new DecodeTable(patterns, fields)
 
-  val decodeBundle: DecodeBundle = decodeTable.decode(in.zipNum ## in.sew.toOH)
+  val decodeBundle: DecodeBundle = decodeTable.decode(in.zipNum ## in.sew.toOH ## in.uopIdx)
 
   val indices: Vec[UInt] = VecInit(
     fields.map(

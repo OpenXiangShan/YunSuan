@@ -160,7 +160,7 @@ class ZipIndexGenDecodeTable(printDetail: Boolean = false)(implicit param: Gathe
 
   val decodeTable = new DecodeTable(patterns, fields)
 
-  val decodeBundle = decodeTable.decode(in.zipNum ## in.sew.toOH)
+  val decodeBundle = decodeTable.decode(in.zipNum ## in.sew.toOH ## in.uopIdx)
 
   val indices: Vec[UInt] = VecInit(
     fields.map(
