@@ -51,7 +51,7 @@ object ZipIndexGenBase {
       Array("--target-dir", "build/vector") ++ args,
       chisel3.stage
         .ChiselGeneratorAnnotation(
-          () => new ZipIndexGenDecodeTable(printDetail = true)(GatherParam.default)
+          () => new ZipIndexGenDecodeTable()(GatherParam.default)
         ) +: firtoolAnno
     )
 
@@ -110,9 +110,10 @@ class ZipIndexGenHandWrite(printDetail: Boolean = false)(implicit param: GatherP
 
 }
 
-class ZipIndexGenDecodeTable(printDetail: Boolean = false)(implicit param: GatherParam)
-    extends ZipIndexGenBase(printDetail) {
+class ZipIndexGenDecodeTable()(implicit param: GatherParam)
+    extends ZipIndexGenBase(param.debug) {
 
+  private val debug = param.debug
   private val vlenb = VLENB
 
   val patterns: Seq[ZipnSewPattern] = for {
@@ -143,15 +144,15 @@ class ZipIndexGenDecodeTable(printDetail: Boolean = false)(implicit param: Gathe
     val uopIdx = pattern.uopIdx
     if (sew != lastSew) {
       lastSew = sew
-      if (printDetail) println()
-      if (printDetail) println(s"zipn = $zipn, sew = $sew")
+      if (debug) println()
+      if (debug) println(s"zipn = $zipn, sew = $sew")
     }
     if (uopIdx != lastUopIdx) {
       lastUopIdx = uopIdx
     }
     for ((field, elemIdx) <- fields.zipWithIndex) {
       val index = field.calculateIndex(pattern, elemIdx, vlenb, NumElem)
-      if (printDetail)
+      if (debug)
         index.foreach(
           i => print(f"${i}%2x ")
         )
