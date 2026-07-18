@@ -6,12 +6,13 @@ import org.scalatest.ParallelTestExecution
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
 
+import yunsuan.vector.v2.Shuffle.GatherCommon.GatherParam
+
 class ZipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution {
 
   val vlen = 128
   val dlen = 128
   val vlenb = vlen / 8
-  val dlenb = dlen / 8
   val numElem = dlen / 8
 
   def sewb(sew: Int): Int = sew / 8
@@ -63,7 +64,7 @@ class ZipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Paral
   describe("ZipIndexGenHandWrite") {
     describe("zipn=2") {
       it("SEW=32, uopIdx=0") {
-        simulate(new ZipIndexGenHandWrite(vlen = 128, dlen = 128)) { dut =>
+        simulate(new ZipIndexGenHandWrite()(GatherParam.default)) { dut =>
           val golden = goldenZip(zipn = 2, sew = 32, uopIdx = 0)
           pZip(dut, zipn = 2, sew = 32, uopIdx = 0)
           dut.clock.step()
@@ -71,7 +72,7 @@ class ZipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Paral
         }
       }
       it("SEW=8, uopIdx=0") {
-        simulate(new ZipIndexGenHandWrite(vlen = 128, dlen = 128)) { dut =>
+        simulate(new ZipIndexGenHandWrite()(GatherParam.default)) { dut =>
           val golden = goldenZip(zipn = 2, sew = 8, uopIdx = 0)
           pZip(dut, zipn = 2, sew = 8, uopIdx = 0)
           dut.clock.step()
@@ -81,7 +82,7 @@ class ZipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Paral
     }
     describe("zipn=4") {
       it("SEW=16, uopIdx=0") {
-        simulate(new ZipIndexGenHandWrite(vlen = 128, dlen = 128)) { dut =>
+        simulate(new ZipIndexGenHandWrite()(GatherParam.default)) { dut =>
           val golden = goldenZip(zipn = 4, sew = 16, uopIdx = 0)
           pZip(dut, zipn = 4, sew = 16, uopIdx = 0)
           dut.clock.step()
@@ -91,7 +92,7 @@ class ZipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Paral
     }
     describe("zipn=8") {
       it("SEW=64, uopIdx=0") {
-        simulate(new ZipIndexGenHandWrite(vlen = 128, dlen = 128)) { dut =>
+        simulate(new ZipIndexGenHandWrite()(GatherParam.default)) { dut =>
           val golden = goldenZip(zipn = 8, sew = 64, uopIdx = 0)
           pZip(dut, zipn = 8, sew = 64, uopIdx = 0)
           dut.clock.step()
@@ -104,7 +105,7 @@ class ZipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Paral
   describe("ZipIndexGenDecodeTable") {
     // BUG: decode input does not include uopIdx — cannot distinguish uop-level indices
     it("zipn=2, SEW=32 — decode lacks uopIdx") {
-      simulate(new ZipIndexGenDecodeTable(vlen = 128, dlen = 128)) { dut =>
+      simulate(new ZipIndexGenDecodeTable()(GatherParam.default)) { dut =>
         pSew(dut.in.sew, 32)
         dut.in.zipNum.poke(1)  // zipn=2
         dut.in.uopIdx.poke(0)

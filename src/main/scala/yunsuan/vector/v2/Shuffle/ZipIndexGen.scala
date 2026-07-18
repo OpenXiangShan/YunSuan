@@ -3,28 +3,17 @@ package yunsuan.vector.v2.Shuffle
 import _root_.circt.stage._
 import chisel3._
 import chisel3.util._
-import chisel3.util.experimental.decode.DecodeField
-import chisel3.util.experimental.decode.DecodePattern
-import chisel3.util.experimental.decode.DecodeTable
+import chisel3.util.experimental.decode.{DecodeField, DecodePattern, DecodeTable}
+import yunsuan.vector.v2.Shuffle.GatherCommon._
 
-class ZipIndexGenBase(vlen: Int, dlen: Int, printDetail: Boolean = false) extends Module {
+class ZipIndexGenBase(printDetail: Boolean = false)(implicit val param: GatherParam) extends GatherModule {
 
-  val vlenb = vlen / 8
+  override def desiredName: String = super.desiredName + s"_${DLEN}b"
 
-  val dlenb = dlen / 8
+  val in = IO(Input(new ZipIndexGenBase.In))
+  val out = IO(Output(new ZipIndexGenBase.Out))
 
-  val MinDataWidth = 8
-
-  val NumElem = dlen / MinDataWidth
-
-  val IndexWidth = log2Ceil(dlen)
-
-  val VlWidth = log2Ceil(vlen) + 1
-
-  val SplittedParts = vlen / dlen * 8
-
-  val in = IO(Input(new ZipIndexGenBase.In(dlen, vlen)))
-  val out = IO(Output(new ZipIndexGenBase.Out(dlen)))
+  val SplittedParts = VLEN / DLEN * 8
 
   val sews = Seq(8, 16, 32, 64)
 
@@ -33,14 +22,14 @@ class ZipIndexGenBase(vlen: Int, dlen: Int, printDetail: Boolean = false) extend
 }
 
 object ZipIndexGenBase {
-  class In(dlen: Int, vlen: Int) extends Bundle {
-    val zipNum = UInt(3.W) // hold 1-7, represent 2-8
+  class In(implicit val param: GatherParam) extends GatherBundle {
+    val zipNum = UInt(3.W)
     val sew    = new GatherSewBundle
-    val uopIdx = UInt(log2Up(vlen / dlen * 8).W)
+    val uopIdx = UInt(log2Up(VLEN / DLEN * 8).W)
   }
 
-  class Out(dlen: Int) extends Bundle {
-    val index = Vec(dlen / 8, ValidIO(UInt(log2Ceil(dlen).W)))
+  class Out(implicit val param: GatherParam) extends GatherBundle {
+    val index = Vec(NumElem, ValidIO(UInt(IndexWidth.W)))
   }
 
   def main(args: Array[String]): Unit = {
@@ -62,7 +51,7 @@ object ZipIndexGenBase {
       Array("--target-dir", "build/vector") ++ args,
       chisel3.stage
         .ChiselGeneratorAnnotation(
-          () => new ZipIndexGenDecodeTable(vlen = 128, dlen = 128, printDetail = true)
+          () => new ZipIndexGenDecodeTable(printDetail = true)(GatherParam.default)
         ) +: firtoolAnno
     )
 
@@ -70,7 +59,7 @@ object ZipIndexGenBase {
       Array("--target-dir", "build/vector") ++ args,
       chisel3.stage
         .ChiselGeneratorAnnotation(
-          () => new ZipIndexGenHandWrite(vlen = 128, dlen = 128, printDetail = true)
+          () => new ZipIndexGenHandWrite(printDetail = true)(GatherParam.default)
         ) +: firtoolAnno
     )
 
@@ -78,12 +67,12 @@ object ZipIndexGenBase {
   }
 }
 
-class ZipIndexGenHandWrite(vlen: Int, dlen: Int, printDetail: Boolean = false)
-    extends ZipIndexGenBase(vlen, dlen, printDetail) {
+class ZipIndexGenHandWrite(printDetail: Boolean = false)(implicit param: GatherParam)
+    extends ZipIndexGenBase(printDetail) {
 
-  override def desiredName: String = super.desiredName + s"_${dlen}b"
+  private val vlenb = VLENB
 
-  // indices(zipn)(sew)(elemIdx)
+  // indices(zipn)(sew)(uop)(elem)
   val indices: Vec[Vec[Vec[Vec[UInt]]]] =
     WireInit(VecInit.fill(zipns.length, sews.length)(VecInit.fill(SplittedParts, NumElem)(0.U(IndexWidth.W))))
 
@@ -121,15 +110,15 @@ class ZipIndexGenHandWrite(vlen: Int, dlen: Int, printDetail: Boolean = false)
 
 }
 
-class ZipIndexGenDecodeTable(vlen: Int, dlen: Int, printDetail: Boolean = false)
-    extends ZipIndexGenBase(vlen, dlen, printDetail) {
+class ZipIndexGenDecodeTable(printDetail: Boolean = false)(implicit param: GatherParam)
+    extends ZipIndexGenBase(printDetail) {
 
-  override def desiredName: String = super.desiredName + s"_${dlen}b"
+  private val vlenb = VLENB
 
   val patterns: Seq[ZipnSewPattern] = for {
     (zipn, zipnIdx) <- zipns.zipWithIndex
     (sew, sewIdx)   <- sews.zipWithIndex
-    uopIdx          <- 0 to 7
+    uopIdx          <- 0 until SplittedParts
   } yield {
     new ZipnSewPattern(zipn, sew, uopIdx, SplittedParts)
   }
