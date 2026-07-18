@@ -35,7 +35,7 @@ class GatherRing[T <: Data](
   controller.in.s0pipes  := in.s0pipes
   controller.in.hasTable := VecInit(units.map(_.out.status.hasTable))
   controller.in.hasIndex := VecInit(units.map(_.out.status.hasIndex))
-  controller.in.unitDone := Cat(units.map(_.out.status.done).reverse)
+  controller.in.wbValid := Cat(units.map(_.out.wb.valid).reverse)
 
   // Flow loopback connections (ring topology)
   private val ring2Units = units.grouped(2).toSeq

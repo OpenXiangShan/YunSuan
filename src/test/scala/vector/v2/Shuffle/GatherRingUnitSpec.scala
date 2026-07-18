@@ -3,13 +3,14 @@ package yunsuan.vector.v2.Shuffle
 import chisel3._
 import chisel3.experimental.SourceInfo
 import chisel3.simulator.scalatest.ChiselSim
+import chisel3.simulator.{ChiselOptionsModifications, ExpectationValueFormat, FirtoolOptionsModifications, HasSimulator}
+import chisel3.testing.HasTestingDirectory
 import org.scalatest.ParallelTestExecution
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
-import yunsuan.vector.v2.Shuffle.GatherCommon.FakeRobPtr
-import chisel3.simulator.{ChiselOptionsModifications, ExpectationValueFormat, FirtoolOptionsModifications, HasSimulator}
-import chisel3.testing.HasTestingDirectory
 import svsim.verilator.Backend.CompilationSettings.CoverageSettings
+import yunsuan.vector.v2.Shuffle.GatherCommon.FakeRobPtr
+import yunsuan.vector.v2.Shuffle.{GatherCommon, GatherRingUnit}
 
 class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution {
 

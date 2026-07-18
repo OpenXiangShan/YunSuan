@@ -70,7 +70,7 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
 
   private val pipeUnitDone = Seq.tabulate(NumPipeOut) { p =>
     Cat(Seq.tabulate(pipeGroupSize(p)) { k =>
-      in.unitDone(p + k * NumPipeOut)
+      in.wbValid(p + k * NumPipeOut)
     }.reverse)
   }
 
@@ -94,7 +94,7 @@ object GatherRingController {
     val s0pipes  = Vec(NumPipeIn, ValidIO(new GatherRing.PipeInS0))
     val hasTable = Input(Vec(NumUnits, Bool()))
     val hasIndex = Input(Vec(NumUnits, Bool()))
-    val unitDone = UInt(NumUnits.W)
+    val wbValid = UInt(NumUnits.W)
   }
 
   class Out(implicit val param: GatherParam) extends GatherBundle {

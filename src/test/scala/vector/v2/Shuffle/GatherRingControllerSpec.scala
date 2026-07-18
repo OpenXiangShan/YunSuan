@@ -14,8 +14,8 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
   def simulateCtrl(
     hasTable: BigInt,
     hasIndex: BigInt,
-    unitDone: BigInt,
-    s0pipes:  Seq[(Boolean, Int, Int)] = Seq.fill(4)((false, 0, 0))
+    wbValid : BigInt,
+    s0pipes :  Seq[(Boolean, Int, Int)] = Seq.fill(4)((false, 0, 0))
   )(
     check: (Seq[(Boolean, Int)], Seq[(Boolean, Int)], Seq[Boolean], Seq[BigInt]) => Unit
   ): Unit = {
@@ -27,7 +27,7 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
         dut.in.hasTable(i).poke(((hasTable >> i) & 1) != 0)
         dut.in.hasIndex(i).poke(((hasIndex >> i) & 1) != 0)
       }
-      dut.in.unitDone.poke(unitDone)
+      dut.in.wbValid.poke(wbValid)
       for (i <- s0pipes.indices) {
         dut.in.s0pipes(i).valid.poke(s0pipes(i)._1)
         dut.in.s0pipes(i).bits.placeIdx.poke(s0pipes(i)._2)
