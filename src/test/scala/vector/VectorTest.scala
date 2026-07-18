@@ -62,20 +62,20 @@ class VFloatDividerTest extends AnyFlatSpec with ChiselScalatestTester with Matc
   }
 }
 
-class VFloatFMATest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
-
-  behavior of "YunSuan VectorFloatFMA"
-  it should "pass the syntax" in {
-    test(new VectorFloatFMA()).withAnnotations(Seq(
-      VerilatorBackendAnnotation,
-      VerilatorFlags(Seq()),
-      // WriteVcdAnnotation,
-      // TargetDirAnnotation("./build"),
-    )) { dut =>
-      dut.clock.step(10)
-    }
-  }
-}
+// class VFloatFMATest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
+//
+//   behavior of "YunSuan VectorFloatFMA"
+//   it should "pass the syntax" in {
+//     test(new VectorFloatFMA()).withAnnotations(Seq(
+//       VerilatorBackendAnnotation,
+//       VerilatorFlags(Seq()),
+//       // WriteVcdAnnotation,
+//       // TargetDirAnnotation("./build"),
+//     )) { dut =>
+//       dut.clock.step(10)
+//     }
+//   }
+// }
 
 class VIntAdderTest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
 

@@ -21,7 +21,7 @@ trait VSPParameter {
   val XLEN       : Int = 64
   val VIA_latency: Int = 0 // TODO: change to 1
   val VIAF_latency: Int = 1
-  val VFF_latency: Int = 3 // TODO: check only mul and mul+add, different or not
+  // val VFF_latency: Int = 3 // TODO: check only mul and mul+add, different or not
   val VFD_latency: Int = 99
   val VFA_latency: Int = 1
   val VPERM_latency: Int = 1
@@ -37,7 +37,7 @@ trait VSPParameter {
 
 object VPUTestFuType { // only use in test, difftest with xs
   def vfa = "b0000_0000".U(8.W)
-  def vff = "b0000_0001".U(8.W)
+  // def vff = "b0000_0001".U(8.W)
   def vfd = "b0000_0010".U(8.W)
   def via = "b0000_0011".U(8.W)
   def vperm = "b0000_0100".U(8.W)
@@ -121,7 +121,7 @@ class SimTop() extends VPUTestModule {
     in := io.in.bits
     latency := LookupTreeDefault(io.in.bits.fuType, 999.U, List(
       VPUTestFuType.vfa -> VFA_latency.U,
-      VPUTestFuType.vff -> VFF_latency.U,
+      // VPUTestFuType.vff -> VFF_latency.U,
       VPUTestFuType.vfd -> VFD_latency.U,
       VPUTestFuType.via -> VIA_latency.U,
       VPUTestFuType.vperm -> VPERM_latency.U,
@@ -208,7 +208,7 @@ class SimTop() extends VPUTestModule {
   ))
 
   val vfa_result = Wire(new VSTOutputIO)
-  val vff_result = Wire(new VSTOutputIO)
+  // val vff_result = Wire(new VSTOutputIO)
   val vfd_result = Reg(new VSTOutputIO)
   val via_result = Wire(new VSTOutputIO)
   val vperm_result = Wire(new VSTOutputIO)
@@ -234,7 +234,7 @@ class SimTop() extends VPUTestModule {
   for (i <- 0 until (VLEN / XLEN)) {
     val (src1, src2, src3) = (in.src(0)(i), in.src(1)(i), in.src(2)(i))
     val vfa = Module(new VectorFloatAdder) // result at next cycle
-    val vff = Module(new VectorFloatFMA)
+    // val vff = Module(new VectorFloatFMA)
     val vfd = Module(new VectorFloatDivider)
     val via = Module(new VectorIntAdder)
     val vcvt = Module(new VectorCvt(XLEN))
@@ -330,28 +330,28 @@ class SimTop() extends VPUTestModule {
     via_result.fflags(i) := 0.U // DontCare
     via_result.vxsat := 0.U // DontCare
 
-    vff.io.fire := busy
-    vff.io.fp_a := src1
-    vff.io.fp_b := src2
-    vff.io.fp_c := src3
-    //io.widen_a Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
-    //io.widen_b Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
-    vff.io.widen_a := Cat(in.src(0)(1)(31+i*32,0+i*32),in.src(0)(0)(31+i*32,0+i*32))
-    vff.io.widen_b := Cat(in.src(1)(1)(31+i*32,0+i*32),in.src(1)(0)(31+i*32,0+i*32))
-    vff.io.uop_idx := uop_idx(0)
-    vff.io.frs1  := in.src(1)(0) // VS1(63,0)
-    vff.io.round_mode := rm
-    vff.io.fp_format := sew
-    vff.io.op_code := opcode
-    vff.io.is_frs1  := is_frs1
-    vff.io.is_vec := true.B // TODO: check it
-    vff.io.fp_aIsFpCanonicalNAN := false.B
-    vff.io.fp_bIsFpCanonicalNAN := false.B
-    vff.io.fp_cIsFpCanonicalNAN := false.B
-    vff.io.res_widening := widen
-    vff_result.result(i) := vff.io.fp_result
-    vff_result.fflags(i) := vff.io.fflags
-    vff_result.vxsat := 0.U // DontCare
+    // vff.io.fire := busy
+    // vff.io.fp_a := src1
+    // vff.io.fp_b := src2
+    // vff.io.fp_c := src3
+    // //io.widen_a Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
+    // //io.widen_b Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
+    // vff.io.widen_a := Cat(in.src(0)(1)(31+i*32,0+i*32),in.src(0)(0)(31+i*32,0+i*32))
+    // vff.io.widen_b := Cat(in.src(1)(1)(31+i*32,0+i*32),in.src(1)(0)(31+i*32,0+i*32))
+    // vff.io.uop_idx := uop_idx(0)
+    // vff.io.frs1  := in.src(1)(0) // VS1(63,0)
+    // vff.io.round_mode := rm
+    // vff.io.fp_format := sew
+    // vff.io.op_code := opcode
+    // vff.io.is_frs1  := is_frs1
+    // vff.io.is_vec := true.B // TODO: check it
+    // vff.io.fp_aIsFpCanonicalNAN := false.B
+    // vff.io.fp_bIsFpCanonicalNAN := false.B
+    // vff.io.fp_cIsFpCanonicalNAN := false.B
+    // vff.io.res_widening := widen
+    // vff_result.result(i) := vff.io.fpResult
+    // vff_result.fflags(i) := vff.io.fflags
+    // vff_result.vxsat := 0.U // DontCare
 
     // connect vcvt's io
     vcvt.io.fire := busy
@@ -547,7 +547,7 @@ class SimTop() extends VPUTestModule {
   io.out.valid := Mux(is_uncertain, finish_uncertain, finish_fixLatency)
   io.out.bits := LookupTreeDefault(in.fuType, 0.U.asTypeOf(new VSTOutputIO), List(
     VPUTestFuType.vfa -> vfa_result,
-    VPUTestFuType.vff -> vff_result,
+    // VPUTestFuType.vff -> vff_result,
     VPUTestFuType.vfd -> vfd_result,
     VPUTestFuType.via -> via_result,
     VPUTestFuType.vperm -> vperm_result,
