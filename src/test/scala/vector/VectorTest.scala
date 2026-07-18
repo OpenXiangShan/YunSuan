@@ -8,7 +8,6 @@ import chiseltest._
 import chiseltest.ChiselScalatestTester
 import chiseltest.VerilatorBackendAnnotation
 import chiseltest.simulator.{VerilatorFlags, VerilatorCFlags}
-// import freechips.rocketchip.util.{ElaborationArtefacts, HasRocketChipStageUtils}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers
 object GenTest extends App {
@@ -23,11 +22,6 @@ trait HasTestAnnos {
   var testAnnos: firrtl.AnnotationSeq = Seq()
 }
 
-// trait UseVerilatorBackend { this: HasTestAnnos =>
-//   testAnnos = testAnnos ++ Seq(VerilatorBackendAnnotation)
-// 
-// }
-
 class YunSuanTester  extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
   behavior of "YunSuan Test"
 }
@@ -39,8 +33,6 @@ class VFloatAdderTest extends YunSuanTester {
     test(new VectorFloatAdder()).withAnnotations(Seq(
       VerilatorBackendAnnotation,
       VerilatorFlags(Seq()),
-      // WriteVcdAnnotation,
-      // TargetDirAnnotation("./build"),
     )) { dut =>
       dut.clock.step(10)
     }
@@ -54,23 +46,6 @@ class VFloatDividerTest extends AnyFlatSpec with ChiselScalatestTester with Matc
     test(new VectorFloatDivider()).withAnnotations(Seq(
       VerilatorBackendAnnotation,
       VerilatorFlags(Seq()),
-      // WriteVcdAnnotation,
-      // TargetDirAnnotation("./build"),
-    )) { dut =>
-      dut.clock.step(10)
-    }
-  }
-}
-
-class VFloatFMATest extends AnyFlatSpec with ChiselScalatestTester with Matchers with HasTestAnnos {
-
-  behavior of "YunSuan VectorFloatFMA"
-  it should "pass the syntax" in {
-    test(new VectorFloatFMA()).withAnnotations(Seq(
-      VerilatorBackendAnnotation,
-      VerilatorFlags(Seq()),
-      // WriteVcdAnnotation,
-      // TargetDirAnnotation("./build"),
     )) { dut =>
       dut.clock.step(10)
     }
@@ -84,8 +59,6 @@ class VIntAdderTest extends AnyFlatSpec with ChiselScalatestTester with Matchers
     test(new VectorIntAdder()).withAnnotations(Seq(
       VerilatorBackendAnnotation,
       VerilatorFlags(Seq()),
-      // WriteVcdAnnotation,
-      // TargetDirAnnotation("./build"),
     )) { dut =>
       dut.clock.step(10)
     }
@@ -99,8 +72,6 @@ class VSlideUpLookupTest extends AnyFlatSpec with ChiselScalatestTester with Mat
     test(new SlideUpLookupModule()).withAnnotations(Seq(
       VerilatorBackendAnnotation,
       VerilatorFlags(Seq()),
-      // WriteVcdAnnotation,
-      // TargetDirAnnotation("./build"),
     )) { dut =>
       dut.clock.step(10)
     }
@@ -114,8 +85,6 @@ class VSlide1UpTest extends AnyFlatSpec with ChiselScalatestTester with Matchers
     test(new Slide1UpModule()).withAnnotations(Seq(
       VerilatorBackendAnnotation,
       VerilatorFlags(Seq()),
-      // WriteVcdAnnotation,
-      // TargetDirAnnotation("./build"),
     )) { dut =>
       dut.clock.step(10)
     }
@@ -129,8 +98,6 @@ class VSlideDownLookupTest extends AnyFlatSpec with ChiselScalatestTester with M
     test(new SlideDownLookupModule()).withAnnotations(Seq(
       VerilatorBackendAnnotation,
       VerilatorFlags(Seq()),
-      // WriteVcdAnnotation,
-      // TargetDirAnnotation("./build"),
     )) { dut =>
       dut.clock.step(10)
     }
@@ -144,8 +111,6 @@ class VSlide1DownTest extends AnyFlatSpec with ChiselScalatestTester with Matche
     test(new Slide1DownModule()).withAnnotations(Seq(
       VerilatorBackendAnnotation,
       VerilatorFlags(Seq()),
-      // WriteVcdAnnotation,
-      // TargetDirAnnotation("./build"),
     )) { dut =>
       dut.clock.step(10)
     }
@@ -159,8 +124,6 @@ class VRGatherLookupTest extends AnyFlatSpec with ChiselScalatestTester with Mat
     test(new VRGatherLookupModule()).withAnnotations(Seq(
       VerilatorBackendAnnotation,
       VerilatorFlags(Seq()),
-      // WriteVcdAnnotation,
-      // TargetDirAnnotation("./build"),
     )) { dut =>
       dut.clock.step(10)
     }
@@ -174,8 +137,6 @@ class VCompressTest extends AnyFlatSpec with ChiselScalatestTester with Matchers
     test(new CompressModule()).withAnnotations(Seq(
       VerilatorBackendAnnotation,
       VerilatorFlags(Seq()),
-      // WriteVcdAnnotation,
-      // TargetDirAnnotation("./build"),
     )) { dut =>
       dut.clock.step(10)
     }
@@ -188,8 +149,6 @@ class VIntDividerTest extends AnyFlatSpec with ChiselScalatestTester with Matche
     test(new VectorIdiv()).withAnnotations(Seq(
       VerilatorBackendAnnotation,
       VerilatorFlags(Seq()),
-      // WriteVcdAnnotation,
-      // TargetDirAnnotation("./build"),
     )) { dut =>
       dut.clock.step(10)
     }
