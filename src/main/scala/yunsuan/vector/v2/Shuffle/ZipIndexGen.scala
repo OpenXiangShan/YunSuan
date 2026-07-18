@@ -6,7 +6,7 @@ import chisel3.util._
 import chisel3.util.experimental.decode.{DecodeField, DecodePattern, DecodeTable}
 import yunsuan.vector.v2.Shuffle.GatherCommon._
 
-class ZipIndexGenBase(printDetail: Boolean = false)(implicit val param: GatherParam) extends GatherModule {
+class ZipIndexGenBase()(implicit val param: GatherParam) extends GatherModule {
 
   override def desiredName: String = super.desiredName + s"_${DLEN}b"
 
@@ -59,7 +59,7 @@ object ZipIndexGenBase {
       Array("--target-dir", "build/vector") ++ args,
       chisel3.stage
         .ChiselGeneratorAnnotation(
-          () => new ZipIndexGenHandWrite(printDetail = true)(GatherParam.default)
+          () => new ZipIndexGenHandWrite()(GatherParam.default)
         ) +: firtoolAnno
     )
 
@@ -67,9 +67,10 @@ object ZipIndexGenBase {
   }
 }
 
-class ZipIndexGenHandWrite(printDetail: Boolean = false)(implicit param: GatherParam)
-    extends ZipIndexGenBase(printDetail) {
+class ZipIndexGenHandWrite()(implicit param: GatherParam)
+    extends ZipIndexGenBase() {
 
+  private val debug = param.debug
   private val vlenb = VLENB
 
   // indices(zipn)(sew)(uop)(elem)
@@ -85,16 +86,16 @@ class ZipIndexGenHandWrite(printDetail: Boolean = false)(implicit param: GatherP
   } yield {
     val loopLength = zipn * sew / 8
     val sewb       = sew / 8
-    if (printDetail) println(s"zipn = $zipn, sew = $sew")
+    if (debug) println(s"zipn = $zipn, sew = $sew")
     for (i <- 0 until vlenb * zipn) {
       val r     = i                               % loopLength
       val q     = i / loopLength
       val index = q * sewb + r / sewb * vlenb + i % sewb
       indices(zipnIdx)(sewIdx)(i / NumElem)(i % NumElem)     := index.U
       indexValids(zipnIdx)(sewIdx)(i / NumElem)(i % NumElem) := true.B
-      if (printDetail) print(f"${index}%2x ")
+      if (debug) print(f"${index}%2x ")
     }
-    if (printDetail) println()
+    if (debug) println()
   }
 
   private val sewOH = in.sew.toOH
@@ -111,7 +112,7 @@ class ZipIndexGenHandWrite(printDetail: Boolean = false)(implicit param: GatherP
 }
 
 class ZipIndexGenDecodeTable()(implicit param: GatherParam)
-    extends ZipIndexGenBase(param.debug) {
+    extends ZipIndexGenBase() {
 
   private val debug = param.debug
   private val vlenb = VLENB
