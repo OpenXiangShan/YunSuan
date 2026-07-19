@@ -7,17 +7,9 @@ import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
 import yunsuan.vector.v2.Shuffle.GatherCommon.GatherParam
 
-class SlideUpIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution {
+class SlideUpIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution with GatherSpecUtils {
 
-  val dlen = 128
-  val numElem = dlen / 8
 
-  def sewShift(sew: Int): Int = sew match {
-    case 8  => 0
-    case 16 => 1
-    case 32 => 2
-    case 64 => 3
-  }
 
   // Golden model: slideup index
   // i < min(vl_e8, offset_e8) -> stay (index = i), else -> shift down (index = i - offset_e8)
@@ -210,27 +202,9 @@ class SlideUpIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with P
 
   // ── ISA cross-validation ───────────────────────────────────────────
 
-  def toSewElems(value: BigInt, sew: Int, nElems: Int): Seq[Int] = {
-    (0 until nElems).map { i =>
-      ((value >> (i * sew)) & ((BigInt(1) << sew) - 1)).toInt
-    }
-  }
 
-  def fromSewElems(elems: Seq[Int], sew: Int): BigInt = {
-    elems.zipWithIndex.foldLeft(BigInt(0)) { case (acc, (v, i)) =>
-      acc | (BigInt(v & ((1 << sew) - 1)) << (i * sew))
-    }
-  }
 
-  def sewTo8b(vs2Sew: Seq[Int], sew: Int): Seq[Int] = {
-    val sewb = sew / 8
-    vs2Sew.flatMap(v => (0 until sewb).map(b => (v >> (b * 8)) & 0xff))
-  }
 
-  def eightBToSew(bytes: Seq[Int], sew: Int): Seq[Int] = {
-    val sewb = sew / 8
-    bytes.grouped(sewb).map(g => g.zipWithIndex.foldLeft(0) { case (a, (b, i)) => a | (b << (i * 8)) }).toSeq
-  }
 
   /** ISA-level vslideup: vd[i] = i&lt;offset ? vs2[i] : vs2[i-offset], for i&lt;vl */
   def isaVslideup(vs2Sew: Seq[Int], offset: Int, vl: Int): Seq[Int] = {

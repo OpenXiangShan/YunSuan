@@ -7,14 +7,10 @@ import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
 import yunsuan.vector.v2.Shuffle.GatherCommon.GatherParam
 
-class GatherIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution {
+class GatherIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution with GatherSpecUtils {
 
-  val dlen = 128
-  val vlen = 128
-  val numElem = dlen / 8
 
   // SEW -> number of 8b elements per SEW element
-  def sewb(sew: Int): Int = sew / 8
   // SEW -> number of Ei elements per SEI element
   def eib(ei: Int): Int = ei / 8
 
@@ -194,35 +190,12 @@ class GatherIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   // ── ISA cross-validation ───────────────────────────────────────────
 
   /** Convert DLEN-bit BigInt to Seq of SEW-width elements (little-endian within DLEN) */
-  def toSewElems(value: BigInt, sew: Int): Seq[Int] = {
-    val nElems = dlen / sew
-    (0 until nElems).map { i =>
-      ((value >> (i * sew)) & ((BigInt(1) << sew) - 1)).toInt
-    }
-  }
 
   /** Convert Seq of SEW-width elements back to DLEN-bit BigInt */
-  def fromSewElems(elems: Seq[Int], sew: Int): BigInt = {
-    elems.zipWithIndex.foldLeft(BigInt(0)) { case (acc, (v, i)) =>
-      acc | (BigInt(v & ((1 << sew) - 1)) << (i * sew))
-    }
-  }
 
   /** Flatten SEW-level vs2 values to 8b table */
-  def sewTo8b(vs2Sew: Seq[Int], sew: Int): Seq[Int] = {
-    val sewb = sew / 8
-    vs2Sew.flatMap { v =>
-      (0 until sewb).map { b => (v >> (b * 8)) & 0xff }
-    }
-  }
 
   /** Assemble 8b results back to SEW-level */
-  def eightBToSew(bytes: Seq[Int], sew: Int): Seq[Int] = {
-    val sewb = sew / 8
-    bytes.grouped(sewb).map { group =>
-      group.zipWithIndex.foldLeft(0) { case (acc, (b, i)) => acc | (b << (i * 8)) }
-    }.toSeq
-  }
 
   /** ISA-level vrgather golden: vd[i] = (i&lt;vl && idx&lt;vlmax) ? vs2[idx] : 0 */
   def isaVrgather(vs2Sew: Seq[Int], vs1Sew: Seq[Int], vl: Int, vlmax: Int): Seq[Int] = {
