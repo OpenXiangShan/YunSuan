@@ -7,12 +7,12 @@ import yunsuan.vector.Common._
 import yunsuan.vector.VectorShuffle.RotateUp
 import yunsuan.vector.v2.Shuffle.GatherCommon._
 
-class CompressIndexGen(implicit val param: GatherParam) extends GatherModule {
+class CompressIndexGen(useV2: Boolean = false)(implicit val param: GatherParam) extends GatherModule {
   require(isPow2(VLEN) && VLEN >= 64)
   require(isPow2(DLEN) && DLEN >= 64)
   require(VLEN >= DLEN)
 
-  override def desiredName: String = super.desiredName + s"_${VLEN}b"
+  override def desiredName: String = super.desiredName + (if (useV2) "V2_" else "") + s"_${VLEN}b"
 
   private val dlenb = DLENB
   private val dlenbBits = log2Ceil(dlenb)
@@ -23,7 +23,8 @@ class CompressIndexGen(implicit val param: GatherParam) extends GatherModule {
   val out = IO(Output(new CompressIndexGen.Out))
 
   val indexPreProcess = Module(new CompressIndexPreProcess)
-  val dataPreProcess = Module(new CompressDataPreProcess)
+  val dataPreProcessV1 = Module(new CompressDataPreProcess)
+  val dataPreProcessV2 = Module(new CompressDataPreProcess2)
 
   private val vs3Reg = RegEnable(in.vs3, in.valid)
 
@@ -37,7 +38,8 @@ class CompressIndexGen(implicit val param: GatherParam) extends GatherModule {
     }
   }
 
-  private val preProcessedDataReg = RegEnable(dataPreProcess.out.data, in.valid)
+  private val preProcessedDataReg = RegEnable(
+    if (useV2) dataPreProcessV2.out.data else dataPreProcessV1.out.data, in.valid)
 
   private val uopIdxReg = RegEnable(in.uopIdx, in.valid)
 
@@ -49,9 +51,12 @@ class CompressIndexGen(implicit val param: GatherParam) extends GatherModule {
   indexPreProcess.in.groupSel := in.uopIdx
   indexPreProcess.in.byteMask := in.byteMask
 
-  dataPreProcess.in.groupSel := in.uopIdx
-  dataPreProcess.in.byteMask := in.byteMask
-  dataPreProcess.in.data     := in.data
+  dataPreProcessV1.in.groupSel := in.uopIdx
+  dataPreProcessV1.in.byteMask := in.byteMask
+  dataPreProcessV1.in.data     := in.data
+  dataPreProcessV2.in.groupSel := in.uopIdx
+  dataPreProcessV2.in.byteMask := in.byteMask
+  dataPreProcessV2.in.data     := in.data
 
   val geLeadingSumsVec = Wire(Vec(NumElem, Vec(SplittedParts, Bool())))
 
@@ -281,7 +286,15 @@ object CompressIndexGenMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new CompressIndexGen()(GatherParam.default)
+        () => new CompressIndexGen(useV2 = false)(GatherParam.default)
+      ) +: firtoolAnno
+  )
+
+  (new ChiselStage).execute(
+    Array("--target-dir", "build/vector") ++ args,
+    chisel3.stage
+      .ChiselGeneratorAnnotation(
+        () => new CompressIndexGen(useV2 = true)(GatherParam.default)
       ) +: firtoolAnno
   )
 
