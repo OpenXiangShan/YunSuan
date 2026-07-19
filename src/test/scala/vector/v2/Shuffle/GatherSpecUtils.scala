@@ -1,9 +1,30 @@
 package yunsuan.vector.v2.Shuffle
 
+import chisel3.fromBooleanToLiteral
+import chisel3.simulator.PeekPokeAPI.TestableBool
+
 trait GatherSpecUtils {
   val dlen = 128
   val vlen = 128
   val numElem = dlen / 8
+  def vlenb: Int = vlen / 8
+
+  def pSew(dut: GatherSewBundle, sew: Int): Unit = {
+    dut.e8.poke((sew == 8).B)
+    dut.e16.poke((sew == 16).B)
+    dut.e32.poke((sew == 32).B)
+    dut.e64.poke((sew == 64).B)
+  }
+
+  def pLmul(dut: GatherLmulBundle, lmulFrac: Int): Unit = {
+    dut.mf8.poke((lmulFrac == 1).B)
+    dut.mf4.poke((lmulFrac == 2).B)
+    dut.mf2.poke((lmulFrac == 4).B)
+    dut.m1.poke((lmulFrac == 8).B)
+    dut.m2.poke((lmulFrac == 16).B)
+    dut.m4.poke((lmulFrac == 32).B)
+    dut.m8.poke((lmulFrac == 64).B)
+  }
 
   def sewShift(sew: Int): Int = sew match {
     case 8 => 0; case 16 => 1; case 32 => 2; case 64 => 3

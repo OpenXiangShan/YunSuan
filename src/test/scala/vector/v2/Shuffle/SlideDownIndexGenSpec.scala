@@ -43,22 +43,6 @@ class SlideDownIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with
     }
   }
 
-  def pSew(dut: GatherSewBundle, sew: Int): Unit = {
-    dut.e8.poke((sew == 8).B)
-    dut.e16.poke((sew == 16).B)
-    dut.e32.poke((sew == 32).B)
-    dut.e64.poke((sew == 64).B)
-  }
-
-  def pLmul(dut: GatherLmulBundle, lmul: Int): Unit = {
-    dut.mf8.poke((lmul == 1).B)
-    dut.mf4.poke((lmul == 2).B)
-    dut.mf2.poke((lmul == 4).B)
-    dut.m1.poke((lmul == 8).B)
-    dut.m2.poke((lmul == 16).B)
-    dut.m4.poke((lmul == 32).B)
-    dut.m8.poke((lmul == 64).B)
-  }
 
   def pSlideDown(dut: SlideDownIndexGen, tableIdx: Int, offset: Int, sew: Int, lmulFrac: Int, vl: Int): Unit = {
     dut.in.valid.poke(true)

@@ -8,14 +8,9 @@ import org.scalatest.matchers.must.Matchers
 
 import yunsuan.vector.v2.Shuffle.GatherCommon.GatherParam
 
-class ZipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution {
+class ZipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution with GatherSpecUtils {
 
-  val vlen = 128
-  val dlen = 128
-  val vlenb = vlen / 8
-  val numElem = dlen / 8
 
-  def sewb(sew: Int): Int = sew / 8
 
   // Golden model: zip index
   // i = uopIdx * numElem + elemIdx
@@ -36,12 +31,6 @@ class ZipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Paral
     }
   }
 
-  def pSew(dut: GatherSewBundle, sew: Int): Unit = {
-    dut.e8.poke((sew == 8).B)
-    dut.e16.poke((sew == 16).B)
-    dut.e32.poke((sew == 32).B)
-    dut.e64.poke((sew == 64).B)
-  }
 
   def pZip(dut: ZipIndexGenHandWrite, zipn: Int, sew: Int, uopIdx: Int): Unit = {
     dut.in.zipNum.poke(zipn - 1)  // 0-based: 2->1, 3->2, ..., 8->7
