@@ -10,10 +10,10 @@ import yunsuan.vector.v2.Shuffle.GatherCommon.GatherParam
 class CompressDataPreProcessSpec extends AnyFunSpec with ChiselSim with Matchers
     with ParallelTestExecution with GatherSpecBase with GatherSpecUtils {
 
-  /** Golden: compress active bytes to the front */
-  def goldenCompress(data: Seq[Int], mask: BigInt): Seq[Option[Int]] = {
-    val selected = mask & ((BigInt(1) << numElem) - 1)
-    val activeBytes = (0 until numElem).filter(i => ((selected >> i) & 1) == 1)
+  /** Golden: compress active bytes to the front, accounting for groupSel */
+  def goldenCompress(data: Seq[Int], mask: BigInt, groupSel: Int): Seq[Option[Int]] = {
+    val chunkMask = (mask >> (groupSel * numElem)) & ((BigInt(1) << numElem) - 1)
+    val activeBytes = (0 until numElem).filter(i => ((chunkMask >> i) & 1) == 1)
     val result = Array.fill(numElem)(Option.empty[Int])
     activeBytes.zipWithIndex.foreach { case (srcPos, dstPos) =>
       result(dstPos) = Some(data(srcPos))
@@ -47,14 +47,14 @@ class CompressDataPreProcessSpec extends AnyFunSpec with ChiselSim with Matchers
         val mask = (BigInt(1) << numElem) - 1
         val data = (0 until numElem).map(i => (i * 0x11 + 0xAB) & 0xff)
         pDP(dut, mask, data, groupSel = 0)
-        eDP(dut, goldenCompress(data, mask))
+        eDP(dut, goldenCompress(data, mask, 0))
       }
     }
     it("no bytes active") {
       simulate(new CompressDataPreProcess(useLZA = false)(GatherParam.default)) { dut =>
         val data = (0 until numElem).map(i => (i * 0x11 + 0xAB) & 0xff)
         pDP(dut, BigInt(0), data, groupSel = 0)
-        eDP(dut, goldenCompress(data, BigInt(0)))
+        eDP(dut, goldenCompress(data, BigInt(0), 0))
       }
     }
     it("alternating mask") {
@@ -62,7 +62,7 @@ class CompressDataPreProcessSpec extends AnyFunSpec with ChiselSim with Matchers
         val mask = BigInt("5555", 16)
         val data = (0 until numElem).map(i => (i * 0x11 + 0xAB) & 0xff)
         pDP(dut, mask, data, groupSel = 0)
-        eDP(dut, goldenCompress(data, mask))
+        eDP(dut, goldenCompress(data, mask, 0))
       }
     }
     it("single active byte") {
@@ -70,7 +70,23 @@ class CompressDataPreProcessSpec extends AnyFunSpec with ChiselSim with Matchers
         val mask = BigInt(1) << 7
         val data = (0 until numElem).map(i => (i * 0x11 + 0xAB) & 0xff)
         pDP(dut, mask, data, groupSel = 0)
-        eDP(dut, goldenCompress(data, mask))
+        eDP(dut, goldenCompress(data, mask, 0))
+      }
+    }
+    it("groupSel=1, all active in chunk 1") {
+      simulate(new CompressDataPreProcess(useLZA = false)(GatherParam.default)) { dut =>
+        val mask = ((BigInt(1) << numElem) - 1) << numElem
+        val data = (0 until numElem).map(i => (i * 0x11 + 0xAB) & 0xff)
+        pDP(dut, mask, data, groupSel = 1)
+        eDP(dut, goldenCompress(data, mask, groupSel = 1))
+      }
+    }
+    it("groupSel=7, single bit in last chunk") {
+      simulate(new CompressDataPreProcess(useLZA = false)(GatherParam.default)) { dut =>
+        val mask = BigInt(1) << (7 * numElem + 3)
+        val data = (0 until numElem).map(i => (i * 0x11 + 0xAB) & 0xff)
+        pDP(dut, mask, data, groupSel = 7)
+        eDP(dut, goldenCompress(data, mask, groupSel = 7))
       }
     }
   }
@@ -81,14 +97,14 @@ class CompressDataPreProcessSpec extends AnyFunSpec with ChiselSim with Matchers
         val mask = (BigInt(1) << numElem) - 1
         val data = (0 until numElem).map(i => (i * 0x11 + 0xAB) & 0xff)
         pDP(dut, mask, data, groupSel = 0)
-        eDP(dut, goldenCompress(data, mask))
+        eDP(dut, goldenCompress(data, mask, 0))
       }
     }
     it("no bytes active") {
       simulate(new CompressDataPreProcess(useLZA = true)(GatherParam.default)) { dut =>
         val data = (0 until numElem).map(i => i & 0xff)
         pDP(dut, BigInt(0), data, groupSel = 0)
-        eDP(dut, goldenCompress(data, BigInt(0)))
+        eDP(dut, goldenCompress(data, BigInt(0), 0))
       }
     }
     it("alternating mask") {
@@ -96,7 +112,15 @@ class CompressDataPreProcessSpec extends AnyFunSpec with ChiselSim with Matchers
         val mask = BigInt("5555", 16)
         val data = (0 until numElem).map(i => (i * 0x11 + 0xAB) & 0xff)
         pDP(dut, mask, data, groupSel = 0)
-        eDP(dut, goldenCompress(data, mask))
+        eDP(dut, goldenCompress(data, mask, 0))
+      }
+    }
+    it("groupSel=3, alternating in chunk 3") {
+      simulate(new CompressDataPreProcess(useLZA = true)(GatherParam.default)) { dut =>
+        val mask = BigInt("5555", 16) << (3 * numElem)
+        val data = (0 until numElem).map(i => (i * 0x11 + 0xAB) & 0xff)
+        pDP(dut, mask, data, groupSel = 3)
+        eDP(dut, goldenCompress(data, mask, groupSel = 3))
       }
     }
   }
