@@ -7,31 +7,32 @@ import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
 import yunsuan.vector.v2.Shuffle.GatherCommon.GatherParam
 
-class CompressIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution {
+class CompressIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
+    with ParallelTestExecution with GatherSpecBase with GatherSpecUtils {
 
-  val vlen = 128
-  val dlen = 128
-  val numElem = dlen / 8
+  val dlenb = dlen / 8
   val splittedParts = 8 * vlen / dlen
 
-  // Golden model: compress index
-  // For each input byte position, if mask is set, the byte moves to position popcount(mask[0..pos])-1
-  // indexValid(pos) = mask[pos]
-  // index(pos) = {popcount(mask[0..pos])-1, pos}
-  def goldenCompress(mask: BigInt, uopIdx: Int): (Seq[(Int, Boolean)], Int) = {
-    val base = uopIdx * numElem
-    var count = 0
-    val results = (0 until numElem).map { i =>
-      val globalPos = base + i
-      val bit = (mask >> globalPos) & 1
-      if (bit == 1) {
-        count += 1
-        (globalPos, true)  // (index, indexValid) — index is the original position
-      } else {
-        (0, false)
-      }
+  /** Compute leading sums: popcount of first dlenb*(j+1) bytes of VLEN-wide mask */
+  def leadingSums(mask: BigInt): Seq[Int] = {
+    (0 until splittedParts).map { j =>
+      val bits = (dlenb * (j + 1)).min(vlen)
+      (mask & ((BigInt(1) << bits) - 1)).bitCount
     }
-    (results, count)
+  }
+
+  /** Golden: compress output for given mask and uopIdx */
+  def goldenCompress(mask: BigInt, uopIdx: Int): (Seq[(Int, Boolean)], Int) = {
+    val sums = leadingSums(mask)
+    val total = sums.last
+    val results = (0 until numElem).map { i =>
+      val globalPos = uopIdx * numElem + i
+      val geCount = sums.count(s => globalPos >= s)
+      val index = geCount * numElem + i
+      val valid = globalPos < total
+      (index, valid)
+    }
+    (results, total)
   }
 
   def pCompress(dut: CompressIndexGen, mask: BigInt, uopIdx: Int): Unit = {
@@ -44,39 +45,79 @@ class CompressIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with 
     }
   }
 
-  def pOff(dut: CompressIndexGen): Unit = {
-    dut.in.valid.poke(false)
-  }
-
   describe("CompressIndexGen") {
     it("all bytes active") {
       simulate(new CompressIndexGen(useLZA = false)(GatherParam.default)) { dut =>
-        val mask = (BigInt(1) << numElem) - 1  // 0xFFFF
+        val mask = (BigInt(1) << numElem) - 1
+        val (golden, total) = goldenCompress(mask, uopIdx = 0)
         pCompress(dut, mask, uopIdx = 0)
-        dut.clock.step()  // 1-cycle pipeline: in registered -> out
+        dut.clock.step()
         dut.out.valid.expect(true.B)
         for (i <- 0 until numElem) {
-          dut.out.index.indexValid(i).expect(true.B)
-          dut.out.index.index(i).expect(i.U)  // identity mapping when all active
+          val (idx, valid) = golden(i)
+          dut.out.index.indexValid(i).expect(valid.B)
+          dut.out.index.index(i).expect(idx.U)
         }
-        dut.out.count1s.expect(numElem.U)
+        dut.out.count1s.expect(total.U)
       }
     }
     it("alternating mask") {
       simulate(new CompressIndexGen(useLZA = false)(GatherParam.default)) { dut =>
-        val mask = BigInt("5555", 16)  // 0b0101010101010101
+        val mask = BigInt("5555", 16)
+        val (golden, total) = goldenCompress(mask, uopIdx = 0)
         pCompress(dut, mask, uopIdx = 0)
         dut.clock.step()
         dut.out.valid.expect(true.B)
-        // TODO: golden model for alternating mask needs refinement per hardware semantics
-        dut.out.count1s.expect(8.U)
+        for (i <- 0 until numElem) {
+          val (idx, valid) = golden(i)
+          dut.out.index.indexValid(i).expect(valid.B)
+          if (valid) dut.out.index.index(i).expect(idx.U)
+        }
+        dut.out.count1s.expect(total.U)
       }
     }
     it("no bytes active") {
       simulate(new CompressIndexGen(useLZA = false)(GatherParam.default)) { dut =>
         pCompress(dut, BigInt(0), uopIdx = 0)
-        dut.clock.step()  // 1-cycle pipeline
-        dut.out.valid.expect(true.B)  // valid reg stays set for at least 1 cycle
+        dut.clock.step()
+        dut.out.valid.expect(true.B)
+        for (i <- 0 until numElem) {
+          dut.out.index.indexValid(i).expect(false.B)
+        }
+        dut.out.count1s.expect(0.U)
+      }
+    }
+    it("uopIdx=1, all active in chunk 1") {
+      simulate(new CompressIndexGen(useLZA = false)(GatherParam.default)) { dut =>
+        val mask = ((BigInt(1) << numElem) - 1) << numElem
+        val (golden, total) = goldenCompress(mask, uopIdx = 1)
+        pCompress(dut, mask, uopIdx = 1)
+        dut.clock.step()
+        dut.out.valid.expect(true.B)
+        for (i <- 0 until numElem) {
+          val (idx, valid) = golden(i)
+          dut.out.index.indexValid(i).expect(valid.B)
+          if (valid) dut.out.index.index(i).expect(idx.U)
+        }
+        dut.out.count1s.expect(total.U)
+      }
+    }
+    it("uopIdx=0, mask spanning 2 chunks") {
+      simulate(new CompressIndexGen(useLZA = false)(GatherParam.default)) { dut =>
+        // 8 active in chunk 0 + 3 active in chunk 1
+        val mask0 = BigInt("5555", 16)  // 8 active in chunk 0
+        val mask1 = BigInt("15", 16) << numElem  // 3 active in chunk 1
+        val mask = mask0 | mask1
+        val (golden, total) = goldenCompress(mask, uopIdx = 0)
+        pCompress(dut, mask, uopIdx = 0)
+        dut.clock.step()
+        dut.out.valid.expect(true.B)
+        for (i <- 0 until numElem) {
+          val (idx, valid) = golden(i)
+          dut.out.index.indexValid(i).expect(valid.B)
+          if (valid) dut.out.index.index(i).expect(idx.U)
+        }
+        dut.out.count1s.expect(total.U)
       }
     }
   }
