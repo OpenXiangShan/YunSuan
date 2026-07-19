@@ -62,7 +62,7 @@ class CompressIndexGen(useLZA: Boolean = false)(implicit val param: GatherParam)
 
   for (i <- geLeadingSumsVec.indices) {
     for (j <- geLeadingSumsVec.head.indices) {
-      geLeadingSumsVec(i)(j) := Cat(in.uopIdx, i.U(dlenbBits.W)).suggestName(s"index$i") >= leadingSumsReg(j)
+      geLeadingSumsVec(i)(j) := Cat(uopIdxReg, i.U(dlenbBits.W)).suggestName(s"index$i") >= leadingSumsReg(j)
     }
   }
 
