@@ -67,8 +67,6 @@ class SlideUpIndexGen(implicit val param: GatherParam) extends GatherModule {
     out.slideup.bits.fillZeros(i)  := false.B
     out.slideup.bits.fillScala(i)  := false.B
   }
-  out.slideup.bits.indexValid.foreach(_ := true.B)
-
   out.slide1up.valid := in.valid && in.bits.isSlide1Up
   for (i <- out.slide1up.bits.index.indices) {
     out.slide1up.bits.index(i) :=
