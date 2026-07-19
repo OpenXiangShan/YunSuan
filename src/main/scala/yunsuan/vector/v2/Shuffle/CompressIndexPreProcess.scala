@@ -12,7 +12,7 @@ class CompressIndexGen(useLZA: Boolean = false)(implicit val param: GatherParam)
   require(isPow2(DLEN) && DLEN >= 64)
   require(VLEN >= DLEN)
 
-  override def desiredName: String = super.desiredName + (if (useLZA) "LZA_" else "") + s"_${VLEN}b"
+  override def desiredName: String = super.desiredName + (if (useLZA) "_LZA" else "_LOA") + s"_${VLEN}b"
 
   private val dlenb = DLENB
   private val dlenbBits = log2Ceil(dlenb)
@@ -23,8 +23,8 @@ class CompressIndexGen(useLZA: Boolean = false)(implicit val param: GatherParam)
   val out = IO(Output(new CompressIndexGen.Out))
 
   val indexPreProcess = Module(new CompressIndexPreProcess)
-  val dataPreProcessLOA = Module(new CompressDataPreProcessLOA)
-  val dataPreProcessLZA = Module(new CompressDataPreProcessLZA)
+  val dataPreProcessLOA = Module(new CompressDataPreProcess(useLZA = false))
+  val dataPreProcessLZA = Module(new CompressDataPreProcess(useLZA = true))
 
   private val vs3Reg = RegEnable(in.vs3, in.valid)
 
@@ -155,30 +155,31 @@ object CompressIndexPreProcess {
   }
 }
 
-class CompressDataPreProcessLOA(implicit val param: GatherParam) extends GatherModule {
+class CompressDataPreProcess(useLZA: Boolean = false)(implicit val param: GatherParam) extends GatherModule {
 
-  private val dlenb = DLENB
   private val SplittedParts = 8 * VLEN / DLEN
 
-  val in = IO(Input(new CompressDataPreProcessLOA.In))
-  val out = IO(Output(new CompressDataPreProcessLOA.Out))
+  val in = IO(Input(new CompressDataPreProcess.In))
+  val out = IO(Output(new CompressDataPreProcess.Out))
 
   // 8 Mux 1
   private val selectedByteMask: UInt = in.byteMask.splitToVecN(SplittedParts)(in.groupSel)
 
   private val compressData = Wire(Vec(NumElem, UInt(MinDataWidth.W)))
-
   private val compressDataValid = Wire(Vec(NumElem, Bool()))
-
   private val selectMatrix = Wire(Vec(NumElem, Vec(NumElem, Bool())))
 
-  // leading one account
-  private val loaVec = (0 until NumElem).map(
-    i => PopCount(selectedByteMask.take(i + 1))
-  )
-
-  for (row <- selectMatrix.indices) {
-    for (col <- selectMatrix.indices) {
+  if (useLZA) {
+    // leading zero account
+    val lzaVec = (0 until NumElem).map(i => PopCount(~selectedByteMask.take(i + 1)))
+    for (row <- selectMatrix.indices; col <- selectMatrix.indices) {
+      selectMatrix(row)(col) :=
+        (if (col >= row) ((col - row).U === lzaVec(col)) && selectedByteMask(col) else false.B)
+    }
+  } else {
+    // leading one account
+    val loaVec = (0 until NumElem).map(i => PopCount(selectedByteMask.take(i + 1)))
+    for (row <- selectMatrix.indices; col <- selectMatrix.indices) {
       selectMatrix(row)(col) := (loaVec(col) === (row + 1).U) && selectedByteMask(col)
     }
   }
@@ -194,62 +195,7 @@ class CompressDataPreProcessLOA(implicit val param: GatherParam) extends GatherM
   }
 }
 
-object CompressDataPreProcessLOA {
-  class In(implicit val param: GatherParam) extends GatherBundle {
-    val groupSel = UInt(log2Ceil(8 * VLEN / DLEN).W)
-    val byteMask = UInt(VLEN.W)
-    val data     = Vec(NumElem, UInt(MinDataWidth.W))
-  }
-
-  class Out(implicit val param: GatherParam) extends GatherBundle {
-    val data = Vec(NumElem, ValidIO(UInt(MinDataWidth.W)))
-  }
-}
-
-class CompressDataPreProcessLZA(implicit val param: GatherParam) extends GatherModule {
-
-  private val dlenb = DLENB
-  private val dlenbBits = log2Ceil(dlenb)
-  private val SplittedParts = 8 * VLEN / DLEN
-  private val NumElemVLEN = VLEN / MinDataWidth
-
-  val in = IO(Input(new CompressDataPreProcessLZA.In))
-  val out = IO(Output(new CompressDataPreProcessLZA.Out))
-
-  // 8 Mux 1
-  private val selectedByteMask: UInt = in.byteMask.splitToVecN(SplittedParts)(in.groupSel)
-
-  private val compressData = Wire(Vec(NumElemVLEN, UInt(MinDataWidth.W)))
-
-  private val compressDataValid = Wire(Vec(NumElemVLEN, Bool()))
-
-  private val selectMatrix = Wire(Vec(NumElemVLEN, Vec(NumElemVLEN, Bool())))
-
-  // leading zero account
-  private val lzaVec = (0 until NumElem).map(
-    i => PopCount(~selectedByteMask.take(i + 1))
-  )
-
-  for (row <- selectMatrix.indices) {
-    for (col <- selectMatrix.indices) {
-      selectMatrix(row)(col) :=
-        (if (col >= row) ((col - row).U === lzaVec(col)) && selectedByteMask(col)
-         else false.B)
-    }
-  }
-
-  for (i <- compressData.indices) {
-    compressData(i)      := Mux1H(selectMatrix(i).drop(i), in.data.drop(i))
-    compressDataValid(i) := VecInit(selectMatrix(i).drop(i)).asUInt.orR
-  }
-
-  for (i <- out.data.indices) {
-    out.data(i).valid := compressDataValid(i)
-    out.data(i).bits  := compressData(i)
-  }
-}
-
-object CompressDataPreProcessLZA {
+object CompressDataPreProcess {
   class In(implicit val param: GatherParam) extends GatherBundle {
     val groupSel = UInt(log2Ceil(8 * VLEN / DLEN).W)
     val byteMask = UInt(VLEN.W)
@@ -331,7 +277,7 @@ object CompressDataPreProcessMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new CompressDataPreProcessLOA()(GatherParam.default)
+        () => new CompressDataPreProcess(useLZA = false)(GatherParam.default)
       ) +: firtoolAnno
   )
 
@@ -339,7 +285,7 @@ object CompressDataPreProcessMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new CompressDataPreProcessLZA()(GatherParam.default)
+        () => new CompressDataPreProcess(useLZA = true)(GatherParam.default)
       ) +: firtoolAnno
   )
 
