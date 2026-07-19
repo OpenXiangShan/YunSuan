@@ -156,7 +156,6 @@ class CompressIndexPreProcess(implicit val param: GatherParam) extends GatherMod
 class CompressDataPreProcess(implicit val param: GatherParam) extends GatherModule {
 
   private val dlenb = DLENB
-  private val NumElemVLEN = VLEN / MinDataWidth
   private val SplittedParts = 8 * VLEN / DLEN
 
   val in = IO(
@@ -164,7 +163,7 @@ class CompressDataPreProcess(implicit val param: GatherParam) extends GatherModu
       new Bundle {
         val groupSel = UInt(log2Ceil(SplittedParts).W)
         val byteMask = UInt(VLEN.W)
-        val data     = Vec(NumElemVLEN, UInt(MinDataWidth.W))
+        val data     = Vec(NumElem, UInt(MinDataWidth.W))
       }
     )
   )
@@ -172,7 +171,7 @@ class CompressDataPreProcess(implicit val param: GatherParam) extends GatherModu
   val out = IO(
     Output(
       new Bundle {
-        val data = Vec(NumElemVLEN, ValidIO(UInt(MinDataWidth.W)))
+        val data = Vec(NumElem, ValidIO(UInt(MinDataWidth.W)))
       }
     )
   )
@@ -180,11 +179,11 @@ class CompressDataPreProcess(implicit val param: GatherParam) extends GatherModu
   // 8 Mux 1
   private val selectedByteMask: UInt = in.byteMask.splitToVecN(SplittedParts)(in.groupSel)
 
-  private val compressData = Wire(Vec(NumElemVLEN, UInt(MinDataWidth.W)))
+  private val compressData = Wire(Vec(NumElem, UInt(MinDataWidth.W)))
 
-  private val compressDataValid = Wire(Vec(NumElemVLEN, Bool()))
+  private val compressDataValid = Wire(Vec(NumElem, Bool()))
 
-  private val selectMatrix = Wire(Vec(NumElemVLEN, Vec(NumElemVLEN, Bool())))
+  private val selectMatrix = Wire(Vec(NumElem, Vec(NumElem, Bool())))
 
   // leading one account
   private val loaVec = (0 until NumElem).map(
