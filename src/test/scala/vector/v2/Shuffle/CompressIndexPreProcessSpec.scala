@@ -40,9 +40,8 @@ class CompressIndexPreProcessSpec extends AnyFunSpec with ChiselSim with Matcher
           }
         }
       }
-      it("all ones") {
+      it("groupSel=0 all ones") {
         simulate(new CompressIndexPreProcess()(GatherParam.default)) { dut =>
-          // Only set bits in the mask that are meaningful (VLEN bits)
           val mask = (BigInt(1) << vlen) - 1
           val golden = goldenLeadingSums(mask)
           pPreProcess(dut, mask, groupSel = 0)
@@ -51,9 +50,29 @@ class CompressIndexPreProcessSpec extends AnyFunSpec with ChiselSim with Matcher
           }
         }
       }
+      it("groupSel=3 identical result") {
+        simulate(new CompressIndexPreProcess()(GatherParam.default)) { dut =>
+          val mask = (BigInt(1) << vlen) - 1
+          val golden = goldenLeadingSums(mask)
+          pPreProcess(dut, mask, groupSel = 3)
+          for (j <- 0 until splittedParts) {
+            dut.out.leadingSums(j).expect(golden(j).U)
+          }
+        }
+      }
+      it("groupSel=7 identical result") {
+        simulate(new CompressIndexPreProcess()(GatherParam.default)) { dut =>
+          val mask = (BigInt(1) << vlen) - 1
+          val golden = goldenLeadingSums(mask)
+          pPreProcess(dut, mask, groupSel = 7)
+          for (j <- 0 until splittedParts) {
+            dut.out.leadingSums(j).expect(golden(j).U)
+          }
+        }
+      }
       it("alternating bytes") {
         simulate(new CompressIndexPreProcess()(GatherParam.default)) { dut =>
-          val mask = BigInt("5555", 16)  // 0b01010101... in first DLEN chunk
+          val mask = BigInt("5555", 16)
           val golden = goldenLeadingSums(mask)
           pPreProcess(dut, mask, groupSel = 0)
           for (j <- 0 until splittedParts) {
