@@ -8,7 +8,7 @@ import org.scalatest.matchers.must.Matchers
 
 import yunsuan.vector.v2.Shuffle.GatherCommon.GatherParam
 
-class ZipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution with GatherSpecUtils {
+class ZipIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution with GatherSpecBase with GatherSpecUtils {
 
 
 

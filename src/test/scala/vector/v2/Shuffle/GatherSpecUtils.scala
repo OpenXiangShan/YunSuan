@@ -1,7 +1,24 @@
 package yunsuan.vector.v2.Shuffle
 
+import chisel3._
 import chisel3.fromBooleanToLiteral
 import chisel3.simulator.PeekPokeAPI.TestableBool
+import chisel3.simulator.scalatest.{ChiselSim, HasCliOptions}
+import org.scalatest.ParallelTestExecution
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.must.Matchers
+import svsim.verilator.Backend.CompilationSettings.CoverageSettings
+import yunsuan.util.Cli.EmitFst
+
+trait GatherSpecBase extends EmitFst {
+  this: AnyFunSpec with Matchers with ChiselSim =>
+
+  override implicit def backendSettingsModifications: svsim.BackendSettingsModifications = {
+    case conf: svsim.verilator.Backend.CompilationSettings =>
+      conf.withCoverageSettings(new CoverageSettings(line = true, toggle = true, user = true))
+    case conf => conf
+  }
+}
 
 trait GatherSpecUtils {
   val dlen = 128

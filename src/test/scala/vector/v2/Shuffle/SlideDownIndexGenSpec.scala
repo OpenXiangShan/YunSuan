@@ -7,7 +7,7 @@ import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
 import yunsuan.vector.v2.Shuffle.GatherCommon.GatherParam
 
-class SlideDownIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution with GatherSpecUtils {
+class SlideDownIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution with GatherSpecBase with GatherSpecUtils {
 
   val maxLMUL = 8
   val vlmax = vlen * maxLMUL / 8
