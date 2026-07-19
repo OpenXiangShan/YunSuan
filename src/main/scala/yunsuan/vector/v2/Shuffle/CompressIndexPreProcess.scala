@@ -7,12 +7,12 @@ import yunsuan.vector.Common._
 import yunsuan.vector.VectorShuffle.RotateUp
 import yunsuan.vector.v2.Shuffle.GatherCommon._
 
-class CompressIndexGen(useV2: Boolean = false)(implicit val param: GatherParam) extends GatherModule {
+class CompressIndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends GatherModule {
   require(isPow2(VLEN) && VLEN >= 64)
   require(isPow2(DLEN) && DLEN >= 64)
   require(VLEN >= DLEN)
 
-  override def desiredName: String = super.desiredName + (if (useV2) "V2_" else "") + s"_${VLEN}b"
+  override def desiredName: String = super.desiredName + (if (useLZA) "LZA_" else "") + s"_${VLEN}b"
 
   private val dlenb = DLENB
   private val dlenbBits = log2Ceil(dlenb)
@@ -23,8 +23,8 @@ class CompressIndexGen(useV2: Boolean = false)(implicit val param: GatherParam) 
   val out = IO(Output(new CompressIndexGen.Out))
 
   val indexPreProcess = Module(new CompressIndexPreProcess)
-  val dataPreProcessV1 = Module(new CompressDataPreProcess)
-  val dataPreProcessV2 = Module(new CompressDataPreProcess2)
+  val dataPreProcessLOA = Module(new CompressDataPreProcessLOA)
+  val dataPreProcessLZA = Module(new CompressDataPreProcessLZA)
 
   private val vs3Reg = RegEnable(in.vs3, in.valid)
 
@@ -39,7 +39,7 @@ class CompressIndexGen(useV2: Boolean = false)(implicit val param: GatherParam) 
   }
 
   private val preProcessedDataReg = RegEnable(
-    if (useV2) dataPreProcessV2.out.data else dataPreProcessV1.out.data, in.valid)
+    if (useLZA) dataPreProcessLZA.out.data else dataPreProcessLOA.out.data, in.valid)
 
   private val uopIdxReg = RegEnable(in.uopIdx, in.valid)
 
@@ -51,12 +51,12 @@ class CompressIndexGen(useV2: Boolean = false)(implicit val param: GatherParam) 
   indexPreProcess.in.groupSel := in.uopIdx
   indexPreProcess.in.byteMask := in.byteMask
 
-  dataPreProcessV1.in.groupSel := in.uopIdx
-  dataPreProcessV1.in.byteMask := in.byteMask
-  dataPreProcessV1.in.data     := in.data
-  dataPreProcessV2.in.groupSel := in.uopIdx
-  dataPreProcessV2.in.byteMask := in.byteMask
-  dataPreProcessV2.in.data     := in.data
+  dataPreProcessLOA.in.groupSel := in.uopIdx
+  dataPreProcessLOA.in.byteMask := in.byteMask
+  dataPreProcessLOA.in.data     := in.data
+  dataPreProcessLZA.in.groupSel := in.uopIdx
+  dataPreProcessLZA.in.byteMask := in.byteMask
+  dataPreProcessLZA.in.data     := in.data
 
   val geLeadingSumsVec = Wire(Vec(NumElem, Vec(SplittedParts, Bool())))
 
@@ -158,7 +158,7 @@ class CompressIndexPreProcess(implicit val param: GatherParam) extends GatherMod
   }
 }
 
-class CompressDataPreProcess(implicit val param: GatherParam) extends GatherModule {
+class CompressDataPreProcessLOA(implicit val param: GatherParam) extends GatherModule {
 
   private val dlenb = DLENB
   private val SplittedParts = 8 * VLEN / DLEN
@@ -212,7 +212,7 @@ class CompressDataPreProcess(implicit val param: GatherParam) extends GatherModu
   }
 }
 
-class CompressDataPreProcess2(implicit val param: GatherParam) extends GatherModule {
+class CompressDataPreProcessLZA(implicit val param: GatherParam) extends GatherModule {
 
   private val dlenb = DLENB
   private val dlenbBits = log2Ceil(dlenb)
@@ -286,7 +286,7 @@ object CompressIndexGenMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new CompressIndexGen(useV2 = false)(GatherParam.default)
+        () => new CompressIndexGen(useLZA = false)(GatherParam.default)
       ) +: firtoolAnno
   )
 
@@ -294,7 +294,7 @@ object CompressIndexGenMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new CompressIndexGen(useV2 = true)(GatherParam.default)
+        () => new CompressIndexGen(useLZA = true)(GatherParam.default)
       ) +: firtoolAnno
   )
 
@@ -340,7 +340,7 @@ object CompressDataPreProcessMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new CompressDataPreProcess()(GatherParam.default)
+        () => new CompressDataPreProcessLOA()(GatherParam.default)
       ) +: firtoolAnno
   )
 
@@ -348,7 +348,7 @@ object CompressDataPreProcessMain extends App {
     Array("--target-dir", "build/vector") ++ args,
     chisel3.stage
       .ChiselGeneratorAnnotation(
-        () => new CompressDataPreProcess2()(GatherParam.default)
+        () => new CompressDataPreProcessLZA()(GatherParam.default)
       ) +: firtoolAnno
   )
 
