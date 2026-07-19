@@ -241,4 +241,47 @@ class SlideDownIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with
     it("vslide1down SEW=8 vl=16") { crossValidateSlide1Down(8, 16) }
     it("vslide1down SEW=32 vl=4") { crossValidateSlide1Down(32, 4) }
   }
+
+  describe("coverage gaps") {
+    it("SEW=64, offset=1, LMUL=m1") {
+      simulate(new SlideDownIndexGen()(GatherParam.default)) { dut =>
+        val golden = goldenSlideDown(tableIdx = 0, offset = 1, sew = 64, lmulFrac = 8)
+        pSlideDown(dut, tableIdx = 0, offset = 1, sew = 64, lmulFrac = 8, vl = 1)
+        dut.clock.step()
+        eSlideDown(dut, golden)
+      }
+    }
+    it("offsetOverflow, SEW=16") {
+      simulate(new SlideDownIndexGen()(GatherParam.default)) { dut =>
+        val golden = goldenSlideDown(tableIdx = 0, offset = 8, sew = 16, lmulFrac = 8)
+        pSlideDown(dut, tableIdx = 0, offset = 8, sew = 16, lmulFrac = 8, vl = 7)
+        dut.clock.step()
+        eSlideDown(dut, golden)
+      }
+    }
+    it("uopIdx=2, slide1down SEW=8, vl=30") {
+      simulate(new SlideDownIndexGen()(GatherParam.default)) { dut =>
+        val golden = goldenSlide1Down(tableIdx = 2, sew = 8, vl = 30)
+        pSlide1Down(dut, tableIdx = 2, sew = 8, vl = 30)
+        dut.clock.step()
+        eSlide1Down(dut, golden)
+      }
+    }
+    it("LMUL=mf8, SEW=8") {
+      simulate(new SlideDownIndexGen()(GatherParam.default)) { dut =>
+        val golden = goldenSlideDown(tableIdx = 0, offset = 0, sew = 8, lmulFrac = 1)
+        pSlideDown(dut, tableIdx = 0, offset = 0, sew = 8, lmulFrac = 1, vl = 1)
+        dut.clock.step()
+        eSlideDown(dut, golden)
+      }
+    }
+    it("LMUL=m8, SEW=16, vl=20") {
+      simulate(new SlideDownIndexGen()(GatherParam.default)) { dut =>
+        val golden = goldenSlideDown(tableIdx = 0, offset = 1, sew = 16, lmulFrac = 64)
+        pSlideDown(dut, tableIdx = 0, offset = 1, sew = 16, lmulFrac = 64, vl = 20)
+        dut.clock.step()
+        eSlideDown(dut, golden)
+      }
+    }
+  }
 }

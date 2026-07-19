@@ -195,8 +195,8 @@ class GatherIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     val vlmaxSew = lmulFrac * vlen / 64 / sewb  // vlmax in SEW elements
     val vlmax8b = lmulFrac * vlen / 64
 
-    // Generate test data: vs2 with known pattern, vs1 with random indices
-    val vs2Sew = (0 until nSewElems).map(i => (i * 0x11 + 0xAB) & ((1 << sew) - 1))
+    // Generate test data: vs2 spanning all LMUL chunks
+    val vs2Sew = (0 until vlmaxSew).map(i => (i * 0x11 + 0xAB) & ((1 << sew) - 1))
     val vs1Sew = (0 until nSewElems).map { i =>
       if (i < vl) {
         // indices that span both within and beyond vlmax
@@ -235,10 +235,20 @@ class GatherIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
 
   describe("cross-validate ISA") {
     val sewLmulVls = Seq(
-      (8, 8, 16), (8, 8, 8), (8, 4, 5), (8, 4, 8),
-      (16, 8, 8), (16, 8, 4), (16, 4, 2), (16, 4, 4),
-      (32, 8, 4), (32, 8, 2), (32, 4, 1),
-      (64, 8, 2), (64, 8, 1), (64, 4, 1),
+      // mf8
+      (8, 1, 1), (16, 1, 1),
+      // mf4
+      (8, 2, 4), (16, 2, 2), (32, 2, 1),
+      // mf2
+      (8, 4, 8), (16, 4, 4), (32, 4, 1), (64, 4, 1),
+      // m1
+      (8, 8, 16), (8, 8, 8), (16, 8, 8), (16, 8, 4), (32, 8, 4), (32, 8, 2), (64, 8, 2), (64, 8, 1),
+      // m2: single-chunk only
+      (16, 16, 8), (32, 16, 4), (64, 16, 2),
+      // m4: single-chunk only
+      (32, 32, 4), (64, 32, 2),
+      // m8: single-chunk only
+      (64, 64, 2),
     )
     for ((sew, lmulFrac, vl) <- sewLmulVls) {
       it(s"vrgather SEW=$sew LMUL=f$lmulFrac vl=$vl") {

@@ -24,12 +24,12 @@ class SlideUpIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with P
     }
   }
 
-  // Golden model: slide1up index
-  def goldenSlide1Up(sew: Int): Seq[(Int, Boolean, Boolean, Boolean)] = {
+  // Golden model: slide1up index. tableIdx ≠ 0 means no fillScala (no element has global SEW index 0)
+  def goldenSlide1Up(sew: Int, tableIdx: Int = 0): Seq[(Int, Boolean, Boolean, Boolean)] = {
     val sewb = sew / 8
     (0 until numElem).map { i =>
-      val elemIdx = i / sewb
-      val isFirst = elemIdx == 0
+      val elemIdx = tableIdx * numElem / sewb + i / sewb
+      val isFirst = tableIdx == 0 && elemIdx == 0
       val idx = (i - sewb).max(0)
       (idx, !isFirst, false, isFirst)
     }
@@ -277,5 +277,24 @@ class SlideUpIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with P
     it("vslideup SEW=64 offset=1 vl=1") { crossValidateSlideUp(64, 1, 1) }
     it("vslide1up SEW=8 vl=16") { crossValidateSlide1Up(8, 16) }
     it("vslide1up SEW=32 vl=4") { crossValidateSlide1Up(32, 4) }
+  }
+
+  describe("tableIdx variation") {
+    it("tableIdx=1, offset=3, SEW=8, vl=14") {
+      simulate(new SlideUpIndexGen()(GatherParam.default)) { dut =>
+        val golden = goldenSlideUp(offset = 3, sew = 8, vl = 14)
+        pSlideUp(dut, offset = 3, sew = 8, vl = 14, tableIdx = 1)
+        dut.clock.step()
+        eSlideUp(dut, golden)
+      }
+    }
+    it("tableIdx=2, slide1up SEW=32") {
+      simulate(new SlideUpIndexGen()(GatherParam.default)) { dut =>
+        val golden = goldenSlide1Up(32, tableIdx = 2)
+        pSlide1Up(dut, sew = 32, tableIdx = 2)
+        dut.clock.step()
+        eSlide1Up(dut, golden)
+      }
+    }
   }
 }

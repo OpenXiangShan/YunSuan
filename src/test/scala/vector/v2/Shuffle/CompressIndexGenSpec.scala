@@ -104,12 +104,41 @@ class CompressIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
     }
     it("uopIdx=0, mask spanning 2 chunks") {
       simulate(new CompressIndexGen(useLZA = false)(GatherParam.default)) { dut =>
-        // 8 active in chunk 0 + 3 active in chunk 1
-        val mask0 = BigInt("5555", 16)  // 8 active in chunk 0
-        val mask1 = BigInt("15", 16) << numElem  // 3 active in chunk 1
+        val mask0 = BigInt("5555", 16)
+        val mask1 = BigInt("15", 16) << numElem
         val mask = mask0 | mask1
         val (golden, total) = goldenCompress(mask, uopIdx = 0)
         pCompress(dut, mask, uopIdx = 0)
+        dut.clock.step()
+        dut.out.valid.expect(true.B)
+        for (i <- 0 until numElem) {
+          val (idx, valid) = golden(i)
+          dut.out.index.indexValid(i).expect(valid.B)
+          if (valid) dut.out.index.index(i).expect(idx.U)
+        }
+        dut.out.count1s.expect(total.U)
+      }
+    }
+    it("uopIdx=2, active in chunk 2") {
+      simulate(new CompressIndexGen(useLZA = false)(GatherParam.default)) { dut =>
+        val mask = ((BigInt(1) << numElem) - 1) << (2 * numElem)
+        val (golden, total) = goldenCompress(mask, uopIdx = 2)
+        pCompress(dut, mask, uopIdx = 2)
+        dut.clock.step()
+        dut.out.valid.expect(true.B)
+        for (i <- 0 until numElem) {
+          val (idx, valid) = golden(i)
+          dut.out.index.indexValid(i).expect(valid.B)
+          if (valid) dut.out.index.index(i).expect(idx.U)
+        }
+        dut.out.count1s.expect(total.U)
+      }
+    }
+    it("uopIdx=3, alternating in chunk 3") {
+      simulate(new CompressIndexGen(useLZA = false)(GatherParam.default)) { dut =>
+        val mask = BigInt("5555", 16) << (3 * numElem)
+        val (golden, total) = goldenCompress(mask, uopIdx = 3)
+        pCompress(dut, mask, uopIdx = 3)
         dut.clock.step()
         dut.out.valid.expect(true.B)
         for (i <- 0 until numElem) {
