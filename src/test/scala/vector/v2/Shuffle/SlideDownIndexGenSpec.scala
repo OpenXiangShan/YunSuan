@@ -197,7 +197,7 @@ class SlideDownIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with
     bytes.grouped(sewb).map(g => g.zipWithIndex.foldLeft(0) { case (a, (b, i)) => a | (b << (i * 8)) }).toSeq
   }
 
-  /** ISA-level vslidedown: vd[i] = i+off<vlmax ? vs2[i+off] : 0, for i<vl */
+  /** ISA-level vslidedown: vd[i] = i+off&lt;vlmax ? vs2[i+off] : 0, for i&lt;vl */
   def isaVslidedown(vs2Sew: Seq[Int], offset: Int, vl: Int, vlmaxSew: Int): Seq[Int] = {
     vs2Sew.zipWithIndex.map { case (v, i) =>
       if (i < vl) {
@@ -235,7 +235,7 @@ class SlideDownIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with
       s"\n  complex: ${complexGold.take(vl).mkString(",")}")
   }
 
-  /** ISA-level vslide1down: vd[i]=vs2[i+1] for i<vl-1, vd[vl-1]=scalar */
+  /** ISA-level vslide1down: vd[i]=vs2[i+1] for i&lt;vl-1, vd[vl-1]=scalar */
   def isaVslide1down(vs2Sew: Seq[Int], vl: Int, scalar: Int): Seq[Int] = {
     vs2Sew.zipWithIndex.map { case (v, i) =>
       if (i < vl) {

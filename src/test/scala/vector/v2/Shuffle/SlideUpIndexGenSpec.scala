@@ -232,7 +232,7 @@ class SlideUpIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with P
     bytes.grouped(sewb).map(g => g.zipWithIndex.foldLeft(0) { case (a, (b, i)) => a | (b << (i * 8)) }).toSeq
   }
 
-  /** ISA-level vslideup: vd[i] = i<offset ? vs2[i] : vs2[i-offset], for i<vl */
+  /** ISA-level vslideup: vd[i] = i&lt;offset ? vs2[i] : vs2[i-offset], for i&lt;vl */
   def isaVslideup(vs2Sew: Seq[Int], offset: Int, vl: Int): Seq[Int] = {
     vs2Sew.zipWithIndex.map { case (v, i) =>
       if (i < vl) {
@@ -268,7 +268,7 @@ class SlideUpIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with P
       s"\n  complex: ${complexGold.take(vl).mkString(",")}")
   }
 
-  /** ISA-level vslide1up: vd[0]=scalar, vd[i]=vs2[i-1] for 0<i<vl */
+  /** ISA-level vslide1up: vd[0]=scalar, vd[i]=vs2[i-1] for 0&lt;i&lt;vl */
   def isaVslide1up(vs2Sew: Seq[Int], vl: Int, scalar: Int): Seq[Int] = {
     vs2Sew.zipWithIndex.map { case (v, i) =>
       if (i < vl) {

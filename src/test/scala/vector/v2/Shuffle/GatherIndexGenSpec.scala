@@ -224,7 +224,7 @@ class GatherIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     }.toSeq
   }
 
-  /** ISA-level vrgather golden: vd[i] = (i<vl && idx<vlmax) ? vs2[idx] : 0 */
+  /** ISA-level vrgather golden: vd[i] = (i&lt;vl && idx&lt;vlmax) ? vs2[idx] : 0 */
   def isaVrgather(vs2Sew: Seq[Int], vs1Sew: Seq[Int], vl: Int, vlmax: Int): Seq[Int] = {
     vs1Sew.zipWithIndex.map { case (idx, i) =>
       if (i < vl && idx < vlmax) vs2Sew(idx) else 0
