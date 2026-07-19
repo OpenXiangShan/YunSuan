@@ -118,30 +118,8 @@ class CompressIndexPreProcess(implicit val param: GatherParam) extends GatherMod
   private val dlenbBits = log2Ceil(dlenb)
   private val SplittedParts = 8 * VLEN / DLEN
 
-  val in = IO(
-    Input(
-      new Bundle {
-        val valid    = Bool()
-        val groupSel = UInt(log2Ceil(SplittedParts).W)
-        val byteMask = UInt(VLEN.W)
-      }
-    )
-  )
-
-  val out = IO(
-    Output(
-      new Bundle {
-        // when dlen=128, dlenb=16, dlenbBits=4
-        // leadingSums(0).getWidth will be 5 = log2Floor(0) + 4 + 1
-        // leadingSums(0...n).getWidth will be 5, 6, 6, 7, 7, 7, 7, 8, ...
-        val leadingSums = MixedVec(
-          Seq.tabulate(SplittedParts)(
-            i => UInt((log2Floor(i + 1) + dlenbBits + 1).W)
-          )
-        )
-      }
-    )
-  )
+  val in = IO(Input(new CompressIndexPreProcess.In))
+  val out = IO(Output(new CompressIndexPreProcess.Out))
 
   private val leadingSums = out.leadingSums
 
@@ -158,28 +136,32 @@ class CompressIndexPreProcess(implicit val param: GatherParam) extends GatherMod
   }
 }
 
+object CompressIndexPreProcess {
+  class In(implicit val param: GatherParam) extends GatherBundle {
+    val valid    = Bool()
+    val groupSel = UInt(log2Ceil(8 * VLEN / DLEN).W)
+    val byteMask = UInt(VLEN.W)
+  }
+
+  class Out(implicit val param: GatherParam) extends GatherBundle {
+    // when dlen=128, dlenb=16, dlenbBits=4
+    // leadingSums(0).getWidth will be 5 = log2Floor(0) + 4 + 1
+    // leadingSums(0...n).getWidth will be 5, 6, 6, 7, 7, 7, 7, 8, ...
+    val leadingSums = MixedVec(
+      Seq.tabulate(8 * VLEN / DLEN)(
+        i => UInt((log2Floor(i + 1) + log2Ceil(DLENB) + 1).W)
+      )
+    )
+  }
+}
+
 class CompressDataPreProcessLOA(implicit val param: GatherParam) extends GatherModule {
 
   private val dlenb = DLENB
   private val SplittedParts = 8 * VLEN / DLEN
 
-  val in = IO(
-    Input(
-      new Bundle {
-        val groupSel = UInt(log2Ceil(SplittedParts).W)
-        val byteMask = UInt(VLEN.W)
-        val data     = Vec(NumElem, UInt(MinDataWidth.W))
-      }
-    )
-  )
-
-  val out = IO(
-    Output(
-      new Bundle {
-        val data = Vec(NumElem, ValidIO(UInt(MinDataWidth.W)))
-      }
-    )
-  )
+  val in = IO(Input(new CompressDataPreProcessLOA.In))
+  val out = IO(Output(new CompressDataPreProcessLOA.Out))
 
   // 8 Mux 1
   private val selectedByteMask: UInt = in.byteMask.splitToVecN(SplittedParts)(in.groupSel)
@@ -212,6 +194,18 @@ class CompressDataPreProcessLOA(implicit val param: GatherParam) extends GatherM
   }
 }
 
+object CompressDataPreProcessLOA {
+  class In(implicit val param: GatherParam) extends GatherBundle {
+    val groupSel = UInt(log2Ceil(8 * VLEN / DLEN).W)
+    val byteMask = UInt(VLEN.W)
+    val data     = Vec(NumElem, UInt(MinDataWidth.W))
+  }
+
+  class Out(implicit val param: GatherParam) extends GatherBundle {
+    val data = Vec(NumElem, ValidIO(UInt(MinDataWidth.W)))
+  }
+}
+
 class CompressDataPreProcessLZA(implicit val param: GatherParam) extends GatherModule {
 
   private val dlenb = DLENB
@@ -219,23 +213,8 @@ class CompressDataPreProcessLZA(implicit val param: GatherParam) extends GatherM
   private val SplittedParts = 8 * VLEN / DLEN
   private val NumElemVLEN = VLEN / MinDataWidth
 
-  val in = IO(
-    Input(
-      new Bundle {
-        val groupSel = UInt(log2Ceil(SplittedParts).W)
-        val byteMask = UInt(VLEN.W)
-        val data     = Vec(NumElemVLEN, UInt(MinDataWidth.W))
-      }
-    )
-  )
-
-  val out = IO(
-    Output(
-      new Bundle {
-        val data = Vec(NumElemVLEN, ValidIO(UInt(MinDataWidth.W)))
-      }
-    )
-  )
+  val in = IO(Input(new CompressDataPreProcessLZA.In))
+  val out = IO(Output(new CompressDataPreProcessLZA.Out))
 
   // 8 Mux 1
   private val selectedByteMask: UInt = in.byteMask.splitToVecN(SplittedParts)(in.groupSel)
@@ -267,6 +246,18 @@ class CompressDataPreProcessLZA(implicit val param: GatherParam) extends GatherM
   for (i <- out.data.indices) {
     out.data(i).valid := compressDataValid(i)
     out.data(i).bits  := compressData(i)
+  }
+}
+
+object CompressDataPreProcessLZA {
+  class In(implicit val param: GatherParam) extends GatherBundle {
+    val groupSel = UInt(log2Ceil(8 * VLEN / DLEN).W)
+    val byteMask = UInt(VLEN.W)
+    val data     = Vec(NumElem, UInt(MinDataWidth.W))
+  }
+
+  class Out(implicit val param: GatherParam) extends GatherBundle {
+    val data = Vec(NumElem, ValidIO(UInt(MinDataWidth.W)))
   }
 }
 
