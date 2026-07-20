@@ -14,9 +14,6 @@ import yunsuan.vector.v2.Shuffle.GatherCommon._
   *   - ZipIndexGen        (multi-way interleave)
   *   - UnzipIndexGen      (multi-way deinterleave)
   *   - CompressIndexGen   (vcompress)
-  *
-  * All non-compress paths are combinational. CompressIndexGen has an internal
-  * 1-cycle pipeline; its output is delayed by 1 cycle relative to input.
   */
 class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends GatherModule {
   override def desiredName: String = super.desiredName + s"_${DLEN}b"
@@ -33,20 +30,28 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   private val unzipMod      = Module(new UnzipIndexGenDecodeTable)
   private val compressMod   = Module(new CompressIndexGen(useLZA))
 
-  /************************** Opcode Decode **********************************/
+  /********************** Internal Derivations *******************************/
 
-  private val isGather    = in.bits.opcode === IndexGenOpcode.gather
-  private val isSlideUp   = in.bits.opcode === IndexGenOpcode.slideUp
-  private val isSlideDown = in.bits.opcode === IndexGenOpcode.slideDown
-  private val isZip       = in.bits.opcode === IndexGenOpcode.zip
-  private val isUnzip     = in.bits.opcode === IndexGenOpcode.unzip
-  private val isCompress  = in.bits.opcode === IndexGenOpcode.compress
+  private val op = in.bits.op
+
+  private val isGather    = op.isGather || op.isGatherEI16
+  private val isSlideUp   = op.isSlideUp || op.isSlide1Up
+  private val isSlideDown = op.isSlideDown || op.isSlide1Down
+  private val isZip       = op.isZip
+  private val isUnzip     = op.isUnzip
+  private val isCompress  = op.isCompress
+
+  // Derived from operands (not external inputs)
+  private val tableIdx       = in.bits.uopIdx
+  private val offset         = in.bits.rs1
+  private val offsetOverflow = in.bits.rs1 >= in.bits.vl
+  private val byteMask       = in.bits.vs1 // compress mask
 
   /******************** Sub-module Input Connections *************************/
 
   // --- GatherIndexGen ---
   gatherMod.in.valid              := in.valid && isGather
-  gatherMod.in.bits.isGatherEI16  := in.bits.isGatherEI16
+  gatherMod.in.bits.isGatherEI16  := op.isGatherEI16
   gatherMod.in.bits.uopIdx        := in.bits.uopIdx
   gatherMod.in.bits.lmul          := in.bits.lmul
   gatherMod.in.bits.sew           := in.bits.sew
@@ -56,22 +61,22 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
 
   // --- SlideUpIndexGen ---
   slideUpMod.in.valid              := in.valid && isSlideUp
-  slideUpMod.in.bits.isSlide1Up    := in.bits.isSlide1Up
-  slideUpMod.in.bits.tableIdx      := in.bits.tableIdx
+  slideUpMod.in.bits.isSlide1Up    := op.isSlide1Up
+  slideUpMod.in.bits.tableIdx      := tableIdx
   slideUpMod.in.bits.sew           := in.bits.sew
-  slideUpMod.in.bits.offsetOverflow := in.bits.offsetOverflow
-  slideUpMod.in.bits.offset        := in.bits.offset
+  slideUpMod.in.bits.offsetOverflow := offsetOverflow
+  slideUpMod.in.bits.offset        := offset
   slideUpMod.in.bits.vl            := in.bits.vl
 
   // --- SlideDownIndexGen ---
-  slideDownMod.in.valid              := in.valid && isSlideDown
-  slideDownMod.in.bits.isSlide1Down  := in.bits.isSlide1Down
-  slideDownMod.in.bits.tableIdx      := in.bits.tableIdx
-  slideDownMod.in.bits.lmul          := in.bits.lmul
-  slideDownMod.in.bits.sew           := in.bits.sew
-  slideDownMod.in.bits.offsetOverflow := in.bits.offsetOverflow
-  slideDownMod.in.bits.offset        := in.bits.offset
-  slideDownMod.in.bits.vl            := in.bits.vl
+  slideDownMod.in.valid             := in.valid && isSlideDown
+  slideDownMod.in.bits.isSlide1Down := op.isSlide1Down
+  slideDownMod.in.bits.tableIdx     := tableIdx
+  slideDownMod.in.bits.lmul         := in.bits.lmul
+  slideDownMod.in.bits.sew          := in.bits.sew
+  slideDownMod.in.bits.offsetOverflow := offsetOverflow
+  slideDownMod.in.bits.offset        := offset
+  slideDownMod.in.bits.vl           := in.bits.vl
 
   // --- ZipIndexGen ---
   zipMod.in.zipNum := in.bits.zipNum
@@ -86,13 +91,12 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   // --- CompressIndexGen ---
   compressMod.in.valid    := in.valid && isCompress
   compressMod.in.uopIdx   := in.bits.uopIdx
-  compressMod.in.byteMask := in.bits.byteMask
-  compressMod.in.data     := in.bits.compressData
+  compressMod.in.byteMask := byteMask
+  compressMod.in.data     := in.bits.vs2.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))
   compressMod.in.vs3      := in.bits.vs3
 
   /********************* Output: GatherIndexBundle Mux ***********************/
 
-  // Per-submodule index bundles (for slideUp/Down, select between main and *1 variant)
   private val gatherIdx:    GatherIndexBundle = Wire(new GatherIndexBundle(NumElem, IndexWidth))
   private val slideUpIdx:   GatherIndexBundle = Wire(new GatherIndexBundle(NumElem, IndexWidth))
   private val slideDownIdx: GatherIndexBundle = Wire(new GatherIndexBundle(NumElem, IndexWidth))
@@ -110,38 +114,37 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
 
   // SlideUp: select between slideup and slide1up variants
   for (i <- 0 until NumElem) {
-    slideUpIdx.indexValid(i) := Mux(in.bits.isSlide1Up,
+    slideUpIdx.indexValid(i) := Mux(op.isSlide1Up,
       slideUpMod.out.slide1up.bits.indexValid(i),
       slideUpMod.out.slideup.bits.indexValid(i))
-    slideUpIdx.index(i) := Mux(in.bits.isSlide1Up,
+    slideUpIdx.index(i) := Mux(op.isSlide1Up,
       slideUpMod.out.slide1up.bits.index(i),
       slideUpMod.out.slideup.bits.index(i))
-    slideUpIdx.fillZeros(i) := Mux(in.bits.isSlide1Up,
+    slideUpIdx.fillZeros(i) := Mux(op.isSlide1Up,
       slideUpMod.out.slide1up.bits.fillZeros(i),
       slideUpMod.out.slideup.bits.fillZeros(i))
-    slideUpIdx.fillScala(i) := Mux(in.bits.isSlide1Up,
+    slideUpIdx.fillScala(i) := Mux(op.isSlide1Up,
       slideUpMod.out.slide1up.bits.fillScala(i),
       slideUpMod.out.slideup.bits.fillScala(i))
   }
 
   // SlideDown: select between slidedown and slide1down variants
   for (i <- 0 until NumElem) {
-    slideDownIdx.indexValid(i) := Mux(in.bits.isSlide1Down,
+    slideDownIdx.indexValid(i) := Mux(op.isSlide1Down,
       slideDownMod.out.slide1Down.bits.indexValid(i),
       slideDownMod.out.slideDown.bits.indexValid(i))
-    slideDownIdx.index(i) := Mux(in.bits.isSlide1Down,
+    slideDownIdx.index(i) := Mux(op.isSlide1Down,
       slideDownMod.out.slide1Down.bits.index(i),
       slideDownMod.out.slideDown.bits.index(i))
-    slideDownIdx.fillZeros(i) := Mux(in.bits.isSlide1Down,
+    slideDownIdx.fillZeros(i) := Mux(op.isSlide1Down,
       slideDownMod.out.slide1Down.bits.fillZeros(i),
       slideDownMod.out.slideDown.bits.fillZeros(i))
-    slideDownIdx.fillScala(i) := Mux(in.bits.isSlide1Down,
+    slideDownIdx.fillScala(i) := Mux(op.isSlide1Down,
       slideDownMod.out.slide1Down.bits.fillScala(i),
       slideDownMod.out.slideDown.bits.fillScala(i))
   }
 
   // Zip: convert Vec[ValidIO[UInt]] to GatherIndexBundle
-  // indexValid=true for active elements (within zip range); fillZeros/fillScala always false
   for (i <- 0 until NumElem) {
     zipIdx.indexValid(i) := zipMod.out.index(i).valid
     zipIdx.index(i)      := zipMod.out.index(i).bits
@@ -150,9 +153,6 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   }
 
   // Unzip: compute valid from element range (DecodeTable hardcodes valid=false)
-  // Valid elements: those where global index < unzipn * vlenb
-  // unzipn = zipNum + 1
-  // Per-element: valid if (uopIdx * NumElem + i) < (zipNum + 1) * VLENB
   private val unzipValidWidth = log2Ceil(VLEN / DLEN * 8 * NumElem + 1)
   for (i <- 0 until NumElem) {
     val globalIdx = (in.bits.uopIdx * NumElem.U)(unzipValidWidth - 1, 0) + i.U
@@ -207,20 +207,20 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
     ))
   }
 
-  /********************* Compress-specific Outputs ***************************/
+  /******************* Compress-specific Outputs *****************************/
 
-  // Passthrough from CompressIndexGen; valid only when isCompress
-  out.compressData  := compressMod.out.data
-  out.compressVs3   := compressMod.out.vs3
-  out.compressCount1s := compressMod.out.count1s
+  out.compressData     := compressMod.out.data
+  out.compressCount1s  := compressMod.out.count1s
+
+  /*********************** Prefill Data from vs3 *****************************/
+
+  // Inactive/tail elements get corresponding byte from vs3 (old vd)
+  for (i <- 0 until NumElem) {
+    out.prefillData(i) := in.bits.vs3.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))(i)
+  }
 
   /**************************** Valid Signal *********************************/
 
-  // valid: asserted when this IndexGen output is meaningful
-  // For most ops, output is valid in the same cycle as input.
-  // CompressIndexGen has 1-cycle internal pipeline, so its output out.valid
-  // is delayed. We expose separate per-opcode valid signals so PermUnit
-  // can handle the timing difference.
   out.valid := Mux1H(Seq(
     isGather    -> (in.valid && isGather),
     isSlideUp   -> (in.valid && isSlideUp),
@@ -232,60 +232,63 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
 }
 
 object IndexGen {
+
+  /** One-hot operation select flags. */
+  class OpSel extends Bundle {
+    val isGather     = Bool()  // vrgather.vv
+    val isGatherEI16 = Bool()  // vrgatherei16
+    val isSlideUp    = Bool()  // vslideup
+    val isSlide1Up   = Bool()  // vslide1up
+    val isSlideDown  = Bool()  // vslidedown
+    val isSlide1Down = Bool()  // vslide1down
+    val isZip        = Bool()  // multi-way interleave
+    val isUnzip      = Bool()  // multi-way deinterleave
+    val isCompress   = Bool()  // vcompress
+  }
+
   /** Unified input bundle for IndexGen.
-    * Not all fields are used by every opcode; unused fields tied to 0.
+    * Only includes signals not derivable from other inputs.
     */
   class In(implicit val param: GatherParam) extends GatherBundle {
-    /** Selects which IndexGen sub-module to activate */
-    val opcode = IndexGenOpcode()
+    val op = new OpSel
 
-    // -- Common --
+    // Configuration
     val uopIdx = UInt(log2Ceil(VLEN / DLEN * 8).W)
     val sew    = new GatherSewBundle
     val ei     = new GatherSewBundle
     val lmul   = new GatherLmulBundle
     val vl     = UInt(VlWidth.W)
 
-    // -- GatherIndexGen --
-    val isGatherEI16 = Bool()
-    val vs1          = UInt(DLEN.W)
-    /** 1-bit per MinDataWidth element */
-    val mask         = UInt(NumElem.W)
+    // Register operands
+    val vs1 = UInt(DLEN.W)    // gather indices / compress mask
+    val vs2 = UInt(DLEN.W)    // source data table
+    val vs3 = UInt(DLEN.W)    // old vd -> prefillData source
+    val rs1 = UInt(XLEN.W)    // slide offset / slide1 scalar fill
 
-    // -- SlideUp / SlideDown --
-    val tableIdx       = UnitIdx()
-    val offset         = UInt(IndexWidth.W)
-    val offsetOverflow = Bool()
-    val isSlide1Up     = Bool()
-    val isSlide1Down   = Bool()
-
-    // -- Zip / Unzip --
-    /** zipn - 1 (1-based); actual zip factor = zipNum + 1 */
-    val zipNum = UInt(3.W)
-
-    // -- Compress --
-    val byteMask     = UInt(VLEN.W)
-    val compressData = Vec(NumElem, UInt(MinDataWidth.W))
-    val vs3          = UInt(DLEN.W)
+    // Control
+    val mask   = UInt(VLENB.W)           // element mask (non-compress)
+    val zipNum = UInt(3.W)               // zip/unzip factor - 1
   }
 
   /** Unified output bundle for IndexGen. */
   class Out(implicit val param: GatherParam) extends GatherBundle {
     val valid = Bool()
-    /** GatherIndexBundle: index / indexValid / fillZeros / fillScala */
+
+    /** GatherIndexBundle: indexValid / index / fillZeros / fillScala */
     val index = new GatherIndexBundle(NumElem, IndexWidth)
 
-    // -- Compress-specific (valid only when opcode = compress) --
-    /** Compressed data after CompressDataPreProcess (becomes table for GatherRing) */
-    val compressData  = Vec(NumElem, UInt(MinDataWidth.W))
-    /** Passthrough vs3 (original vs3 value) */
-    val compressVs3   = UInt(DLEN.W)
-    /** Total popcount of byteMask (used for VL update) */
-    val compressCount1s = UInt(VlWidth.W)
+    /** Prefill data from vs3 for inactive/tail elements */
+    val prefillData = Vec(NumElem, UInt(MinDataWidth.W))
+
+    // Compress-specific
+    val compressData    = Vec(NumElem, UInt(MinDataWidth.W))  // compressed vs2 (becomes table)
+    val compressCount1s = UInt(VlWidth.W)                     // total popcount
   }
 }
 
-/** Opcode enumeration for IndexGen operation selection. */
+/** Opcode enumeration for IndexGen operation selection.
+  * Kept for internal use by legacy sub-module decode.
+  */
 object IndexGenOpcode {
   def apply(): UInt = UInt(3.W)
 

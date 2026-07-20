@@ -8,16 +8,14 @@ import yunsuan.vector.v2.Shuffle.GatherRingUnit.Status
 
 /** PermUnit: top-level vector permutation unit integrating IndexGen + GatherRing.
   *
-  * Pipeline (1-cycle uniform register stage between s0 and s1):
+  * Pipeline (1-cycle register stage, VIAlu-style single input pipe):
   * {{{
-  *   s0: in.s0pipes ---> GatherRing.in.s0pipes (block placement)
-  *                    --> IndexGen[i].in          (index computation, one per pipe)
-  *       [Register stage: IndexGen output registered per pipe]
-  *   s1: in.s1pipes + registered index -> GatherRing.in.s1pipes
+  *   Cycle 0: in.pipes --+--> GatherRing.in.s0pipes  (block placement)
+  *                        +--> IndexGen[i].in         (index computation)
+  *                        +--> RegEnable(table, prefill, scalar, meta)
+  *       [Register stage]
+  *   Cycle 1: registered index + table/fill/meta --> GatherRing.in.s1pipes
   * }}}
-  *
-  * One IndexGen instance per s0 pipe so that all NumPipeIn pipes can be
-  * valid simultaneously.
   *
   * @tparam T meta type (pdest, robIdx, etc.), propagated to GatherRing
   * @param useLZA use LZA variant for CompressDataPreProcess (default: LOA)
@@ -35,7 +33,6 @@ class PermUnit[T <: Data](
 
   /*********************** Module Instantiations *****************************/
 
-  /** One IndexGen per s0 pipe -- supports simultaneous valid on all pipes. */
   private val indexGens = Seq.tabulate(NumPipeIn) { i =>
     Module(new IndexGen(useLZA)).suggestName(s"indexGen_$i")
   }
@@ -46,91 +43,98 @@ class PermUnit[T <: Data](
 
   for (i <- 0 until NumPipeIn) {
     val ig = indexGens(i)
-    val s0 = in.s0pipes(i)
+    val pi = in.pipes(i)
 
-    ig.in.valid := s0.valid
-    ig.in.bits.opcode        := s0.bits.opcode
-    ig.in.bits.uopIdx        := s0.bits.uopIdx
-    ig.in.bits.sew           := s0.bits.sew
-    ig.in.bits.ei            := s0.bits.ei
-    ig.in.bits.lmul          := s0.bits.lmul
-    ig.in.bits.vl            := s0.bits.vl
-    ig.in.bits.isGatherEI16  := s0.bits.isGatherEI16
-    ig.in.bits.vs1           := s0.bits.vs1
-    ig.in.bits.mask          := s0.bits.mask
-    ig.in.bits.tableIdx      := s0.bits.tableIdx
-    ig.in.bits.offset        := s0.bits.offset
-    ig.in.bits.offsetOverflow := s0.bits.offsetOverflow
-    ig.in.bits.isSlide1Up    := s0.bits.isSlide1Up
-    ig.in.bits.isSlide1Down  := s0.bits.isSlide1Down
-    ig.in.bits.zipNum        := s0.bits.zipNum
-    ig.in.bits.byteMask      := s0.bits.byteMask
-    ig.in.bits.compressData  := s0.bits.compressData
-    ig.in.bits.vs3           := s0.bits.vs3
+    ig.in.valid       := pi.valid
+    ig.in.bits.op     := pi.bits.op
+    ig.in.bits.uopIdx := pi.bits.uopIdx
+    ig.in.bits.sew    := pi.bits.sew
+    ig.in.bits.ei     := pi.bits.ei
+    ig.in.bits.lmul   := pi.bits.lmul
+    ig.in.bits.vl     := pi.bits.vl
+    ig.in.bits.vs1    := pi.bits.vs1
+    ig.in.bits.vs2    := pi.bits.vs2
+    ig.in.bits.vs3    := pi.bits.vs3
+    ig.in.bits.rs1    := pi.bits.rs1
+    ig.in.bits.mask   := pi.bits.mask
+    ig.in.bits.zipNum := pi.bits.zipNum
   }
 
-  /*********************** Registered IndexGen Outputs ***********************/
+  /*********************** Registered Pipeline Stage *************************/
 
-  // Per-pipe registered IndexGen outputs
-  private val igOutValid    = Wire(Vec(NumPipeIn, Bool()))
-  private val igOutIndex    = Wire(Vec(NumPipeIn, new GatherIndexBundle(NumElem, IndexWidth)))
-  private val igOutCompData = Wire(Vec(NumPipeIn, Vec(NumElem, UInt(MinDataWidth.W))))
-  private val igOutCompVs3  = Wire(Vec(NumPipeIn, UInt(DLEN.W)))
-  private val igOutCompCnt  = Wire(Vec(NumPipeIn, UInt(VlWidth.W)))
-  private val igOpcodeReg   = Wire(Vec(NumPipeIn, IndexGenOpcode()))
+  // IndexGen output (combinational) -> registered
+  private val igOutValid   = Wire(Vec(NumPipeIn, Bool()))
+  private val igOutIndex   = Wire(Vec(NumPipeIn, new GatherIndexBundle(NumElem, IndexWidth)))
+  private val igOutPrefill = Wire(Vec(NumPipeIn, Vec(NumElem, UInt(MinDataWidth.W))))
+  private val igOutCompDat = Wire(Vec(NumPipeIn, Vec(NumElem, UInt(MinDataWidth.W))))
+  private val igOutCompCnt = Wire(Vec(NumPipeIn, UInt(VlWidth.W)))
+  private val igOpReg      = Wire(Vec(NumPipeIn, new IndexGen.OpSel))
+
+  // Pipe payload -> registered (aligned with IndexGen latency)
+  private val regValid     = Wire(Vec(NumPipeIn, Bool()))
+  private val regPlaceIdx  = Wire(Vec(NumPipeIn, PipeInIdx()))
+  private val regBlockBase = Wire(Vec(NumPipeIn, UnitIdx()))
+  private val regBlockSize = Wire(Vec(NumPipeIn, BlockSize()))
+  private val regVs2       = Wire(Vec(NumPipeIn, Vec(NumElem, Elem())))
+  private val regTableIdx  = Wire(Vec(NumPipeIn, UnitIdx()))
+  private val regScalar    = Wire(Vec(NumPipeIn, UInt(XLEN.W)))
+  private val regMeta      = Wire(Vec(NumPipeIn, metaGen.cloneType))
 
   for (i <- 0 until NumPipeIn) {
     val ig = indexGens(i)
-    igOutValid(i)    := RegNext(ig.out.valid, false.B)
-    igOutIndex(i)    := RegEnable(ig.out.index, ig.out.valid)
-    igOutCompData(i) := RegEnable(ig.out.compressData, ig.out.valid)
-    igOutCompVs3(i)  := RegEnable(ig.out.compressVs3, ig.out.valid)
-    igOutCompCnt(i)  := RegEnable(ig.out.compressCount1s, ig.out.valid)
-    igOpcodeReg(i)   := RegEnable(ig.in.bits.opcode, ig.in.valid)
+    val pi = in.pipes(i)
+
+    igOutValid(i)  := RegNext(ig.out.valid, false.B)
+    igOutIndex(i)  := RegEnable(ig.out.index, ig.out.valid)
+    igOutPrefill(i):= RegEnable(ig.out.prefillData, ig.out.valid)
+    igOutCompDat(i):= RegEnable(ig.out.compressData, ig.out.valid)
+    igOutCompCnt(i):= RegEnable(ig.out.compressCount1s, ig.out.valid)
+    igOpReg(i)     := RegEnable(ig.in.bits.op, ig.in.valid)
+
+    regValid(i)     := RegNext(pi.valid, false.B)
+    regPlaceIdx(i)  := RegEnable(pi.bits.placeIdx, pi.valid)
+    regBlockBase(i) := RegEnable(pi.bits.blockBase, pi.valid)
+    regBlockSize(i) := RegEnable(pi.bits.blockSize, pi.valid)
+    regVs2(i)       := RegEnable(pi.bits.vs2.asTypeOf(Vec(NumElem, Elem())), pi.valid)
+    regTableIdx(i)  := RegEnable(pi.bits.tableIdx, pi.valid)
+    regScalar(i)    := RegEnable(pi.bits.rs1, pi.valid)
+    regMeta(i)      := RegEnable(pi.bits.meta, pi.valid)
   }
 
   /*********************** GatherRing s0 Connections *************************/
 
   for (i <- 0 until NumPipeIn) {
-    gatherRing.in.s0pipes(i).valid          := in.s0pipes(i).valid
-    gatherRing.in.s0pipes(i).bits.placeIdx  := in.s0pipes(i).bits.placeIdx
-    gatherRing.in.s0pipes(i).bits.blockBase := in.s0pipes(i).bits.blockBase
-    gatherRing.in.s0pipes(i).bits.blockSize := in.s0pipes(i).bits.blockSize
+    gatherRing.in.s0pipes(i).valid          := in.pipes(i).valid
+    gatherRing.in.s0pipes(i).bits.placeIdx  := in.pipes(i).bits.placeIdx
+    gatherRing.in.s0pipes(i).bits.blockBase := in.pipes(i).bits.blockBase
+    gatherRing.in.s0pipes(i).bits.blockSize := in.pipes(i).bits.blockSize
   }
 
   /*********************** GatherRing s1 Connections *************************/
 
   for (i <- 0 until NumPipeIn) {
-    val s1 = in.s1pipes(i)
-    val isCompressOp = igOpcodeReg(i) === IndexGenOpcode.compress
+    val isCompressOp = igOpReg(i).isCompress
 
-    gatherRing.in.s1pipes(i).valid := s1.valid
+    gatherRing.in.s1pipes(i).valid := regValid(i)
 
-    // Block placement
-    gatherRing.in.s1pipes(i).bits.placeIdx  := s1.bits.placeIdx
-    gatherRing.in.s1pipes(i).bits.blockBase := s1.bits.blockBase
-    gatherRing.in.s1pipes(i).bits.blockSize := s1.bits.blockSize
+    gatherRing.in.s1pipes(i).bits.placeIdx  := regPlaceIdx(i)
+    gatherRing.in.s1pipes(i).bits.blockBase := regBlockBase(i)
+    gatherRing.in.s1pipes(i).bits.blockSize := regBlockSize(i)
 
-    // Index from registered IndexGen output (per pipe)
+    // Index from registered IndexGen output
     gatherRing.in.s1pipes(i).bits.index      := igOutIndex(i).index
     gatherRing.in.s1pipes(i).bits.indexValid := igOutIndex(i).indexValid
     gatherRing.in.s1pipes(i).bits.fillZeros  := igOutIndex(i).fillZeros
     gatherRing.in.s1pipes(i).bits.fillScala  := igOutIndex(i).fillScala
 
-    // Table: for compress, use CompressDataPreProcess result; otherwise from s1 input
-    gatherRing.in.s1pipes(i).bits.table := Mux(
-      isCompressOp,
-      igOutCompData(i),
-      s1.bits.table
-    )
+    // Table: for compress, use IndexGen's compressData; otherwise registered vs2
+    gatherRing.in.s1pipes(i).bits.table := Mux(isCompressOp, igOutCompDat(i), regVs2(i))
 
-    // Fill data from s1 input
-    gatherRing.in.s1pipes(i).bits.prefillData := s1.bits.prefillData
-    gatherRing.in.s1pipes(i).bits.scalarData  := s1.bits.scalarData
-    gatherRing.in.s1pipes(i).bits.tableIdx    := s1.bits.tableIdx
-
-    // Meta from s1 input
-    gatherRing.in.s1pipes(i).bits.meta := s1.bits.meta
+    // Prefill from IndexGen (derived from vs3)
+    gatherRing.in.s1pipes(i).bits.prefillData := igOutPrefill(i)
+    gatherRing.in.s1pipes(i).bits.scalarData  := regScalar(i)
+    gatherRing.in.s1pipes(i).bits.tableIdx    := regTableIdx(i)
+    gatherRing.in.s1pipes(i).bits.meta        := regMeta(i)
   }
 
   /*********************** GatherRing Control Connections ********************/
@@ -143,14 +147,6 @@ class PermUnit[T <: Data](
   out.pipes      := gatherRing.out.pipes
   out.metas      := gatherRing.out.metas
   out.unitStatus := gatherRing.out.unitStatus
-
-  /*********************** Compress-specific Outputs *************************/
-
-  // Expose compress vs3 and count1s from the pipe that has a compress op.
-  // In practice only one compress uop is in-flight at a time per pipe group.
-  private val compressPipeOH = VecInit(igOpcodeReg.map(_ === IndexGenOpcode.compress)).asUInt
-  out.compressVs3    := Mux1H(compressPipeOH, igOutCompVs3)
-  out.compressCount1s := Mux1H(compressPipeOH, igOutCompCnt)
 }
 
 object PermUnit {
@@ -158,8 +154,7 @@ object PermUnit {
   /** PermUnit top-level input bundle. */
   class In[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
     val flush   = Vec(NumUnits, Bool())
-    val s0pipes = Vec(NumPipeIn, ValidIO(new PipeInS0))
-    val s1pipes = Vec(NumPipeIn, ValidIO(new PipeInS1(metaGen)))
+    val pipes   = Vec(NumPipeIn, ValidIO(new PipeIn(metaGen)))
     val wbReady = Vec(NumPipeOut, Bool())
   }
 
@@ -168,76 +163,41 @@ object PermUnit {
     val pipes      = Vec(NumPipeOut, ValidIO(new GatherRing.PipeOut(metaGen)))
     val metas      = Vec(NumUnits, metaGen)
     val unitStatus = Vec(NumUnits, new Status)
-
-    // Compress-specific passthrough
-    val compressVs3    = UInt(DLEN.W)
-    val compressCount1s = UInt(VlWidth.W)
   }
 
-  /** s0 pipe: block placement info + IndexGen operands.
+  /** Single pipe input: block placement + IndexGen operands + table/fill/meta.
     *
-    * This bundle is a superset of GatherRing.PipeInS0, adding all fields
-    * needed by IndexGen to compute the gather indices.
+    * All information arrives in the same cycle (VIAlu style).
+    * PermUnit internally registers the data payload to align with IndexGen latency.
     */
-  class PipeInS0(implicit val param: GatherParam) extends GatherBundle {
-    // -- Block placement (for GatherRing s0) --
+  class PipeIn[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
+    // -- Block placement --
     val placeIdx  = PipeInIdx()
     val blockBase = UnitIdx()
-    val blockSize = BlockSize()
 
-    // -- IndexGen: operation select --
-    val opcode = IndexGenOpcode()
+    // -- Operation select (one-hot) --
+    val op = new IndexGen.OpSel
 
     // -- IndexGen: common --
-    val uopIdx = UInt(log2Ceil(VLEN / DLEN * 8).W)
+    val uopIdx = UopIdx()
     val sew    = new GatherSewBundle
     val ei     = new GatherSewBundle
     val lmul   = new GatherLmulBundle
     val vl     = UInt(VlWidth.W)
-
-    // -- IndexGen: GatherIndexGen --
-    val isGatherEI16 = Bool()
-    val vs1          = UInt(DLEN.W)
-    val mask         = UInt(NumElem.W)
-
-    // -- IndexGen: SlideUp / SlideDown --
-    val tableIdx       = UnitIdx()
-    val offset         = UInt(IndexWidth.W)
-    val offsetOverflow = Bool()
-    val isSlide1Up     = Bool()
-    val isSlide1Down   = Bool()
+    val vs1    = UInt(DLEN.W)
+    val vs2    = UInt(DLEN.W)
+    val vs3    = UInt(DLEN.W)
+    val rs1    = UInt(XLEN.W)
+    val mask   = UInt(NumElem.W)
 
     // -- IndexGen: Zip / Unzip --
     val zipNum = UInt(3.W)
 
-    // -- IndexGen: Compress --
-    val byteMask     = UInt(VLEN.W)
-    val compressData = Vec(NumElem, UInt(MinDataWidth.W))
-    val vs3          = UInt(DLEN.W)
-  }
-
-  /** s1 pipe: table data + fill data + meta (payload for GatherRing s1).
-    *
-    * Mirrors GatherRing.PipeInS1 minus the index fields (which come from
-    * the registered IndexGen output instead).
-    */
-  class PipeInS1[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
-    // -- Block placement --
-    val placeIdx  = PipeInIdx()
-    val blockBase = UnitIdx()
-    val blockSize = BlockSize()
-
-    // -- Table data (for GatherRingUnit lookup) --
-    val table    = Vec(NumElem, Elem())
-    val tableIdx = UnitIdx()
-
-    // -- Fill data --
-    /** Inactive/tail element data */
-    val prefillData = Vec(NumElem, Elem())
-    /** Scalar register data (x[rs1] or f[fs1]) */
-    val scalarData = UInt(XLEN.W)
-
     // -- Meta --
     val meta = metaGen
+
+    def blockSize: UInt = Cat(lmul.m8, lmul.m4, lmul.m2, lmul.mf8 || lmul.mf4 || lmul.mf2 || lmul.m1)
+
+    def tableIdx = uopIdx
   }
 }

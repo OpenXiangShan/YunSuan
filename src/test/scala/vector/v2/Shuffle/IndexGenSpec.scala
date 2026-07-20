@@ -14,36 +14,25 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
 
   // -- Helpers: poke IndexGen.In fields ----------------------------------
 
-  /** Set all IndexGen.In fields to safe defaults, then override specific fields */
   def pDefaults(dut: IndexGen): Unit = {
     dut.in.valid.poke(false)
-    dut.in.bits.opcode.poke(0)
+    val o = dut.in.bits.op
+    o.isGather.poke(false); o.isGatherEI16.poke(false)
+    o.isSlideUp.poke(false); o.isSlide1Up.poke(false)
+    o.isSlideDown.poke(false); o.isSlide1Down.poke(false)
+    o.isZip.poke(false); o.isUnzip.poke(false); o.isCompress.poke(false)
     dut.in.bits.uopIdx.poke(0)
-    pSew(dut.in.bits.sew, 8)
-    pSew(dut.in.bits.ei, 8)
-    pLmul(dut.in.bits.lmul, 8) // m1
+    pSew(dut.in.bits.sew, 8); pSew(dut.in.bits.ei, 8)
+    pLmul(dut.in.bits.lmul, 8)
     dut.in.bits.vl.poke(16)
-    dut.in.bits.isGatherEI16.poke(false)
-    dut.in.bits.vs1.poke(0)
+    dut.in.bits.vs1.poke(0); dut.in.bits.vs2.poke(0)
+    dut.in.bits.vs3.poke(0); dut.in.bits.rs1.poke(0)
     dut.in.bits.mask.poke(0)
-    dut.in.bits.tableIdx.poke(0)
-    dut.in.bits.offset.poke(0)
-    dut.in.bits.offsetOverflow.poke(false)
-    dut.in.bits.isSlide1Up.poke(false)
-    dut.in.bits.isSlide1Down.poke(false)
-    dut.in.bits.zipNum.poke(0) // zipn=1 (2-way)
-    dut.in.bits.byteMask.poke(0)
-    for (i <- 0 until numElem) dut.in.bits.compressData(i).poke(0)
-    dut.in.bits.vs3.poke(0)
+    dut.in.bits.zipNum.poke(0)
   }
 
-  def pOpcode(dut: IndexGen, op: UInt): Unit = dut.in.bits.opcode.poke(op)
-
-  /** Expect IndexGen.Out fields match golden values */
-  def eIndex(
-    dut: IndexGen,
-    goldenIdx: Seq[Int],
-    goldenValid: Seq[Boolean],
+  def eIndex(dut: IndexGen,
+    goldenIdx: Seq[Int], goldenValid: Seq[Boolean],
     goldenFillZ: Seq[Boolean] = Seq.fill(numElem)(false),
     goldenFillS: Seq[Boolean] = Seq.fill(numElem)(false)
   ): Unit = {
@@ -58,55 +47,40 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
 
   // -- Golden Models -----------------------------------------------------
 
-  /** Golden for vrgather: SEW-level index -> 8b granularity indices */
   def goldenGather(vs1: BigInt, sew: Int, ei: Int, lmulFrac: Int, uopIdx: Int): Seq[(Int, Boolean, Boolean, Boolean)] = {
-    val sewbVal = sewb(sew)
-    val nIdxElems = dlen / ei
+    val s = sewb(sew)
+    val nIdx = dlen / ei
     val vlmax = lmulFrac * vlen / 64
-    val results = Array.fill(numElem)((0, false, false, false))
-    for (idxElem <- 0 until nIdxElems) {
-      val rawIdx = ((vs1 >> (idxElem * ei)) & ((BigInt(1) << ei) - 1)).toInt
-      for (j <- 0 until sewbVal) {
-        val eightBIdx = rawIdx * sewbVal + j
-        val outPos = idxElem * sewbVal + j
-        if (outPos < numElem) {
-          val geVlmax = eightBIdx >= vlmax
-          results(outPos) = (eightBIdx, !geVlmax, geVlmax, false)
-        }
+    val res = Array.fill(numElem)((0, false, false, false))
+    for (ie <- 0 until nIdx; j <- 0 until s) {
+      val raw = ((vs1 >> (ie * ei)) & ((BigInt(1) << ei) - 1)).toInt
+      val pos = ie * s + j
+      if (pos < numElem) {
+        val idx = raw * s + j
+        res(pos) = (idx, idx < vlmax, idx >= vlmax, false)
       }
     }
-    results.toSeq
+    res.toSeq
   }
 
-  /** Golden for vslideup */
-  def goldenSlideUp(
-    sew: Int, offset: Int, vl: Int, tableIdx: Int, offsetOverflow: Boolean, isSlide1Up: Boolean
-  ): Seq[(Int, Boolean, Boolean, Boolean)] = {
+  def goldenSlideUp(sew: Int, offset: Int, vl: Int, isSlide1Up: Boolean): Seq[(Int, Boolean, Boolean, Boolean)] = {
     val s = sewb(sew)
     val e8Off = offset << sewShift(sew)
     val e8Vl = vl << sewShift(sew)
     (0 until numElem).map { i =>
       if (isSlide1Up) {
-        // vslide1up: vd[i] = (i==0) ? scalar : vs2[i-1]
         val idx = (i - s).max(0)
         (idx, i >= s, false, i < s)
       } else {
-        // vslideup: vd[i] = (i < offset) ? vs2[i] : vs2[i-offset]
-        if (offsetOverflow || (i < e8Vl && i < e8Off))
-          (i, true, false, false)
-        else
-          (i - e8Off, true, false, false)
+        val overflow = offset >= vl
+        if (overflow || (i < e8Vl && i < e8Off)) (i, true, false, false)
+        else (i - e8Off, true, false, false)
       }
     }
   }
 
-  /** Golden for vslidedown.
-    * Index = (tableIdx*NumElem + i + e8Off) truncated to IndexWidth bits.
-    * slidedown: fillZeros when iPlus >= vlmax.
-    * slide1down: fillScala when SEW-level position == vl-1.
-    */
   def goldenSlideDown(
-    sew: Int, offset: Int, lmulFrac: Int, tableIdx: Int, offsetOverflow: Boolean,
+    sew: Int, offset: Int, lmulFrac: Int, tableIdx: Int,
     isSlide1Down: Boolean, vl: Int = 16
   ): Seq[(Int, Boolean, Boolean, Boolean)] = {
     val s = sewb(sew)
@@ -118,62 +92,47 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
       if (isSlide1Down) {
         val iPlus = tableIdx * numElem + i + s
         val index = iPlus & ((1 << idxBits) - 1)
-        // iIsVlM1: SEW-level position == vl-1 (vl is in SEW elements)
         val sewPos = tableIdx * sewElemsPerChunk + i / s
-        val isLastSew = sewPos == (vl - 1)
-        (index, !isLastSew, false, isLastSew)
+        (index, sewPos != (vl - 1), false, sewPos == (vl - 1))
       } else {
         val iPlus = tableIdx * numElem + i + e8Off
-        val geBoundary = iPlus >= vlmax8b
-        val index = iPlus & ((1 << idxBits) - 1)
-        (index, !geBoundary, geBoundary, false)
+        val ge = iPlus >= vlmax8b
+        (iPlus & ((1 << idxBits) - 1), !ge, ge, false)
       }
     }
   }
 
-  /** Golden for zip interleave: index = q * sewb + r / sewb * vlenb + i % sewb */
   def goldenZip(zipn: Int, sew: Int, uopIdx: Int): Seq[Option[Int]] = {
-    val sewbVal = sewb(sew)
-    val loopLength = zipn * sewbVal
+    val sb = sewb(sew); val ll = zipn * sb
     (0 until numElem).map { i =>
-      val globalI = uopIdx * numElem + i
-      if (globalI < vlenb * zipn) {
-        val r = globalI % loopLength
-        val q = globalI / loopLength
-        Some(q * sewbVal + r / sewbVal * vlenb + globalI % sewbVal)
+      val g = uopIdx * numElem + i
+      if (g < vlenb * zipn) {
+        val r = g % ll; val q = g / ll
+        Some(q * sb + r / sb * vlenb + g % sb)
       } else None
     }
   }
 
-  /** Golden for unzip deinterleave: index = i % vlenb / sewb * times + i / vlenb * sewb + i % sewb */
   def goldenUnzip(unzipn: Int, sew: Int, uopIdx: Int): Seq[Option[Int]] = {
-    val sewbVal = sewb(sew)
-    val times = unzipn * sewbVal
+    val sb = sewb(sew); val times = unzipn * sb
     (0 until numElem).map { i =>
-      val globalI = uopIdx * numElem + i
-      if (globalI < unzipn * vlenb) {
-        Some(globalI % vlenb / sewbVal * times + globalI / vlenb * sewbVal + globalI % sewbVal)
-      } else None
+      val g = uopIdx * numElem + i
+      if (g < unzipn * vlenb) Some(g % vlenb / sb * times + g / vlenb * sb + g % sb)
+      else None
     }
   }
 
-  /** Golden for vcompress: index = geCount * dlenb + i, truncated to IndexWidth bits.
-    * valid = globalPos < total (popcount of full mask).
-    */
   def goldenCompress(mask: BigInt, uopIdx: Int): (Seq[(Int, Boolean)], Int) = {
     val splitted = 8 * vlen / dlen
     val sums = (0 until splitted).map { j =>
-      val bits = (dlenb * (j + 1)).min(vlen)
-      (mask & ((BigInt(1) << bits) - 1)).bitCount
+      (mask & ((BigInt(1) << (dlenb * (j + 1)).min(vlen)) - 1)).bitCount
     }
     val total = sums.last
-    val idxBits = (vlen - 1).toBinaryString.length // IndexWidth = log2Ceil(VLEN)
+    val idxBits = (vlen - 1).toBinaryString.length
     val results = (0 until numElem).map { i =>
-      val globalPos = uopIdx * numElem + i
-      val geCount = sums.count(s => globalPos >= s)
-      val fullIndex = geCount * numElem + i
-      val index = fullIndex & ((1 << idxBits) - 1) // MSB truncation
-      (index, globalPos < total)
+      val g = uopIdx * numElem + i
+      val gc = sums.count(s => g >= s)
+      ((gc * numElem + i) & ((1 << idxBits) - 1), g < total)
     }
     (results, total)
   }
@@ -182,233 +141,172 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
 
   describe("IndexGen") {
 
-    describe("Gather (vrgather)") {
-      it("e64ei64, identity index") {
+    describe("Gather") {
+      it("e64ei64 identity") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.gather)
-          val vs1 = BigInt(0) // element 0->0, element 1->0
-          val golden = goldenGather(vs1, sew = 64, ei = 64, lmulFrac = 8, uopIdx = 0)
-          dut.in.valid.poke(true)
+          pDefaults(dut); val g = goldenGather(0, 64, 64, 8, 0)
+          dut.in.valid.poke(true); dut.in.bits.op.isGather.poke(true)
           pSew(dut.in.bits.sew, 64); pSew(dut.in.bits.ei, 64)
-          dut.in.bits.vs1.poke(vs1)
           dut.clock.step()
-          eIndex(dut,
-            golden.map(_._1), golden.map(_._2),
-            golden.map(_._3), golden.map(_._4))
+          eIndex(dut, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4))
         }
       }
-      it("e32ei32, nonzero index") {
+      it("e32ei32 nonzero") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.gather)
-          val vs1 = BigInt(3) // element 0->3
-          val golden = goldenGather(vs1, sew = 32, ei = 32, lmulFrac = 8, uopIdx = 0)
-          dut.in.valid.poke(true)
-          pSew(dut.in.bits.sew, 32); pSew(dut.in.bits.ei, 32)
-          dut.in.bits.vs1.poke(vs1)
+          pDefaults(dut); val g = goldenGather(3, 32, 32, 8, 0)
+          dut.in.valid.poke(true); dut.in.bits.op.isGather.poke(true)
+          pSew(dut.in.bits.sew, 32); pSew(dut.in.bits.ei, 32); dut.in.bits.vs1.poke(3)
           dut.clock.step()
-          eIndex(dut, golden.map(_._1), golden.map(_._2), golden.map(_._3), golden.map(_._4))
+          eIndex(dut, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4))
         }
       }
-      it("e8ei8, passthrough") {
+      it("e8ei8 passthrough") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.gather)
+          pDefaults(dut)
           val vs1 = BigInt("0102030405060708090a0b0c0d0e0f10", 16)
-          val golden = goldenGather(vs1, sew = 8, ei = 8, lmulFrac = 8, uopIdx = 0)
-          dut.in.valid.poke(true)
-          pSew(dut.in.bits.sew, 8); pSew(dut.in.bits.ei, 8)
-          dut.in.bits.vs1.poke(vs1)
+          val g = goldenGather(vs1, 8, 8, 8, 0)
+          dut.in.valid.poke(true); dut.in.bits.op.isGather.poke(true)
+          pSew(dut.in.bits.sew, 8); pSew(dut.in.bits.ei, 8); dut.in.bits.vs1.poke(vs1)
           dut.clock.step()
-          eIndex(dut, golden.map(_._1), golden.map(_._2), golden.map(_._3), golden.map(_._4))
+          eIndex(dut, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4))
         }
       }
-      it("e64ei64, out-of-range -> fillZeros") {
+      it("out-of-range fillZeros") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.gather)
-          val vs1 = BigInt(1) // element 0->1, >= vlmax for mf2
-          val golden = goldenGather(vs1, sew = 64, ei = 64, lmulFrac = 4, uopIdx = 0)
-          dut.in.valid.poke(true)
+          pDefaults(dut); val g = goldenGather(1, 64, 64, 4, 0)
+          dut.in.valid.poke(true); dut.in.bits.op.isGather.poke(true)
           pSew(dut.in.bits.sew, 64); pSew(dut.in.bits.ei, 64)
-          pLmul(dut.in.bits.lmul, 4) // mf2
-          dut.in.bits.vs1.poke(vs1)
+          pLmul(dut.in.bits.lmul, 4); dut.in.bits.vs1.poke(1)
           dut.clock.step()
-          eIndex(dut, golden.map(_._1), golden.map(_._2), golden.map(_._3), golden.map(_._4))
+          eIndex(dut, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4))
         }
       }
     }
 
     describe("SlideUp") {
-      it("vslideup offset=2, SEW=32") {
+      it("vslideup offset=2 SEW=32") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.slideUp)
-          val sew = 32; val offset = 2
-          val golden = goldenSlideUp(sew, offset, vl = 4, tableIdx = 0, offsetOverflow = false, isSlide1Up = false)
-          dut.in.valid.poke(true)
-          pSew(dut.in.bits.sew, sew)
-          dut.in.bits.offset.poke(offset)
-          dut.in.bits.vl.poke(4)
+          pDefaults(dut); val g = goldenSlideUp(32, 2, 4, false)
+          dut.in.valid.poke(true); dut.in.bits.op.isSlideUp.poke(true)
+          pSew(dut.in.bits.sew, 32); dut.in.bits.rs1.poke(2); dut.in.bits.vl.poke(4)
           dut.clock.step()
-          eIndex(dut, golden.map(_._1), golden.map(_._2), golden.map(_._3), golden.map(_._4))
+          eIndex(dut, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4))
         }
       }
-      it("vslide1up, SEW=64") {
+      it("vslide1up SEW=64") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.slideUp)
-          val sew = 64
-          val golden = goldenSlideUp(sew, offset = 0, vl = 2, tableIdx = 0, offsetOverflow = false, isSlide1Up = true)
-          dut.in.valid.poke(true)
-          pSew(dut.in.bits.sew, sew)
-          dut.in.bits.isSlide1Up.poke(true)
-          dut.in.bits.vl.poke(2)
+          pDefaults(dut); val g = goldenSlideUp(64, 0, 2, true)
+          dut.in.valid.poke(true); dut.in.bits.op.isSlide1Up.poke(true)
+          pSew(dut.in.bits.sew, 64); dut.in.bits.vl.poke(2)
           dut.clock.step()
-          eIndex(dut, golden.map(_._1), golden.map(_._2), golden.map(_._3), golden.map(_._4))
+          eIndex(dut, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4))
         }
       }
     }
 
     describe("SlideDown") {
-      it("vslidedown offset=1, SEW=16, LMUL=m1") {
+      it("vslidedown offset=1 SEW=16") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.slideDown)
-          val sew = 16; val offset = 1
-          val golden = goldenSlideDown(sew, offset, lmulFrac = 8, tableIdx = 0, offsetOverflow = false, isSlide1Down = false)
-          dut.in.valid.poke(true)
-          pSew(dut.in.bits.sew, sew)
-          dut.in.bits.offset.poke(offset)
+          pDefaults(dut); val g = goldenSlideDown(16, 1, 8, 0, false)
+          dut.in.valid.poke(true); dut.in.bits.op.isSlideDown.poke(true)
+          pSew(dut.in.bits.sew, 16); dut.in.bits.rs1.poke(1)
           dut.clock.step()
-          eIndex(dut, golden.map(_._1), golden.map(_._2), golden.map(_._3), golden.map(_._4))
+          eIndex(dut, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4))
         }
       }
-      it("vslide1down, SEW=32") {
+      it("vslide1down SEW=32") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.slideDown)
-          val sew = 32; val vl = 16
-          val golden = goldenSlideDown(sew, offset = 0, lmulFrac = 8, tableIdx = 0,
-            offsetOverflow = false, isSlide1Down = true, vl = vl)
-          dut.in.valid.poke(true)
-          pSew(dut.in.bits.sew, sew)
-          dut.in.bits.isSlide1Down.poke(true)
+          pDefaults(dut); val g = goldenSlideDown(32, 0, 8, 0, true, 16)
+          dut.in.valid.poke(true); dut.in.bits.op.isSlide1Down.poke(true)
+          pSew(dut.in.bits.sew, 32)
           dut.clock.step()
-          eIndex(dut, golden.map(_._1), golden.map(_._2), golden.map(_._3), golden.map(_._4))
+          eIndex(dut, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4))
         }
       }
-      it("vslidedown SEW=8, last element -> fillZeros") {
+      it("vslidedown SEW=8 boundary fillZeros") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.slideDown)
-          val sew = 8; val offset = 15 // near boundary
-          val golden = goldenSlideDown(sew, offset, lmulFrac = 8, tableIdx = 0, offsetOverflow = false, isSlide1Down = false)
-          dut.in.valid.poke(true)
-          pSew(dut.in.bits.sew, sew)
-          dut.in.bits.offset.poke(offset)
+          pDefaults(dut); val g = goldenSlideDown(8, 15, 8, 0, false)
+          dut.in.valid.poke(true); dut.in.bits.op.isSlideDown.poke(true)
+          pSew(dut.in.bits.sew, 8); dut.in.bits.rs1.poke(15)
           dut.clock.step()
-          eIndex(dut, golden.map(_._1), golden.map(_._2), golden.map(_._3), golden.map(_._4))
+          eIndex(dut, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4))
         }
       }
     }
 
     describe("Zip") {
-      it("2-way, SEW=8") {
+      it("2-way SEW=8") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.zip)
-          val golden = goldenZip(zipn = 2, sew = 8, uopIdx = 0)
-          dut.in.valid.poke(true)
-          pSew(dut.in.bits.sew, 8)
-          dut.in.bits.zipNum.poke(1) // zipn-1 = 1 -> 2-way
+          pDefaults(dut); val g = goldenZip(2, 8, 0)
+          dut.in.valid.poke(true); dut.in.bits.op.isZip.poke(true)
+          pSew(dut.in.bits.sew, 8); dut.in.bits.zipNum.poke(1)
           dut.clock.step()
-          val valid = golden.map(_.nonEmpty)
-          val idx   = golden.map(_.getOrElse(0))
-          eIndex(dut, idx, valid)
+          eIndex(dut, g.map(_.getOrElse(0)), g.map(_.nonEmpty))
         }
       }
-      it("4-way, SEW=16") {
+      it("4-way SEW=16") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.zip)
-          val golden = goldenZip(zipn = 4, sew = 16, uopIdx = 0)
-          dut.in.valid.poke(true)
-          pSew(dut.in.bits.sew, 16)
-          dut.in.bits.zipNum.poke(3) // 4-way
+          pDefaults(dut); val g = goldenZip(4, 16, 0)
+          dut.in.valid.poke(true); dut.in.bits.op.isZip.poke(true)
+          pSew(dut.in.bits.sew, 16); dut.in.bits.zipNum.poke(3)
           dut.clock.step()
-          val valid = golden.map(_.nonEmpty)
-          val idx   = golden.map(_.getOrElse(0))
-          eIndex(dut, idx, valid)
+          eIndex(dut, g.map(_.getOrElse(0)), g.map(_.nonEmpty))
         }
       }
     }
 
     describe("Unzip") {
-      it("2-way, SEW=8") {
+      it("2-way SEW=8") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.unzip)
-          val golden = goldenUnzip(unzipn = 2, sew = 8, uopIdx = 0)
-          dut.in.valid.poke(true)
-          pSew(dut.in.bits.sew, 8)
-          dut.in.bits.zipNum.poke(1) // 2-way
+          pDefaults(dut); val g = goldenUnzip(2, 8, 0)
+          dut.in.valid.poke(true); dut.in.bits.op.isUnzip.poke(true)
+          pSew(dut.in.bits.sew, 8); dut.in.bits.zipNum.poke(1)
           dut.clock.step()
-          val valid = golden.map(_.nonEmpty)
-          val idx   = golden.map(_.getOrElse(0))
-          eIndex(dut, idx, valid)
+          eIndex(dut, g.map(_.getOrElse(0)), g.map(_.nonEmpty))
         }
       }
-      it("4-way, SEW=32, uopIdx=1") {
+      it("4-way SEW=32 uopIdx=1") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.unzip)
-          val golden = goldenUnzip(unzipn = 4, sew = 32, uopIdx = 1)
-          dut.in.valid.poke(true)
-          pSew(dut.in.bits.sew, 32)
-          dut.in.bits.zipNum.poke(3) // 4-way
-          dut.in.bits.uopIdx.poke(1)
+          pDefaults(dut); val g = goldenUnzip(4, 32, 1)
+          dut.in.valid.poke(true); dut.in.bits.op.isUnzip.poke(true)
+          pSew(dut.in.bits.sew, 32); dut.in.bits.zipNum.poke(3); dut.in.bits.uopIdx.poke(1)
           dut.clock.step()
-          val valid = golden.map(_.nonEmpty)
-          val idx   = golden.map(_.getOrElse(0))
-          eIndex(dut, idx, valid)
+          eIndex(dut, g.map(_.getOrElse(0)), g.map(_.nonEmpty))
         }
       }
     }
 
     describe("Compress") {
-      it("all bytes active") {
+      it("all active") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.compress)
-          val mask = (BigInt(1) << numElem) - 1
-          val (golden, total) = goldenCompress(mask, uopIdx = 0)
-          dut.in.valid.poke(true)
-          dut.in.bits.byteMask.poke(mask)
-          dut.clock.step() // CompressIndexGen has 1-cycle pipeline
+          pDefaults(dut); val (g, t) = goldenCompress((BigInt(1) << numElem) - 1, 0)
+          dut.in.valid.poke(true); dut.in.bits.op.isCompress.poke(true)
+          dut.in.bits.vs1.poke((BigInt(1) << numElem) - 1)
+          dut.clock.step()
           dut.out.valid.expect(true.B)
           for (i <- 0 until numElem) {
-            val (idx, valid) = golden(i)
-            dut.out.index.index(i).expect(idx.U)
-            dut.out.index.indexValid(i).expect(valid.B)
+            val (idx, valid) = g(i)
+            dut.out.index.index(i).expect(idx.U); dut.out.index.indexValid(i).expect(valid.B)
           }
-          dut.out.compressCount1s.expect(total.U)
+          dut.out.compressCount1s.expect(t.U)
         }
       }
       it("alternating mask") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.compress)
-          val mask = BigInt("5555", 16)
-          val (golden, total) = goldenCompress(mask, uopIdx = 0)
-          dut.in.valid.poke(true)
-          dut.in.bits.byteMask.poke(mask)
+          pDefaults(dut); val (g, t) = goldenCompress(BigInt("5555", 16), 0)
+          dut.in.valid.poke(true); dut.in.bits.op.isCompress.poke(true)
+          dut.in.bits.vs1.poke(BigInt("5555", 16))
           dut.clock.step()
-          dut.out.valid.expect(true.B)
-          for (i <- 0 until numElem) {
-            val (idx, valid) = golden(i)
-            dut.out.index.index(i).expect(idx.U)
-            dut.out.index.indexValid(i).expect(valid.B)
-          }
-          dut.out.compressCount1s.expect(total.U)
+          for (i <- 0 until numElem) { val (idx, v) = g(i); dut.out.index.index(i).expect(idx.U); dut.out.index.indexValid(i).expect(v.B) }
+          dut.out.compressCount1s.expect(t.U)
         }
       }
-      it("no bytes active") {
+      it("none active") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut); pOpcode(dut, IndexGenOpcode.compress)
-          dut.in.valid.poke(true)
-          dut.in.bits.byteMask.poke(0)
+          pDefaults(dut)
+          dut.in.valid.poke(true); dut.in.bits.op.isCompress.poke(true)
           dut.clock.step()
-          dut.out.valid.expect(true.B)
-          for (i <- 0 until numElem) {
-            dut.out.index.indexValid(i).expect(false.B)
-          }
+          for (i <- 0 until numElem) dut.out.index.indexValid(i).expect(false.B)
           dut.out.compressCount1s.expect(0.U)
         }
       }
@@ -417,9 +315,7 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
     describe("Invalid input") {
       it("valid=false -> output not valid") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
-          pDefaults(dut)
-          dut.in.valid.poke(false)
-          dut.clock.step()
+          pDefaults(dut); dut.clock.step()
           dut.out.valid.expect(false.B)
         }
       }

@@ -79,6 +79,8 @@ object GatherCommon {
     def Index() = UInt(IndexWidth.W)
 
     def PipeInIdx() = UInt(log2Ceil(NumPipeIn).W)
+
+    def UopIdx() = UInt(log2Ceil(VLEN / DLEN * 8).W)
   }
 
   /**
