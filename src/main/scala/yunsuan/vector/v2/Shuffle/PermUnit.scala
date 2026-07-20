@@ -10,10 +10,10 @@ import yunsuan.vector.v2.Shuffle.GatherRingUnit.Status
   *
   * Pipeline (1-cycle uniform register stage between s0 and s1):
   * {{{
-  *   s0: in.s0pipes ─┬─► GatherRing.in.s0pipes (block placement)
-  *                    └─► IndexGen[i].in          (index computation, one per pipe)
+  *   s0: in.s0pipes ---> GatherRing.in.s0pipes (block placement)
+  *                    --> IndexGen[i].in          (index computation, one per pipe)
   *       [Register stage: IndexGen output registered per pipe]
-  *   s1: in.s1pipes + registered index ─► GatherRing.in.s1pipes
+  *   s1: in.s1pipes + registered index -> GatherRing.in.s1pipes
   * }}}
   *
   * One IndexGen instance per s0 pipe so that all NumPipeIn pipes can be
@@ -35,7 +35,7 @@ class PermUnit[T <: Data](
 
   /*********************** Module Instantiations *****************************/
 
-  /** One IndexGen per s0 pipe — supports simultaneous valid on all pipes. */
+  /** One IndexGen per s0 pipe -- supports simultaneous valid on all pipes. */
   private val indexGens = Seq.tabulate(NumPipeIn) { i =>
     Module(new IndexGen(useLZA)).suggestName(s"indexGen_$i")
   }
@@ -180,37 +180,37 @@ object PermUnit {
     * needed by IndexGen to compute the gather indices.
     */
   class PipeInS0(implicit val param: GatherParam) extends GatherBundle {
-    // ── Block placement (for GatherRing s0) ──
+    // -- Block placement (for GatherRing s0) --
     val placeIdx  = PipeInIdx()
     val blockBase = UnitIdx()
     val blockSize = BlockSize()
 
-    // ── IndexGen: operation select ──
+    // -- IndexGen: operation select --
     val opcode = IndexGenOpcode()
 
-    // ── IndexGen: common ──
+    // -- IndexGen: common --
     val uopIdx = UInt(log2Ceil(VLEN / DLEN * 8).W)
     val sew    = new GatherSewBundle
     val ei     = new GatherSewBundle
     val lmul   = new GatherLmulBundle
     val vl     = UInt(VlWidth.W)
 
-    // ── IndexGen: GatherIndexGen ──
+    // -- IndexGen: GatherIndexGen --
     val isGatherEI16 = Bool()
     val vs1          = UInt(DLEN.W)
     val mask         = UInt(NumElem.W)
 
-    // ── IndexGen: SlideUp / SlideDown ──
+    // -- IndexGen: SlideUp / SlideDown --
     val tableIdx       = UnitIdx()
     val offset         = UInt(IndexWidth.W)
     val offsetOverflow = Bool()
     val isSlide1Up     = Bool()
     val isSlide1Down   = Bool()
 
-    // ── IndexGen: Zip / Unzip ──
+    // -- IndexGen: Zip / Unzip --
     val zipNum = UInt(3.W)
 
-    // ── IndexGen: Compress ──
+    // -- IndexGen: Compress --
     val byteMask     = UInt(VLEN.W)
     val compressData = Vec(NumElem, UInt(MinDataWidth.W))
     val vs3          = UInt(DLEN.W)
@@ -222,22 +222,22 @@ object PermUnit {
     * the registered IndexGen output instead).
     */
   class PipeInS1[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
-    // ── Block placement ──
+    // -- Block placement --
     val placeIdx  = PipeInIdx()
     val blockBase = UnitIdx()
     val blockSize = BlockSize()
 
-    // ── Table data (for GatherRingUnit lookup) ──
+    // -- Table data (for GatherRingUnit lookup) --
     val table    = Vec(NumElem, Elem())
     val tableIdx = UnitIdx()
 
-    // ── Fill data ──
+    // -- Fill data --
     /** Inactive/tail element data */
     val prefillData = Vec(NumElem, Elem())
     /** Scalar register data (x[rs1] or f[fs1]) */
     val scalarData = UInt(XLEN.W)
 
-    // ── Meta ──
+    // -- Meta --
     val meta = metaGen
   }
 }

@@ -12,7 +12,7 @@ class PermUnitSpec extends AnyFunSpec with ChiselSim with Matchers
 
   val NumPipes = 4
 
-  // ── Helpers: poke PermUnit pipes ─────────────────────────────────────
+  // -- Helpers: poke PermUnit pipes -------------------------------------
 
   def pS0Defaults(dut: PermUnit[FakeRobPtr], pipe: Int): Unit = {
     val s0 = dut.in.s0pipes(pipe)
@@ -103,7 +103,7 @@ class PermUnitSpec extends AnyFunSpec with ChiselSim with Matchers
     dut.out.pipes(pipe).bits.data.expect(dest)
   }
 
-  // ── Utilities ────────────────────────────────────────────────────────
+  // -- Utilities --------------------------------------------------------
 
   def foldBytes(bytes: Seq[Int]): BigInt =
     bytes.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
@@ -141,7 +141,7 @@ class PermUnitSpec extends AnyFunSpec with ChiselSim with Matchers
     res.toSeq
   }
 
-  // ── Tests ────────────────────────────────────────────────────────────
+  // -- Tests ------------------------------------------------------------
 
   describe("PermUnit") {
 

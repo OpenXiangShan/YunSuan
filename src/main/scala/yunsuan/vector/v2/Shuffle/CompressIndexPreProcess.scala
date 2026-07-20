@@ -105,6 +105,47 @@ object CompressIndexGen {
     val index    = new GatherIndexBundle(NumElem, IndexWidth)
     val count1s  = UInt(VlWidth.W)
   }
+
+  def main(args: Array[String]): Unit = {
+    import _root_.circt.stage._
+
+    val targetDir = "build/vector"
+
+    println(s"Generating the $this hardware in $targetDir")
+
+    val firtoolOpts = Array(
+      "-O=release",
+      "--disable-annotation-unknown",
+      "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
+    )
+    val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
+
+    (new ChiselStage).execute(
+      Array(
+        "--target",
+        "systemverilog",
+        "--target-dir",
+        targetDir,
+      ) ++ args,
+      chisel3.stage.ChiselGeneratorAnnotation(
+        () => new CompressIndexGen(useLZA = false)(GatherParam.default)
+      ) +: firtoolAnno
+    )
+
+    (new ChiselStage).execute(
+      Array(
+        "--target",
+        "systemverilog",
+        "--target-dir",
+        targetDir,
+      ) ++ args,
+      chisel3.stage.ChiselGeneratorAnnotation(
+        () => new CompressIndexGen(useLZA = true)(GatherParam.default)
+      ) +: firtoolAnno
+    )
+
+    println("done")
+  }
 }
 
 class CompressIndexPreProcess(implicit val param: GatherParam) extends GatherModule {
@@ -205,89 +246,4 @@ object CompressDataPreProcess {
   class Out(implicit val param: GatherParam) extends GatherBundle {
     val data = Vec(NumElem, ValidIO(UInt(MinDataWidth.W)))
   }
-}
-
-object CompressIndexGenMain extends App {
-  println("Generating the CompressIndexGen hardware")
-
-  val firtoolOpts = Array(
-    "--target=systemverilog",
-    "-O=release",
-    "--disable-annotation-unknown",
-    "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
-  )
-
-  val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
-
-  (new ChiselStage).execute(
-    Array("--target-dir", "build/vector") ++ args,
-    chisel3.stage
-      .ChiselGeneratorAnnotation(
-        () => new CompressIndexGen(useLZA = false)(GatherParam.default)
-      ) +: firtoolAnno
-  )
-
-  (new ChiselStage).execute(
-    Array("--target-dir", "build/vector") ++ args,
-    chisel3.stage
-      .ChiselGeneratorAnnotation(
-        () => new CompressIndexGen(useLZA = true)(GatherParam.default)
-      ) +: firtoolAnno
-  )
-
-  println("done")
-}
-
-object CompressPreProcessMain extends App {
-  println("Generating the CompressPreProcess hardware")
-
-  val firtoolOpts = Array(
-    "--target=systemverilog",
-    "-O=release",
-    "--disable-annotation-unknown",
-    "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
-  )
-
-  val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
-
-  (new ChiselStage).execute(
-    Array("--target-dir", "build/vector") ++ args,
-    chisel3.stage
-      .ChiselGeneratorAnnotation(
-        () => new CompressIndexPreProcess()(GatherParam.default)
-      ) +: firtoolAnno
-  )
-
-  println("done")
-}
-
-object CompressDataPreProcessMain extends App {
-  println("Generating the CompressPreProcess hardware")
-
-  val firtoolOpts = Array(
-    "--target=systemverilog",
-    "-O=release",
-    "--disable-annotation-unknown",
-    "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
-  )
-
-  val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
-
-  (new ChiselStage).execute(
-    Array("--target-dir", "build/vector") ++ args,
-    chisel3.stage
-      .ChiselGeneratorAnnotation(
-        () => new CompressDataPreProcess(useLZA = false)(GatherParam.default)
-      ) +: firtoolAnno
-  )
-
-  (new ChiselStage).execute(
-    Array("--target-dir", "build/vector") ++ args,
-    chisel3.stage
-      .ChiselGeneratorAnnotation(
-        () => new CompressDataPreProcess(useLZA = true)(GatherParam.default)
-      ) +: firtoolAnno
-  )
-
-  println("done")
 }

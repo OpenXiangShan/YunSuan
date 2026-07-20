@@ -171,7 +171,7 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
     compressIdx.fillScala(i)  := compressMod.out.index.fillScala(i)
   }
 
-  // ── Final output mux ──
+  // -- Final output mux --
   for (i <- 0 until NumElem) {
     out.index.indexValid(i) := Mux1H(Seq(
       isGather    -> gatherIdx.indexValid(i),
@@ -239,31 +239,31 @@ object IndexGen {
     /** Selects which IndexGen sub-module to activate */
     val opcode = IndexGenOpcode()
 
-    // ── Common ──
+    // -- Common --
     val uopIdx = UInt(log2Ceil(VLEN / DLEN * 8).W)
     val sew    = new GatherSewBundle
     val ei     = new GatherSewBundle
     val lmul   = new GatherLmulBundle
     val vl     = UInt(VlWidth.W)
 
-    // ── GatherIndexGen ──
+    // -- GatherIndexGen --
     val isGatherEI16 = Bool()
     val vs1          = UInt(DLEN.W)
     /** 1-bit per MinDataWidth element */
     val mask         = UInt(NumElem.W)
 
-    // ── SlideUp / SlideDown ──
+    // -- SlideUp / SlideDown --
     val tableIdx       = UnitIdx()
     val offset         = UInt(IndexWidth.W)
     val offsetOverflow = Bool()
     val isSlide1Up     = Bool()
     val isSlide1Down   = Bool()
 
-    // ── Zip / Unzip ──
+    // -- Zip / Unzip --
     /** zipn - 1 (1-based); actual zip factor = zipNum + 1 */
     val zipNum = UInt(3.W)
 
-    // ── Compress ──
+    // -- Compress --
     val byteMask     = UInt(VLEN.W)
     val compressData = Vec(NumElem, UInt(MinDataWidth.W))
     val vs3          = UInt(DLEN.W)
@@ -275,7 +275,7 @@ object IndexGen {
     /** GatherIndexBundle: index / indexValid / fillZeros / fillScala */
     val index = new GatherIndexBundle(NumElem, IndexWidth)
 
-    // ── Compress-specific (valid only when opcode = compress) ──
+    // -- Compress-specific (valid only when opcode = compress) --
     /** Compressed data after CompressDataPreProcess (becomes table for GatherRing) */
     val compressData  = Vec(NumElem, UInt(MinDataWidth.W))
     /** Passthrough vs3 (original vs3 value) */

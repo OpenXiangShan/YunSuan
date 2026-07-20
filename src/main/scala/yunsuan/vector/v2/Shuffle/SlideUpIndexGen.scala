@@ -102,24 +102,27 @@ object SlideUpIndexGen {
   def main(args: Array[String]): Unit = {
     import _root_.circt.stage._
 
-    println("Generating the SlideIndexGen hardware")
+    val targetDir = "build/vector"
+
+    println(s"Generating the ${this.getClass} hardware in $targetDir")
 
     val firtoolOpts = Array(
-      "--target",
-      "systemverilog",
       "-O=release",
       "--disable-annotation-unknown",
       "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
     )
-
     val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
 
     (new ChiselStage).execute(
-      Array("--target-dir", "build/vector") ++ args,
-      chisel3.stage
-        .ChiselGeneratorAnnotation(
-          () => new SlideUpIndexGen()(GatherParam.default)
-        ) +: firtoolAnno
+      Array(
+        "--target",
+        "systemverilog",
+        "--target-dir",
+        targetDir,
+      ) ++ args,
+      chisel3.stage.ChiselGeneratorAnnotation(
+        () => new SlideUpIndexGen()(GatherParam.default)
+      ) +: firtoolAnno
     )
 
     println("done")

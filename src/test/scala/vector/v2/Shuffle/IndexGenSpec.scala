@@ -12,7 +12,7 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
 
   val dlenb = dlen / 8
 
-  // ── Helpers: poke IndexGen.In fields ──────────────────────────────────
+  // -- Helpers: poke IndexGen.In fields ----------------------------------
 
   /** Set all IndexGen.In fields to safe defaults, then override specific fields */
   def pDefaults(dut: IndexGen): Unit = {
@@ -56,9 +56,9 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
     }
   }
 
-  // ── Golden Models ─────────────────────────────────────────────────────
+  // -- Golden Models -----------------------------------------------------
 
-  /** Golden for vrgather: SEW-level index → 8b granularity indices */
+  /** Golden for vrgather: SEW-level index -> 8b granularity indices */
   def goldenGather(vs1: BigInt, sew: Int, ei: Int, lmulFrac: Int, uopIdx: Int): Seq[(Int, Boolean, Boolean, Boolean)] = {
     val sewbVal = sewb(sew)
     val nIdxElems = dlen / ei
@@ -178,7 +178,7 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
     (results, total)
   }
 
-  // ── Tests ─────────────────────────────────────────────────────────────
+  // -- Tests -------------------------------------------------------------
 
   describe("IndexGen") {
 
@@ -186,7 +186,7 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
       it("e64ei64, identity index") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
           pDefaults(dut); pOpcode(dut, IndexGenOpcode.gather)
-          val vs1 = BigInt(0) // element 0→0, element 1→0
+          val vs1 = BigInt(0) // element 0->0, element 1->0
           val golden = goldenGather(vs1, sew = 64, ei = 64, lmulFrac = 8, uopIdx = 0)
           dut.in.valid.poke(true)
           pSew(dut.in.bits.sew, 64); pSew(dut.in.bits.ei, 64)
@@ -200,7 +200,7 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
       it("e32ei32, nonzero index") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
           pDefaults(dut); pOpcode(dut, IndexGenOpcode.gather)
-          val vs1 = BigInt(3) // element 0→3
+          val vs1 = BigInt(3) // element 0->3
           val golden = goldenGather(vs1, sew = 32, ei = 32, lmulFrac = 8, uopIdx = 0)
           dut.in.valid.poke(true)
           pSew(dut.in.bits.sew, 32); pSew(dut.in.bits.ei, 32)
@@ -221,10 +221,10 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
           eIndex(dut, golden.map(_._1), golden.map(_._2), golden.map(_._3), golden.map(_._4))
         }
       }
-      it("e64ei64, out-of-range → fillZeros") {
+      it("e64ei64, out-of-range -> fillZeros") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
           pDefaults(dut); pOpcode(dut, IndexGenOpcode.gather)
-          val vs1 = BigInt(1) // element 0→1, >= vlmax for mf2
+          val vs1 = BigInt(1) // element 0->1, >= vlmax for mf2
           val golden = goldenGather(vs1, sew = 64, ei = 64, lmulFrac = 4, uopIdx = 0)
           dut.in.valid.poke(true)
           pSew(dut.in.bits.sew, 64); pSew(dut.in.bits.ei, 64)
@@ -291,7 +291,7 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
           eIndex(dut, golden.map(_._1), golden.map(_._2), golden.map(_._3), golden.map(_._4))
         }
       }
-      it("vslidedown SEW=8, last element → fillZeros") {
+      it("vslidedown SEW=8, last element -> fillZeros") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
           pDefaults(dut); pOpcode(dut, IndexGenOpcode.slideDown)
           val sew = 8; val offset = 15 // near boundary
@@ -312,7 +312,7 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
           val golden = goldenZip(zipn = 2, sew = 8, uopIdx = 0)
           dut.in.valid.poke(true)
           pSew(dut.in.bits.sew, 8)
-          dut.in.bits.zipNum.poke(1) // zipn-1 = 1 → 2-way
+          dut.in.bits.zipNum.poke(1) // zipn-1 = 1 -> 2-way
           dut.clock.step()
           val valid = golden.map(_.nonEmpty)
           val idx   = golden.map(_.getOrElse(0))
@@ -415,7 +415,7 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
     }
 
     describe("Invalid input") {
-      it("valid=false → output not valid") {
+      it("valid=false -> output not valid") {
         simulate(new IndexGen()(GatherParam.default)) { dut =>
           pDefaults(dut)
           dut.in.valid.poke(false)
