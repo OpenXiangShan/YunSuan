@@ -180,6 +180,7 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
     in.bits.sew.e64 -> Cat(in.bits.vl, 0.U(3.W)),
   ))
   private val vs3Bytes = in.bits.vs3.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))
+  private val rs1Bytes = in.bits.rs1.asTypeOf(Vec(XLEN / MinDataWidth, UInt(MinDataWidth.W)))
   private val dlenBits = log2Ceil(DLEN / MinDataWidth) // bits per uop-internal idx
 
   // Pre-allocated Vec for better Verilog naming
@@ -237,7 +238,12 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
     ))
     out.elemData(i) := Mux1H(Seq(
       fz        -> 0.U,
-      fs        -> 0.U,
+      fs        -> Mux1H(Seq(
+        in.bits.sew.e8  -> rs1Bytes(0),
+        in.bits.sew.e16 -> rs1Bytes(i % 2),
+        in.bits.sew.e32 -> rs1Bytes(i % 4),
+        in.bits.sew.e64 -> rs1Bytes(i % (XLEN / MinDataWidth)),
+      )),
       iv        -> idx,
       isPrefill -> prefillByte(i),
     ))

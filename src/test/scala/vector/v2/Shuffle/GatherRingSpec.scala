@@ -57,7 +57,7 @@ class GatherRingSpec
     prefill:    Seq[Int],
     fillZeros:  Seq[Boolean] = Seq.fill(16)(false),
     fillScala:  Seq[Boolean] = Seq.fill(16)(false),
-    scalarData: BigInt = BigInt(0),
+    scalaBytes: Seq[Int] = Seq.fill(8)(0),
     sew:        Int = 64,
     placeIdx:   Int = 0,
     blockBase:  Int = 0,
@@ -70,15 +70,11 @@ class GatherRingSpec
     s1.bits.blockBase.poke(blockBase)
     s1.bits.blockSize.poke(blockSize)
     s1.bits.tableIdx.poke(tableIdx)
-    s1.bits.scalarData.poke(scalarData)
-    s1.bits.sew.e64.poke(sew == 64)
-    s1.bits.sew.e32.poke(sew == 32)
-    s1.bits.sew.e16.poke(sew == 16)
-    s1.bits.sew.e8.poke(sew == 8)
-    // Encode to merged flags+data
+    // Encode to merged flags+data; scalar byte computed here (IndexGen equivalent)
     for (i <- 0 until 16) {
       val flags = if (fillZeros(i)) ElemFlags.ZERO else if (fillScala(i)) ElemFlags.SCALAR else if (indexValid(i)) ElemFlags.LOOKUP else ElemFlags.PREFILL
-      val data  = if (fillZeros(i) || fillScala(i)) 0 else if (indexValid(i)) index(i) else prefill(i)
+      val sByte = sew match { case 8 => scalaBytes(0); case 16 => scalaBytes(i % 2); case 32 => scalaBytes(i % 4); case _ => scalaBytes(i % 8) }
+      val data  = if (fillZeros(i)) 0 else if (fillScala(i)) sByte else if (indexValid(i)) index(i) else prefill(i)
       s1.bits.elemFlags(i).poke(flags)
       s1.bits.elemData(i).poke(data.U)
     }
@@ -147,13 +143,18 @@ class GatherRingSpec
       tableRange:  Seq[Int],
       zeroValid:   Seq[Boolean] = Seq.fill(16)(false),
       scalarValid: Seq[Boolean] = Seq.fill(16)(false),
-      scalarTable: Seq[Int] = ScalarTable.default(8)
+      scalarTable: Seq[Int] = ScalarTable.default(8),
+      sew: Int = 64
     ): BigInt = {
+      def scalarByte(i: Int): Int = sew match {
+        case 8 => scalarTable(0); case 16 => scalarTable(i % 2)
+        case 32 => scalarTable(i % 4); case _ => scalarTable(i % 8)
+      }
       index.indices.map { i =>
         if (indexValid(i)) {
           if (tableRange.contains(index(i) / 16)) table(index(i))
           else index(i)
-        } else if (scalarValid(i)) scalarTable(i % scalarTable.size)
+        } else if (scalarValid(i)) scalarByte(i)
         else if (zeroValid(i)) 0
         else prefill(i)
       }.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
@@ -611,11 +612,11 @@ class GatherRingSpec
           initDut(dut)
           val sew = 8; val table = Table.inc(1); val index = Index.slideup(sew)
           val pf = Prefill.default(1); val sTable = ScalarTable.default(sew)
-          val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable)
+          val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable, sew = sew)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
 
-          pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalarData = foldBytes(sTable))
+          pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalaBytes = sTable, sew = sew)
           dut.clock.step(); pS1Off(dut, pipe = 0)
 
           dut.clock.step()
@@ -628,11 +629,11 @@ class GatherRingSpec
           initDut(dut)
           val sew = 16; val table = Table.inc(1); val index = Index.slideup(sew)
           val pf = Prefill.default(1); val sTable = ScalarTable.default(sew)
-          val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable)
+          val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable, sew = sew)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
 
-          pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalarData = foldBytes(sTable))
+          pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalaBytes = sTable, sew = sew)
           dut.clock.step(); pS1Off(dut, pipe = 0)
 
           dut.clock.step()
@@ -645,11 +646,11 @@ class GatherRingSpec
           initDut(dut)
           val sew = 32; val table = Table.inc(1); val index = Index.slideup(sew)
           val pf = Prefill.default(1); val sTable = ScalarTable.default(sew)
-          val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable)
+          val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable, sew = sew)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
 
-          pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalarData = foldBytes(sTable))
+          pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalaBytes = sTable, sew = sew)
           dut.clock.step(); pS1Off(dut, pipe = 0)
 
           dut.clock.step()
@@ -662,11 +663,11 @@ class GatherRingSpec
           initDut(dut)
           val sew = 64; val table = Table.inc(1); val index = Index.slideup(sew)
           val pf = Prefill.default(1); val sTable = ScalarTable.default(sew)
-          val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable)
+          val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable, sew = sew)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
 
-          pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalarData = foldBytes(sTable))
+          pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalaBytes = sTable, sew = sew)
           dut.clock.step(); pS1Off(dut, pipe = 0)
 
           dut.clock.step()
@@ -681,11 +682,11 @@ class GatherRingSpec
           val sValid = Seq.tabulate(16)(_ == 0)
           val iValid = Seq.tabulate(16)(i => i >= 1 && i < 14 && index(i) >= 0)
           val pf = Seq.tabulate(16)(i => 0xBB + i); val sTable = ScalarTable.default(sew)
-          val golden = Res.gather(table, index, iValid, pf, 0 until 1, scalarValid = sValid, scalarTable = sTable)
+          val golden = Res.gather(table, index, iValid, pf, 0 until 1, scalarValid = sValid, scalarTable = sTable, sew = sew)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
 
-          pS1(dut, pipe = 0, table, index, iValid, pf, fillScala = sValid, scalarData = foldBytes(sTable))
+          pS1(dut, pipe = 0, table, index, iValid, pf, fillScala = sValid, scalaBytes = sTable, sew = sew)
           dut.clock.step(); pS1Off(dut, pipe = 0)
 
           dut.clock.step()
@@ -702,11 +703,11 @@ class GatherRingSpec
           initDut(dut)
           val sew = 8; val table = Table.inc(1); val index = Index.slidedown(sew)
           val pf = Prefill.default(1); val sTable = ScalarTable.default(sew)
-          val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable)
+          val golden = Res.gather(table, index, iValid(sew), pf, 0 until 1, scalarValid = sValid(sew), scalarTable = sTable, sew = sew)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
 
-          pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalarData = foldBytes(sTable))
+          pS1(dut, pipe = 0, table, index, iValid(sew), pf, fillScala = sValid(sew), scalaBytes = sTable, sew = sew)
           dut.clock.step(); pS1Off(dut, pipe = 0)
 
           dut.clock.step()
@@ -721,11 +722,11 @@ class GatherRingSpec
           val sValid = Seq.tabulate(16)(_ == 15)
           val iValid = Seq.tabulate(16)(i => i < 12 && index(i) < 16)
           val pf = Seq.fill(16)(0xFF); val sTable = ScalarTable.default(sew)
-          val golden = Res.gather(table, index, iValid, pf, 0 until 1, scalarValid = sValid, scalarTable = sTable)
+          val golden = Res.gather(table, index, iValid, pf, 0 until 1, scalarValid = sValid, scalarTable = sTable, sew = sew)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
 
-          pS1(dut, pipe = 0, table, index, iValid, pf, fillScala = sValid, scalarData = foldBytes(sTable))
+          pS1(dut, pipe = 0, table, index, iValid, pf, fillScala = sValid, scalaBytes = sTable, sew = sew)
           dut.clock.step(); pS1Off(dut, pipe = 0)
 
           dut.clock.step()
@@ -814,11 +815,11 @@ class GatherRingSpec
           val sew = 8; val table = Table.inc(1); val index = Seq.fill(16)(0)
           val iValid = Seq.tabulate(16)(_ != 0); val sValid = Seq.tabulate(16)(_ == 0)
           val pf = Seq.fill(16)(0xEE); val sTable = ScalarTable.default(sew)
-          val golden = Res.gather(table, index, iValid, pf, 0 until 1, scalarValid = sValid, scalarTable = sTable)
+          val golden = Res.gather(table, index, iValid, pf, 0 until 1, scalarValid = sValid, scalarTable = sTable, sew = sew)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
 
-          pS1(dut, pipe = 0, table, index, iValid, pf, fillScala = sValid, scalarData = foldBytes(sTable))
+          pS1(dut, pipe = 0, table, index, iValid, pf, fillScala = sValid, scalaBytes = sTable, sew = sew)
           dut.clock.step(); pS1Off(dut, pipe = 0)
 
           dut.clock.step()
@@ -840,11 +841,11 @@ class GatherRingSpec
             else 0xFF
           }
           val golden = Res.gather(table, index, iValid, pf, 0 until 1,
-            zeroValid = zValid, scalarValid = sValid, scalarTable = sTable)
+            zeroValid = zValid, scalarValid = sValid, scalarTable = sTable, sew = sew)
           pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
           dut.clock.step(); pS0Off(dut, pipe = 0)
 
-          pS1(dut, pipe = 0, table, index, iValid, pf, fillZeros = zValid, fillScala = sValid, scalarData = foldBytes(sTable))
+          pS1(dut, pipe = 0, table, index, iValid, pf, fillZeros = zValid, fillScala = sValid, scalaBytes = sTable, sew = sew)
           dut.clock.step(); pS1Off(dut, pipe = 0)
 
           dut.clock.step()

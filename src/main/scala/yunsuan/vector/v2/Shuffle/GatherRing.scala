@@ -180,8 +180,6 @@ object GatherRing {
     val elemFlags = Vec(NumElem, ElemFlags())
     val elemData  = Vec(NumElem, UInt(8.W))
 
-    val scalarData = UInt(XLEN.W)
-    val sew        = new GatherSewBundle
     val tableIdx   = UnitIdx()
     val table      = Vec(NumElem, Elem())
     val meta       = metaGen

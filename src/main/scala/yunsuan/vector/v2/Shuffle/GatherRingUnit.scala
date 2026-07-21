@@ -36,23 +36,6 @@ class GatherRingUnit[T <: Data](
   ))
   private val isEntryNext = localPos === 0.U
 
-  // ── Scala Table Byte Split (SEW-aware replication) ──
-  // RISC-V scalar (rs1) is SEW bits wide. When SEW < XLEN, rs1[SEW-1:0] is
-  // replicated to fill all XLEN/MinDataWidth bytes, so that scalaTableBytes(i % 8)
-  // always returns the correct scalar byte regardless of element position i.
-  // Without replication, vslide1down (scalar at vl-1 != 0) would pick the wrong byte.
-  private val sew = in.placeIndex.sew
-  private val rawScalarBytes = in.placeIndex.scalarData.asTypeOf(Vec(XLEN / MinDataWidth, UInt(MinDataWidth.W)))
-  private val scalaTableBytes = Wire(Vec(XLEN / MinDataWidth, UInt(MinDataWidth.W)))
-  for (b <- 0 until XLEN / MinDataWidth) {
-    scalaTableBytes(b) := Mux1H(Seq(
-      sew.e8  -> rawScalarBytes(0),
-      sew.e16 -> rawScalarBytes(b % 2),
-      sew.e32 -> rawScalarBytes(b % 4),
-      sew.e64 -> rawScalarBytes(b),
-    ))
-  }
-
   // ── Table Input MUX ──────────────────────────────────
   private val doPlaceTable = in.placeTable.valid
   private val doPlaceIndex = in.placeIndex.valid
@@ -201,7 +184,7 @@ class GatherRingUnit[T <: Data](
     }.elsewhen(doPlaceIndex) {
       indexOrRes(i) := Mux1H(Seq(
         prefill(i)   -> in.placeIndex.bits.elemData(i),
-        fillScala(i) -> scalaTableBytes(i % (XLEN / MinDataWidth)),
+        fillScala(i) -> in.placeIndex.bits.elemData(i),
         fillZeros(i) -> 0.U,
         fillIdx(i)   -> in.placeIndex.bits.elemData(i),
         fillRes(i)   -> gatherMod.out.result(i),
@@ -316,8 +299,6 @@ object GatherRingUnit {
     val elemFlags = Vec(NumElem, ElemFlags())
     val elemData  = Vec(NumElem, UInt(8.W))
 
-    val scalarData = UInt(XLEN.W)
-    val sew        = new GatherSewBundle
     val meta       = metaGen
   }
 
@@ -328,8 +309,6 @@ object GatherRingUnit {
       req.blockSize  := s1.blockSize
       req.elemFlags  := s1.elemFlags
       req.elemData   := s1.elemData
-      req.scalarData := s1.scalarData
-      req.sew        := s1.sew
       req.meta       := s1.meta
       req
     }

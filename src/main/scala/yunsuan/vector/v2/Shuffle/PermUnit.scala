@@ -77,8 +77,6 @@ class PermUnit[T <: Data](
   private val regBlockSize = Wire(Vec(NumPipeIn, BlockSize()))
   private val regTable     = Wire(Vec(NumPipeIn, Vec(NumElem, Elem())))
   private val regTableIdx  = Wire(Vec(NumPipeIn, UnitIdx()))
-  private val regScalar    = Wire(Vec(NumPipeIn, UInt(XLEN.W)))
-  private val regSew       = Wire(Vec(NumPipeIn, new GatherSewBundle))
   private val regMeta      = Wire(Vec(NumPipeIn, metaGen.cloneType))
 
   for (i <- 0 until NumPipeIn) {
@@ -95,8 +93,6 @@ class PermUnit[T <: Data](
     regBlockBase(i) := RegEnable(pi.bits.blockBase, pi.valid)
     regBlockSize(i) := RegEnable(pi.bits.blockSize, pi.valid)
     regTableIdx(i)  := RegEnable(pi.bits.tableIdx, pi.valid)
-    regScalar(i)    := RegEnable(pi.bits.rs1, pi.valid)
-    regSew(i)       := RegEnable(pi.bits.sew, pi.valid)
     regMeta(i)      := RegEnable(pi.bits.meta, pi.valid)
 
     // Merged table register: compressData (delayed) vs vs2 (immediate)
@@ -136,8 +132,6 @@ class PermUnit[T <: Data](
     // Table: merged register (compressData or vs2)
     gatherRing.in.s1pipes(i).bits.table := regTable(i)
 
-    gatherRing.in.s1pipes(i).bits.scalarData  := regScalar(i)
-    gatherRing.in.s1pipes(i).bits.sew         := regSew(i)
     gatherRing.in.s1pipes(i).bits.tableIdx    := regTableIdx(i)
     gatherRing.in.s1pipes(i).bits.meta        := regMeta(i)
   }

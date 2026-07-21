@@ -126,14 +126,6 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       dut.in.placeTable.bits.blockSize.poke(blockSize)
   }
 
-  def pSew(sew: Int): GatherRingUnit[FakeRobPtr] => Unit = {
-    dut =>
-      dut.in.placeIndex.bits.sew.e64.poke(sew == 64)
-      dut.in.placeIndex.bits.sew.e32.poke(sew == 32)
-      dut.in.placeIndex.bits.sew.e16.poke(sew == 16)
-      dut.in.placeIndex.bits.sew.e8.poke(sew == 8)
-  }
-
   def pPlaceIndex(
     blkSize: Int,
     idx:     Seq[Int],
@@ -141,16 +133,17 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     prefill: Seq[Int] = Seq.fill(16)(0xFF),
     fScala:  Seq[Boolean] = Seq.fill(16)(false),
     fZeros:  Seq[Boolean] = Seq.fill(16)(false),
+    scalarData: Seq[Int] = Seq.fill(8)(0),
     sew:     Int = 64
   ): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
       dut.in.placeIndex.bits.blockSize.poke(blkSize)
       dut.in.placeIndex.valid.poke(true)
-      pSew(sew)(dut)
       for (i <- 0 until 16) {
         val flags = if (fZeros(i)) ElemFlags.ZERO else if (fScala(i)) ElemFlags.SCALAR else if (iValid(i)) ElemFlags.LOOKUP else ElemFlags.PREFILL
-        val data  = if (fZeros(i) || fScala(i)) 0 else if (iValid(i)) idx(i) else prefill(i)
+        val sByte = sew match { case 8 => scalarData(0); case 16 => scalarData(i % 2); case 32 => scalarData(i % 4); case _ => scalarData(i % 8) }
+        val data  = if (fZeros(i)) 0 else if (fScala(i)) sByte else if (iValid(i)) idx(i) else prefill(i)
         dut.in.placeIndex.bits.elemFlags(i).poke(flags)
         dut.in.placeIndex.bits.elemData(i).poke(data.U)
       }
@@ -165,11 +158,12 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     prefill    : Seq[Int] = Seq.fill(16)(0xFF),
     scalarValid: Seq[Boolean] = Seq.fill(16)(false),
     zeroValid  : Seq[Boolean] = Seq.fill(16)(false),
+    scalarData : Seq[Int] = Seq.fill(8)(0),
     sew        : Int = 64
   ): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
       pPlaceTable(blkSize, tblIdx, tbl)(dut)
-      pPlaceIndex(blkSize, idx, iValid, prefill, scalarValid, zeroValid, sew)(dut)
+      pPlaceIndex(blkSize, idx, iValid, prefill, scalarValid, zeroValid, scalarData, sew)(dut)
   }
 
   def pNoPlace: GatherRingUnit[FakeRobPtr] => Unit = {
@@ -200,12 +194,6 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
   }
 
   def pNoFlowTbl(): GatherRingUnit[FakeRobPtr] => Unit = _.in.flow.valid.poke(false)
-
-  def pScala(v: BigInt): GatherRingUnit[FakeRobPtr] => Unit = _.in.placeIndex.bits.scalarData.poke(v)
-
-  def pScala(v: Seq[Int]): GatherRingUnit[FakeRobPtr] => Unit = {
-    _.in.placeIndex.bits.scalarData.poke(Int8SeqToBigInt(v))
-  }
 
   def pWbReady(v: Boolean = true): GatherRingUnit[FakeRobPtr] => Unit = _.in.wbReady.poke(v)
 
@@ -281,10 +269,16 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       scalarValid: Seq[Boolean] = Seq.fill(16)(false),
       zeroValid: Seq[Boolean] = Seq.fill(16)(false),
       scalarTable: Seq[Int] = ScalarTable.default(8),
+      sew: Int = 64,
     ): BigInt = {
       require(index.size == indexValid.size)
       require(index.size == prefill.size)
       require(scalarTable.size == 8)
+
+      def scalarByte(i: Int): Int = sew match {
+        case 8 => scalarTable(0); case 16 => scalarTable(i % 2)
+        case 32 => scalarTable(i % 4); case _ => scalarTable(i % 8)
+      }
 
       index.indices.map(
         i =>
@@ -295,7 +289,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
               index(i)
           }
           else if (scalarValid(i)) {
-            scalarTable(i % scalarTable.size)
+            scalarByte(i)
           }
           else if (zeroValid(i)) {
             0
@@ -504,7 +498,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     val prefill = Prefill.default()
     def scalarValid(vl: Int) = (0 until 16).map(_ / sewByte == vl)
     val scalarTable = ScalarTable.default(1)
-    def res(vl: Int) = Res.gather(table, index, indexValid(vl), prefill, 0 to 0, scalarValid = scalarValid(vl), scalarTable = scalarTable)
+    def res(vl: Int) = Res.gather(table, index, indexValid(vl), prefill, 0 to 0, scalarValid = scalarValid(vl), scalarTable = scalarTable, sew = sew)
 
     it("SEW=8") {
       sew = 8
@@ -514,14 +508,14 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid(15), prefill = prefill, scalarValid = scalarValid(15)), pScala(scalarTable))(eWb1(res(15))),
-            Cycle(pPlace(1, 0, table, index, indexValid(14), prefill = prefill, scalarValid = scalarValid(14)), pScala(scalarTable), pWbReady())(eWb1(res(14))),
-            Cycle(pPlace(1, 0, table, index, indexValid(13), prefill = prefill, scalarValid = scalarValid(13)), pScala(scalarTable), pWbReady())(eWb1(res(13))),
-            Cycle(pPlace(1, 0, table, index, indexValid(12), prefill = prefill, scalarValid = scalarValid(12)), pScala(scalarTable), pWbReady())(eWb1(res(12))),
-            Cycle(pPlace(1, 0, table, index, indexValid(11), prefill = prefill, scalarValid = scalarValid(11)), pScala(scalarTable), pWbReady())(eWb1(res(11))),
-            Cycle(pPlace(1, 0, table, index, indexValid(10), prefill = prefill, scalarValid = scalarValid(10)), pScala(scalarTable), pWbReady())(eWb1(res(10))),
-            Cycle(pPlace(1, 0, table, index, indexValid( 9), prefill = prefill, scalarValid = scalarValid( 9)), pScala(scalarTable), pWbReady())(eWb1(res( 9))),
-            Cycle(pPlace(1, 0, table, index, indexValid( 8), prefill = prefill, scalarValid = scalarValid( 8)), pScala(scalarTable), pWbReady())(eWb1(res( 8))),
+            Cycle(pPlace(1, 0, table, index, indexValid(15), prefill = prefill, scalarValid = scalarValid(15), scalarData = scalarTable, sew = sew))(eWb1(res(15))),
+            Cycle(pPlace(1, 0, table, index, indexValid(14), prefill = prefill, scalarValid = scalarValid(14), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(14))),
+            Cycle(pPlace(1, 0, table, index, indexValid(13), prefill = prefill, scalarValid = scalarValid(13), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(13))),
+            Cycle(pPlace(1, 0, table, index, indexValid(12), prefill = prefill, scalarValid = scalarValid(12), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(12))),
+            Cycle(pPlace(1, 0, table, index, indexValid(11), prefill = prefill, scalarValid = scalarValid(11), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(11))),
+            Cycle(pPlace(1, 0, table, index, indexValid(10), prefill = prefill, scalarValid = scalarValid(10), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(10))),
+            Cycle(pPlace(1, 0, table, index, indexValid( 9), prefill = prefill, scalarValid = scalarValid( 9), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res( 9))),
+            Cycle(pPlace(1, 0, table, index, indexValid( 8), prefill = prefill, scalarValid = scalarValid( 8), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res( 8))),
             Cycle(pNoPlace, pWbReady())(eWb0)
           )
       }
@@ -534,10 +528,10 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid(7), prefill = prefill, scalarValid = scalarValid(7)), pScala(scalarTable))(eWb1(res(7))),
-            Cycle(pPlace(1, 0, table, index, indexValid(6), prefill = prefill, scalarValid = scalarValid(6)), pScala(scalarTable), pWbReady())(eWb1(res(6))),
-            Cycle(pPlace(1, 0, table, index, indexValid(5), prefill = prefill, scalarValid = scalarValid(5)), pScala(scalarTable), pWbReady())(eWb1(res(5))),
-            Cycle(pPlace(1, 0, table, index, indexValid(4), prefill = prefill, scalarValid = scalarValid(4)), pScala(scalarTable), pWbReady())(eWb1(res(4))),
+            Cycle(pPlace(1, 0, table, index, indexValid(7), prefill = prefill, scalarValid = scalarValid(7), scalarData = scalarTable, sew = sew))(eWb1(res(7))),
+            Cycle(pPlace(1, 0, table, index, indexValid(6), prefill = prefill, scalarValid = scalarValid(6), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(6))),
+            Cycle(pPlace(1, 0, table, index, indexValid(5), prefill = prefill, scalarValid = scalarValid(5), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(5))),
+            Cycle(pPlace(1, 0, table, index, indexValid(4), prefill = prefill, scalarValid = scalarValid(4), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(4))),
             Cycle(pNoPlace, pWbReady())(eWb0)
           )
       }
@@ -550,9 +544,9 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid(3), prefill = prefill, scalarValid = scalarValid(3)), pScala(scalarTable))(eWb1(res(3))),
-            Cycle(pPlace(1, 0, table, index, indexValid(2), prefill = prefill, scalarValid = scalarValid(2)), pScala(scalarTable), pWbReady())(eWb1(res(2))),
-            Cycle(pPlace(1, 0, table, index, indexValid(1), prefill = prefill, scalarValid = scalarValid(1)), pScala(scalarTable), pWbReady())(eWb1(res(1))),
+            Cycle(pPlace(1, 0, table, index, indexValid(3), prefill = prefill, scalarValid = scalarValid(3), scalarData = scalarTable, sew = sew))(eWb1(res(3))),
+            Cycle(pPlace(1, 0, table, index, indexValid(2), prefill = prefill, scalarValid = scalarValid(2), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(2))),
+            Cycle(pPlace(1, 0, table, index, indexValid(1), prefill = prefill, scalarValid = scalarValid(1), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(1))),
             Cycle(pNoPlace, pWbReady())(eWb0)
           )
       }
@@ -565,8 +559,8 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid(1), prefill = prefill, scalarValid = scalarValid(1)), pScala(scalarTable))(eWb1(res(1))),
-            Cycle(pPlace(1, 0, table, index, indexValid(0), prefill = prefill, scalarValid = scalarValid(0)), pScala(scalarTable), pWbReady())(eWb1(res(0))),
+            Cycle(pPlace(1, 0, table, index, indexValid(1), prefill = prefill, scalarValid = scalarValid(1), scalarData = scalarTable, sew = sew))(eWb1(res(1))),
+            Cycle(pPlace(1, 0, table, index, indexValid(0), prefill = prefill, scalarValid = scalarValid(0), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(0))),
             Cycle(pNoPlace, pWbReady())(eWb0)
           )
       }
@@ -593,8 +587,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           dut,
           initUnit,
           Cycle(
-            pPlace(1, 0, table, index, allInvalid, prefill = prefill, scalarValid = sAt14, sew = 8),
-            pScala(distinctST)
+            pPlace(1, 0, table, index, allInvalid, prefill = prefill, scalarValid = sAt14, scalarData = distinctST, sew = 8)
           )(eWb1(golden)),
           Cycle(pNoPlace, pWbReady())(eWb0)
         )
@@ -612,7 +605,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     val prefill = Prefill.default()
     def scalarValid = (0 until 16).map(_ / sewByte == 0)
     val scalarTable = ScalarTable.default(1)
-    def res = Res.gather(table, index, indexValid, prefill, 0 to 0, scalarValid = scalarValid, scalarTable = scalarTable)
+    def res = Res.gather(table, index, indexValid, prefill, 0 to 0, scalarValid = scalarValid, scalarTable = scalarTable, sew = sew)
 
     it("SEW=8") {
       sew = 8
@@ -622,7 +615,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid), pScala(scalarTable))(eWb1(res)),
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = sew))(eWb1(res)),
           )
       }
     }
@@ -634,7 +627,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid), pScala(scalarTable))(eWb1(res)),
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = sew))(eWb1(res)),
           )
       }
     }
@@ -646,7 +639,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid), pScala(scalarTable))(eWb1(res)),
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = sew))(eWb1(res)),
           )
       }
     }
@@ -658,7 +651,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid), pScala(scalarTable))(eWb1(res)),
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = sew))(eWb1(res)),
           )
       }
     }
@@ -684,7 +677,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid), pScala(scalarTable))(eWb1(res)),
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = 16))(eWb1(res)),
           )
       }
     }
@@ -709,7 +702,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(eWb1(exp)),
+            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs, scalarData = Seq.fill(8)(0x5A), sew = 16))(eWb1(exp)),
           )
       }
     }
@@ -738,7 +731,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(eWb1(exp)),
+            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs, scalarData = Seq.fill(8)(0x5A), sew = 16))(eWb1(exp)),
           )
       }
     }
@@ -763,7 +756,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs), pScala(BigInt("5A5A5A5A5A5A5A5A", 16)))(eWb1(exp)),
+            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs, scalarData = Seq.fill(8)(0x5A), sew = 16))(eWb1(exp)),
           )
       }
     }
@@ -846,7 +839,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             dut,
             initUnit,
             Cycle(
-              pPlace(1, 0, t, idx, iv, scalarValid = fs, zeroValid = fz), pScala(BigInt("5A5A5A5A5A5A5A5A", 16))
+              pPlace(1, 0, t, idx, iv, scalarValid = fs, zeroValid = fz, scalarData = Seq.fill(8)(0x5A), sew = 16)
             )(eWb1(exp))
           )
       }
