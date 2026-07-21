@@ -25,6 +25,7 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
     pSew(dut.in.bits.sew, 8); pSew(dut.in.bits.ei, 8)
     pLmul(dut.in.bits.lmul, 8)
     dut.in.bits.vl.poke(16)
+    dut.in.bits.vta.poke(false); dut.in.bits.vma.poke(false)
     dut.in.bits.vs1.poke(0); dut.in.bits.vs2.poke(0)
     dut.in.bits.vs3.poke(0); dut.in.bits.rs1.poke(0)
     dut.in.bits.mask.poke(0)

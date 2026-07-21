@@ -52,6 +52,8 @@ class PermUnit[T <: Data](
     ig.in.bits.ei     := pi.bits.ei
     ig.in.bits.lmul   := pi.bits.lmul
     ig.in.bits.vl     := pi.bits.vl
+    ig.in.bits.vta    := pi.bits.vta
+    ig.in.bits.vma    := pi.bits.vma
     ig.in.bits.vs1    := pi.bits.vs1
     ig.in.bits.vs2    := pi.bits.vs2
     ig.in.bits.vs3    := pi.bits.vs3
@@ -191,6 +193,8 @@ object PermUnit {
     val ei     = new GatherSewBundle
     val lmul   = new GatherLmulBundle
     val vl     = UInt(VlWidth.W)
+    val vta    = Bool()                 // tail agnostic (reserved)
+    val vma    = Bool()                 // mask agnostic
     val vs1    = UInt(DLEN.W)
     val vs2    = UInt(DLEN.W)
     val vs3    = UInt(DLEN.W)

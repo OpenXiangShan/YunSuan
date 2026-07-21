@@ -172,7 +172,10 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   }
 
   // -- Final output: encode to merged flags+data --
-  private val prefillByte = in.bits.vs3.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))
+  private val prefillByte = {
+    val vs3Bytes = in.bits.vs3.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))
+    VecInit((0 until NumElem).map(i => Mux(in.bits.vma, Fill(8, 1.B), vs3Bytes(i))))
+  }
   for (i <- 0 until NumElem) {
     val iv = Wire(Bool()); val idx = Wire(Index()); val fz = Wire(Bool()); val fs = Wire(Bool())
     iv := Mux1H(Seq(
@@ -268,6 +271,8 @@ object IndexGen {
     val ei     = new GatherSewBundle
     val lmul   = new GatherLmulBundle
     val vl     = UInt(VlWidth.W)
+    val vta    = Bool()                 // tail agnostic (reserved)
+    val vma    = Bool()                 // mask agnostic
 
     // Register operands
     val vs1 = UInt(DLEN.W)    // gather indices / compress mask

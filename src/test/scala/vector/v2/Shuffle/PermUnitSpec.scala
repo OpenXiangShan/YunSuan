@@ -26,6 +26,7 @@ class PermUnitSpec extends AnyFunSpec with ChiselSim with Matchers
     p.bits.uopIdx.poke(0)
     pSew(p.bits.sew, 8); pSew(p.bits.ei, 8); pLmul(p.bits.lmul, 8)
     p.bits.vl.poke(16)
+    p.bits.vta.poke(false); p.bits.vma.poke(false)
     p.bits.vs1.poke(0); p.bits.vs2.poke(0); p.bits.vs3.poke(0); p.bits.rs1.poke(0)
     p.bits.mask.poke(0); p.bits.zipNum.poke(0)
   }
