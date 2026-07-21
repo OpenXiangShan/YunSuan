@@ -36,12 +36,13 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
     goldenFillZ: Seq[Boolean] = Seq.fill(numElem)(false),
     goldenFillS: Seq[Boolean] = Seq.fill(numElem)(false)
   ): Unit = {
+    import ElemFlags._
     dut.out.valid.expect(true.B)
     for (i <- 0 until numElem) {
-      dut.out.index.index(i).expect(goldenIdx(i).U, s"index($i)")
-      dut.out.index.indexValid(i).expect(goldenValid(i).B, s"indexValid($i)")
-      dut.out.index.fillZeros(i).expect(goldenFillZ(i).B, s"fillZeros($i)")
-      dut.out.index.fillScala(i).expect(goldenFillS(i).B, s"fillScala($i)")
+      val flags = if (goldenFillZ(i)) ZERO else if (goldenFillS(i)) SCALAR else if (goldenValid(i)) LOOKUP else PREFILL
+      val data  = if (goldenFillZ(i) || goldenFillS(i)) 0 else goldenIdx(i)
+      dut.out.elemFlags(i).expect(flags, s"elemFlags($i)")
+      dut.out.elemData(i).expect(data.U, s"elemData($i)")
     }
   }
 
@@ -286,7 +287,8 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
           dut.out.valid.expect(true.B)
           for (i <- 0 until numElem) {
             val (idx, valid) = g(i)
-            dut.out.index.index(i).expect(idx.U); dut.out.index.indexValid(i).expect(valid.B)
+            dut.out.elemFlags(i).expect(if (valid) ElemFlags.LOOKUP else ElemFlags.PREFILL)
+            if (valid) dut.out.elemData(i).expect(idx.U)
           }
           dut.out.compressCount1s.expect(t.U)
         }
@@ -297,7 +299,7 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
           dut.in.valid.poke(true); dut.in.bits.op.isCompress.poke(true)
           dut.in.bits.vs1.poke(BigInt("5555", 16))
           dut.clock.step()
-          for (i <- 0 until numElem) { val (idx, v) = g(i); dut.out.index.index(i).expect(idx.U); dut.out.index.indexValid(i).expect(v.B) }
+          for (i <- 0 until numElem) { val (idx, v) = g(i); dut.out.elemFlags(i).expect(if (v) ElemFlags.LOOKUP else ElemFlags.PREFILL); if (v) dut.out.elemData(i).expect(idx.U) }
           dut.out.compressCount1s.expect(t.U)
         }
       }
@@ -306,7 +308,7 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
           pDefaults(dut)
           dut.in.valid.poke(true); dut.in.bits.op.isCompress.poke(true)
           dut.clock.step()
-          for (i <- 0 until numElem) dut.out.index.indexValid(i).expect(false.B)
+          for (i <- 0 until numElem) dut.out.elemFlags(i).expect(ElemFlags.PREFILL)
           dut.out.compressCount1s.expect(0.U)
         }
       }

@@ -64,10 +64,9 @@ class PermUnit[T <: Data](
 
   // IndexGen output (combinational) -> registered
   private val igOutValid   = Wire(Vec(NumPipeIn, Bool()))
-  private val igOutIndex   = Wire(Vec(NumPipeIn, new GatherIndexBundle(NumElem, IndexWidth)))
-  private val igOutPrefill = Wire(Vec(NumPipeIn, Vec(NumElem, UInt(MinDataWidth.W))))
+  private val igOutFlags   = Wire(Vec(NumPipeIn, Vec(NumElem, ElemFlags())))
+  private val igOutData    = Wire(Vec(NumPipeIn, Vec(NumElem, UInt(8.W))))
   private val igOutCompCnt = Wire(Vec(NumPipeIn, UInt(VlWidth.W)))
-  private val igOpReg      = Wire(Vec(NumPipeIn, new IndexGen.OpSel))
 
   // Pipe payload -> registered (aligned with IndexGen latency)
   private val regValid     = Wire(Vec(NumPipeIn, Bool()))
@@ -84,10 +83,9 @@ class PermUnit[T <: Data](
     val pi = in.pipes(i)
 
     igOutValid(i)  := RegNext(ig.out.valid, false.B)
-    igOutIndex(i)  := RegEnable(ig.out.index, ig.out.valid)
-    igOutPrefill(i):= RegEnable(ig.out.prefillData, ig.out.valid)
+    igOutFlags(i)  := RegEnable(ig.out.elemFlags, ig.out.valid)
+    igOutData(i)   := RegEnable(ig.out.elemData, ig.out.valid)
     igOutCompCnt(i):= RegEnable(ig.out.compressCount1s, ig.out.valid)
-    igOpReg(i)     := RegEnable(ig.in.bits.op, ig.in.valid)
 
     regValid(i)     := RegNext(pi.valid, false.B)
     regPlaceIdx(i)  := RegEnable(pi.bits.placeIdx, pi.valid)
@@ -127,17 +125,20 @@ class PermUnit[T <: Data](
     gatherRing.in.s1pipes(i).bits.blockBase := regBlockBase(i)
     gatherRing.in.s1pipes(i).bits.blockSize := regBlockSize(i)
 
-    // Index from registered IndexGen output
-    gatherRing.in.s1pipes(i).bits.index      := igOutIndex(i).index
-    gatherRing.in.s1pipes(i).bits.indexValid := igOutIndex(i).indexValid
-    gatherRing.in.s1pipes(i).bits.fillZeros  := igOutIndex(i).fillZeros
-    gatherRing.in.s1pipes(i).bits.fillScala  := igOutIndex(i).fillScala
+    // Index/flag decode from merged format back to GatherRing fields
+    import ElemFlags._
+    for (j <- 0 until NumElem) {
+      val f = igOutFlags(i)(j)
+      gatherRing.in.s1pipes(i).bits.indexValid(j) := f === LOOKUP
+      gatherRing.in.s1pipes(i).bits.fillZeros(j)  := f === ZERO
+      gatherRing.in.s1pipes(i).bits.fillScala(j)  := f === SCALAR
+      gatherRing.in.s1pipes(i).bits.index(j)      := igOutData(i)(j)
+      gatherRing.in.s1pipes(i).bits.prefillData(j):= igOutData(i)(j)
+    }
 
     // Table: merged register (compressData or vs2)
     gatherRing.in.s1pipes(i).bits.table := regTable(i)
 
-    // Prefill from IndexGen (derived from vs3)
-    gatherRing.in.s1pipes(i).bits.prefillData := igOutPrefill(i)
     gatherRing.in.s1pipes(i).bits.scalarData  := regScalar(i)
     gatherRing.in.s1pipes(i).bits.tableIdx    := regTableIdx(i)
     gatherRing.in.s1pipes(i).bits.meta        := regMeta(i)

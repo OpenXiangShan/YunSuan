@@ -171,9 +171,11 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
     compressIdx.fillScala(i)  := compressMod.out.index.fillScala(i)
   }
 
-  // -- Final output mux --
+  // -- Final output: encode to merged flags+data --
+  private val prefillByte = in.bits.vs3.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))
   for (i <- 0 until NumElem) {
-    out.index.indexValid(i) := Mux1H(Seq(
+    val iv = Wire(Bool()); val idx = Wire(Index()); val fz = Wire(Bool()); val fs = Wire(Bool())
+    iv := Mux1H(Seq(
       isGather    -> gatherIdx.indexValid(i),
       isSlideUp   -> slideUpIdx.indexValid(i),
       isSlideDown -> slideDownIdx.indexValid(i),
@@ -181,7 +183,7 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
       isUnzip     -> unzipIdx.indexValid(i),
       isCompress  -> compressIdx.indexValid(i),
     ))
-    out.index.index(i) := Mux1H(Seq(
+    idx := Mux1H(Seq(
       isGather    -> gatherIdx.index(i),
       isSlideUp   -> slideUpIdx.index(i),
       isSlideDown -> slideDownIdx.index(i),
@@ -189,7 +191,7 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
       isUnzip     -> unzipIdx.index(i),
       isCompress  -> compressIdx.index(i),
     ))
-    out.index.fillZeros(i) := Mux1H(Seq(
+    fz := Mux1H(Seq(
       isGather    -> gatherIdx.fillZeros(i),
       isSlideUp   -> slideUpIdx.fillZeros(i),
       isSlideDown -> slideDownIdx.fillZeros(i),
@@ -197,7 +199,7 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
       isUnzip     -> unzipIdx.fillZeros(i),
       isCompress  -> compressIdx.fillZeros(i),
     ))
-    out.index.fillScala(i) := Mux1H(Seq(
+    fs := Mux1H(Seq(
       isGather    -> gatherIdx.fillScala(i),
       isSlideUp   -> slideUpIdx.fillScala(i),
       isSlideDown -> slideDownIdx.fillScala(i),
@@ -205,19 +207,18 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
       isUnzip     -> unzipIdx.fillScala(i),
       isCompress  -> compressIdx.fillScala(i),
     ))
+
+    out.elemFlags(i) := Mux(fz, ElemFlags.ZERO,
+      Mux(fs, ElemFlags.SCALAR,
+        Mux(iv, ElemFlags.LOOKUP, ElemFlags.PREFILL)))
+    out.elemData(i) := Mux(fz || fs, 0.U,
+      Mux(iv, idx, prefillByte(i)))
   }
 
   /******************* Compress-specific Outputs *****************************/
 
   out.compressData     := compressMod.out.data
   out.compressCount1s  := compressMod.out.count1s
-
-  /*********************** Prefill Data from vs3 *****************************/
-
-  // Inactive/tail elements get corresponding byte from vs3 (old vd)
-  for (i <- 0 until NumElem) {
-    out.prefillData(i) := in.bits.vs3.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))(i)
-  }
 
   /**************************** Valid Signal *********************************/
 
@@ -274,45 +275,24 @@ object IndexGen {
   class Out(implicit val param: GatherParam) extends GatherBundle {
     val valid = Bool()
 
-    /** GatherIndexBundle: indexValid / index / fillZeros / fillScala */
-    val index = new GatherIndexBundle(NumElem, IndexWidth)
-
-    /** Prefill data from vs3 for inactive/tail elements */
-    val prefillData = Vec(NumElem, UInt(MinDataWidth.W))
+    // Per-element merged: 2b flags + 8b data (index or prefill)
+    // flags: 00=PREFILL 01=LOOKUP 10=ZERO 11=SCALAR
+    val elemFlags = Vec(NumElem, ElemFlags())
+    val elemData  = Vec(NumElem, UInt(8.W))
 
     // Compress-specific
     val compressData    = Vec(NumElem, UInt(MinDataWidth.W))  // compressed vs2 (becomes table)
     val compressCount1s = UInt(VlWidth.W)                     // total popcount
   }
+}
 
-  def main(args: Array[String]): Unit = {
-    import _root_.circt.stage._
-
-    val targetDir = "build/vector"
-
-    println(s"Generating the $this hardware in $targetDir")
-
-    val firtoolOpts = Array(
-      "-O=release",
-      "--disable-annotation-unknown",
-      "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
-    )
-    val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
-
-    (new ChiselStage).execute(
-      Array(
-        "--target",
-        "systemverilog",
-        "--target-dir",
-        targetDir,
-      ) ++ args,
-      chisel3.stage.ChiselGeneratorAnnotation(
-        () => new IndexGen()(GatherParam.default)
-      ) +: firtoolAnno
-    )
-
-    println("done")
-  }
+/** Per-element flag encoding: 4 mutually exclusive states in 2 bits. */
+object ElemFlags {
+  def apply(): UInt = UInt(2.W)
+  def PREFILL: UInt = 0.U(2.W)  // inactive/tail -> prefill from vs3
+  def LOOKUP:  UInt = 1.U(2.W)  // active -> GatherBase lookup
+  def ZERO:    UInt = 2.U(2.W)  // out-of-range -> fill zero
+  def SCALAR:  UInt = 3.U(2.W)  // slide1 -> fill scalar
 }
 
 /** Opcode enumeration for IndexGen operation selection.
