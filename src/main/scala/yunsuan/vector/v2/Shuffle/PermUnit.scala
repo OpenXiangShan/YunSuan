@@ -66,7 +66,6 @@ class PermUnit[T <: Data](
   private val igOutValid   = Wire(Vec(NumPipeIn, Bool()))
   private val igOutIndex   = Wire(Vec(NumPipeIn, new GatherIndexBundle(NumElem, IndexWidth)))
   private val igOutPrefill = Wire(Vec(NumPipeIn, Vec(NumElem, UInt(MinDataWidth.W))))
-  private val igOutCompDat = Wire(Vec(NumPipeIn, Vec(NumElem, UInt(MinDataWidth.W))))
   private val igOutCompCnt = Wire(Vec(NumPipeIn, UInt(VlWidth.W)))
   private val igOpReg      = Wire(Vec(NumPipeIn, new IndexGen.OpSel))
 
@@ -75,7 +74,7 @@ class PermUnit[T <: Data](
   private val regPlaceIdx  = Wire(Vec(NumPipeIn, PipeInIdx()))
   private val regBlockBase = Wire(Vec(NumPipeIn, UnitIdx()))
   private val regBlockSize = Wire(Vec(NumPipeIn, BlockSize()))
-  private val regVs2       = Wire(Vec(NumPipeIn, Vec(NumElem, Elem())))
+  private val regTable     = Wire(Vec(NumPipeIn, Vec(NumElem, Elem())))
   private val regTableIdx  = Wire(Vec(NumPipeIn, UnitIdx()))
   private val regScalar    = Wire(Vec(NumPipeIn, UInt(XLEN.W)))
   private val regMeta      = Wire(Vec(NumPipeIn, metaGen.cloneType))
@@ -87,7 +86,6 @@ class PermUnit[T <: Data](
     igOutValid(i)  := RegNext(ig.out.valid, false.B)
     igOutIndex(i)  := RegEnable(ig.out.index, ig.out.valid)
     igOutPrefill(i):= RegEnable(ig.out.prefillData, ig.out.valid)
-    igOutCompDat(i):= RegEnable(ig.out.compressData, ig.out.valid)
     igOutCompCnt(i):= RegEnable(ig.out.compressCount1s, ig.out.valid)
     igOpReg(i)     := RegEnable(ig.in.bits.op, ig.in.valid)
 
@@ -95,10 +93,19 @@ class PermUnit[T <: Data](
     regPlaceIdx(i)  := RegEnable(pi.bits.placeIdx, pi.valid)
     regBlockBase(i) := RegEnable(pi.bits.blockBase, pi.valid)
     regBlockSize(i) := RegEnable(pi.bits.blockSize, pi.valid)
-    regVs2(i)       := RegEnable(pi.bits.vs2.asTypeOf(Vec(NumElem, Elem())), pi.valid)
     regTableIdx(i)  := RegEnable(pi.bits.tableIdx, pi.valid)
     regScalar(i)    := RegEnable(pi.bits.rs1, pi.valid)
     regMeta(i)      := RegEnable(pi.bits.meta, pi.valid)
+
+    // Merged table register: compressData (delayed) vs vs2 (immediate)
+    val isCompress = pi.bits.op.isCompress
+    val tableIn = Mux(isCompress,
+      ig.out.compressData,
+      pi.bits.vs2.asTypeOf(Vec(NumElem, Elem()))
+    )
+    regTable(i) := RegEnable(tableIn,
+      Mux(isCompress, ig.out.valid, pi.valid)
+    )
   }
 
   /*********************** GatherRing s0 Connections *************************/
@@ -113,7 +120,6 @@ class PermUnit[T <: Data](
   /*********************** GatherRing s1 Connections *************************/
 
   for (i <- 0 until NumPipeIn) {
-    val isCompressOp = igOpReg(i).isCompress
 
     gatherRing.in.s1pipes(i).valid := regValid(i)
 
@@ -127,8 +133,8 @@ class PermUnit[T <: Data](
     gatherRing.in.s1pipes(i).bits.fillZeros  := igOutIndex(i).fillZeros
     gatherRing.in.s1pipes(i).bits.fillScala  := igOutIndex(i).fillScala
 
-    // Table: for compress, use IndexGen's compressData; otherwise registered vs2
-    gatherRing.in.s1pipes(i).bits.table := Mux(isCompressOp, igOutCompDat(i), regVs2(i))
+    // Table: merged register (compressData or vs2)
+    gatherRing.in.s1pipes(i).bits.table := regTable(i)
 
     // Prefill from IndexGen (derived from vs3)
     gatherRing.in.s1pipes(i).bits.prefillData := igOutPrefill(i)
@@ -199,5 +205,34 @@ object PermUnit {
     def blockSize: UInt = Cat(lmul.m8, lmul.m4, lmul.m2, lmul.mf8 || lmul.mf4 || lmul.mf2 || lmul.m1)
 
     def tableIdx = uopIdx
+  }
+
+  def main(args: Array[String]): Unit = {
+    import _root_.circt.stage._
+
+    val targetDir = "build/vector"
+
+    println(s"Generating the $this hardware in $targetDir")
+
+    val firtoolOpts = Array(
+      "-O=release",
+      "--disable-annotation-unknown",
+      "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
+    )
+    val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
+
+    (new ChiselStage).execute(
+      Array(
+        "--target",
+        "systemverilog",
+        "--target-dir",
+        targetDir,
+      ) ++ args,
+      chisel3.stage.ChiselGeneratorAnnotation(
+        () => new PermUnit(FakeRobPtr())(GatherParam.default)
+      ) +: firtoolAnno
+    )
+
+    println("done")
   }
 }

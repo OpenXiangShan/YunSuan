@@ -284,6 +284,35 @@ object IndexGen {
     val compressData    = Vec(NumElem, UInt(MinDataWidth.W))  // compressed vs2 (becomes table)
     val compressCount1s = UInt(VlWidth.W)                     // total popcount
   }
+
+  def main(args: Array[String]): Unit = {
+    import _root_.circt.stage._
+
+    val targetDir = "build/vector"
+
+    println(s"Generating the $this hardware in $targetDir")
+
+    val firtoolOpts = Array(
+      "-O=release",
+      "--disable-annotation-unknown",
+      "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
+    )
+    val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
+
+    (new ChiselStage).execute(
+      Array(
+        "--target",
+        "systemverilog",
+        "--target-dir",
+        targetDir,
+      ) ++ args,
+      chisel3.stage.ChiselGeneratorAnnotation(
+        () => new IndexGen()(GatherParam.default)
+      ) +: firtoolAnno
+    )
+
+    println("done")
+  }
 }
 
 /** Opcode enumeration for IndexGen operation selection.

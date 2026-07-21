@@ -45,7 +45,7 @@ class CompressIndexGen(useLZA: Boolean = false)(implicit val param: GatherParam)
 
   private val leadingSumsReg = RegEnable(leadingSums, in.valid)
 
-  private val lzaForDataRotateLZA = VecInit((0.U +: leadingSumsReg).toSeq)
+  private val lzaForDataRotateLZA = VecInit(0.U +: leadingSumsReg.dropRight(1))
 
   indexPreProcess.in.valid    := in.valid
   indexPreProcess.in.groupSel := in.uopIdx
