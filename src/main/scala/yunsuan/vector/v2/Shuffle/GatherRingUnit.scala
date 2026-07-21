@@ -36,8 +36,22 @@ class GatherRingUnit[T <: Data](
   ))
   private val isEntryNext = localPos === 0.U
 
-  // ── Scala Table Byte Split ───────────────────────────
-  private val scalaTableBytes: Vec[UInt] = in.placeIndex.scalarData.splitToVecByWidth(MinDataWidth)
+  // ── Scala Table Byte Split (SEW-aware replication) ──
+  // RISC-V scalar (rs1) is SEW bits wide. When SEW < XLEN, rs1[SEW-1:0] is
+  // replicated to fill all XLEN/MinDataWidth bytes, so that scalaTableBytes(i % 8)
+  // always returns the correct scalar byte regardless of element position i.
+  // Without replication, vslide1down (scalar at vl-1 != 0) would pick the wrong byte.
+  private val sew = in.placeIndex.sew
+  private val rawScalarBytes = in.placeIndex.scalarData.asTypeOf(Vec(XLEN / MinDataWidth, UInt(MinDataWidth.W)))
+  private val scalaTableBytes = Wire(Vec(XLEN / MinDataWidth, UInt(MinDataWidth.W)))
+  for (b <- 0 until XLEN / MinDataWidth) {
+    scalaTableBytes(b) := Mux1H(Seq(
+      sew.e8  -> rawScalarBytes(0),
+      sew.e16 -> rawScalarBytes(b % 2),
+      sew.e32 -> rawScalarBytes(b % 4),
+      sew.e64 -> rawScalarBytes(b),
+    ))
+  }
 
   // ── Table Input MUX ──────────────────────────────────
   private val doPlaceTable = in.placeTable.valid
@@ -303,6 +317,7 @@ object GatherRingUnit {
     val elemData  = Vec(NumElem, UInt(8.W))
 
     val scalarData = UInt(XLEN.W)
+    val sew        = new GatherSewBundle
     val meta       = metaGen
   }
 
@@ -314,6 +329,7 @@ object GatherRingUnit {
       req.elemFlags  := s1.elemFlags
       req.elemData   := s1.elemData
       req.scalarData := s1.scalarData
+      req.sew        := s1.sew
       req.meta       := s1.meta
       req
     }

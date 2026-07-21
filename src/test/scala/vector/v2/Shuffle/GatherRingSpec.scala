@@ -58,6 +58,7 @@ class GatherRingSpec
     fillZeros:  Seq[Boolean] = Seq.fill(16)(false),
     fillScala:  Seq[Boolean] = Seq.fill(16)(false),
     scalarData: BigInt = BigInt(0),
+    sew:        Int = 64,
     placeIdx:   Int = 0,
     blockBase:  Int = 0,
     blockSize:  Int = 1,
@@ -70,6 +71,10 @@ class GatherRingSpec
     s1.bits.blockSize.poke(blockSize)
     s1.bits.tableIdx.poke(tableIdx)
     s1.bits.scalarData.poke(scalarData)
+    s1.bits.sew.e64.poke(sew == 64)
+    s1.bits.sew.e32.poke(sew == 32)
+    s1.bits.sew.e16.poke(sew == 16)
+    s1.bits.sew.e8.poke(sew == 8)
     // Encode to merged flags+data
     for (i <- 0 until 16) {
       val flags = if (fillZeros(i)) ElemFlags.ZERO else if (fillScala(i)) ElemFlags.SCALAR else if (indexValid(i)) ElemFlags.LOOKUP else ElemFlags.PREFILL

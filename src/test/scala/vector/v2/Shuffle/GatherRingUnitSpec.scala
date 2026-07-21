@@ -126,18 +126,28 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       dut.in.placeTable.bits.blockSize.poke(blockSize)
   }
 
+  def pSew(sew: Int): GatherRingUnit[FakeRobPtr] => Unit = {
+    dut =>
+      dut.in.placeIndex.bits.sew.e64.poke(sew == 64)
+      dut.in.placeIndex.bits.sew.e32.poke(sew == 32)
+      dut.in.placeIndex.bits.sew.e16.poke(sew == 16)
+      dut.in.placeIndex.bits.sew.e8.poke(sew == 8)
+  }
+
   def pPlaceIndex(
     blkSize: Int,
     idx:     Seq[Int],
     iValid:  Seq[Boolean],
     prefill: Seq[Int] = Seq.fill(16)(0xFF),
     fScala:  Seq[Boolean] = Seq.fill(16)(false),
-    fZeros:  Seq[Boolean] = Seq.fill(16)(false)
+    fZeros:  Seq[Boolean] = Seq.fill(16)(false),
+    sew:     Int = 64
   ): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
       dut.in.placeIndex.bits.blockSize.poke(blkSize)
       dut.in.placeIndex.valid.poke(true)
+      pSew(sew)(dut)
       for (i <- 0 until 16) {
         val flags = if (fZeros(i)) ElemFlags.ZERO else if (fScala(i)) ElemFlags.SCALAR else if (iValid(i)) ElemFlags.LOOKUP else ElemFlags.PREFILL
         val data  = if (fZeros(i) || fScala(i)) 0 else if (iValid(i)) idx(i) else prefill(i)
@@ -155,10 +165,11 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     prefill    : Seq[Int] = Seq.fill(16)(0xFF),
     scalarValid: Seq[Boolean] = Seq.fill(16)(false),
     zeroValid  : Seq[Boolean] = Seq.fill(16)(false),
+    sew        : Int = 64
   ): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
       pPlaceTable(blkSize, tblIdx, tbl)(dut)
-      pPlaceIndex(blkSize, idx, iValid, prefill, scalarValid, zeroValid)(dut)
+      pPlaceIndex(blkSize, idx, iValid, prefill, scalarValid, zeroValid, sew)(dut)
   }
 
   def pNoPlace: GatherRingUnit[FakeRobPtr] => Unit = {
@@ -560,6 +571,34 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           )
       }
 
+    }
+
+    it("SEW=8 scalar at vl-1=14: rs1[7:0] should replicate to position 14") {
+      sew = 8
+      // Distinct scalarTable bytes: [0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD0, 0xD1]
+      val distinctST = ScalarTable.default(8)
+      // vslide1down: scalar at position vl-1 = 14
+      val sAt14 = (0 until 16).map(i => i / sewByte == 14)
+      val allInvalid = Seq.fill(16)(false)
+
+      // Golden: SEW=8 scalar is rs1[7:0] (byte 0), replicated to position 14.
+      // RTL currently picks scalaTableBytes(14 % 8) = rs1[55:48] (byte 6) — BUG.
+      val golden = (0 until 16).map(i =>
+        if (sAt14(i)) distinctST(0) // correct: rs1[7:0]
+        else prefill(i)
+      ).foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
+
+      simulator() { dut =>
+        runCycles(
+          dut,
+          initUnit,
+          Cycle(
+            pPlace(1, 0, table, index, allInvalid, prefill = prefill, scalarValid = sAt14, sew = 8),
+            pScala(distinctST)
+          )(eWb1(golden)),
+          Cycle(pNoPlace, pWbReady())(eWb0)
+        )
+      }
     }
   }
 
