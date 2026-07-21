@@ -155,12 +155,12 @@ class GatherRingUnit[T <: Data](
       (hasTable || doPlaceTable || doFlowTable)
     gatherMod.in.indexValid(i) := shouldQuery && Mux(
       doPlaceIndex,
-      in.placeIndex.bits.indexValid(i),
+      in.placeIndex.bits.elemFlags(i) === ElemFlags.LOOKUP,
       true.B
     )
     gatherMod.in.index(i) := Mux(
       doPlaceIndex,
-      in.placeIndex.bits.index(i),
+      in.placeIndex.bits.elemData(i),
       indexView(i)
     )
   }
@@ -172,13 +172,13 @@ class GatherRingUnit[T <: Data](
   private val fillScala = Wire(Vec(NumElem, Bool()))
   private val prefill   = Wire(Vec(NumElem, Bool()))
 
+  import ElemFlags._
+
   for (i <- 0 until NumElem) {
-    // prefill: index invalid (but NOT overridden by fillScala/fillZeros)
-    prefill(i)   := !in.placeIndex.bits.indexValid(i) &&
-      !in.placeIndex.bits.fillScala(i) &&
-      !in.placeIndex.bits.fillZeros(i)
-    fillScala(i) := doPlaceIndex && in.placeIndex.bits.fillScala(i)
-    fillZeros(i) := doPlaceIndex && in.placeIndex.bits.fillZeros(i)
+    val f = in.placeIndex.bits.elemFlags(i)
+    prefill(i)   := f === PREFILL
+    fillScala(i) := f === SCALAR && doPlaceIndex
+    fillZeros(i) := f === ZERO && doPlaceIndex
     fillRes(i)   := (doPlaceIndex || hasIndex) && gatherMod.out.resultValid(i)
     fillIdx(i)   := (doPlaceIndex || hasIndex) && gatherMod.out.notfound(i)
 
@@ -186,10 +186,10 @@ class GatherRingUnit[T <: Data](
       indexDone(i)  := false.B
     }.elsewhen(doPlaceIndex) {
       indexOrRes(i) := Mux1H(Seq(
-        prefill(i)   -> in.placeIndex.bits.prefillData(i),
+        prefill(i)   -> in.placeIndex.bits.elemData(i),
         fillScala(i) -> scalaTableBytes(i % (XLEN / MinDataWidth)),
         fillZeros(i) -> 0.U,
-        fillIdx(i)   -> in.placeIndex.bits.index(i),
+        fillIdx(i)   -> in.placeIndex.bits.elemData(i),
         fillRes(i)   -> gatherMod.out.result(i),
       ))
       indexDone(i) := !fillIdx(i)
@@ -295,64 +295,26 @@ object GatherRingUnit {
    * This bundle contains some control signals
    */
   class PlaceIndexRequest[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
-    /**
-     * The start index of the block in [[GatherRing]]
-     */
-    val blockBase   = UnitIdx()
+    val blockBase = UnitIdx()
+    val blockSize = BlockSize()
 
-    /**
-     * The size of the block in [[GatherRing]], should be equal to [[PlaceTableRequest]].blockSize if valid
-     */
-    val blockSize   = BlockSize()
+    // Per-element merged: 2b flags + 8b data (index or prefill)
+    val elemFlags = Vec(NumElem, ElemFlags())
+    val elemData  = Vec(NumElem, UInt(8.W))
 
-    /**
-     * Precalculated index vector
-     */
-    val index       = Vec(NumElem, Index())
-
-    /**
-     * If the index need to do gather
-     */
-    val indexValid  = Vec(NumElem, Bool())
-
-    /**
-     * The result need to be filled with zero, when the index of vrgather is greater than vlmax
-     */
-    val fillZeros   = Vec(NumElem, Bool())
-
-    /**
-     * The result need to be filled with scalar value(x[rs1]), when the executed uop is vslide1up/down
-     */
-    val fillScala   = Vec(NumElem, Bool())
-
-    /**
-     * The inactive/tail data
-     */
-    val prefillData = Vec(NumElem, Elem())
-
-    /**
-     * The scalar data x[rs1] or f[fs1]
-     */
     val scalarData = UInt(XLEN.W)
-
-    /**
-     * The meta data, contains pdest and robIdx
-     */
-    val meta = metaGen
+    val meta       = metaGen
   }
 
   object PlaceIndexRequest {
     def fromPipeInS1[T <: Data](s1: GatherRing.PipeInS1[T])(implicit param: GatherParam): PlaceIndexRequest[T] = {
       val req = Wire(new PlaceIndexRequest(s1.meta.cloneType))
-      req.blockBase   := s1.blockBase
-      req.blockSize   := s1.blockSize
-      req.index       := s1.index
-      req.indexValid  := s1.indexValid
-      req.fillZeros   := s1.fillZeros
-      req.fillScala   := s1.fillScala
-      req.prefillData := s1.prefillData
-      req.scalarData  := s1.scalarData
-      req.meta        := s1.meta
+      req.blockBase  := s1.blockBase
+      req.blockSize  := s1.blockSize
+      req.elemFlags  := s1.elemFlags
+      req.elemData   := s1.elemData
+      req.scalarData := s1.scalarData
+      req.meta       := s1.meta
       req
     }
   }

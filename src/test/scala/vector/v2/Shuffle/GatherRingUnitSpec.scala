@@ -138,20 +138,11 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
 
       dut.in.placeIndex.bits.blockSize.poke(blkSize)
       dut.in.placeIndex.valid.poke(true)
-      idx.zipWithIndex.foreach {
-        case (v, i) => dut.in.placeIndex.bits.index(i).poke(v)
-      }
-      iValid.zipWithIndex.foreach {
-        case (v, i) => dut.in.placeIndex.bits.indexValid(i).poke(v)
-      }
-      prefill.zipWithIndex.foreach {
-        case (v, i) => dut.in.placeIndex.bits.prefillData(i).poke(v)
-      }
-      fScala.zipWithIndex.foreach {
-        case (v, i) => dut.in.placeIndex.bits.fillScala(i).poke(v)
-      }
-      fZeros.zipWithIndex.foreach {
-        case (v, i) => dut.in.placeIndex.bits.fillZeros(i).poke(v)
+      for (i <- 0 until 16) {
+        val flags = if (fZeros(i)) ElemFlags.ZERO else if (fScala(i)) ElemFlags.SCALAR else if (iValid(i)) ElemFlags.LOOKUP else ElemFlags.PREFILL
+        val data  = if (fZeros(i) || fScala(i)) 0 else if (iValid(i)) idx(i) else prefill(i)
+        dut.in.placeIndex.bits.elemFlags(i).poke(flags)
+        dut.in.placeIndex.bits.elemData(i).poke(data.U)
       }
   }
 

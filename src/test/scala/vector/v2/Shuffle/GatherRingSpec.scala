@@ -47,7 +47,7 @@ class GatherRingSpec
     dut.in.s0pipes(pipe).valid.poke(false)
   }
 
-  // s1: deliver table + index data
+  // s1: deliver table + merged flags+data
   def pS1(
     dut:        GatherRing[FakeRobPtr],
     pipe:       Int,
@@ -70,11 +70,13 @@ class GatherRingSpec
     s1.bits.blockSize.poke(blockSize)
     s1.bits.tableIdx.poke(tableIdx)
     s1.bits.scalarData.poke(scalarData)
-    index.zipWithIndex.foreach { case (v, i) => s1.bits.index(i).poke(v) }
-    indexValid.zipWithIndex.foreach { case (v, i) => s1.bits.indexValid(i).poke(v) }
-    prefill.zipWithIndex.foreach { case (v, i) => s1.bits.prefillData(i).poke(v) }
-    fillZeros.zipWithIndex.foreach { case (v, i) => s1.bits.fillZeros(i).poke(v) }
-    fillScala.zipWithIndex.foreach { case (v, i) => s1.bits.fillScala(i).poke(v) }
+    // Encode to merged flags+data
+    for (i <- 0 until 16) {
+      val flags = if (fillZeros(i)) ElemFlags.ZERO else if (fillScala(i)) ElemFlags.SCALAR else if (indexValid(i)) ElemFlags.LOOKUP else ElemFlags.PREFILL
+      val data  = if (fillZeros(i) || fillScala(i)) 0 else if (indexValid(i)) index(i) else prefill(i)
+      s1.bits.elemFlags(i).poke(flags)
+      s1.bits.elemData(i).poke(data.U)
+    }
     // table data
     table.zipWithIndex.foreach { case (v, i) => s1.bits.table(i).poke(v) }
   }

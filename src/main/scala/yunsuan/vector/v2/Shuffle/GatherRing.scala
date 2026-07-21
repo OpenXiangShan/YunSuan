@@ -172,65 +172,18 @@ object GatherRing {
   }
 
   class PipeInS1[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
-    /**
-     * The index of placement in block
-     */
-    val placeIdx = PipeInIdx()
+    val placeIdx  = PipeInIdx()
+    val blockBase = UnitIdx()
+    val blockSize = BlockSize()
 
-    /**
-     * The start index of the block in [[GatherRing]]
-     */
-    val blockBase   = UnitIdx()
+    // Per-element merged: 2b flags + 8b data (index or prefill)
+    val elemFlags = Vec(NumElem, ElemFlags())
+    val elemData  = Vec(NumElem, UInt(8.W))
 
-    /**
-     * The size of the block in [[GatherRing]]
-     */
-    val blockSize   = BlockSize()
-
-    /**
-     * Precalculated index vector
-     */
-    val index       = Vec(NumElem, Index())
-
-    /**
-     * If the index need to do gather
-     */
-    val indexValid  = Vec(NumElem, Bool())
-
-    /**
-     * The result need to be filled with zero, when the index of vrgather is greater than vlmax
-     */
-    val fillZeros   = Vec(NumElem, Bool())
-
-    /**
-     * The result need to be filled with scalar value(x[rs1]), when the executed uop is vslide1up/down
-     */
-    val fillScala   = Vec(NumElem, Bool())
-
-    /**
-     * The result need to be filled with inactive/tail data
-     */
-    val prefillData = Vec(NumElem, Elem())
-
-    /**
-     * The scalar data x[rs1] or f[fs1]
-     */
     val scalarData = UInt(XLEN.W)
-
-    /**
-     * the index of this table in v[vs2]
-     */
-    val tableIdx = UnitIdx()
-
-    /**
-     * The data of table
-     */
-    val table = Vec(NumElem, Elem())
-
-    /**
-     * The meta data
-     */
-    val meta = metaGen
+    val tableIdx   = UnitIdx()
+    val table      = Vec(NumElem, Elem())
+    val meta       = metaGen
   }
 
   class PipeOut[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {

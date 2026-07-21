@@ -127,16 +127,9 @@ class PermUnit[T <: Data](
     gatherRing.in.s1pipes(i).bits.blockBase := regBlockBase(i)
     gatherRing.in.s1pipes(i).bits.blockSize := regBlockSize(i)
 
-    // Index/flag decode from merged format back to GatherRing fields
-    import ElemFlags._
-    for (j <- 0 until NumElem) {
-      val f = igOutFlags(i)(j)
-      gatherRing.in.s1pipes(i).bits.indexValid(j) := f === LOOKUP
-      gatherRing.in.s1pipes(i).bits.fillZeros(j)  := f === ZERO
-      gatherRing.in.s1pipes(i).bits.fillScala(j)  := f === SCALAR
-      gatherRing.in.s1pipes(i).bits.index(j)      := igOutData(i)(j)
-      gatherRing.in.s1pipes(i).bits.prefillData(j):= igOutData(i)(j)
-    }
+    // Merged flags+data passed directly to GatherRing
+    gatherRing.in.s1pipes(i).bits.elemFlags := igOutFlags(i)
+    gatherRing.in.s1pipes(i).bits.elemData  := igOutData(i)
 
     // Table: merged register (compressData or vs2)
     gatherRing.in.s1pipes(i).bits.table := regTable(i)
