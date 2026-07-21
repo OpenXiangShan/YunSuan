@@ -208,11 +208,20 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
       isCompress  -> compressIdx.fillScala(i),
     ))
 
-    out.elemFlags(i) := Mux(fz, ElemFlags.ZERO,
-      Mux(fs, ElemFlags.SCALAR,
-        Mux(iv, ElemFlags.LOOKUP, ElemFlags.PREFILL)))
-    out.elemData(i) := Mux(fz || fs, 0.U,
-      Mux(iv, idx, prefillByte(i)))
+    val isPrefill = !fz && !fs && !iv
+
+    out.elemFlags(i) := Mux1H(Seq(
+      fz -> ElemFlags.ZERO,
+      fs -> ElemFlags.SCALAR,
+      iv -> ElemFlags.LOOKUP,
+      isPrefill -> ElemFlags.PREFILL,
+    ))
+    out.elemData(i) := Mux1H(Seq(
+      fz        -> 0.U,
+      fs        -> 0.U,
+      iv        -> idx,
+      isPrefill -> prefillByte(i),
+    ))
   }
 
   /******************* Compress-specific Outputs *****************************/
