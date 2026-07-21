@@ -172,12 +172,16 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   }
 
   // -- Final output: encode to merged flags+data --
-  private val prefillByte = {
-    val vs3Bytes = in.bits.vs3.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))
-    // compress tail elements follow vta; mask-inactive elements follow vma
-    val agnostic = Mux(isCompress, in.bits.vta, in.bits.vma)
-    VecInit((0 until NumElem).map(i => Mux(agnostic, Fill(8, 1.B), vs3Bytes(i))))
-  }
+  // e8vl = vl in 8b elements = vl << sewShift(sew)
+  private val e8vl = Mux1H(Seq(
+    in.bits.sew.e8  -> in.bits.vl,
+    in.bits.sew.e16 -> Cat(in.bits.vl, 0.U(1.W)),
+    in.bits.sew.e32 -> Cat(in.bits.vl, 0.U(2.W)),
+    in.bits.sew.e64 -> Cat(in.bits.vl, 0.U(3.W)),
+  ))
+  private val vs3Bytes = in.bits.vs3.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))
+  private val dlenBits = log2Ceil(DLEN / MinDataWidth) // bits per uop-internal idx
+
   for (i <- 0 until NumElem) {
     val iv = Wire(Bool()); val idx = Wire(Index()); val fz = Wire(Bool()); val fs = Wire(Bool())
     iv := Mux1H(Seq(
@@ -215,6 +219,12 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
 
     val isPrefill = !fz && !fs && !iv
 
+    // PREFILL data: tail elements follow vta, mask-inactive follow vma;
+    // compress has no mask, all PREFILL are tail -> vta
+    val isTail = Cat(in.bits.uopIdx, i.U(dlenBits.W)) >= e8vl
+    val agnostic = Mux(isCompress || isTail, in.bits.vta, in.bits.vma)
+    val prefillByte = Mux(agnostic, Fill(8, 1.B), vs3Bytes(i))
+
     out.elemFlags(i) := Mux1H(Seq(
       fz -> ElemFlags.ZERO,
       fs -> ElemFlags.SCALAR,
@@ -225,7 +235,7 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
       fz        -> 0.U,
       fs        -> 0.U,
       iv        -> idx,
-      isPrefill -> prefillByte(i),
+      isPrefill -> prefillByte,
     ))
   }
 
