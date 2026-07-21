@@ -2,13 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [ kunminghu-v3 ]
   pull_request:
-    branched: [ master ]
+    branches: [ kunminghu-v3 ]
 
 jobs:
   builtin-test:
-    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, ubuntu-22.04, ubuntu-24.04]
+    runs-on: ubuntu-latest
+    container: ghcr.io/openxiangshan/xs-env:${{ matrix.os }}
 
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -16,20 +20,9 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup Scala
-        uses: olafurpg/setup-scala@v10
-
       - name: Cache
         id: cache
         uses: coursier/cache-action@v6
-
-      - name: Verilator
-        run: sudo apt install verilator
-
-      - name: Setup Mill
-        uses: jodersky/setup-mill@v0.2.3
-        with:
-          mill-version: 0.11.1
 
       - name: builtin-chiseltest
         run: |
