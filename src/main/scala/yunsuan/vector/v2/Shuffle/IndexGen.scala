@@ -182,6 +182,10 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   private val vs3Bytes = in.bits.vs3.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))
   private val dlenBits = log2Ceil(DLEN / MinDataWidth) // bits per uop-internal idx
 
+  // Pre-allocated Vec for better Verilog naming
+  private val isTail      = Wire(Vec(NumElem, Bool()))
+  private val prefillByte = Wire(Vec(NumElem, UInt(MinDataWidth.W)))
+
   for (i <- 0 until NumElem) {
     val iv = Wire(Bool()); val idx = Wire(Index()); val fz = Wire(Bool()); val fs = Wire(Bool())
     iv := Mux1H(Seq(
@@ -221,9 +225,9 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
 
     // PREFILL data: tail elements follow vta, mask-inactive follow vma;
     // compress has no mask, all PREFILL are tail -> vta
-    val isTail = Cat(in.bits.uopIdx, i.U(dlenBits.W)) >= e8vl
-    val agnostic = Mux(isCompress || isTail, in.bits.vta, in.bits.vma)
-    val prefillByte = Mux(agnostic, Fill(8, 1.B), vs3Bytes(i))
+    isTail(i) := Cat(in.bits.uopIdx, i.U(dlenBits.W)) >= e8vl
+    val agnostic = Mux(isCompress || isTail(i), in.bits.vta, in.bits.vma)
+    prefillByte(i) := Mux(agnostic, Fill(8, 1.B), vs3Bytes(i))
 
     out.elemFlags(i) := Mux1H(Seq(
       fz -> ElemFlags.ZERO,
@@ -235,7 +239,7 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
       fz        -> 0.U,
       fs        -> 0.U,
       iv        -> idx,
-      isPrefill -> prefillByte,
+      isPrefill -> prefillByte(i),
     ))
   }
 
