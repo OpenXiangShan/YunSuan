@@ -313,6 +313,41 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
           dut.out.compressCount1s.expect(0.U)
         }
       }
+      it("vta=true, tail elements fill all-1s") {
+        simulate(new IndexGen()(GatherParam.default)) { dut =>
+          pDefaults(dut)
+          // vs3 = non-zero pattern, so we can distinguish vs3 from all-1s
+          dut.in.bits.vs3.poke(BigInt("AABBCCDDEEFF00112233445566778899", 16))
+          dut.in.bits.vta.poke(true); dut.in.bits.vma.poke(false)
+          val mask = BigInt("5555", 16) // 8 bits set
+          dut.in.valid.poke(true); dut.in.bits.op.isCompress.poke(true)
+          dut.in.bits.vs1.poke(mask)
+          dut.clock.step()
+          // tail elements (i=8..15) should have elemData=0xFF
+          for (i <- 8 until numElem) {
+            dut.out.elemFlags(i).expect(ElemFlags.PREFILL)
+            dut.out.elemData(i).expect(0xFF.U)
+          }
+        }
+      }
+      it("vta=false, tail elements fill vs3") {
+        simulate(new IndexGen()(GatherParam.default)) { dut =>
+          pDefaults(dut)
+          val vs3 = BigInt("AABBCCDDEEFF00112233445566778899", 16)
+          dut.in.bits.vs3.poke(vs3)
+          dut.in.bits.vta.poke(false); dut.in.bits.vma.poke(false)
+          val mask = BigInt("FF00", 16) // first 8 bytes active
+          dut.in.valid.poke(true); dut.in.bits.op.isCompress.poke(true)
+          dut.in.bits.vs1.poke(mask)
+          dut.clock.step()
+          // tail elements (i=8..15) should have elemData = vs3 byte
+          for (i <- 8 until numElem) {
+            dut.out.elemFlags(i).expect(ElemFlags.PREFILL)
+            val expectedByte = ((vs3 >> (i * 8)) & 0xFF).toInt
+            dut.out.elemData(i).expect(expectedByte.U)
+          }
+        }
+      }
     }
 
     describe("Invalid input") {

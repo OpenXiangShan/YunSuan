@@ -174,7 +174,9 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   // -- Final output: encode to merged flags+data --
   private val prefillByte = {
     val vs3Bytes = in.bits.vs3.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))
-    VecInit((0 until NumElem).map(i => Mux(in.bits.vma, Fill(8, 1.B), vs3Bytes(i))))
+    // compress tail elements follow vta; mask-inactive elements follow vma
+    val agnostic = Mux(isCompress, in.bits.vta, in.bits.vma)
+    VecInit((0 until NumElem).map(i => Mux(agnostic, Fill(8, 1.B), vs3Bytes(i))))
   }
   for (i <- 0 until NumElem) {
     val iv = Wire(Bool()); val idx = Wire(Index()); val fz = Wire(Bool()); val fs = Wire(Bool())
