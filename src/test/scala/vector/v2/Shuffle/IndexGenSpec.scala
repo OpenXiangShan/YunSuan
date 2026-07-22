@@ -40,8 +40,8 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
     import ElemFlags._
     dut.out.valid.expect(true.B)
     for (i <- 0 until numElem) {
-      val flags = if (goldenFillZ(i)) ZERO else if (goldenFillS(i)) SCALAR else if (goldenValid(i)) LOOKUP else PREFILL
-      val data  = if (goldenFillZ(i) || goldenFillS(i)) 0 else goldenIdx(i)
+      val flags = if (goldenFillZ(i)) ZERO else if (goldenValid(i)) LOOKUP else PREFILL
+      val data  = if (goldenFillZ(i)) 0 else goldenIdx(i)
       dut.out.elemFlags(i).expect(flags, s"elemFlags($i)")
       dut.out.elemData(i).expect(data.U, s"elemData($i)")
     }

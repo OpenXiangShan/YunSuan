@@ -152,7 +152,7 @@ class GatherRingUnit[T <: Data](
       (hasTable || doPlaceTable || doFlowTable)
     gatherMod.in.indexValid(i) := shouldQuery && Mux(
       doPlaceIndex,
-      in.placeIndex.bits.elemFlags(i) === ElemFlags.LOOKUP,
+      ElemFlags.isLOOKUP(in.placeIndex.bits.elemFlags(i)),
       true.B
     )
     gatherMod.in.index(i) := Mux(
@@ -166,16 +166,14 @@ class GatherRingUnit[T <: Data](
   private val fillRes   = Wire(Vec(NumElem, Bool()))
   private val fillIdx   = Wire(Vec(NumElem, Bool()))
   private val fillZeros = Wire(Vec(NumElem, Bool()))
-  private val fillScala = Wire(Vec(NumElem, Bool()))
   private val prefill   = Wire(Vec(NumElem, Bool()))
 
   import ElemFlags._
 
   for (i <- 0 until NumElem) {
     val f = in.placeIndex.bits.elemFlags(i)
-    prefill(i)   := f === PREFILL
-    fillScala(i) := f === SCALAR && doPlaceIndex
-    fillZeros(i) := f === ZERO && doPlaceIndex
+    prefill(i)   := isPREFILL(f)
+    fillZeros(i) := isZERO(f) && doPlaceIndex
     fillRes(i)   := (doPlaceIndex || hasIndex) && gatherMod.out.resultValid(i)
     fillIdx(i)   := (doPlaceIndex || hasIndex) && gatherMod.out.notfound(i)
 
@@ -184,7 +182,6 @@ class GatherRingUnit[T <: Data](
     }.elsewhen(doPlaceIndex) {
       indexOrRes(i) := Mux1H(Seq(
         prefill(i)   -> in.placeIndex.bits.elemData(i),
-        fillScala(i) -> in.placeIndex.bits.elemData(i),
         fillZeros(i) -> 0.U,
         fillIdx(i)   -> in.placeIndex.bits.elemData(i),
         fillRes(i)   -> gatherMod.out.result(i),

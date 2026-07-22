@@ -72,7 +72,7 @@ class GatherRingSpec
     s1.bits.tableIdx.poke(tableIdx)
     // Encode to merged flags+data; scalar byte computed here (IndexGen equivalent)
     for (i <- 0 until 16) {
-      val flags = if (fillZeros(i)) ElemFlags.ZERO else if (fillScala(i)) ElemFlags.SCALAR else if (indexValid(i)) ElemFlags.LOOKUP else ElemFlags.PREFILL
+      val flags = if (fillZeros(i)) ElemFlags.ZERO else if (indexValid(i)) ElemFlags.LOOKUP else ElemFlags.PREFILL
       val sByte = sew match { case 8 => scalaBytes(0); case 16 => scalaBytes(i % 2); case 32 => scalaBytes(i % 4); case _ => scalaBytes(i % 8) }
       val data  = if (fillZeros(i)) 0 else if (fillScala(i)) sByte else if (indexValid(i)) index(i) else prefill(i)
       s1.bits.elemFlags(i).poke(flags)

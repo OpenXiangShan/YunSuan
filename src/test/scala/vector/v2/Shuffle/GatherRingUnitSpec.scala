@@ -141,7 +141,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
       dut.in.placeIndex.bits.blockSize.poke(blkSize)
       dut.in.placeIndex.valid.poke(true)
       for (i <- 0 until 16) {
-        val flags = if (fZeros(i)) ElemFlags.ZERO else if (fScala(i)) ElemFlags.SCALAR else if (iValid(i)) ElemFlags.LOOKUP else ElemFlags.PREFILL
+        val flags = if (fZeros(i)) ElemFlags.ZERO else if (iValid(i)) ElemFlags.LOOKUP else ElemFlags.PREFILL
         val sByte = sew match { case 8 => scalarData(0); case 16 => scalarData(i % 2); case 32 => scalarData(i % 4); case _ => scalarData(i % 8) }
         val data  = if (fZeros(i)) 0 else if (fScala(i)) sByte else if (iValid(i)) idx(i) else prefill(i)
         dut.in.placeIndex.bits.elemFlags(i).poke(flags)

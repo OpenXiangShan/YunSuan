@@ -232,20 +232,21 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
 
     out.elemFlags(i) := Mux1H(Seq(
       fz -> ElemFlags.ZERO,
-      fs -> ElemFlags.SCALAR,
+      (fs || isPrefill) -> ElemFlags.PREFILL,
       iv -> ElemFlags.LOOKUP,
-      isPrefill -> ElemFlags.PREFILL,
     ))
     out.elemData(i) := Mux1H(Seq(
       fz        -> 0.U,
-      fs        -> Mux1H(Seq(
-        in.bits.sew.e8  -> rs1Bytes(0),
-        in.bits.sew.e16 -> rs1Bytes(i % 2),
-        in.bits.sew.e32 -> rs1Bytes(i % 4),
-        in.bits.sew.e64 -> rs1Bytes(i % (XLEN / MinDataWidth)),
-      )),
+      (fs || isPrefill) -> Mux(fs,
+        Mux1H(Seq(  // SCALAR: SEW-aware rs1 byte
+          in.bits.sew.e8  -> rs1Bytes(0),
+          in.bits.sew.e16 -> rs1Bytes(i % 2),
+          in.bits.sew.e32 -> rs1Bytes(i % 4),
+          in.bits.sew.e64 -> rs1Bytes(i % (XLEN / MinDataWidth)),
+        )),
+        prefillByte(i)  // PREFILL: vs3 byte or agnostic
+      ),
       iv        -> idx,
-      isPrefill -> prefillByte(i),
     ))
   }
 
@@ -322,13 +323,19 @@ object IndexGen {
   }
 }
 
-/** Per-element flag encoding: 4 mutually exclusive states in 2 bits. */
+/** Per-element flag encoding: 3 states in 2 bits.
+  * ZERO=00, PREFILL=01 (includes old SCALAR), LOOKUP=10.
+  * Bit0=1 means PREFILL; Bit1=1 means LOOKUP.
+  */
 object ElemFlags {
   def apply(): UInt = UInt(2.W)
-  def PREFILL: UInt = 0.U(2.W)  // inactive/tail -> prefill from vs3
-  def LOOKUP:  UInt = 1.U(2.W)  // active -> GatherBase lookup
-  def ZERO:    UInt = 2.U(2.W)  // out-of-range -> fill zero
-  def SCALAR:  UInt = 3.U(2.W)  // slide1 -> fill scalar
+  def ZERO:    UInt = 0.U(2.W)
+  def PREFILL: UInt = 1.U(2.W)
+  def LOOKUP:  UInt = 2.U(2.W)
+
+  def isZERO(flags:    UInt): Bool = flags === 0.U(2.W)
+  def isPREFILL(flags: UInt): Bool = flags(0)
+  def isLOOKUP(flags:  UInt): Bool = flags(1)
 }
 
 /** Opcode enumeration for IndexGen operation selection.
