@@ -22,7 +22,7 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
     check: (Seq[(Boolean, Int)], Seq[(Boolean, Int)], Seq[Boolean], Seq[BigInt]) => Unit
   ): Unit = {
     val param = GatherCommon.GatherParam.default
-    val NumUnits = 8 // VLEN/DLEN * MaxLMUL = 128/128 * 8
+    val NumUnits = 8
 
     simulate(new GatherRingController()(param)) { dut =>
       for (i <- 0 until NumUnits) {
@@ -53,6 +53,37 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
         dut.out.wbSelOH(i).peekValue().asBigInt
       }
       check(tablePos, indexPos, willFlow, wbSelOH)
+    }
+  }
+
+  // Extended helper that also exposes blockSize and dbgPipeCtrlValid
+  def simulateCtrlEx(
+    blockSize: Int,
+    blockBase: Int,
+    s0valid:  Boolean = true
+  )(
+    check: Int => Unit  // receives dbgPipeCtrlValid(0) bitmap
+  ): Unit = {
+    val param = GatherCommon.GatherParam.default
+    val NumUnits = 8
+
+    simulate(new GatherRingController()(param)) { dut =>
+      for (i <- 0 until NumUnits) {
+        dut.in.hasTable(i).poke(false)
+        dut.in.hasIndex(i).poke(false)
+      }
+      dut.in.wbValid.poke(0)
+      dut.in.s0pipes(0).valid.poke(s0valid)
+      dut.in.s0pipes(0).bits.placeIdx.poke(0)
+      dut.in.s0pipes(0).bits.blockBase.poke(blockBase)
+      dut.in.s0pipes(0).bits.blockSize.poke(blockSize)
+      for (i <- 1 until param.numPipeIn) {
+        dut.in.s0pipes(i).valid.poke(false)
+      }
+      dut.clock.step()
+
+      val dbg = dut.out.dbgPipeCtrlValid(0).peekValue().asBigInt.toInt
+      check(dbg)
     }
   }
 
@@ -159,6 +190,42 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
       // Interleaved: units 0 and 4 both in pipe0 -> unit 0 wins (lower OH index)
       simulateCtrl(0, 0, 0x11) { (_, _, _, wb) =>
         assert(wb(0) == 1, s"pipe0 should pick unit 0 over unit 4, got ${wb(0)}")
+      }
+    }
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  Tests: block controller mutual exclusion
+  // ══════════════════════════════════════════════════════
+  describe("Block controller mutual exclusion") {
+    it("LMUL=1 (blockSize=1) -> no block controller active") {
+      simulateCtrlEx(blockSize = 1, blockBase = 0) { dbg =>
+        // dbg bits: [ring8, ring4, ring2]
+        assert(dbg == 0, s"LMUL=1: no controller should be active, got dbg=0b${dbg.toBinaryString}")
+      }
+    }
+
+    it("LMUL=2 (blockSize=2) -> only ring2 active") {
+      simulateCtrlEx(blockSize = 2, blockBase = 0) { dbg =>
+        assert(dbg == 1, s"LMUL=2: only ring2 should be active (0b001), got dbg=0b${dbg.toBinaryString}")
+      }
+    }
+
+    it("LMUL=4 (blockSize=4) -> only ring4 active") {
+      simulateCtrlEx(blockSize = 4, blockBase = 0) { dbg =>
+        assert(dbg == 2, s"LMUL=4: only ring4 should be active (0b010), got dbg=0b${dbg.toBinaryString}")
+      }
+    }
+
+    it("LMUL=8 (blockSize=8) -> only ring8 active") {
+      simulateCtrlEx(blockSize = 8, blockBase = 0) { dbg =>
+        assert(dbg == 4, s"LMUL=8: only ring8 should be active (0b100), got dbg=0b${dbg.toBinaryString}")
+      }
+    }
+
+    it("LMUL=4 non-zero blockBase -> only ring4 active") {
+      simulateCtrlEx(blockSize = 4, blockBase = 4) { dbg =>
+        assert(dbg == 2, s"LMUL=4 base=4: only ring4 should be active, got dbg=0b${dbg.toBinaryString}")
       }
     }
   }

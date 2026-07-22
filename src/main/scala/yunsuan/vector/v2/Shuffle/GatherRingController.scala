@@ -57,6 +57,12 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
     out.pipeIndexPos(i) := Mux1HValidIO(
       (ring2Controllers ++ ring4Controllers ++ ring8Controllers).map(_.out.indexPos(i))
     )
+    // Debug: bitmap of which controller type is active for this pipe
+    out.dbgPipeCtrlValid(i) := Cat(
+      ring8Controllers.map(_.in.pipePlaceIdx(i).valid).reduce(_ || _),
+      ring4Controllers.map(_.in.pipePlaceIdx(i).valid).reduce(_ || _),
+      ring2Controllers.map(_.in.pipePlaceIdx(i).valid).reduce(_ || _),
+    )
   }
 
   private val ring2WillFlowVec = Cat(ring2Controllers.map(_.out.willFlow).reverse)
@@ -104,6 +110,8 @@ object GatherRingController {
     val pipeIndexPos = Vec(NumPipeIn, ValidIO(UnitIdx()))
     val willFlow     = Output(Vec(NumUnits, Bool()))
     val wbSelOH      = Vec(NumPipeOut, UInt(NumUnits.W))
+    // Debug: per-pipe controller valid bitmap [ring8, ring4, ring2]
+    val dbgPipeCtrlValid = Output(Vec(NumPipeIn, UInt(3.W)))
   }
 
   def main(args: Array[String]): Unit = {
