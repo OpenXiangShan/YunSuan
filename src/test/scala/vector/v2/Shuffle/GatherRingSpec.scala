@@ -375,6 +375,30 @@ class GatherRingSpec
           eWb(dut, pipe = 0, golden)
         }
       }
+      it("blockBase=4") {
+        simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(4)
+          val index = Index.unzip4(1)
+          val iValid = IndexValid.allTrue(1)
+          val pf = Prefill.default(1)
+          val golden = Res.gather(table, index, 0 until 4)
+          for (p <- 0 until 4) { pS0(dut, pipe = p, blockBase = 4, blockSize = 4, placeIdx = p) }
+          dut.clock.step()
+
+          for (p <- 0 until 4) pS0Off(dut, pipe = p)
+          for (p <- 0 until 4) {
+            pS1(dut, pipe = p, table.slice(p * 16, (p + 1) * 16), index, iValid, pf,
+              blockSize = 4, tableIdx = p, placeIdx = p)
+          }
+          dut.clock.step()
+
+          for (p <- 0 until 4) pS1Off(dut, pipe = p)
+          for (_ <- 0 until 8) dut.clock.step()
+
+          eWb(dut, pipe = 0, golden)
+        }
+      }
     }
     describe("LMUL=8") {
       it("identity") {

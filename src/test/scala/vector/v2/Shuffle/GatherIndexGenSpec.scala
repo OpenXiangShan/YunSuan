@@ -48,7 +48,6 @@ class GatherIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     dut.in.bits.isGatherEI16.poke(false)
     dut.in.bits.vs1.poke(vs1)
     dut.in.bits.uopIdx.poke(uopIdx)
-    dut.in.bits.mask.poke((BigInt(1) << numElem) - 1)
     pSew(dut.in.bits.sew, sew)
     pSew(dut.in.bits.ei, ei)
     pLmul(dut.in.bits.lmul, lmulFrac)
@@ -59,7 +58,6 @@ class GatherIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     dut.in.bits.isGatherEI16.poke(true)
     dut.in.bits.vs1.poke(vs1)
     dut.in.bits.uopIdx.poke(uopIdx)
-    dut.in.bits.mask.poke((BigInt(1) << numElem) - 1)
     pSew(dut.in.bits.sew, sew)
     pSew(dut.in.bits.ei, 16)
     pLmul(dut.in.bits.lmul, lmulFrac)
@@ -69,7 +67,10 @@ class GatherIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
     dut.out.gather.valid.expect(true.B)
     for (i <- 0 until numElem) {
       val (idx, valid, fillZ, fillS) = golden(i)
-      dut.out.gather.bits.index(i).expect(idx.U)
+      // index is don't-care when fillZeros; only check validity flags
+      if (!fillZ) {
+        dut.out.gather.bits.index(i).expect(idx.U)
+      }
       dut.out.gather.bits.indexValid(i).expect(valid.B)
       dut.out.gather.bits.fillZeros(i).expect(fillZ.B)
       dut.out.gather.bits.fillScala(i).expect(fillS.B)
@@ -113,6 +114,19 @@ class GatherIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           // mf2: vlmax in 8b = lmulFrac*vlen/64 = 4*128/64 = 8 bytes = 1 E64 element
           // index 1 → bytes 8..15 → >= 8 → fillZeros
           val vs1 = BigInt(1)
+          val golden = goldenGather(vs1, sew, ei, lmulFrac, uopIdx = 0)
+          pGather(dut, vs1, sew, ei, lmulFrac, uopIdx = 0)
+          dut.clock.step()
+          eGather(dut, golden)
+        }
+      }
+      it("element value with upper bits set is out-of-range") {
+        simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
+          val sew = 64; val ei = 64; val lmulFrac = 8  // LMUL=m1, VLMAX=2 elem
+          // vs1[0] = 16 (0x10) → lower 4 bits = 0, but full value 16 >= VLMAX=2
+          // RTL truncates to 4 bits → gets idx 0, incorrectly treating as valid
+          // Spec: element offset 16 >= 2 → should return 0 (fillZeros)
+          val vs1 = BigInt(16)
           val golden = goldenGather(vs1, sew, ei, lmulFrac, uopIdx = 0)
           pGather(dut, vs1, sew, ei, lmulFrac, uopIdx = 0)
           dut.clock.step()

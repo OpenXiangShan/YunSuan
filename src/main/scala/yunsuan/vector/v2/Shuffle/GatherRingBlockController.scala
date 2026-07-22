@@ -30,9 +30,11 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   // The least significant free position of tableValid less than the most significant valid position of indexValid
   val tableLeastFreeOH = PriorityEncoderOH(~in.tableValid)
   val indexMostValidOH = Reverse(PriorityEncoderOH(Reverse(in.indexValid)))
+  val allFull = in.tableValid.andR
   // Either one suffices: a uop entering GatherRing always carries both table and index groups
+  // allFull: when all table slots are occupied, existing tables must still circulate
   val willFlow = (in.tableValid.orR || in.indexValid.orR) &&
-    !(tableLeastFreeOH.rotateRight(1) & indexMostValidOH).orR
+    (allFull || !(tableLeastFreeOH.rotateRight(1) & indexMostValidOH).orR)
 
   // Per-pipe table/index position outputs
   for (i <- 0 until NumPipeIn) {

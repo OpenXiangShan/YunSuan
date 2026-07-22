@@ -48,12 +48,6 @@ class GatherIndexGen(implicit val param: GatherParam) extends GatherModule {
 
   val uopIdx = in.bits.uopIdx
 
-  val maskVf1 = in.bits.mask
-
-  val maskVf2 = in.bits.mask.toVf2Vec
-
-  val maskVf4 = in.bits.mask.toVf4Vec
-
   val e64ei64MinSewIdx = Wire(Vec(DLEN / 64, Vec(64 / MinDataWidth, Index)))
 
   val e32ei32MinSewIdx = Wire(Vec(DLEN / 32, Vec(32 / MinDataWidth, Index)))
@@ -159,9 +153,46 @@ class GatherIndexGen(implicit val param: GatherParam) extends GatherModule {
 
   val geVlmax = Wire(Vec(NumElem, Bool()))
 
+  // Element-level out-of-range: upper bits of SEW/EI-width element are non-zero.
+  // These are missed by the byte-level geVlmax check because the index
+  // construction truncates the element to EXXValidBits bits.
+  def expandElemOor(vs1Vec: Vec[UInt], sew: Int, validBits: Int): Vec[Bool] = {
+    val result = Wire(Vec(NumElem, Bool()))
+    val nElems = DLEN / sew
+    val subPerElem = sew / MinDataWidth
+    for (i <- 0 until nElems) {
+      val oor = if (validBits < sew) vs1Vec(i)(sew - 1, validBits).orR else false.B
+      for (j <- 0 until subPerElem) {
+        result(i * subPerElem + j) := oor
+      }
+    }
+    for (k <- nElems * subPerElem until NumElem) {
+      result(k) := false.B
+    }
+    result
+  }
+
+  val e64ei64ElemOor = expandElemOor(e64Vs1, 64, E64ValidBits)
+  val e32ei32ElemOor = expandElemOor(e32Vs1, 32, E32ValidBits)
+  val e16ei16ElemOor = expandElemOor(e16Vs1, 16, E16ValidBits)
+  val e8ei8ElemOor   = expandElemOor(e8Vs1,   8,  E8ValidBits)
+  // EI=16 cases: element value is 16-bit, same upper-bits check via E16ValidBits
+  val e64ei16ElemOor = expandElemOor(e16Vs1, 16, E16ValidBits)
+  val e32ei16ElemOor = expandElemOor(e16Vs1, 16, E16ValidBits)
+  val e8ei16ElemOor  = expandElemOor(e16Vs1, 16, E16ValidBits)
+
   for (i <- 0 until NumElem) {
-    // index >= vlmax
-    geVlmax(i) :=
+    val elemOor = Mux1H(Seq(
+      e64ei64 -> e64ei64ElemOor(i),
+      e32ei32 -> e32ei32ElemOor(i),
+      e16ei16 -> e16ei16ElemOor(i),
+      e8ei8   -> e8ei8ElemOor(i),
+      e64ei16 -> e64ei16ElemOor(i),
+      e32ei16 -> e32ei16ElemOor(i),
+      e8ei16  -> e8ei16ElemOor(i),
+    ))
+    // index >= vlmax (byte-level) OR element upper bits set (element-level)
+    geVlmax(i) := elemOor ||
       Mux1H(
         Seq(
           lmul.mf8 -> (out.gather.bits.index(i).head(6) =/= 0.U),
@@ -209,7 +240,6 @@ object GatherIndexGen {
     val ei           = new GatherSewBundle
     // Todo: if vrgatherei16, vs1 should be selected before the register of EXU
     val vs1  = UInt(DLEN.W)
-    val mask = UInt(NumElem.W) // 1bit per MinWidth Data
   }
 
   class Out(implicit val param: GatherParam) extends GatherBundle {

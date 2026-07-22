@@ -131,7 +131,7 @@ class GatherRingUnit[T <: Data](
     }.otherwise {
       counter := blockSize
     }
-  }.elsewhen(doFlow && hasTable) {
+  }.elsewhen(doFlow && hasTable && counter > 0.U) {
     counter := counter - 1.U
   }
 
@@ -188,6 +188,8 @@ class GatherRingUnit[T <: Data](
       ))
       indexDone(i) := !fillIdx(i)
       meta := in.placeIndex.meta
+    }.elsewhen(counter === 0.U && doFlow) {
+      indexDone(i) := true.B
     }.elsewhen(doFlow) {
       when (fillRes(i)) {
         indexOrRes(i) := gatherMod.out.result(i)
@@ -196,8 +198,6 @@ class GatherRingUnit[T <: Data](
     }.elsewhen(fillRes(i)) {
       indexOrRes(i) := gatherMod.out.result(i)
       indexDone(i)  := true.B
-    }.elsewhen(counter === 0.U && doFlow) {
-      indexDone(i) := true.B
     }
   }
 

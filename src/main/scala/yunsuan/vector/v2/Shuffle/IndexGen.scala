@@ -57,7 +57,6 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   gatherMod.in.bits.sew           := in.bits.sew
   gatherMod.in.bits.ei            := in.bits.ei
   gatherMod.in.bits.vs1           := in.bits.vs1
-  gatherMod.in.bits.mask          := in.bits.mask
 
   // --- SlideUpIndexGen ---
   slideUpMod.in.valid              := in.valid && isSlideUp

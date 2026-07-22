@@ -21,8 +21,10 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
     bc.in.tableValid := in.hasTable.asUInt(base + 1, base)
     bc.in.indexValid := in.hasIndex.asUInt(base + 1, base)
     for (j <- 0 until NumPipeIn) {
+      // blockSize(1)=m2 gates ring2: only active for LMUL=2, not 4 or 8
       bc.in.pipePlaceIdx(j).valid :=
-        in.s0pipes(j).valid && in.s0pipes(j).bits.blockBase.drop(1) === bc.blockBase.U(UnitIdx().getWidth.W).drop(1)
+        in.s0pipes(j).valid && in.s0pipes(j).bits.blockSize(1) &&
+        in.s0pipes(j).bits.blockBase.drop(1) === bc.blockBase.U(UnitIdx().getWidth.W).drop(1)
       bc.in.pipePlaceIdx(j).bits := in.s0pipes(j).bits.placeIdx
     }
   }
