@@ -20,7 +20,7 @@ class VClmul extends Module {
     val cl = UInt(64.W)
   }))
 
-  val a, b = Wire(UInt())
+  val a, b = Wire(UInt(64.W))
   (a, b) := (in.a, in.b)
   val res = Wire(Vec(127, Bool()))
 
@@ -28,8 +28,9 @@ class VClmul extends Module {
     res(i) := Cat((0.max(i - 63) to i.min(63)).map(x => a(x) & b(i - x))).xorR
   }
 
-  out.cl := res.asUInt.take(64)
-  out.ch := res.asUInt.drop(64)
+  val product = Cat(0.U(1.W), res.asUInt)
+  out.cl := product(63, 0)
+  out.ch := product(127, 64)
 }
 
 object VClmul {

@@ -1989,6 +1989,21 @@ object Opcodes {
 
   object VSha256cOpcode extends VSha256cOpcode
 
+  trait VCryptoOpcode extends Opcodes with DataType {
+    private val vclmul_op = bb"001100"
+    private val vclmulh_op = bb"001101"
+
+    private val unused_f5 = bb"00000"
+    val vclmul = DvSvlS2vS1(vclmul_op, unused_f5, E64)
+    val vclmulh = DvSvlS2vS1(vclmulh_op, unused_f5, E64)
+
+    override def getLat(opcode: Opcode): Int = 2
+
+    def isLegal(implicit op: UInt): Bool = op.isOneOf(this.allBitPats)
+  }
+
+  object VCryptoOpcode extends VCryptoOpcode
+
   trait DataType {
     protected val F = bb"0"
     protected val V = bb"1"
