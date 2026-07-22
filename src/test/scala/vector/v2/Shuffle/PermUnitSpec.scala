@@ -28,7 +28,7 @@ class PermUnitSpec extends AnyFunSpec with ChiselSim with Matchers
     p.bits.vl.poke(16)
     p.bits.vta.poke(false); p.bits.vma.poke(false)
     p.bits.vs1.poke(0); p.bits.vs2.poke(0); p.bits.vs3.poke(0); p.bits.rs1.poke(0)
-    p.bits.mask.poke(0); p.bits.zipNum.poke(0)
+    p.bits.mask.poke((BigInt(1) << numElem) - 1); p.bits.zipNum.poke(0)
   }
 
   def bytesToBigInt(bytes: Seq[Int]): BigInt =

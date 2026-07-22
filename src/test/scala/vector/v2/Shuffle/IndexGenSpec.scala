@@ -28,7 +28,7 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
     dut.in.bits.vta.poke(false); dut.in.bits.vma.poke(false)
     dut.in.bits.vs1.poke(0); dut.in.bits.vs2.poke(0)
     dut.in.bits.vs3.poke(0); dut.in.bits.rs1.poke(0)
-    dut.in.bits.mask.poke(0)
+    dut.in.bits.mask.poke((BigInt(1) << numElem) - 1)  // all-1s = all active
     dut.in.bits.zipNum.poke(0)
   }
 
@@ -183,6 +183,53 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
           eIndex(dut, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4))
         }
       }
+      it("SEW=8 mask-inactive elements should be PREFILL") {
+        simulate(new IndexGen()(GatherParam.default)) { dut =>
+          // Mask 0x00FF: bytes 0-7 active, bytes 8-15 inactive
+          pDefaults(dut)
+          dut.in.valid.poke(true); dut.in.bits.op.isGather.poke(true)
+          pSew(dut.in.bits.sew, 8); pSew(dut.in.bits.ei, 8)
+          dut.in.bits.vs1.poke(0)          // all indices = 0 (in range)
+          dut.in.bits.vma.poke(true)        // agnostic: fill 0xFF
+          dut.in.bits.mask.poke(0x00FF)     // bytes 8-15 inactive
+          dut.clock.step()
+
+          import ElemFlags._
+          dut.out.valid.expect(true.B)
+          for (i <- 0 until 16) {
+            if (i < 8) {
+              dut.out.elemFlags(i).expect(LOOKUP, s"elemFlags($i): active should be LOOKUP")
+              dut.out.elemData(i).expect(0.U, s"elemData($i): index=0")
+            } else {
+              dut.out.elemFlags(i).expect(PREFILL, s"elemFlags($i): mask-inactive should be PREFILL")
+              dut.out.elemData(i).expect(0xFF.U, s"elemData($i): agnostic fill=0xFF")
+            }
+          }
+        }
+      }
+      it("SEW=16 mask-inactive elements should be PREFILL") {
+        simulate(new IndexGen()(GatherParam.default)) { dut =>
+          // SEW=16: 8 halfword elements. Mask 0x000F: halfwords 0-1 active, 2-7 inactive
+          pDefaults(dut)
+          dut.in.valid.poke(true); dut.in.bits.op.isGather.poke(true)
+          pSew(dut.in.bits.sew, 16); pSew(dut.in.bits.ei, 16)
+          dut.in.bits.vs1.poke(0)          // all indices = 0 (in range)
+          dut.in.bits.vma.poke(true)        // agnostic: fill 0xFF
+          dut.in.bits.mask.poke(0x000F)     // bytes 0-3 active, 4-15 inactive
+          dut.clock.step()
+
+          import ElemFlags._
+          dut.out.valid.expect(true.B)
+          for (i <- 0 until 16) {
+            if (i < 4) {
+              dut.out.elemFlags(i).expect(LOOKUP, s"elemFlags($i): active should be LOOKUP")
+            } else {
+              dut.out.elemFlags(i).expect(PREFILL, s"elemFlags($i): mask-inactive should be PREFILL")
+              dut.out.elemData(i).expect(0xFF.U, s"elemData($i): agnostic fill=0xFF")
+            }
+          }
+        }
+      }
     }
 
     describe("SlideUp") {
@@ -202,6 +249,28 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
           pSew(dut.in.bits.sew, 64); dut.in.bits.vl.poke(2)
           dut.clock.step()
           eIndex(dut, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4))
+        }
+      }
+      it("vslideup SEW=8 mask-inactive") {
+        simulate(new IndexGen()(GatherParam.default)) { dut =>
+          // mask 0x00FF: bytes 0-7 active, 8-15 inactive
+          pDefaults(dut)
+          dut.in.valid.poke(true); dut.in.bits.op.isSlideUp.poke(true)
+          pSew(dut.in.bits.sew, 8); dut.in.bits.vma.poke(true)
+          dut.in.bits.rs1.poke(4); dut.in.bits.vl.poke(16)
+          dut.in.bits.mask.poke(0x00FF)
+          dut.clock.step()
+
+          import ElemFlags._
+          dut.out.valid.expect(true.B)
+          for (i <- 0 until 16) {
+            if (i < 8) {
+              dut.out.elemFlags(i).expect(LOOKUP, s"elemFlags($i): active")
+            } else {
+              dut.out.elemFlags(i).expect(PREFILL, s"elemFlags($i): mask-inactive")
+              dut.out.elemData(i).expect(0xFF.U, s"elemData($i): agnostic=1")
+            }
+          }
         }
       }
     }
@@ -232,6 +301,27 @@ class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
           pSew(dut.in.bits.sew, 8); dut.in.bits.rs1.poke(15)
           dut.clock.step()
           eIndex(dut, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4))
+        }
+      }
+      it("vslide1down SEW=8 mask-inactive") {
+        simulate(new IndexGen()(GatherParam.default)) { dut =>
+          // mask 0x00FF: bytes 0-7 active, 8-15 inactive
+          pDefaults(dut)
+          dut.in.valid.poke(true); dut.in.bits.op.isSlide1Down.poke(true)
+          pSew(dut.in.bits.sew, 8); dut.in.bits.vma.poke(true)
+          dut.in.bits.mask.poke(0x00FF)
+          dut.clock.step()
+
+          import ElemFlags._
+          dut.out.valid.expect(true.B)
+          for (i <- 0 until 16) {
+            if (i < 8) {
+              dut.out.elemFlags(i).expect(LOOKUP, s"elemFlags($i): active")
+            } else {
+              dut.out.elemFlags(i).expect(PREFILL, s"elemFlags($i): mask-inactive")
+              dut.out.elemData(i).expect(0xFF.U, s"elemData($i): agnostic=1")
+            }
+          }
         }
       }
     }

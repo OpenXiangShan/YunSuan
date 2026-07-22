@@ -222,7 +222,9 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
       isCompress  -> compressIdx.fillScala(i),
     ))
 
-    val isPrefill = !fz && !fs && !iv
+    // Mask-inactive elements (mask bit = 0) are PREFILL for all ops except compress
+    val maskInactive = !isCompress && !in.bits.mask(i)
+    val isPrefill = !fz && (!fs && !iv || maskInactive)
 
     // PREFILL data: tail elements follow vta, mask-inactive follow vma;
     // compress has no mask, all PREFILL are tail -> vta
@@ -230,14 +232,15 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
     val agnostic = Mux(isCompress || isTail(i), in.bits.vta, in.bits.vma)
     prefillByte(i) := Mux(agnostic, Fill(8, 1.B), vs3Bytes(i))
 
+    val effectiveFs = fs && !maskInactive
     out.elemFlags(i) := Mux1H(Seq(
       fz -> ElemFlags.ZERO,
-      (fs || isPrefill) -> ElemFlags.PREFILL,
-      iv -> ElemFlags.LOOKUP,
+      (effectiveFs || isPrefill) -> ElemFlags.PREFILL,
+      (iv && !maskInactive) -> ElemFlags.LOOKUP,
     ))
     out.elemData(i) := Mux1H(Seq(
       fz        -> 0.U,
-      (fs || isPrefill) -> Mux(fs,
+      (effectiveFs || isPrefill) -> Mux(effectiveFs,
         Mux1H(Seq(  // SCALAR: SEW-aware rs1 byte
           in.bits.sew.e8  -> rs1Bytes(0),
           in.bits.sew.e16 -> rs1Bytes(i % 2),
@@ -246,7 +249,7 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
         )),
         prefillByte(i)  // PREFILL: vs3 byte or agnostic
       ),
-      iv        -> idx,
+      (iv && !maskInactive) -> idx,
     ))
   }
 
