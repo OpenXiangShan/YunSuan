@@ -34,8 +34,10 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
     bc.in.tableValid := in.hasTable.asUInt(base + 3, base)
     bc.in.indexValid := in.hasIndex.asUInt(base + 3, base)
     for (j <- 0 until NumPipeIn) {
+      // blockSize(2) gates ring4: only active for LMUL=4
       bc.in.pipePlaceIdx(j).valid :=
-        in.s0pipes(j).valid && in.s0pipes(j).bits.blockBase.drop(2) === bc.blockBase.U(UnitIdx().getWidth.W).drop(2)
+        in.s0pipes(j).valid && in.s0pipes(j).bits.blockSize(2) &&
+        in.s0pipes(j).bits.blockBase.drop(2) === bc.blockBase.U(UnitIdx().getWidth.W).drop(2)
       bc.in.pipePlaceIdx(j).bits := in.s0pipes(j).bits.placeIdx
     }
   }
@@ -44,7 +46,9 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
     bc.in.tableValid := in.hasTable.asUInt
     bc.in.indexValid := in.hasIndex.asUInt
     for (j <- 0 until NumPipeIn) {
-      bc.in.pipePlaceIdx(j).valid := in.s0pipes(j).valid
+      // blockSize(3) gates ring8: only active for LMUL=8
+      bc.in.pipePlaceIdx(j).valid :=
+        in.s0pipes(j).valid && in.s0pipes(j).bits.blockSize(3)
       bc.in.pipePlaceIdx(j).bits := in.s0pipes(j).bits.placeIdx
     }
   }
