@@ -5,6 +5,7 @@ import chisel3.stage.ChiselGeneratorAnnotation
 import circt.stage._
 import chisel3.util._
 import yunsuan.util._
+import yunsuan.VfexpType
 import yunsuan.vector.VectorConvert.VectorCvt
 import yunsuan.vector._
 import yunsuan.scalar.INT2FP
@@ -98,6 +99,8 @@ class SimTop() extends VPUTestModule {
 
   has_issued := busy
   when (io.in.fire) {
+    val isVfexp2Opcode = io.in.bits.fuType === VPUTestFuType.vcvt &&
+      (io.in.bits.fuOpType === VfexpType.vfexp2 || io.in.bits.fuOpType === VfexpType.vfexp2bf16)
     counter := 0.U
     busy := true.B
     in := io.in.bits
@@ -109,7 +112,7 @@ class SimTop() extends VPUTestModule {
       VPUTestFuType.vperm -> VPERM_latency.U,
       VPUTestFuType.viaf -> VIAF_latency.U,
       VPUTestFuType.vid -> VID_latency.U,
-      VPUTestFuType.vcvt -> VCVT_latency.U,
+      VPUTestFuType.vcvt -> Mux(isVfexp2Opcode, VfExp2Pipe.latency.U, VCVT_latency.U),
       VPUTestFuType.fcvtf2x -> VCVT_latency.U,
       VPUTestFuType.fcvti2f -> VCVT_latency.U
     )) // fuType --> latency, spec case for div
@@ -157,6 +160,7 @@ class SimTop() extends VPUTestModule {
     val vfd = Module(new VectorFloatDivider)
     val via = Module(new VectorIntAdder)
     val vcvt = Module(new VectorCvt(XLEN))
+    val vfexp2 = Module(new VfExp2(XLEN))
     val i2fcvt = Module(new INT2FP(2, XLEN))
     val fpcvt = Module(new FPCVT(XLEN))
 
@@ -276,9 +280,15 @@ class SimTop() extends VPUTestModule {
     vcvt.io.isFpToVecInst := false.B
     vcvt.io.isFround := 0.U
     vcvt.io.isFcvtmod := false.B
+    vfexp2.io.fire := busy
+    vfexp2.io.sew := sew
+    vfexp2.io.opType := opcode
+    vfexp2.io.rm := rm
+    vfexp2.io.src := src1
+    val isVfexp2Opcode = opcode === VfexpType.vfexp2 || opcode === VfexpType.vfexp2bf16
     vcvt_result.vxsat := 0.U
-    vcvt_result.result(i) := vcvt.io.result
-    vcvt_result.fflags(i) := vcvt.io.fflags
+    vcvt_result.result(i) := Mux(isVfexp2Opcode, vfexp2.io.result, vcvt.io.result)
+    vcvt_result.fflags(i) := Mux(isVfexp2Opcode, vfexp2.io.fflags, vcvt.io.fflags)
 
     // i2fcvt
     i2fcvt.regEnables(0) := true.B

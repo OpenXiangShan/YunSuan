@@ -574,6 +574,13 @@ package object yunsuan {
     def fcvtmod_w_d     = "b1_10_010001".U(9.W)
   }
 
+  object VfexpType {
+    def width = 8
+
+    def vfexp2     = "b11_100010".U(width.W)
+    def vfexp2bf16 = "b11_100011".U(width.W)
+  }
+
   object VectorElementFormat {
     def width = 2
 

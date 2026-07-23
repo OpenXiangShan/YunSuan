@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <time.h>
+#include <cstring>
 #include <getopt.h>
 #include "VSimTop.h"
 #include "verilated_vcd_c.h"
@@ -23,6 +24,8 @@ static inline void print_help(const char *file) {
   printf("  -s, --seed=NUM             use this seed\n");
   printf("  -C, --max-cycles=NUM       execute at most NUM cycles\n");
   printf("  -O, --max-operations=NUM   execute at most NUM instructions\n");
+  printf("      --vfexp2-only          restrict random testing to vfexp2/vfexp2bf16\n");
+  printf("      --vfexp2-format=FMT    vfexp2 format: mixed|fp16|bf16|fp32\n");
   printf("  -b, --log-begin=NUM        display log from NUM th cycle\n");
   printf("  -e, --log-end=NUM          stop display log at NUM th cycle\n");
   printf("      --dump-wave            dump waveform when log is enabled\n");
@@ -30,11 +33,22 @@ static inline void print_help(const char *file) {
   printf("\n");
 }
 
+static inline uint8_t parse_vfexp2_format(const char *str) {
+  if (!strcmp(str, "mixed")) return VFEXP2_MODE_MIXED;
+  if (!strcmp(str, "fp16")) return VFEXP2_MODE_FP16;
+  if (!strcmp(str, "bf16")) return VFEXP2_MODE_BF16;
+  if (!strcmp(str, "fp32")) return VFEXP2_MODE_FP32;
+  printf("[ERROR] --vfexp2-format must be one of mixed|fp16|bf16|fp32\n");
+  exit(EINVAL);
+}
+
 inline EmuArgs parse_args(int argc, const char *argv[]) {
   EmuArgs args;
   int long_index = 0;
   const struct option long_options[] = {
     { "dump-wave",         0, NULL,  0  },
+    { "vfexp2-only",       0, NULL,  0  },
+    { "vfexp2-format",     1, NULL,  0  },
     { "seed",              1, NULL, 's' },
     { "max-cycles",        1, NULL, 'C' },
     { "max-operations",    1, NULL, 'O' },
@@ -51,6 +65,8 @@ inline EmuArgs parse_args(int argc, const char *argv[]) {
       case 0:
         switch (long_index) {
           case 0: args.enable_waveform = true; continue;
+          case 1: args.vfexp2_only = true; continue;
+          case 2: args.vfexp2_format = parse_vfexp2_format(optarg); continue;
         }
       default:
         print_help(argv[0]);
@@ -93,6 +109,7 @@ Emulator::Emulator(int argc, const char *argv[]):
 #endif
   
   test_driver.set_default_value(dut_ptr);
+  test_driver.configure_vfexp2_test(args.vfexp2_only, args.vfexp2_format);
   reset_ncycles(10);
 }
 
@@ -208,6 +225,7 @@ bool Emulator::execute() {
   bool good_trap = ((trap_code == STATE_RUNNING) || (trap_code == STATE_FINISH_OPERATION));
   printf("EMU %s\n", good_trap ? "EXCEEDED LIMIT" : "BADTRAP");
   printf("HAS Executed Cycles:%ld Operations:%ld\n", cycles, operations);
+  test_driver.print_summary();
   if (!good_trap) {
     printf("=========Re-Execute, Print Golden Model Trace and Dump Wave===========\n");
 

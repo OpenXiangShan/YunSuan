@@ -4,7 +4,7 @@ on:
   push:
     branches: [ master ]
   pull_request:
-    branched: [ master ]
+    branches: [ kunminghu-v3, v2r2a ]
 
 jobs:
   builtin-test:
@@ -23,8 +23,10 @@ jobs:
         id: cache
         uses: coursier/cache-action@v6
 
-      - name: Verilator
-        run: sudo apt install verilator
+      - name: Install Verilator and Math Libraries (GMP/MPFR)
+        run: |
+          sudo apt update
+          sudo apt install -y verilator libgmp-dev libmpfr-dev
 
       - name: Setup Mill
         uses: jodersky/setup-mill@v0.2.3

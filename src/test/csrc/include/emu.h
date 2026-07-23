@@ -14,6 +14,8 @@ struct EmuArgs {
   uint64_t max_operations;
   uint64_t log_begin, log_end;
   uint64_t enable_waveform;
+  bool vfexp2_only;
+  uint8_t vfexp2_format;
 
   bool verbose;
 
@@ -24,6 +26,8 @@ struct EmuArgs {
     log_begin = -1;
     log_end = -1;
     enable_waveform = false;
+    vfexp2_only = false;
+    vfexp2_format = 0;
     verbose = false;
   }
 };

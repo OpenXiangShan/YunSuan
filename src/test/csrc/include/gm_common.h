@@ -76,6 +76,12 @@ class VGMFloatDivider : public VGMFloatBase {
   virtual ElementOutput calculation_e64(ElementInput input);
 };
 
+class VGMFloatExp2 : public VGMFloatBase {
+  virtual ElementOutput calculation_e16(ElementInput input);
+  virtual ElementOutput calculation_e32(ElementInput input);
+  virtual ElementOutput calculation_e64(ElementInput input);
+};
+
 class VGMIntegerALU : public VPUGoldenModel {
   virtual ElementOutput calculation_e8(ElementInput input);
   virtual ElementOutput calculation_e16(ElementInput input);

@@ -10,8 +10,92 @@ extern "C" {
 #include "include/vpu_constant.h"
 #include "include/test_driver.h"
 
+namespace {
+
+uint64_t width_mask(int width) {
+  return width == 64 ? ~0ULL : ((1ULL << width) - 1ULL);
+}
+
+int exp_bits_for_format(uint8_t format_mode) {
+  return format_mode == VFEXP2_MODE_FP32 || format_mode == VFEXP2_MODE_BF16 ? 8 : 5;
+}
+
+int frac_bits_for_format(uint8_t format_mode) {
+  switch (format_mode) {
+    case VFEXP2_MODE_FP16: return 10;
+    case VFEXP2_MODE_BF16: return 7;
+    case VFEXP2_MODE_FP32: return 23;
+    default:
+      printf("Unsupported vfexp2 format mode %u\n", format_mode);
+      exit(1);
+  }
+}
+
+bool is_zero_bits(uint64_t bits, int width) {
+  uint64_t payload_mask = (1ULL << (width - 1)) - 1ULL;
+  return (bits & payload_mask) == 0;
+}
+
+bool is_nan_bits(uint64_t bits, int exp_bits, int frac_bits) {
+  uint64_t exp_mask = (1ULL << exp_bits) - 1ULL;
+  uint64_t frac_mask = (1ULL << frac_bits) - 1ULL;
+  uint64_t exp = (bits >> frac_bits) & exp_mask;
+  uint64_t frac = bits & frac_mask;
+  return exp == exp_mask && frac != 0;
+}
+
+uint64_t ordered_bits(uint64_t bits, int width) {
+  const uint64_t mask = width_mask(width);
+  const uint64_t sign_mask = 1ULL << (width - 1);
+  const uint64_t normalized = bits & mask;
+  return (normalized & sign_mask) ? ((~normalized) & mask) : (normalized | sign_mask);
+}
+
+uint64_t ulp_distance(uint64_t a, uint64_t b, int width) {
+  const uint64_t oa = ordered_bits(a, width);
+  const uint64_t ob = ordered_bits(b, width);
+  return oa > ob ? (oa - ob) : (ob - oa);
+}
+
+uint64_t log2_ulp_metric(uint64_t a, uint64_t b, int width) {
+  const uint64_t ulp = ulp_distance(a, b, width);
+  if (ulp == 0) return 0;
+  return 64 - __builtin_clzll(ulp);
+}
+
+uint64_t vfexp2_budget(uint8_t format_mode, uint8_t rm) {
+  if (format_mode == VFEXP2_MODE_FP32) return 13;
+  if (rm == RM_RTO) return 4;
+  return 1;
+}
+
+uint64_t vfexp2_metric(uint8_t format_mode, uint64_t a, uint64_t b, int width) {
+  if (format_mode == VFEXP2_MODE_FP32) return log2_ulp_metric(a, b, width);
+  return ulp_distance(a, b, width);
+}
+
+const char *vfexp2_metric_name(uint8_t format_mode) {
+  return format_mode == VFEXP2_MODE_FP32 ? "log2ulp" : "ulp";
+}
+
+uint64_t extract_lane_bits(const VecOutput &output, int lane, int width) {
+  const int lanes_per_word = 64 / width;
+  const int word = lane / lanes_per_word;
+  const int shift = (lane % lanes_per_word) * width;
+  return (output.result[word] >> shift) & width_mask(width);
+}
+
+uint64_t extract_lane_input_bits(const VecInput &input, int lane, int width) {
+  const int lanes_per_word = 64 / width;
+  const int word = lane / lanes_per_word;
+  const int shift = (lane % lanes_per_word) * width;
+  return (input.src1[word] >> shift) & width_mask(width);
+}
+
+} // namespace
+
 TestDriver::TestDriver():
-  issued(false), verbose(false), keepinput(false)
+  issued(false), vfexp2_only(false), vfexp2_format_mode(VFEXP2_MODE_MIXED), vfexp2_logged_diffs(0), verbose(false), keepinput(false)
 {
   // aviod random value
   set_test_type();
@@ -25,13 +109,123 @@ void TestDriver::set_default_value(VSimTop *dut_ptr) {
   dut_ptr->io_in_valid = false;
   dut_ptr->io_out_ready = true;
 }
+
+void TestDriver::configure_vfexp2_test(bool enabled, uint8_t format_mode) {
+  vfexp2_only = enabled;
+  vfexp2_format_mode = format_mode;
+  set_test_type();
+  gen_next_test_case();
+}
 // fix set_test_type to select fuType
 void TestDriver::set_test_type() {
-  test_type.pick_fuType = false;
-  test_type.pick_fuOpType = false;
-  test_type.fuType = VFloatCvt;
-  test_type.fuOpType = VFREC7;
+  if (vfexp2_only) {
+    test_type.pick_fuType = true;
+    test_type.pick_fuOpType = false;
+    test_type.fuType = VFloatCvt;
+    test_type.fuOpType = VFEXP2;
+  } else {
+    test_type.pick_fuType = false;
+    test_type.pick_fuOpType = false;
+    test_type.fuType = VFloatCvt;
+    test_type.fuOpType = VFREC7;
+  }
   printf("Set Test Type Res: fuType:%d fuOpType:%d\n", test_type.fuType, test_type.fuOpType);
+}
+
+const char *TestDriver::vfexp2_format_name(uint8_t format_mode) {
+  switch (format_mode) {
+    case VFEXP2_MODE_FP16: return "fp16";
+    case VFEXP2_MODE_BF16: return "bf16";
+    case VFEXP2_MODE_FP32: return "fp32";
+    default: return "mixed";
+  }
+}
+
+uint8_t TestDriver::pick_vfexp2_format() const {
+  if (vfexp2_format_mode != VFEXP2_MODE_MIXED) return vfexp2_format_mode;
+  const uint8_t modes[3] = {VFEXP2_MODE_FP16, VFEXP2_MODE_BF16, VFEXP2_MODE_FP32};
+  return modes[rand() % 3];
+}
+
+uint64_t TestDriver::gen_exp2_lane_bits(uint8_t format_mode) {
+  if (format_mode == VFEXP2_MODE_FP32) {
+    const uint32_t specials[] = {
+      0x00000000U, 0x80000000U, 0x3f800000U, 0xbf800000U,
+      0x7f800000U, 0xff800000U, 0x7fc00000U, 0x7f800001U,
+      0x00000001U, 0x00800000U, 0x7f7fffffU, 0xff7fffffU
+    };
+    if (rand() % 5 == 0) return specials[rand() % (sizeof(specials) / sizeof(specials[0]))];
+    uint32_t sign = (rand() & 1) ? 0x80000000U : 0U;
+    uint32_t exp = ((rand() % 2) == 0 ? (120 + rand() % 15) : (1 + rand() % 254)) << 23;
+    uint32_t frac = static_cast<uint32_t>(rand64() & 0x7fffffU);
+    return sign | exp | frac;
+  }
+
+  if (format_mode == VFEXP2_MODE_BF16) {
+    const uint16_t specials[] = {
+      0x0000U, 0x8000U, 0x3f80U, 0xbf80U,
+      0x7f80U, 0xff80U, 0x7fc0U, 0x7f81U,
+      0x0001U, 0x0080U, 0x7f7fU, 0xff7fU
+    };
+    if (rand() % 5 == 0) return specials[rand() % (sizeof(specials) / sizeof(specials[0]))];
+    uint16_t sign = (rand() & 1) ? 0x8000U : 0U;
+    uint16_t exp = static_cast<uint16_t>((124 + rand() % 10) << 7);
+    uint16_t frac = static_cast<uint16_t>(rand() & 0x7fU);
+    return static_cast<uint16_t>(sign | exp | frac);
+  }
+
+  const uint16_t specials[] = {
+    0x0000U, 0x8000U, 0x3c00U, 0xbc00U,
+    0x7c00U, 0xfc00U, 0x7e00U, 0x7d00U,
+    0x0001U, 0x0400U, 0x7bffU, 0xfbffU
+  };
+  if (rand() % 5 == 0) return specials[rand() % (sizeof(specials) / sizeof(specials[0]))];
+  uint16_t sign = (rand() & 1) ? 0x8000U : 0U;
+  uint16_t exp = static_cast<uint16_t>((11 + rand() % 10) << 10);
+  uint16_t frac = static_cast<uint16_t>(rand() & 0x3ffU);
+  return static_cast<uint16_t>(sign | exp | frac);
+}
+
+void TestDriver::get_random_exp2_input() {
+  memset(&input, 0, sizeof(input));
+
+  const uint8_t format_mode = pick_vfexp2_format();
+  const int width = format_mode == VFEXP2_MODE_FP32 ? 32 : 16;
+  const int lanes = 128 / width;
+  const int lanes_per_word = 64 / width;
+
+  input.fuType = VFloatCvt;
+  input.fuOpType = format_mode == VFEXP2_MODE_BF16 ? VFEXP2BF16 : VFEXP2;
+  input.sew = format_mode == VFEXP2_MODE_FP32 ? 2 : 1;
+  input.widen = false;
+  input.src_widen = false;
+  input.is_frs1 = false;
+  input.is_frs2 = false;
+  input.uop_idx = 0;
+  input.rm_s = 0;
+  input.rm = (rand() % 6 == 5) ? RM_RTO : (rand() % 5);
+  input.vinfo.vlmul = 0;
+  input.vinfo.vl = lanes;
+  input.vinfo.vstart = 0;
+  input.vinfo.vm = true;
+  input.vinfo.ta = false;
+  input.vinfo.ma = false;
+
+  for (int lane = 0; lane < lanes; lane++) {
+    const int word = lane / lanes_per_word;
+    const int shift = (lane % lanes_per_word) * width;
+    input.src1[word] |= gen_exp2_lane_bits(format_mode) << shift;
+  }
+  input.src2[0] = rand64();
+  input.src2[1] = rand64();
+  input.src3[0] = rand64();
+  input.src3[1] = rand64();
+  input.src4[0] = rand64();
+  input.src4[1] = rand64();
+}
+
+bool TestDriver::is_vfexp2_case() const {
+  return input.fuType == VFloatCvt && (input.fuOpType == VFEXP2 || input.fuOpType == VFEXP2BF16);
 }
 
 void TestDriver::gen_next_test_case() {
@@ -362,6 +556,11 @@ void TestDriver::gen_random_idiv_input() {
 
 void TestDriver::get_random_input() {
   if (keepinput) { return; }
+
+  if (vfexp2_only) {
+    get_random_exp2_input();
+    return;
+  }
  
   input.src1[0] = rand64();
   input.src1[1] = rand64();
@@ -379,8 +578,17 @@ void TestDriver::get_random_input() {
     input.is_frs1 = false;
     input.is_frs2 = false;
     input.widen = false;
+    input.src_widen = false;
+    input.uop_idx = 0;
+    input.rm_s = 0;
     if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
     else { input.fuOpType = test_type.fuOpType; }
+    input.vinfo.vlmul = 0;
+    input.vinfo.vl = (VLEN / 8) >> input.sew;
+    input.vinfo.vstart = 0;
+    input.vinfo.vm = true;
+    input.vinfo.ta = false;
+    input.vinfo.ma = false;
   }else if(input.fuType == FloatCvtF2X){
     input.sew = gen_random_sew();
     input.is_frs1 = false;
@@ -457,7 +665,7 @@ void TestDriver::get_expected_output() {
       expect_output = vid.get_expected_output(input); return;
     case VFloatCvt:
       if (verbose) { printf("FuType:%d, choose VFloatCvt %d\n", input.fuType, VFloatCvt); }
-      expect_output = vcvt.get_expected_output(input); return;     
+      expect_output = is_vfexp2_case() ? vexp2.get_expected_output(input) : vcvt.get_expected_output(input); return;
     case FloatCvtF2X:
       if (verbose) { printf("FuType:%d, choose FloatCvtF2X %d\n", input.fuType, FloatCvtF2X); }
       expect_output = scvt.get_expected_output(input); return;   
@@ -475,6 +683,89 @@ uint64_t TestDriver::rand64() {
   tmp = (tmp << 32) + (uint32_t) rand();
   return tmp;
 }
+
+void TestDriver::record_vfexp2_match(uint8_t format_mode, int lane, uint64_t src_bits, uint64_t dut_bits, uint64_t ref_bits) {
+  Vfexp2LaneStats &stats = vfexp2_stats[format_mode - 1];
+  const int width = format_mode == VFEXP2_MODE_FP32 ? 32 : 16;
+  const int exp_bits = exp_bits_for_format(format_mode);
+  const int frac_bits = frac_bits_for_format(format_mode);
+
+  if (dut_bits == ref_bits) {
+    stats.exact++;
+    if (format_mode == VFEXP2_MODE_FP32) stats.log2_ulp_le_13++;
+    else stats.ulp_le_1++;
+    return;
+  }
+  if (is_zero_bits(dut_bits, width) && is_zero_bits(ref_bits, width)) {
+    stats.zero_equivalent++;
+    if (format_mode == VFEXP2_MODE_FP32) stats.log2_ulp_le_13++;
+    else stats.ulp_le_1++;
+    return;
+  }
+  if (is_nan_bits(dut_bits, exp_bits, frac_bits) && is_nan_bits(ref_bits, exp_bits, frac_bits)) {
+    stats.nan_equivalent++;
+    if (format_mode == VFEXP2_MODE_FP32) stats.log2_ulp_le_13++;
+    else stats.ulp_le_1++;
+    return;
+  }
+
+  const uint64_t ulp = ulp_distance(dut_bits, ref_bits, width);
+  if (input.rm < 8) {
+    stats.max_ulp_by_rm[input.rm] = std::max(stats.max_ulp_by_rm[input.rm], ulp);
+  }
+  {
+    Vfexp2WorstEntry (&w)[3] = vfexp2_worst[format_mode - 1];
+    if (input.rm == RM_RNE && ulp > w[2].ulp) {
+      int pos = 2;
+      while (pos > 0 && ulp > w[pos - 1].ulp) pos--;
+      for (int j = 2; j > pos; j--) w[j] = w[j - 1];
+      w[pos].src_bits = src_bits;
+      w[pos].dut_bits = dut_bits;
+      w[pos].ref_bits = ref_bits;
+      w[pos].ulp = ulp;
+      w[pos].rm = input.rm;
+    }
+  }
+  const uint64_t metric = vfexp2_metric(format_mode, dut_bits, ref_bits, width);
+  const uint64_t budget = vfexp2_budget(format_mode, input.rm);
+  if (format_mode == VFEXP2_MODE_FP32) {
+    if (metric <= budget) stats.log2_ulp_le_13++;
+  } else {
+    if (metric <= 1) stats.ulp_le_1++;
+    if (input.rm == RM_RTO && metric <= 4) stats.ulp_le_4_rto++;
+  }
+  const bool ulp_over_budget = metric > budget;
+  if (ulp_over_budget) stats.ulp_over_budget++;
+
+  if (ulp_over_budget && vfexp2_logged_diffs < vfexp2_log_limit) {
+    printf("[vfexp2] %s lane %d rm=%u %s=%lu exceeds_budget src=0x%0*lx dut=0x%0*lx ref=0x%0*lx\n",
+      vfexp2_format_name(format_mode),
+      lane,
+      input.rm,
+      vfexp2_metric_name(format_mode),
+      metric,
+      width / 4, static_cast<unsigned long>(src_bits),
+      width / 4, static_cast<unsigned long>(dut_bits),
+      width / 4, static_cast<unsigned long>(ref_bits));
+    vfexp2_logged_diffs++;
+  }
+}
+
+bool TestDriver::compare_vfexp2_output() {
+  const uint8_t format_mode = input.fuOpType == VFEXP2BF16 ? VFEXP2_MODE_BF16 : (input.sew == 2 ? VFEXP2_MODE_FP32 : VFEXP2_MODE_FP16);
+  const int width = format_mode == VFEXP2_MODE_FP32 ? 32 : 16;
+  const int lanes = 128 / width;
+
+  for (int lane = 0; lane < lanes; lane++) {
+    vfexp2_stats[format_mode - 1].total++;
+    const uint64_t src_bits = extract_lane_input_bits(input, lane, width);
+    const uint64_t dut_bits = extract_lane_bits(dut_output, lane, width);
+    const uint64_t ref_bits = extract_lane_bits(expect_output, lane, width);
+    record_vfexp2_match(format_mode, lane, src_bits, dut_bits, ref_bits);
+  }
+  return true;
+}
+
 // dut io check, return fire or not
 bool TestDriver::assign_input_raising(VSimTop *dut_ptr) {
   if (!issued) {
@@ -522,7 +813,14 @@ int TestDriver::diff_output_falling(VSimTop *dut_ptr) {
     dut_output.fflags[1] = dut_ptr->io_out_bits_fflags_1;
     dut_output.vxsat = dut_ptr->io_out_bits_vxsat;
 
-    if (memcmp(&dut_output, &expect_output, sizeof(dut_output))) {
+    bool matched = false;
+    if (is_vfexp2_case()) {
+      matched = compare_vfexp2_output();
+    } else {
+      matched = memcmp(&dut_output, &expect_output, sizeof(dut_output)) == 0;
+    }
+
+    if (!matched) {
       printf("Error, compare failed\n");
       display();
       return STATE_BADTRAP;
@@ -562,4 +860,35 @@ void TestDriver::display() {
   display_ref_input();
   display_ref_output();
   display_dut();
+}
+
+void TestDriver::print_summary() const {
+  if (!vfexp2_only) return;
+
+  printf("==== VFEXP2 comparison summary ====\n");
+  for (uint8_t mode = VFEXP2_MODE_FP16; mode <= VFEXP2_MODE_FP32; mode++) {
+    const Vfexp2LaneStats &stats = vfexp2_stats[mode - 1];
+    if (stats.total == 0) continue;
+    printf("  [%s] total=%lu exact=%lu zeroEq=%lu nanEq=%lu maxULP RNE=%lu RTZ=%lu RDN=%lu RUP=%lu RMM=%lu RTO=%lu\n",
+      vfexp2_format_name(mode),
+      stats.total,
+      stats.exact,
+      stats.zero_equivalent,
+      stats.nan_equivalent,
+      stats.max_ulp_by_rm[0],
+      stats.max_ulp_by_rm[1],
+      stats.max_ulp_by_rm[2],
+      stats.max_ulp_by_rm[3],
+      stats.max_ulp_by_rm[4],
+      stats.max_ulp_by_rm[6]);
+    const Vfexp2WorstEntry (&w)[3] = vfexp2_worst[mode - 1];
+    const int hexw = (mode == VFEXP2_MODE_FP32) ? 8 : 4;
+    for (int i = 0; i < 3 && w[i].ulp > 0; i++) {
+      printf("    Top%u ULP=%lu  src=0x%0*lx dut=0x%0*lx ref=0x%0*lx\n",
+        i + 1, w[i].ulp,
+        hexw, w[i].src_bits,
+        hexw, w[i].dut_bits,
+        hexw, w[i].ref_bits);
+    }
+  }
 }
