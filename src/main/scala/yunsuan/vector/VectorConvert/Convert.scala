@@ -15,6 +15,9 @@ class VectorCvtIO(width: Int) extends Bundle {
   val isFpToVecInst = Input(Bool())
   val isFround = Input(UInt(2.W))
   val isFcvtmod = Input(Bool())
+  val isMXFP = Input(Bool())
+  // UE8M0 encodes the power-of-two scale as 2^(factor - 127).
+  val factor = Input(UInt(8.W))
 
   val result = Output(UInt(width.W))
   val fflags = Output(UInt(20.W))
@@ -24,6 +27,8 @@ class VectorCvt(xlen :Int) extends Module{
 
   val io = IO(new VectorCvtIO(xlen))
   val (fire, src, opType, sew, rm, isFpToVecInst, isFround, isFcvtmod) = (io.fire, io.src, io.opType, io.sew, io.rm, io.isFpToVecInst, io.isFround, io.isFcvtmod)
+  val isMXFP = io.isMXFP && (sew === "b00".U || sew === "b01".U)
+  val isMXFPOut = RegEnable(RegEnable(isMXFP, false.B, fire), false.B, GatedValidRegNext(fire))
   val widen = opType(4, 3) // 0->single 1->widen 2->norrow => width of result
   val isVfnCvtBf16 = opType === VfcvtType.vfncvtbf16_ffw
   val isVfwCvtBf16 = opType === VfcvtType.vfwcvtbf16_ffv
@@ -101,17 +106,37 @@ class VectorCvt(xlen :Int) extends Module{
   val (result2, fflags2) = VCVT(16)(fire, in2, opType, sew, rm, input1H, output1H, isFpToVecInst, isFround, isFcvtmod)
   val (result3, fflags3) = VCVT(16)(fire, in3, opType, sew, rm, input1H, output1H, isFpToVecInst, isFround, isFcvtmod)
 
-  io.result := Mux1H(outputWidth1H, Seq(
+  val mxfp0 = Module(new CVT_mxfp)
+  val mxfp1 = Module(new CVT_mxfp)
+  for ((converter, input) <- Seq((mxfp0, element32(0)), (mxfp1, element32(1)))) {
+    converter.io.fire := fire
+    converter.io.src := input
+    converter.io.factor := io.factor
+    converter.io.rm := rm
+    converter.io.isFp4 := sew === "b01".U
+  }
+
+  val mxfpResult = Mux(
+    RegEnable(RegEnable(sew === "b01".U, false.B, fire), false.B, GatedValidRegNext(fire)),
+    Cat(0.U(56.W), mxfp1.io.result(3, 0), mxfp0.io.result(3, 0)),
+    Cat(0.U(48.W), mxfp1.io.result, mxfp0.io.result)
+  )
+  // Flags remain one 5-bit group per source FP32 lane.
+  val mxfpFflags = Cat(0.U(10.W), mxfp1.io.fflags, mxfp0.io.fflags)
+
+  val commonResult = Mux1H(outputWidth1H, Seq(
     result3(7,0) ## result2(7,0) ## result1(7,0) ## result0(7,0),
     result3(15,0) ## result2(15,0) ## result1(15,0) ## result0(15,0),
     result1(31,0) ## result0(31,0),
     result0
   ))
 
-  io.fflags := Mux1H(outputWidth1H, Seq(
+  val commonFflags = Mux1H(outputWidth1H, Seq(
     fflags3 ## fflags2 ## fflags1 ## fflags0,
     fflags3 ## fflags2 ## fflags1 ## fflags0,
     fflags1 ## fflags0,
     fflags0
   ))
+  io.result := Mux(isMXFPOut, mxfpResult, commonResult)
+  io.fflags := Mux(isMXFPOut, mxfpFflags, commonFflags)
 }

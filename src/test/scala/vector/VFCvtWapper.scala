@@ -15,9 +15,15 @@ class VFCVTTop(xlen :Int) extends Module{
   inputNext := src
 
   vfcvtWrapper.io.src := inputReg
+  vfcvtWrapper.io.fire := io.fire
   vfcvtWrapper.io.opType := opType
   vfcvtWrapper.io.sew := sew
   vfcvtWrapper.io.rm := rm
+  vfcvtWrapper.io.isFpToVecInst := io.isFpToVecInst
+  vfcvtWrapper.io.isFround := io.isFround
+  vfcvtWrapper.io.isFcvtmod := io.isFcvtmod
+  vfcvtWrapper.io.isMXFP := io.isMXFP
+  vfcvtWrapper.io.factor := io.factor
 
   val outputNext = Wire(UInt(64.W))
   val outputReg = RegNext(outputNext, 0.U)
