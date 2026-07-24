@@ -81,18 +81,18 @@ class Adder extends VIAlu.Module {
   cIn(1) := sel8 & Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(1)), isSub & !widenVs2 & !widen)
   cIn(2) := Mux1H(Seq(
     sel8  -> Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(2)), isSub),
-    sel16 -> Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(1)), isSub & !widenVs2 & !widen),
+    sel16 -> Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(2)), isSub & !widenVs2 & !widen),
   ))
   cIn(3) := sel8 & Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(3)), isSub & !widenVs2 & !widen)
   cIn(4) := Mux1H(Seq(
     sel8  -> Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(4)), isSub),
-    sel16 -> Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(2)), isSub),
-    sel32 -> Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(1)), isSub & !widenVs2 & !widen),
+    sel16 -> Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(4)), isSub),
+    sel32 -> Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(4)), isSub & !widenVs2 & !widen),
   ))
   cIn(5) := sel8 & Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(5)), isSub & !widenVs2 & !widen)
   cIn(6) := Mux1H(Seq(
     sel8  -> Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(6)), isSub),
-    sel16 -> Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(3)), isSub & !widenVs2 & !widen),
+    sel16 -> Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(6)), isSub & !widenVs2 & !widen),
   ))
   cIn(7) := sel8 & Mux(isAddCarry, Mux(vm, isSub, isSub ^ mask(7)), isSub & !widenVs2 & !widen)
 
@@ -587,7 +587,7 @@ object Adder extends VIAlu.Config {
     val vs1 = UInt(dWidth.W)
     val vs2Widen = UInt(dWidth.W)
     val vs1Widen = UInt(dWidth.W)
-    // Todo: use e8Mask instead
+    // One mask bit per byte. Wider elements consume the bit of their first byte.
     val mask = UInt(maskWidth.W)
   }
 
