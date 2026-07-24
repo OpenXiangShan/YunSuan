@@ -76,6 +76,11 @@ class GatherRing[T <: Data](
   }
 
   for (u <- 0 until NumUnits) {
+    assert(PopCount(validMatrixPipeUnitTable.map(_(u))) <= 1.U,
+      s"multiple table writers target GatherRing unit $u")
+    assert(PopCount(validMatrixPipeUnitIndex.map(_(u))) <= 1.U,
+      s"multiple index writers target GatherRing unit $u")
+
     units(u).in.placeTable.valid := Cat(validMatrixPipeUnitTable.map(_(u))).orR
     units(u).in.placeTable.bits  := Mux1H(
       validMatrixPipeUnitTable.map(_(u)),

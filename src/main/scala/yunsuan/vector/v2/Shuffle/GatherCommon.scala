@@ -25,8 +25,11 @@ object GatherCommon {
     val xlen      : Int = 64,
     val debug     : Boolean = false,
   ) {
+    require(numPipeIn > 0)
+    require(numPipeOut > 0)
     require(isPow2(dlen) && dlen >= 64)
     require(isPow2(vlen) && vlen >= 128)
+    require(vlen >= dlen)
   }
 
   object GatherParam {
@@ -78,7 +81,9 @@ object GatherCommon {
 
     def Index() = UInt(IndexWidth.W)
 
-    def PipeInIdx() = UInt(log2Ceil(NumPipeIn).W)
+    def PipeInIdxWidth: Int = 1.max(log2Ceil(NumPipeIn))
+
+    def PipeInIdx() = UInt(PipeInIdxWidth.W)
 
     def UopIdx() = UInt(log2Ceil(VLEN / DLEN * 8).W)
   }

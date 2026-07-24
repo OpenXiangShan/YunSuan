@@ -41,6 +41,13 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   private val isUnzip     = op.isUnzip
   private val isCompress  = op.isCompress
 
+  private val opReg    = RegEnable(op, in.valid)
+  private val validReg = RegNext(in.valid, false.B)
+
+  when(in.valid) {
+    assert(PopCount(op.asUInt) === 1.U, "IndexGen operation must be one-hot")
+  }
+
   // Derived from operands (not external inputs)
   private val tableIdx       = in.bits.uopIdx
   private val offset         = in.bits.rs1
@@ -170,16 +177,38 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
     compressIdx.fillScala(i)  := compressMod.out.index.fillScala(i)
   }
 
+  private val gatherIdxReg    = RegEnable(gatherIdx, in.valid && isGather)
+  private val slideUpIdxReg   = RegEnable(slideUpIdx, in.valid && isSlideUp)
+  private val slideDownIdxReg = RegEnable(slideDownIdx, in.valid && isSlideDown)
+  private val zipIdxReg       = RegEnable(zipIdx, in.valid && isZip)
+  private val unzipIdxReg     = RegEnable(unzipIdx, in.valid && isUnzip)
+
+  private val sewReg    = RegEnable(in.bits.sew, in.valid)
+  private val uopIdxReg = RegEnable(in.bits.uopIdx, in.valid)
+  private val vlReg     = RegEnable(in.bits.vl, in.valid)
+  private val vtaReg    = RegEnable(in.bits.vta, in.valid)
+  private val vmaReg    = RegEnable(in.bits.vma, in.valid)
+  private val vs3Reg    = RegEnable(in.bits.vs3, in.valid)
+  private val rs1Reg    = RegEnable(in.bits.rs1, in.valid)
+  private val maskReg   = RegEnable(in.bits.mask, in.valid)
+
+  private val outIsGather    = opReg.isGather || opReg.isGatherEI16
+  private val outIsSlideUp   = opReg.isSlideUp || opReg.isSlide1Up
+  private val outIsSlideDown = opReg.isSlideDown || opReg.isSlide1Down
+  private val outIsZip       = opReg.isZip
+  private val outIsUnzip     = opReg.isUnzip
+  private val outIsCompress  = opReg.isCompress
+
   // -- Final output: encode to merged flags+data --
   // e8vl = vl in 8b elements = vl << sewShift(sew)
   private val e8vl = Mux1H(Seq(
-    in.bits.sew.e8  -> in.bits.vl,
-    in.bits.sew.e16 -> Cat(in.bits.vl, 0.U(1.W)),
-    in.bits.sew.e32 -> Cat(in.bits.vl, 0.U(2.W)),
-    in.bits.sew.e64 -> Cat(in.bits.vl, 0.U(3.W)),
+    sewReg.e8  -> vlReg,
+    sewReg.e16 -> Cat(vlReg, 0.U(1.W)),
+    sewReg.e32 -> Cat(vlReg, 0.U(2.W)),
+    sewReg.e64 -> Cat(vlReg, 0.U(3.W)),
   ))
-  private val vs3Bytes = in.bits.vs3.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))
-  private val rs1Bytes = in.bits.rs1.asTypeOf(Vec(XLEN / MinDataWidth, UInt(MinDataWidth.W)))
+  private val vs3Bytes = vs3Reg.asTypeOf(Vec(NumElem, UInt(MinDataWidth.W)))
+  private val rs1Bytes = rs1Reg.asTypeOf(Vec(XLEN / MinDataWidth, UInt(MinDataWidth.W)))
   private val dlenBits = log2Ceil(DLEN / MinDataWidth) // bits per uop-internal idx
 
   // Pre-allocated Vec for better Verilog naming
@@ -189,46 +218,46 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   for (i <- 0 until NumElem) {
     val iv = Wire(Bool()); val idx = Wire(Index()); val fz = Wire(Bool()); val fs = Wire(Bool())
     iv := Mux1H(Seq(
-      isGather    -> gatherIdx.indexValid(i),
-      isSlideUp   -> slideUpIdx.indexValid(i),
-      isSlideDown -> slideDownIdx.indexValid(i),
-      isZip       -> zipIdx.indexValid(i),
-      isUnzip     -> unzipIdx.indexValid(i),
-      isCompress  -> compressIdx.indexValid(i),
+      outIsGather    -> gatherIdxReg.indexValid(i),
+      outIsSlideUp   -> slideUpIdxReg.indexValid(i),
+      outIsSlideDown -> slideDownIdxReg.indexValid(i),
+      outIsZip       -> zipIdxReg.indexValid(i),
+      outIsUnzip     -> unzipIdxReg.indexValid(i),
+      outIsCompress  -> compressIdx.indexValid(i),
     ))
     idx := Mux1H(Seq(
-      isGather    -> gatherIdx.index(i),
-      isSlideUp   -> slideUpIdx.index(i),
-      isSlideDown -> slideDownIdx.index(i),
-      isZip       -> zipIdx.index(i),
-      isUnzip     -> unzipIdx.index(i),
-      isCompress  -> compressIdx.index(i),
+      outIsGather    -> gatherIdxReg.index(i),
+      outIsSlideUp   -> slideUpIdxReg.index(i),
+      outIsSlideDown -> slideDownIdxReg.index(i),
+      outIsZip       -> zipIdxReg.index(i),
+      outIsUnzip     -> unzipIdxReg.index(i),
+      outIsCompress  -> compressIdx.index(i),
     ))
     fz := Mux1H(Seq(
-      isGather    -> gatherIdx.fillZeros(i),
-      isSlideUp   -> slideUpIdx.fillZeros(i),
-      isSlideDown -> slideDownIdx.fillZeros(i),
-      isZip       -> zipIdx.fillZeros(i),
-      isUnzip     -> unzipIdx.fillZeros(i),
-      isCompress  -> compressIdx.fillZeros(i),
+      outIsGather    -> gatherIdxReg.fillZeros(i),
+      outIsSlideUp   -> slideUpIdxReg.fillZeros(i),
+      outIsSlideDown -> slideDownIdxReg.fillZeros(i),
+      outIsZip       -> zipIdxReg.fillZeros(i),
+      outIsUnzip     -> unzipIdxReg.fillZeros(i),
+      outIsCompress  -> compressIdx.fillZeros(i),
     ))
     fs := Mux1H(Seq(
-      isGather    -> gatherIdx.fillScala(i),
-      isSlideUp   -> slideUpIdx.fillScala(i),
-      isSlideDown -> slideDownIdx.fillScala(i),
-      isZip       -> zipIdx.fillScala(i),
-      isUnzip     -> unzipIdx.fillScala(i),
-      isCompress  -> compressIdx.fillScala(i),
+      outIsGather    -> gatherIdxReg.fillScala(i),
+      outIsSlideUp   -> slideUpIdxReg.fillScala(i),
+      outIsSlideDown -> slideDownIdxReg.fillScala(i),
+      outIsZip       -> zipIdxReg.fillScala(i),
+      outIsUnzip     -> unzipIdxReg.fillScala(i),
+      outIsCompress  -> compressIdx.fillScala(i),
     ))
 
     // Mask-inactive elements (mask bit = 0) are PREFILL for all ops except compress
-    val maskInactive = !isCompress && !in.bits.mask(i)
+    val maskInactive = !outIsCompress && !maskReg(i)
     val isPrefill = !fz && (!fs && !iv || maskInactive)
 
     // PREFILL data: tail elements follow vta, mask-inactive follow vma;
     // compress has no mask, all PREFILL are tail -> vta
-    isTail(i) := Cat(in.bits.uopIdx, i.U(dlenBits.W)) >= e8vl
-    val agnostic = Mux(isCompress || isTail(i), in.bits.vta, in.bits.vma)
+    isTail(i) := Cat(uopIdxReg, i.U(dlenBits.W)) >= e8vl
+    val agnostic = Mux(outIsCompress || isTail(i), vtaReg, vmaReg)
     prefillByte(i) := Mux(agnostic, Fill(8, 1.B), vs3Bytes(i))
 
     val effectiveFs = fs && !maskInactive
@@ -241,10 +270,10 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
       fz        -> 0.U,
       (effectiveFs || isPrefill) -> Mux(effectiveFs,
         Mux1H(Seq(  // SCALAR: SEW-aware rs1 byte
-          in.bits.sew.e8  -> rs1Bytes(0),
-          in.bits.sew.e16 -> rs1Bytes(i % 2),
-          in.bits.sew.e32 -> rs1Bytes(i % 4),
-          in.bits.sew.e64 -> rs1Bytes(i % (XLEN / MinDataWidth)),
+          sewReg.e8  -> rs1Bytes(0),
+          sewReg.e16 -> rs1Bytes(i % 2),
+          sewReg.e32 -> rs1Bytes(i % 4),
+          sewReg.e64 -> rs1Bytes(i % (XLEN / MinDataWidth)),
         )),
         prefillByte(i)  // PREFILL: vs3 byte or agnostic
       ),
@@ -259,14 +288,11 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
 
   /**************************** Valid Signal *********************************/
 
-  out.valid := Mux1H(Seq(
-    isGather    -> (in.valid && isGather),
-    isSlideUp   -> (in.valid && isSlideUp),
-    isSlideDown -> (in.valid && isSlideDown),
-    isZip       -> (in.valid && isZip),
-    isUnzip     -> (in.valid && isUnzip),
-    isCompress  -> compressMod.out.valid,
-  ))
+  out.valid := validReg
+
+  when(validReg && outIsCompress) {
+    assert(compressMod.out.valid, "compress payload must align with IndexGen valid")
+  }
 }
 
 object IndexGen {

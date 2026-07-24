@@ -64,18 +64,12 @@ class PermUnit[T <: Data](
 
   /*********************** Registered Pipeline Stage *************************/
 
-  // IndexGen output (combinational) -> registered
-  private val igOutValid   = Wire(Vec(NumPipeIn, Bool()))
-  private val igOutFlags   = Wire(Vec(NumPipeIn, Vec(NumElem, ElemFlags())))
-  private val igOutData    = Wire(Vec(NumPipeIn, Vec(NumElem, UInt(8.W))))
-  private val igOutCompCnt = Wire(Vec(NumPipeIn, UInt(VlWidth.W)))
-
   // Pipe payload -> registered (aligned with IndexGen latency)
-  private val regValid     = Wire(Vec(NumPipeIn, Bool()))
   private val regPlaceIdx  = Wire(Vec(NumPipeIn, PipeInIdx()))
   private val regBlockBase = Wire(Vec(NumPipeIn, UnitIdx()))
   private val regBlockSize = Wire(Vec(NumPipeIn, BlockSize()))
-  private val regTable     = Wire(Vec(NumPipeIn, Vec(NumElem, Elem())))
+  private val regVs2       = Wire(Vec(NumPipeIn, UInt(DLEN.W)))
+  private val regCompress  = Wire(Vec(NumPipeIn, Bool()))
   private val regTableIdx  = Wire(Vec(NumPipeIn, UnitIdx()))
   private val regMeta      = Wire(Vec(NumPipeIn, metaGen.cloneType))
 
@@ -83,27 +77,20 @@ class PermUnit[T <: Data](
     val ig = indexGens(i)
     val pi = in.pipes(i)
 
-    igOutValid(i)  := RegNext(ig.out.valid, false.B)
-    igOutFlags(i)  := RegEnable(ig.out.elemFlags, ig.out.valid)
-    igOutData(i)   := RegEnable(ig.out.elemData, ig.out.valid)
-    igOutCompCnt(i):= RegEnable(ig.out.compressCount1s, ig.out.valid)
-
-    regValid(i)     := RegNext(pi.valid, false.B)
     regPlaceIdx(i)  := RegEnable(pi.bits.placeIdx, pi.valid)
     regBlockBase(i) := RegEnable(pi.bits.blockBase, pi.valid)
     regBlockSize(i) := RegEnable(pi.bits.blockSize, pi.valid)
+    regVs2(i)       := RegEnable(pi.bits.vs2, pi.valid)
+    regCompress(i)  := RegEnable(pi.bits.op.isCompress, pi.valid)
     regTableIdx(i)  := RegEnable(pi.bits.tableIdx, pi.valid)
     regMeta(i)      := RegEnable(pi.bits.meta, pi.valid)
 
-    // Merged table register: compressData (delayed) vs vs2 (immediate)
-    val isCompress = pi.bits.op.isCompress
-    val tableIn = Mux(isCompress,
-      ig.out.compressData,
-      pi.bits.vs2.asTypeOf(Vec(NumElem, Elem()))
-    )
-    regTable(i) := RegEnable(tableIn,
-      Mux(isCompress, ig.out.valid, pi.valid)
-    )
+    when(pi.valid) {
+      assert(pi.bits.placeIdx < pi.bits.blockSize,
+        "PermUnit placeIdx must be inside the selected block")
+      assert((pi.bits.blockBase & (pi.bits.blockSize - 1.U)) === 0.U,
+        "PermUnit blockBase must align to blockSize")
+    }
   }
 
   /*********************** GatherRing s0 Connections *************************/
@@ -119,18 +106,22 @@ class PermUnit[T <: Data](
 
   for (i <- 0 until NumPipeIn) {
 
-    gatherRing.in.s1pipes(i).valid := regValid(i)
+    gatherRing.in.s1pipes(i).valid := indexGens(i).out.valid
 
     gatherRing.in.s1pipes(i).bits.placeIdx  := regPlaceIdx(i)
     gatherRing.in.s1pipes(i).bits.blockBase := regBlockBase(i)
     gatherRing.in.s1pipes(i).bits.blockSize := regBlockSize(i)
 
     // Merged flags+data passed directly to GatherRing
-    gatherRing.in.s1pipes(i).bits.elemFlags := igOutFlags(i)
-    gatherRing.in.s1pipes(i).bits.elemData  := igOutData(i)
+    gatherRing.in.s1pipes(i).bits.elemFlags := indexGens(i).out.elemFlags
+    gatherRing.in.s1pipes(i).bits.elemData  := indexGens(i).out.elemData
 
     // Table: merged register (compressData or vs2)
-    gatherRing.in.s1pipes(i).bits.table := regTable(i)
+    gatherRing.in.s1pipes(i).bits.table := Mux(
+      regCompress(i),
+      indexGens(i).out.compressData,
+      regVs2(i).asTypeOf(Vec(NumElem, Elem()))
+    )
 
     gatherRing.in.s1pipes(i).bits.tableIdx    := regTableIdx(i)
     gatherRing.in.s1pipes(i).bits.meta        := regMeta(i)
