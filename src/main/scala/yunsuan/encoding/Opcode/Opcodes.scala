@@ -1939,15 +1939,15 @@ object Opcodes {
   trait VIPermOpcode extends Opcodes with DataType {
 
     // funct6(4) ## funct6(1,0) ## funct3(2,1)
-    private val RGATHER_V     = bb"00000"
-    private val RGATHER_X     = bb"00010"
-    private val RGATHER_I     = bb"00001"
-    private val RGATHER_EI16  = bb"01000"
-    private val SLIDEUP       = bb"01010"
-    private val SLIDEDOWN     = bb"01110"
-    private val COMPRESS      = bb"11101"
-    private val SLIDE1UP      = bb"01001"
-    private val SLIDE1DOWN    = bb"01101"
+    val RGATHER_V     = bb"00000"
+    val RGATHER_X     = bb"00010"
+    val RGATHER_I     = bb"00001"
+    val RGATHER_EI16  = bb"01000"
+    val SLIDEUP       = bb"01010"
+    val SLIDEDOWN     = bb"01110"
+    val COMPRESS      = bb"11101"
+    val SLIDE1UP      = bb"01001"
+    val SLIDE1DOWN    = bb"01101"
 
     val vrgather_v_e8     = DvSvlS2vS1(RGATHER_V   , E8 )
     val vrgather_v_e16    = DvSvlS2vS1(RGATHER_V   , E16)
@@ -1985,6 +1985,8 @@ object Opcodes {
     val vslide1down_e16   = DvSvlS2vS1(SLIDE1DOWN  , E16)
     val vslide1down_e32   = DvSvlS2vS1(SLIDE1DOWN  , E32)
     val vslide1down_e64   = DvSvlS2vS1(SLIDE1DOWN  , E64)
+
+    def isFunc(f: this.type => BitPat)(implicit op: UInt) = op(6, 2) === f(this)
   }
 
   object VIPermOpcode extends VIPermOpcode
