@@ -5,7 +5,6 @@ import chisel3.util._
 import yunsuan.VfexpType
 import yunsuan.util._
 import yunsuan.vector.VectorConvert.RoundingModle._
-import yunsuan.vector.VectorConvert.util.ShiftRightJam
 
 case class VfExp2Format(
     expWidth: Int,
@@ -348,7 +347,7 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     val fflags = Output(Vec(laneCount, UInt(5.W)))
   })
 
-  private val kWidth = 16
+  private val kWidth = 9
   private val coeffWidth = fmtFP16.coeffFracBits + 2
   private val tFracBits = fmtFP16.tFracBits
   private val localTKeep = fmtFP16.tFracBits - fmtFP16.segmentBits
@@ -431,16 +430,12 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     )
   }
 
-  private def roundShiftRightPositive(
-      x: UInt,
-      shamt: UInt,
+  private def roundPositiveFromGRS(
+      shifted: UInt,
+      guard: Bool,
+      sticky: Bool,
       rm: UInt
   ): (UInt, Bool) = {
-    val (shifted, _) = ShiftRightJam(x, shamt)
-    val shamtM1 = Mux(shamt === 0.U, 0.U, shamt - 1.U)
-    val (shiftedM1, stickyLow) = ShiftRightJam(x, shamtM1)
-    val guard = Mux(shamt === 0.U, false.B, shiftedM1(0))
-    val sticky = Mux(shamt <= 1.U, false.B, stickyLow)
     val inexact = guard || sticky
     val roundUp = MuxLookup(
       rm,
@@ -450,23 +445,78 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
         RTZ -> false.B,
         RDN -> false.B,
         RUP -> inexact,
-        RMM -> guard,
-        RTO -> false.B
+        RMM -> guard
       )
     )
     (shifted + roundUp, inexact)
   }
 
-  private def roundShiftRightPositiveConst(
+  private def shiftRightGRSNarrow(
+      x: UInt,
+      shamt: UInt,
+      outWidth: Int
+  ): (UInt, Bool, Bool) = {
+    require(outWidth > 0 && outWidth <= x.getWidth)
+    val extWidth = x.getWidth + 1
+    val shiftWidth = log2Ceil(extWidth + 1)
+    val shamtLow =
+      if (shamt.getWidth >= shiftWidth) shamt(shiftWidth - 1, 0)
+      else ZeroExt(shamt, shiftWidth)
+    val shamtHigh =
+      if (shamt.getWidth > shiftWidth)
+        shamt(shamt.getWidth - 1, shiftWidth).orR
+      else false.B
+    val clampedShamt = Mux(
+      shamtHigh || shamtLow > extWidth.U,
+      extWidth.U(shiftWidth.W),
+      shamtLow
+    )
+
+    // Appending zero makes bit 0 after the shift the guard bit. Process the
+    // barrel from large to small shifts so each level can discard upper bits
+    // that no remaining shift can move into the retained result.
+    var data = Cat(x, 0.U(1.W))
+    var sticky = false.B
+    for (i <- (0 until shiftWidth).reverse) {
+      val amount = 1 << i
+      val dataWidth = data.getWidth
+      val keepWidth = math.min(dataWidth, outWidth + amount)
+      val doShift = clampedShamt(i)
+      val dropped =
+        if (amount >= dataWidth) data.orR else data(amount - 1, 0).orR
+      val unshifted =
+        if (keepWidth == dataWidth) data else data(keepWidth - 1, 0)
+      val shifted =
+        if (amount >= dataWidth) {
+          0.U(keepWidth.W)
+        } else {
+          val available = dataWidth - amount
+          val payloadWidth = math.min(available, keepWidth)
+          val payload = data(amount + payloadWidth - 1, amount)
+          if (payloadWidth == keepWidth) payload
+          else Cat(0.U((keepWidth - payloadWidth).W), payload)
+        }
+      sticky = sticky || (doShift && dropped)
+      data = Mux(doShift, shifted, unshifted)
+    }
+
+    (data(outWidth, 1), data(0), sticky)
+  }
+
+  private def shiftRightConstGRS(
       x: UInt,
       shamt: Int,
-      rm: UInt
-  ): (UInt, Bool) = {
+      outWidth: Int
+  ): (UInt, Bool, Bool) = {
     require(shamt >= 0)
-    val shifted =
+    require(outWidth > 0 && outWidth <= x.getWidth)
+    val shiftedWide =
       if (shamt == 0) x
       else if (shamt >= x.getWidth) 0.U(x.getWidth.W)
       else Cat(0.U(shamt.W), x(x.getWidth - 1, shamt))
+    val shifted =
+      if (outWidth == x.getWidth) shiftedWide
+      else shiftedWide(outWidth - 1, 0)
     val guard =
       if (shamt == 0) false.B
       else if (shamt <= x.getWidth) x(shamt - 1)
@@ -475,20 +525,27 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
       if (shamt <= 1) false.B
       else if (shamt <= x.getWidth) x(shamt - 2, 0).orR
       else x.orR
-    val inexact = guard || sticky
-    val roundUp = MuxLookup(
-      rm,
-      guard && (sticky || shifted(0))
-    )(
-      Seq(
-        RTZ -> false.B,
-        RDN -> false.B,
-        RUP -> inexact,
-        RMM -> guard,
-        RTO -> false.B
-      )
-    )
-    (shifted + roundUp, inexact)
+    (shifted, guard, sticky)
+  }
+
+  private def roundShiftRightPositive(
+      x: UInt,
+      shamt: UInt,
+      rm: UInt,
+      outWidth: Int
+  ): (UInt, Bool) = {
+    val (shifted, guard, sticky) = shiftRightGRSNarrow(x, shamt, outWidth)
+    roundPositiveFromGRS(shifted, guard, sticky, rm)
+  }
+
+  private def roundShiftRightPositiveConst(
+      x: UInt,
+      shamt: Int,
+      rm: UInt,
+      outWidth: Int
+  ): (UInt, Bool) = {
+    val (shifted, guard, sticky) = shiftRightConstGRS(x, shamt, outWidth)
+    roundPositiveFromGRS(shifted, guard, sticky, rm)
   }
 
   private def roundAndPackPositive(
@@ -512,17 +569,18 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
 
     val normalizedSig = Wire(UInt((sigScaled.getWidth + 1).W))
     val normalizedK = Wire(SInt(kWidth.W))
+    val maxK = ((BigInt(1) << (kWidth - 1)) - 1).S(kWidth.W)
     normalizedSig := sigScaled
     normalizedK := k
     when(sigScaled >= (BigInt(2) << sigFracBits).U) {
       normalizedSig := (sigScaled + 1.U) >> 1
-      normalizedK := k + 1.S
+      normalizedK := Mux(k === maxK, k, k + 1.S(kWidth.W))
     }
 
     val expCalcWidth = kWidth + 3
     val normalExp = normalizedK.pad(expCalcWidth) + bias.S(expCalcWidth.W)
     val (normalRoundedRaw, normalRoundInexact) =
-      roundShiftRightPositiveConst(normalizedSig, normalShift, rm)
+      roundShiftRightPositiveConst(normalizedSig, normalShift, rm, fracWidth + 2)
     val normalCarry = normalRoundedRaw >= overflowSig
     val normalRounded =
       Mux(normalCarry, normalRoundedRaw >> 1, normalRoundedRaw)
@@ -539,7 +597,7 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
         expCalcWidth
       ) + (bias - 1 + fracWidth).S(expCalcWidth.W))
     val (subRoundedRaw, subRoundInexact) =
-      roundShiftRightPositive(normalizedSig, subShift.asUInt, rm)
+      roundShiftRightPositive(normalizedSig, subShift.asUInt, rm, fracWidth + 1)
     val subCarry = subRoundedRaw >= normalThreshold
     val subZero = subRoundedRaw === 0.U
     val subResult = Mux(
@@ -568,9 +626,175 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     }
 
     val nx = hasFracInput || nxRound
-    val rtoResult =
-      Mux(rm === RTO && nx && !of, result | 1.U(resultWidth.W), result)
-    (rtoResult, Cat(false.B, false.B, of, uf, nx))
+    (result, Cat(false.B, false.B, of, uf, nx))
+  }
+
+  private def roundAndPackPositiveShared16(
+      sigScaled: UInt,
+      k: SInt,
+      rm: UInt,
+      hasFracInput: Bool,
+      isBF16: Bool
+  ): (UInt, UInt) = {
+    require(hasBF16)
+    require(fmtFP16.width == 16 && fmtBF16.width == 16)
+    require(fmtFP16.sigFracBits >= fmtBF16.sigFracBits)
+    require(fmtFP16.fracWidth > fmtBF16.fracWidth)
+
+    val commonSigFracBits = fmtFP16.sigFracBits
+    val bf16ScaleShift = fmtFP16.sigFracBits - fmtBF16.sigFracBits
+    val expCalcWidth = kWidth + 3
+    val maxK = ((BigInt(1) << (kWidth - 1)) - 1).S(kWidth.W)
+
+    val normalizedSig = Wire(UInt((sigScaled.getWidth + 1).W))
+    val normalizedK = Wire(SInt(kWidth.W))
+    normalizedSig := sigScaled
+    normalizedK := k
+    when(sigScaled >= (BigInt(2) << commonSigFracBits).U) {
+      val normalizeIncrement = Mux(
+        isBF16,
+        (BigInt(1) << bf16ScaleShift).U(sigScaled.getWidth.W),
+        1.U(sigScaled.getWidth.W)
+      )
+      val normalizedShifted =
+        extendUInt((sigScaled + normalizeIncrement) >> 1, sigScaled.getWidth)
+      val bf16Normalized = Cat(
+        normalizedShifted(sigScaled.getWidth - 1, bf16ScaleShift),
+        0.U(bf16ScaleShift.W)
+      )
+      normalizedSig := Mux(isBF16, bf16Normalized, normalizedShifted)
+      normalizedK := Mux(k === maxK, k, k + 1.S(kWidth.W))
+    }
+
+    val selectedBias = Mux(
+      isBF16,
+      fmtBF16.bias.S(expCalcWidth.W),
+      fmtFP16.bias.S(expCalcWidth.W)
+    )
+    val normalExp = normalizedK.pad(expCalcWidth) + selectedBias
+
+    val normalRoundWidth = fmtFP16.fracWidth + 2
+    val normalFracDelta = fmtFP16.fracWidth - fmtBF16.fracWidth
+    val (fp16Shifted, fp16Guard, fp16Sticky) = shiftRightConstGRS(
+      normalizedSig,
+      commonSigFracBits - fmtFP16.fracWidth,
+      normalRoundWidth
+    )
+    val bf16Shifted = Cat(
+      0.U(normalFracDelta.W),
+      fp16Shifted(normalRoundWidth - 1, normalFracDelta)
+    )
+    val bf16Guard = fp16Shifted(normalFracDelta - 1)
+    val bf16StickyFromRetained =
+      if (normalFracDelta == 1) false.B
+      else fp16Shifted(normalFracDelta - 2, 0).orR
+    val bf16Sticky = bf16StickyFromRetained || fp16Guard || fp16Sticky
+    val (normalRoundedRaw, normalRoundInexact) = roundPositiveFromGRS(
+      Mux(isBF16, bf16Shifted, fp16Shifted),
+      Mux(isBF16, bf16Guard, fp16Guard),
+      Mux(isBF16, bf16Sticky, fp16Sticky),
+      rm
+    )
+    val normalCarryThreshold = Mux(
+      isBF16,
+      (BigInt(1) << (fmtBF16.fracWidth + 1)).U(normalRoundWidth.W),
+      (BigInt(1) << (fmtFP16.fracWidth + 1)).U(normalRoundWidth.W)
+    )
+    val normalCarry = normalRoundedRaw >= normalCarryThreshold
+    val normalRounded =
+      Mux(normalCarry, normalRoundedRaw >> 1, normalRoundedRaw)
+    val normalExpAdj =
+      normalExp + Mux(normalCarry, 1.S(expCalcWidth.W), 0.S(expCalcWidth.W))
+    val selectedMaxExp = Mux(
+      isBF16,
+      fmtBF16.maxExpField.U(expCalcWidth.W),
+      fmtFP16.maxExpField.U(expCalcWidth.W)
+    ).asSInt
+    val normalOverflow = normalExpAdj > selectedMaxExp
+    val fp16NormalResult = Cat(
+      0.U(1.W),
+      normalExpAdj.asUInt(fmtFP16.expWidth - 1, 0),
+      normalRounded(fmtFP16.fracWidth - 1, 0)
+    )
+    val bf16NormalResult = Cat(
+      0.U(1.W),
+      normalExpAdj.asUInt(fmtBF16.expWidth - 1, 0),
+      normalRounded(fmtBF16.fracWidth - 1, 0)
+    )
+    val normalResult = Mux(isBF16, bf16NormalResult, fp16NormalResult)
+    val selectedMaxFinite = Mux(
+      isBF16,
+      fmtBF16.maxFinite.U(fmtBF16.width.W),
+      fmtFP16.maxFinite.U(fmtFP16.width.W)
+    )
+    val selectedInf = Mux(
+      isBF16,
+      fmtBF16.inf.U(fmtBF16.width.W),
+      fmtFP16.inf.U(fmtFP16.width.W)
+    )
+    val overflowResult =
+      Mux(rm === RTZ || rm === RDN, selectedMaxFinite, selectedInf)
+
+    val selectedSubOffset = Mux(
+      isBF16,
+      (fmtBF16.bias - 1 + fmtBF16.fracWidth).S(expCalcWidth.W),
+      (fmtFP16.bias - 1 + fmtFP16.fracWidth).S(expCalcWidth.W)
+    )
+    val subShift =
+      commonSigFracBits.S(expCalcWidth.W) -
+        (normalizedK.pad(expCalcWidth) + selectedSubOffset)
+    val subRoundWidth = fmtFP16.fracWidth + 1
+    val (subRoundedRaw, subRoundInexact) = roundShiftRightPositive(
+      normalizedSig,
+      subShift.asUInt,
+      rm,
+      subRoundWidth
+    )
+    val subCarryThreshold = Mux(
+      isBF16,
+      (BigInt(1) << fmtBF16.fracWidth).U(subRoundWidth.W),
+      (BigInt(1) << fmtFP16.fracWidth).U(subRoundWidth.W)
+    )
+    val subCarry = subRoundedRaw >= subCarryThreshold
+    val subZero = subRoundedRaw === 0.U
+    val fp16SubResult = Mux(
+      subCarry,
+      (BigInt(1) << fmtFP16.fracWidth).U(fmtFP16.width.W),
+      Cat(
+        0.U((fmtFP16.expWidth + 1).W),
+        subRoundedRaw(fmtFP16.fracWidth - 1, 0)
+      )
+    )
+    val bf16SubResult = Mux(
+      subCarry,
+      (BigInt(1) << fmtBF16.fracWidth).U(fmtBF16.width.W),
+      Cat(
+        0.U((fmtBF16.expWidth + 1).W),
+        subRoundedRaw(fmtBF16.fracWidth - 1, 0)
+      )
+    )
+    val subResult = Mux(isBF16, bf16SubResult, fp16SubResult)
+    val subUnderflow = !subCarry && !subZero && subRoundInexact
+    val zeroUnderflow = subZero && subRoundInexact
+
+    val result = Wire(UInt(fmtFP16.width.W))
+    val of = Wire(Bool())
+    val uf = Wire(Bool())
+    val nxRound = Wire(Bool())
+    when(normalExp > 0.S) {
+      result := Mux(normalOverflow, overflowResult, normalResult)
+      of := normalOverflow
+      uf := false.B
+      nxRound := normalRoundInexact || normalOverflow
+    }.otherwise {
+      result := subResult
+      of := false.B
+      uf := subUnderflow || zeroUnderflow
+      nxRound := subRoundInexact
+    }
+
+    val nx = hasFracInput || nxRound
+    (result, Cat(false.B, false.B, of, uf, nx))
   }
 
   private def overflowResultInternal(
@@ -663,7 +887,8 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
         fracQNeg := negQuantized(fmt.tFracBits - 1, 0)
       }.otherwise {
         val shift = rshift - fmt.tFracBits.U
-        val (posRounded, _) = roundShiftRightPositive(rem, shift, RMM)
+        val (posRounded, _) =
+          roundShiftRightPositive(rem, shift, RMM, rem.getWidth)
         val posQuantized = ZeroExt(posRounded, fmt.tFracBits)
         fracQPos := posQuantized
         fracQNeg := Mux(
@@ -993,7 +1218,7 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     fireS3
   )
 
-  // Stage 5: product2 + (C << 2*tFracBits), shift muxed for BF16
+  // Stage 5: product2 + C, aligned to the FP16 Q format for shared S6 rounding
   val stage5SpecialNext = Wire(Vec(laneCount, Bool()))
   val stage5SpecialKindNext = Wire(Vec(laneCount, UInt(specialKindWidth.W)))
   val stage5HasFracNext = Wire(Vec(laneCount, Bool()))
@@ -1005,8 +1230,24 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     stage5SpecialKindNext(lane) := stage4SpecialKind(lane)
     stage5HasFracNext(lane) := stage4HasFrac(lane)
     stage5KNext(lane) := stage4K(lane)
-    val tFrac2ShiftS5 = if (hasBF16) Mux(isBF16_S4.get, (2 * tFracBitsBF16).U, (2 * tFracBits).U) else (2 * tFracBits).U
-    stage5SigScaledNext(lane) := stage4Product(lane) +& (stage4CoeffC(lane) << tFrac2ShiftS5)
+    val bf16ScaleShift = fmtFP16.sigFracBits - fmtBF16.sigFracBits
+    val productAlignedS5 =
+      if (hasBF16)
+        Mux(
+          isBF16_S4.get,
+          stage4Product(lane) << bf16ScaleShift,
+          stage4Product(lane)
+        )
+      else stage4Product(lane)
+    val coeffCAlignedS5 =
+      if (hasBF16)
+        Mux(
+          isBF16_S4.get,
+          stage4CoeffC(lane) << (2 * tFracBitsBF16 + bf16ScaleShift),
+          stage4CoeffC(lane) << (2 * tFracBits)
+        )
+      else stage4CoeffC(lane) << (2 * tFracBits)
+    stage5SigScaledNext(lane) := productAlignedS5 +& coeffCAlignedS5
   }
 
   val stage5Special =
@@ -1026,14 +1267,33 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     fireS4
   )
 
-  // ── Stage 6: rounding — compute both formats, mux ──
+  // Stage 6: shared FP16/BF16 rounding; FP32 uses the single-format path
   val resultNext = Wire(Vec(laneCount, UInt(fmtFP16.width.W)))
   val flagsNext = Wire(Vec(laneCount, UInt(5.W)))
 
   for (lane <- 0 until laneCount) {
-    // FP16 rounding path (always computed)
-    val (fp16FiniteResult, fp16FiniteFlags) =
-      roundAndPackPositive(
+    val specialKind = stage5SpecialKind(lane)
+    val isSpecial = stage5Special(lane)
+    val specialFlags = specialFlagsFromKind(specialKind)
+
+    if (hasBF16) {
+      val isBF16 = isBF16_S5.get
+      val (finiteResult, finiteFlags) = roundAndPackPositiveShared16(
+        stage5SigScaled(lane),
+        stage5K(lane),
+        rmS5,
+        stage5HasFrac(lane),
+        isBF16
+      )
+      val specialResult = Mux(
+        isBF16,
+        specialResultFromKind(fmtBF16, specialKind),
+        specialResultFromKind(fmtFP16, specialKind)
+      )
+      resultNext(lane) := Mux(isSpecial, specialResult, finiteResult)
+      flagsNext(lane) := Mux(isSpecial, specialFlags, finiteFlags)
+    } else {
+      val (finiteResult, finiteFlags) = roundAndPackPositive(
         stage5SigScaled(lane),
         fmtFP16.sigFracBits,
         fmtFP16.fracWidth,
@@ -1048,38 +1308,9 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
         rmS5,
         stage5HasFrac(lane)
       )
-    val specialKind = stage5SpecialKind(lane)
-    val isSpecial = stage5Special(lane)
-    val specialFlags = specialFlagsFromKind(specialKind)
-    val fp16Res = Mux(isSpecial, specialResultFromKind(fmtFP16, specialKind), fp16FiniteResult)
-    val fp16Flg = Mux(isSpecial, specialFlags, fp16FiniteFlags)
-
-    if (hasBF16) {
-      // BF16 rounding path
-      val (bf16FiniteResult, bf16FiniteFlags) =
-        roundAndPackPositive(
-          stage5SigScaled(lane),
-          fmtBF16.sigFracBits,
-          fmtBF16.fracWidth,
-          fmtBF16.expWidth,
-          fmtBF16.bias,
-          fmtBF16.maxExpField,
-          fmtBF16.inf,
-          fmtBF16.maxFinite,
-          fmtBF16.canonicalNaN,
-          fmtBF16.width,
-          stage5K(lane),
-          rmS5,
-          stage5HasFrac(lane)
-        )
-      val bf16Res = Mux(isSpecial, specialResultFromKind(fmtBF16, specialKind), bf16FiniteResult)
-      val bf16Flg = Mux(isSpecial, specialFlags, bf16FiniteFlags)
-
-      resultNext(lane) := Mux(isBF16_S5.get, bf16Res, fp16Res)
-      flagsNext(lane) := Mux(isBF16_S5.get, bf16Flg, fp16Flg)
-    } else {
-      resultNext(lane) := fp16Res
-      flagsNext(lane) := fp16Flg
+      val specialResult = specialResultFromKind(fmtFP16, specialKind)
+      resultNext(lane) := Mux(isSpecial, specialResult, finiteResult)
+      flagsNext(lane) := Mux(isSpecial, specialFlags, finiteFlags)
     }
   }
 

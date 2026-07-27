@@ -45,7 +45,6 @@ object VfExp2StrictRef {
     case 2 /* RDN */ => sign && inexact
     case 3 /* RUP */ => !sign && inexact
     case 4 /* RMM */ => guard
-    case 6 /* RTO */ => false // RTO : always set LSB later
     case _ /*  ?? */ => false
   }
 
@@ -110,7 +109,6 @@ object VfExp2StrictRef {
       val doUp = roundUp(s != 0, main, g, r, stk, inexact, rm)
       var resMain = if (doUp) main + 1 else main
       var resExp = 0
-      var resInexact = inexact || doUp
 
       if (resMain >= (1 << F16_SIG)) {
         resMain = resMain >> 1
@@ -118,14 +116,10 @@ object VfExp2StrictRef {
       }
       if (resExp > 0 && resExp < 31) {
         val frac = (resMain & ((1 << F16_FRAC) - 1)).toInt
-        var result = BigInt((s << 15) | (resExp << 10) | frac)
-        if (rm == 6 && resInexact) result = result | 1
-        result
+        BigInt((s << 15) | (resExp << 10) | frac)
       } else {
         val frac = (resMain & ((1 << F16_FRAC) - 1)).toInt
-        var result = BigInt((s << 15) | frac)
-        if (rm == 6 && resInexact) result = result | 1
-        result
+        BigInt((s << 15) | frac)
       }
     } else {
       // ---- normal fp16 ----
@@ -142,7 +136,6 @@ object VfExp2StrictRef {
       val doUp = roundUp(s != 0, main, g, r, stk, inexact, rm)
       var resMain = if (doUp) main + 1 else main
       var resExp = targetExp
-      var resInexact = inexact || doUp
 
       if (resMain >= (1 << (F16_SIG + 1))) {
         resMain = resMain >> 1
@@ -156,9 +149,7 @@ object VfExp2StrictRef {
       }
 
       val frac = (resMain & ((1 << F16_FRAC) - 1)).toInt
-      var result = BigInt((s << 15) | (resExp << 10) | frac)
-      if (rm == 6 && resInexact) result = result | 1
-      result
+      BigInt((s << 15) | (resExp << 10) | frac)
     }
   }
 
@@ -222,20 +213,15 @@ object VfExp2StrictRef {
       val doUp = roundUp(s != 0, main, g, r, stk, inexact, rm)
       var resMain = if (doUp) main + 1 else main
       var resExp = 0
-      var resInexact = inexact || doUp
       if (resMain >= (1 << tSig)) { resMain = resMain >> 1; resExp = 1 }
       if (resExp > 0 && resExp < tMaxExp) {
         val frac = (resMain & ((1L << tFrac) - 1)).toInt
-        var result = BigInt(
+        BigInt(
           (s.toLong << 15) | (resExp.toLong << tFrac) | frac.toLong
         )
-        if (rm == 6 && resInexact) result = result | 1
-        result
       } else {
         val frac = (resMain & ((1L << tFrac) - 1)).toInt
-        var result = BigInt((s.toLong << 15) | frac.toLong)
-        if (rm == 6 && resInexact) result = result | 1
-        result
+        BigInt((s.toLong << 15) | frac.toLong)
       }
     } else {
       // normal
@@ -251,7 +237,6 @@ object VfExp2StrictRef {
       val doUp = roundUp(s != 0, main, g, r, stk, inexact, rm)
       var resMain = if (doUp) main + 1 else main
       var resExp = targetExp
-      var resInexact = inexact || doUp
       if (resMain >= (1L << (tSig + 1))) {
         resMain = resMain >> 1; resExp = resExp + 1
         if (resExp >= tMaxExp) {
@@ -262,11 +247,9 @@ object VfExp2StrictRef {
         }
       }
       val frac = (resMain & ((1L << tFrac) - 1)).toInt
-      var result = BigInt(
+      BigInt(
         (s.toLong << 15) | (resExp.toLong << tFrac) | frac.toLong
       )
-      if (rm == 6 && resInexact) result = result | 1
-      result
     }
   }
 
@@ -356,20 +339,11 @@ object VfExp2StrictRef {
       case 2 /* RDN */ => false
       case 3 /* RUP */ => true
       case 4 /* RMM */ => Math.abs(dRNE) < Math.abs(d)
-      case 6 /* RTO */ =>
-        val du = fUpper.toDouble - d
-        val dl = d - fLower.toDouble
-        if (du < dl) true
-        else if (dl < du) false
-        else (upBits & 1) != 0 // tie : pick odd
       case _ => !isAbove
     }
 
     val result = if (useUpper) upBits else loBits
-
-    // RTO : always set LSB when inexact
-    if (rm == 6 && d != dRNE) BigInt(result | 1)
-    else BigInt(result)
+    BigInt(result)
   }
 
   // ====================  exp2  reference ====================
@@ -491,8 +465,7 @@ class VfExp2UlpSpec
     1 -> "RTZ",
     2 -> "RDN",
     3 -> "RUP",
-    4 -> "RMM",
-    6 -> "RTO"
+    4 -> "RMM"
   )
 
   case class Mismatch(
@@ -799,7 +772,6 @@ class VfExp2UlpSpec
             else BigInt(ulp.bitLength)
           val threshold =
             if (width == 32) 13
-            else if (rm == 6) 2 // RTO: ULP ≤ 4 (log2_ULP ≤ 2) allowed
             else 1
           (logBits, logBits > threshold)
         }
@@ -1004,7 +976,7 @@ class VfExp2UlpSpec
     test(new VfExp2(64)).withAnnotations(
       Seq(VerilatorBackendAnnotation, VerilatorFlags(Seq()))
     ) { dut =>
-      val rms = Seq(0, 1, 2, 3, 4, 6)
+      val rms = Seq(0, 1, 2, 3, 4)
       var allOk = true
       for (rm <- rms) {
         val rand = new Random(0x2f16a1L + rm)
@@ -1031,7 +1003,7 @@ class VfExp2UlpSpec
     test(new VfExp2(64)).withAnnotations(
       Seq(VerilatorBackendAnnotation, VerilatorFlags(Seq()))
     ) { dut =>
-      val rms = Seq(0, 1, 2, 3, 4, 6)
+      val rms = Seq(0, 1, 2, 3, 4)
       var allOk = true
       for (rm <- rms) {
         val rand = new Random(0x2f16a1L + rm + 42)
@@ -1061,7 +1033,7 @@ class VfExp2UlpSpec
     test(new VfExp2(64)).withAnnotations(
       Seq(VerilatorBackendAnnotation, VerilatorFlags(Seq()))
     ) { dut =>
-      val rms = Seq(0, 1, 2, 3, 4, 6)
+      val rms = Seq(0, 1, 2, 3, 4)
       var allOk = true
       for (rm <- rms) {
         val rand = new Random(0x3f32a1L + rm)

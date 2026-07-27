@@ -120,7 +120,6 @@ uint64_t overflow_result_bits(const Exp2Format &fmt, int rm) {
 uint64_t underflow_tiny_result_bits(int rm) {
   switch (rm) {
     case RM_RUP:
-    case RM_RTO:
       return 1ULL;
     default:
       return 0ULL;
@@ -156,8 +155,6 @@ uint64_t round_scaled_positive(const mpfr_t scaled, int rm, bool *inexact) {
     case RM_RUP:
       mpz_add_ui(ceil_z, floor_z, 1);
       result = mpz_get_ui(ceil_z);
-      break;
-    case RM_RTO:
       break;
     case RM_RNE:
     case RM_RMM: {
@@ -239,7 +236,6 @@ RoundedValue compute_rounded_exp2(const mpfr_t x, const Exp2Format &fmt, int rm)
       out.bits = (static_cast<uint64_t>(exp_unbiased + fmt.bias) << fmt.frac_bits) |
                  ((rounded - (1ULL << fmt.frac_bits)) & ((1ULL << fmt.frac_bits) - 1ULL));
     }
-    if (rm == RM_RTO && inexact) out.bits |= 1ULL;
     out.fflags = inexact ? FFLAGS_NX : 0;
     mpfr_clear(exact);
     return out;
@@ -247,14 +243,12 @@ RoundedValue compute_rounded_exp2(const mpfr_t x, const Exp2Format &fmt, int rm)
 
   if (rounded >= (1ULL << fmt.frac_bits)) {
     out.bits = static_cast<uint64_t>(1ULL << fmt.frac_bits);
-    if (rm == RM_RTO && inexact) out.bits |= 1ULL;
     out.fflags = inexact ? FFLAGS_NX : 0;
     mpfr_clear(exact);
     return out;
   }
 
   out.bits = rounded;
-  if (rm == RM_RTO && inexact) out.bits |= 1ULL;
   out.fflags = inexact ? (FFLAGS_UF | FFLAGS_NX) : 0;
   mpfr_clear(exact);
   return out;
