@@ -279,6 +279,12 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
       ),
       (iv && !maskInactive) -> idx,
     ))
+    // Tail elements (i >= e8vl) are not active gather elements;
+    // override to PREFILL regardless of index validity
+    when(isTail(i)) {
+      out.elemFlags(i) := ElemFlags.PREFILL
+      out.elemData(i)  := prefillByte(i)
+    }
   }
 
   /******************* Compress-specific Outputs *****************************/

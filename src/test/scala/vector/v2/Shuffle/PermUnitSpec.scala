@@ -249,6 +249,23 @@ class PermUnitSpec extends AnyFunSpec with ChiselSim with Matchers
         }
       }
 
+      // Diagnostic: same scenario with LMUL=m1 (full register, no tail)
+      it("LMUL=m1 vl=16 all active (diagnostic)") {
+        simulate(new PermUnit[FakeRobPtr](FakeRobPtr())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = (0xAB :: (0 until 15).toList).toList
+          val vs3 = (0xaa to 0xaa + 15).toList
+          val vs1 = BigInt(0x0200) // byte0=0, byte1=2, rest=0
+          // Use existing golden with lmulFrac=8 (m1)
+          val g = goldenGatherIdx(vs1, 8, 8, 8, 0)
+          val golden = goldenWb(vs2, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4), vs3, 0 until 1)
+          pGatherFrac(dut, 0, sew = 8, ei = 8, lmulFrac = 8, vl = 16, vs1 = vs1, vs2 = vs2, vs3 = vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          dut.clock.step(); dut.clock.step()
+          eWb(dut, 0, golden)
+        }
+      }
+
       it("LMUL=mf2 vl=4 tail preserves vs3") {
         simulate(new PermUnit[FakeRobPtr](FakeRobPtr())(GatherParam.default)) { dut =>
           initDut(dut)
@@ -271,9 +288,9 @@ class PermUnitSpec extends AnyFunSpec with ChiselSim with Matchers
           initDut(dut)
           val vs2 = (0 until 16).toList
           val vs3 = (0xaa to 0xaa + 15).toList
-          val vs1 = BigInt(5) // byte0=5
+          val vs1 = BigInt(3) // byte0=3, in-range (3 < VLMAX=4 for mf4)
           val expected = bytesToBigInt(
-            Seq(vs2(5)) ++ vs3.drop(1)
+            Seq(vs2(3)) ++ vs3.drop(1)
           )
           pGatherFrac(dut, 0, sew = 8, ei = 8, lmulFrac = 2, vl = 1, vs1 = vs1, vs2 = vs2, vs3 = vs3)
           dut.clock.step(); pPipeOff(dut, 0)
