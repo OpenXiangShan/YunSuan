@@ -1987,6 +1987,8 @@ object Opcodes {
     val vslide1down_e64   = DvSvlS2vS1(SLIDE1DOWN  , E64)
 
     def isFunc(f: this.type => BitPat)(implicit op: UInt) = op(6, 2) === f(this)
+
+    def getSew(implicit op: UInt) = op(1, 0)
   }
 
   object VIPermOpcode extends VIPermOpcode

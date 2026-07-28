@@ -615,6 +615,16 @@ class GatherLmulBundle extends Bundle {
 
   val m8 = Bool()
 
+  def fromLMUL(uint: UInt): this.type = {
+    this.mf8 := VLmul.mf8 === uint
+    this.mf4 := VLmul.mf4 === uint
+    this.mf2 := VLmul.mf2 === uint
+    this.m1  := VLmul.m1  === uint
+    this.m2  := VLmul.m2  === uint
+    this.m4  := VLmul.m4  === uint
+    this.m8  := VLmul.m8  === uint
+    this
+  }
 }
 
 class GatherSewBundle extends Bundle {
@@ -629,6 +639,13 @@ class GatherSewBundle extends Bundle {
 
   def toOH: UInt = Cat(e64, e32, e16, e8)
 
+  def fromSEW(uint: UInt): this.type = {
+    this.e64 := VSew.e64 === uint
+    this.e32 := VSew.e32 === uint
+    this.e16 := VSew.e16 === uint
+    this.e8 := VSew.e8 === uint
+    this
+  }
 }
 
 object MaskSelectAndDupModuleMain extends App {
