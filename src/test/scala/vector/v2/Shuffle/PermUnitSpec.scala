@@ -202,5 +202,85 @@ class PermUnitSpec extends AnyFunSpec with ChiselSim with Matchers
         }
       }
     }
+
+    describe("Fractional LMUL tail undisturbed") {
+      // Helper: set fractional LMUL on PermUnit pipe
+      def pGatherFrac(dut: PermUnit[FakeRobPtr], pipe: Int,
+        sew: Int, ei: Int, lmulFrac: Int, vl: Int,
+        vs1: BigInt, vs2: Seq[Int], vs3: Seq[Int],
+      ): Unit = {
+        val p = dut.in.pipes(pipe)
+        p.valid.poke(true)
+        p.bits.op.isGather.poke(true)
+        p.bits.placeIdx.poke(0); p.bits.blockBase.poke(0)
+        pSew(p.bits.sew, sew); pSew(p.bits.ei, ei)
+        pLmul(p.bits.lmul, lmulFrac)
+        p.bits.vl.poke(vl)
+        p.bits.vta.poke(false) // tail undisturbed
+        p.bits.vma.poke(false)
+        p.bits.vs1.poke(vs1)
+        p.bits.mask.poke((BigInt(1) << numElem) - 1)
+        p.bits.vs2.poke(bytesToBigInt(vs2))
+        p.bits.vs3.poke(bytesToBigInt(vs3))
+      }
+
+      // Scenario derived from emu vrgather_vv-0 failure:
+      // SEW=8, LMUL=mf8, vl=2, tu undisturbed
+      // vs1[0]=0 (in-range), vs1[1]=2 (out-of-range)
+      // bytes 0-1 should be gather result, bytes 2-15 should preserve vs3
+      it("LMUL=mf8 vl=2 tail preserves vs3") {
+        simulate(new PermUnit[FakeRobPtr](FakeRobPtr())(GatherParam.default)) { dut =>
+          initDut(dut)
+          // vs2 (table): byte0=0xAB, rest ascending
+          val vs2 = (0xAB :: (0 until 15).toList).toList
+          // vs3 (previous register value, should be preserved for tail)
+          val vs3 = (0xaa to 0xaa + 15).toList
+          // vs1 indices: low 2 bytes = {0, 2}
+          val vs1 = BigInt(0x0200) // byte0=0, byte1=2
+          // Expected: byte0 = vs2[0]=0xAB, byte1 = 0 (out-of-range), bytes2-15 = vs3
+          val expectedTail = vs3.drop(2) // bytes 2-15
+          val expectedHead = Seq(vs2(0), 0) // byte0=gather(0xAB), byte1=fillZeros
+          val expected = bytesToBigInt(expectedHead ++ expectedTail)
+
+          pGatherFrac(dut, 0, sew = 8, ei = 8, lmulFrac = 1, vl = 2, vs1 = vs1, vs2 = vs2, vs3 = vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          dut.clock.step(); dut.clock.step()
+          eWb(dut, 0, expected)
+        }
+      }
+
+      it("LMUL=mf2 vl=4 tail preserves vs3") {
+        simulate(new PermUnit[FakeRobPtr](FakeRobPtr())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = (0 until 16).toList
+          val vs3 = (0xaa to 0xaa + 15).toList
+          // vs1: byte0=1, byte1=3, byte2=0, byte3=0
+          val vs1 = BigInt(0x0301)
+          val expected = bytesToBigInt(
+            Seq(vs2(1), vs2(3), vs2(0), vs2(0)) ++ vs3.drop(4)
+          )
+          pGatherFrac(dut, 0, sew = 8, ei = 8, lmulFrac = 4, vl = 4, vs1 = vs1, vs2 = vs2, vs3 = vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          dut.clock.step(); dut.clock.step()
+          eWb(dut, 0, expected)
+        }
+      }
+
+      it("LMUL=mf4 vl=1 tail preserves vs3") {
+        simulate(new PermUnit[FakeRobPtr](FakeRobPtr())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = (0 until 16).toList
+          val vs3 = (0xaa to 0xaa + 15).toList
+          val vs1 = BigInt(5) // byte0=5
+          val expected = bytesToBigInt(
+            Seq(vs2(5)) ++ vs3.drop(1)
+          )
+          pGatherFrac(dut, 0, sew = 8, ei = 8, lmulFrac = 2, vl = 1, vs1 = vs1, vs2 = vs2, vs3 = vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          dut.clock.step(); dut.clock.step()
+          eWb(dut, 0, expected)
+        }
+      }
+    }
   }
 }
