@@ -173,6 +173,10 @@ abstract class Opcodes {
 
   def getMaxLat: Int = this.all.map(_.getLat).max
 
+  object Latency {
+    def width: Int = log2Up(getMaxLat + 2)
+  }
+
   // Todo: override it in every child class
   def getLat(opcode: Opcode): Int = {
     println(s"[Warning] please rewrite getLat method in class $getClass")
@@ -1936,7 +1940,7 @@ object Opcodes {
 
   object VIRedOpcode extends VIRedOpcode
 
-  trait VIPermOpcode extends Opcodes with DataType {
+  trait VIPermOpcode extends Opcodes with DataType with LmulType {
 
     // funct6(4) ## funct6(1,0) ## funct3(2,1)
     val RGATHER_V     = bb"00000"
@@ -1949,46 +1953,171 @@ object Opcodes {
     val SLIDE1UP      = bb"01001"
     val SLIDE1DOWN    = bb"01101"
 
-    val vrgather_v_e8     = DvSvlS2vS1(RGATHER_V   , E8 )
-    val vrgather_v_e16    = DvSvlS2vS1(RGATHER_V   , E16)
-    val vrgather_v_e32    = DvSvlS2vS1(RGATHER_V   , E32)
-    val vrgather_v_e64    = DvSvlS2vS1(RGATHER_V   , E64)
-    val vrgather_x_e8     = DvSvlS2vS1(RGATHER_X   , E8 )
-    val vrgather_x_e16    = DvSvlS2vS1(RGATHER_X   , E16)
-    val vrgather_x_e32    = DvSvlS2vS1(RGATHER_X   , E32)
-    val vrgather_x_e64    = DvSvlS2vS1(RGATHER_X   , E64)
-    val vrgather_i_e8     = DvSvlS2vS1(RGATHER_I   , E8 )
-    val vrgather_i_e16    = DvSvlS2vS1(RGATHER_I   , E16)
-    val vrgather_i_e32    = DvSvlS2vS1(RGATHER_I   , E32)
-    val vrgather_i_e64    = DvSvlS2vS1(RGATHER_I   , E64)
-    val vrgather_ei16_e8  = DvSvlS2vS1(RGATHER_EI16, E8 )
-    val vrgather_ei16_e16 = DvSvlS2vS1(RGATHER_EI16, E16)
-    val vrgather_ei16_e32 = DvSvlS2vS1(RGATHER_EI16, E32)
-    val vrgather_ei16_e64 = DvSvlS2vS1(RGATHER_EI16, E64)
-    val vslideup_e8       = DvSvlS2vS1(SLIDEUP     , E8 )
-    val vslideup_e16      = DvSvlS2vS1(SLIDEUP     , E16)
-    val vslideup_e32      = DvSvlS2vS1(SLIDEUP     , E32)
-    val vslideup_e64      = DvSvlS2vS1(SLIDEUP     , E64)
-    val vslidedown_e8     = DvSvlS2vS1(SLIDEDOWN   , E8 )
-    val vslidedown_e16    = DvSvlS2vS1(SLIDEDOWN   , E16)
-    val vslidedown_e32    = DvSvlS2vS1(SLIDEDOWN   , E32)
-    val vslidedown_e64    = DvSvlS2vS1(SLIDEDOWN   , E64)
-    val vcompress_e8      = DvSvlS2vS1(COMPRESS    , E8 )
-    val vcompress_e16     = DvSvlS2vS1(COMPRESS    , E16)
-    val vcompress_e32     = DvSvlS2vS1(COMPRESS    , E32)
-    val vcompress_e64     = DvSvlS2vS1(COMPRESS    , E64)
-    val vslide1up_e8      = DvSvlS2vS1(SLIDE1UP    , E8 )
-    val vslide1up_e16     = DvSvlS2vS1(SLIDE1UP    , E16)
-    val vslide1up_e32     = DvSvlS2vS1(SLIDE1UP    , E32)
-    val vslide1up_e64     = DvSvlS2vS1(SLIDE1UP    , E64)
-    val vslide1down_e8    = DvSvlS2vS1(SLIDE1DOWN  , E8 )
-    val vslide1down_e16   = DvSvlS2vS1(SLIDE1DOWN  , E16)
-    val vslide1down_e32   = DvSvlS2vS1(SLIDE1DOWN  , E32)
-    val vslide1down_e64   = DvSvlS2vS1(SLIDE1DOWN  , E64)
+    val vrgather_v_e8m1     = DvSvlS2vS1(M1, RGATHER_V   , E8 )
+    val vrgather_v_e8m2     = DvSvlS2vS1(M2, RGATHER_V   , E8 )
+    val vrgather_v_e8m4     = DvSvlS2vS1(M4, RGATHER_V   , E8 )
+    val vrgather_v_e8m8     = DvSvlS2vS1(M8, RGATHER_V   , E8 )
+    val vrgather_v_e16m1    = DvSvlS2vS1(M1, RGATHER_V   , E16)
+    val vrgather_v_e16m2    = DvSvlS2vS1(M2, RGATHER_V   , E16)
+    val vrgather_v_e16m4    = DvSvlS2vS1(M4, RGATHER_V   , E16)
+    val vrgather_v_e16m8    = DvSvlS2vS1(M8, RGATHER_V   , E16)
+    val vrgather_v_e32m1    = DvSvlS2vS1(M1, RGATHER_V   , E32)
+    val vrgather_v_e32m2    = DvSvlS2vS1(M2, RGATHER_V   , E32)
+    val vrgather_v_e32m4    = DvSvlS2vS1(M4, RGATHER_V   , E32)
+    val vrgather_v_e32m8    = DvSvlS2vS1(M8, RGATHER_V   , E32)
+    val vrgather_v_e64m1    = DvSvlS2vS1(M1, RGATHER_V   , E64)
+    val vrgather_v_e64m2    = DvSvlS2vS1(M2, RGATHER_V   , E64)
+    val vrgather_v_e64m4    = DvSvlS2vS1(M4, RGATHER_V   , E64)
+    val vrgather_v_e64m8    = DvSvlS2vS1(M8, RGATHER_V   , E64)
+    val vrgather_x_e8m1     = DvSvlS2vS1(M1, RGATHER_X   , E8 )
+    val vrgather_x_e8m2     = DvSvlS2vS1(M2, RGATHER_X   , E8 )
+    val vrgather_x_e8m4     = DvSvlS2vS1(M4, RGATHER_X   , E8 )
+    val vrgather_x_e8m8     = DvSvlS2vS1(M8, RGATHER_X   , E8 )
+    val vrgather_x_e16m1    = DvSvlS2vS1(M1, RGATHER_X   , E16)
+    val vrgather_x_e16m2    = DvSvlS2vS1(M2, RGATHER_X   , E16)
+    val vrgather_x_e16m4    = DvSvlS2vS1(M4, RGATHER_X   , E16)
+    val vrgather_x_e16m8    = DvSvlS2vS1(M8, RGATHER_X   , E16)
+    val vrgather_x_e32m1    = DvSvlS2vS1(M1, RGATHER_X   , E32)
+    val vrgather_x_e32m2    = DvSvlS2vS1(M2, RGATHER_X   , E32)
+    val vrgather_x_e32m4    = DvSvlS2vS1(M4, RGATHER_X   , E32)
+    val vrgather_x_e32m8    = DvSvlS2vS1(M8, RGATHER_X   , E32)
+    val vrgather_x_e64m1    = DvSvlS2vS1(M1, RGATHER_X   , E64)
+    val vrgather_x_e64m2    = DvSvlS2vS1(M2, RGATHER_X   , E64)
+    val vrgather_x_e64m4    = DvSvlS2vS1(M4, RGATHER_X   , E64)
+    val vrgather_x_e64m8    = DvSvlS2vS1(M8, RGATHER_X   , E64)
+    val vrgather_i_e8m1     = DvSvlS2vS1(M1, RGATHER_I   , E8 )
+    val vrgather_i_e8m2     = DvSvlS2vS1(M2, RGATHER_I   , E8 )
+    val vrgather_i_e8m4     = DvSvlS2vS1(M4, RGATHER_I   , E8 )
+    val vrgather_i_e8m8     = DvSvlS2vS1(M8, RGATHER_I   , E8 )
+    val vrgather_i_e16m1    = DvSvlS2vS1(M1, RGATHER_I   , E16)
+    val vrgather_i_e16m2    = DvSvlS2vS1(M2, RGATHER_I   , E16)
+    val vrgather_i_e16m4    = DvSvlS2vS1(M4, RGATHER_I   , E16)
+    val vrgather_i_e16m8    = DvSvlS2vS1(M8, RGATHER_I   , E16)
+    val vrgather_i_e32m1    = DvSvlS2vS1(M1, RGATHER_I   , E32)
+    val vrgather_i_e32m2    = DvSvlS2vS1(M2, RGATHER_I   , E32)
+    val vrgather_i_e32m4    = DvSvlS2vS1(M4, RGATHER_I   , E32)
+    val vrgather_i_e32m8    = DvSvlS2vS1(M8, RGATHER_I   , E32)
+    val vrgather_i_e64m1    = DvSvlS2vS1(M1, RGATHER_I   , E64)
+    val vrgather_i_e64m2    = DvSvlS2vS1(M2, RGATHER_I   , E64)
+    val vrgather_i_e64m4    = DvSvlS2vS1(M4, RGATHER_I   , E64)
+    val vrgather_i_e64m8    = DvSvlS2vS1(M8, RGATHER_I   , E64)
+    val vrgather_ei16_e8m1  = DvSvlS2vS1(M1, RGATHER_EI16, E8 )
+    val vrgather_ei16_e8m2  = DvSvlS2vS1(M2, RGATHER_EI16, E8 )
+    val vrgather_ei16_e8m4  = DvSvlS2vS1(M4, RGATHER_EI16, E8 )
+    val vrgather_ei16_e16m1 = DvSvlS2vS1(M1, RGATHER_EI16, E16)
+    val vrgather_ei16_e16m2 = DvSvlS2vS1(M2, RGATHER_EI16, E16)
+    val vrgather_ei16_e16m4 = DvSvlS2vS1(M4, RGATHER_EI16, E16)
+    val vrgather_ei16_e16m8 = DvSvlS2vS1(M8, RGATHER_EI16, E16)
+    val vrgather_ei16_e32m1 = DvSvlS2vS1(M1, RGATHER_EI16, E32)
+    val vrgather_ei16_e32m2 = DvSvlS2vS1(M2, RGATHER_EI16, E32)
+    val vrgather_ei16_e32m4 = DvSvlS2vS1(M4, RGATHER_EI16, E32)
+    val vrgather_ei16_e32m8 = DvSvlS2vS1(M8, RGATHER_EI16, E32)
+    val vrgather_ei16_e64m1 = DvSvlS2vS1(M1, RGATHER_EI16, E64)
+    val vrgather_ei16_e64m2 = DvSvlS2vS1(M2, RGATHER_EI16, E64)
+    val vrgather_ei16_e64m4 = DvSvlS2vS1(M4, RGATHER_EI16, E64)
+    val vrgather_ei16_e64m8 = DvSvlS2vS1(M8, RGATHER_EI16, E64)
+    val vslideup_e8m1       = DvSvlS2vS1(M1, SLIDEUP     , E8 )
+    val vslideup_e8m2       = DvSvlS2vS1(M2, SLIDEUP     , E8 )
+    val vslideup_e8m4       = DvSvlS2vS1(M4, SLIDEUP     , E8 )
+    val vslideup_e8m8       = DvSvlS2vS1(M8, SLIDEUP     , E8 )
+    val vslideup_e16m1      = DvSvlS2vS1(M1, SLIDEUP     , E16)
+    val vslideup_e16m2      = DvSvlS2vS1(M2, SLIDEUP     , E16)
+    val vslideup_e16m4      = DvSvlS2vS1(M4, SLIDEUP     , E16)
+    val vslideup_e16m8      = DvSvlS2vS1(M8, SLIDEUP     , E16)
+    val vslideup_e32m1      = DvSvlS2vS1(M1, SLIDEUP     , E32)
+    val vslideup_e32m2      = DvSvlS2vS1(M2, SLIDEUP     , E32)
+    val vslideup_e32m4      = DvSvlS2vS1(M4, SLIDEUP     , E32)
+    val vslideup_e32m8      = DvSvlS2vS1(M8, SLIDEUP     , E32)
+    val vslideup_e64m1      = DvSvlS2vS1(M1, SLIDEUP     , E64)
+    val vslideup_e64m2      = DvSvlS2vS1(M2, SLIDEUP     , E64)
+    val vslideup_e64m4      = DvSvlS2vS1(M4, SLIDEUP     , E64)
+    val vslideup_e64m8      = DvSvlS2vS1(M8, SLIDEUP     , E64)
+    val vslidedown_e8m1     = DvSvlS2vS1(M1, SLIDEDOWN   , E8 )
+    val vslidedown_e8m2     = DvSvlS2vS1(M2, SLIDEDOWN   , E8 )
+    val vslidedown_e8m4     = DvSvlS2vS1(M4, SLIDEDOWN   , E8 )
+    val vslidedown_e8m8     = DvSvlS2vS1(M8, SLIDEDOWN   , E8 )
+    val vslidedown_e16m1    = DvSvlS2vS1(M1, SLIDEDOWN   , E16)
+    val vslidedown_e16m2    = DvSvlS2vS1(M2, SLIDEDOWN   , E16)
+    val vslidedown_e16m4    = DvSvlS2vS1(M4, SLIDEDOWN   , E16)
+    val vslidedown_e16m8    = DvSvlS2vS1(M8, SLIDEDOWN   , E16)
+    val vslidedown_e32m1    = DvSvlS2vS1(M1, SLIDEDOWN   , E32)
+    val vslidedown_e32m2    = DvSvlS2vS1(M2, SLIDEDOWN   , E32)
+    val vslidedown_e32m4    = DvSvlS2vS1(M4, SLIDEDOWN   , E32)
+    val vslidedown_e32m8    = DvSvlS2vS1(M8, SLIDEDOWN   , E32)
+    val vslidedown_e64m1    = DvSvlS2vS1(M1, SLIDEDOWN   , E64)
+    val vslidedown_e64m2    = DvSvlS2vS1(M2, SLIDEDOWN   , E64)
+    val vslidedown_e64m4    = DvSvlS2vS1(M4, SLIDEDOWN   , E64)
+    val vslidedown_e64m8    = DvSvlS2vS1(M8, SLIDEDOWN   , E64)
+    val vcompress_e8m1      = DvSvlS2vS1(M1, COMPRESS    , E8 )
+    val vcompress_e8m2      = DvSvlS2vS1(M2, COMPRESS    , E8 )
+    val vcompress_e8m4      = DvSvlS2vS1(M4, COMPRESS    , E8 )
+    val vcompress_e8m8      = DvSvlS2vS1(M8, COMPRESS    , E8 )
+    val vcompress_e16m1     = DvSvlS2vS1(M1, COMPRESS    , E16)
+    val vcompress_e16m2     = DvSvlS2vS1(M2, COMPRESS    , E16)
+    val vcompress_e16m4     = DvSvlS2vS1(M4, COMPRESS    , E16)
+    val vcompress_e16m8     = DvSvlS2vS1(M8, COMPRESS    , E16)
+    val vcompress_e32m1     = DvSvlS2vS1(M1, COMPRESS    , E32)
+    val vcompress_e32m2     = DvSvlS2vS1(M2, COMPRESS    , E32)
+    val vcompress_e32m4     = DvSvlS2vS1(M4, COMPRESS    , E32)
+    val vcompress_e32m8     = DvSvlS2vS1(M8, COMPRESS    , E32)
+    val vcompress_e64m1     = DvSvlS2vS1(M1, COMPRESS    , E64)
+    val vcompress_e64m2     = DvSvlS2vS1(M2, COMPRESS    , E64)
+    val vcompress_e64m4     = DvSvlS2vS1(M4, COMPRESS    , E64)
+    val vcompress_e64m8     = DvSvlS2vS1(M8, COMPRESS    , E64)
+    val vslide1up_e8m1      = DvSvlS2vS1(M1, SLIDE1UP    , E8 )
+    val vslide1up_e8m2      = DvSvlS2vS1(M2, SLIDE1UP    , E8 )
+    val vslide1up_e8m4      = DvSvlS2vS1(M4, SLIDE1UP    , E8 )
+    val vslide1up_e8m8      = DvSvlS2vS1(M8, SLIDE1UP    , E8 )
+    val vslide1up_e16m1     = DvSvlS2vS1(M1, SLIDE1UP    , E16)
+    val vslide1up_e16m2     = DvSvlS2vS1(M2, SLIDE1UP    , E16)
+    val vslide1up_e16m4     = DvSvlS2vS1(M4, SLIDE1UP    , E16)
+    val vslide1up_e16m8     = DvSvlS2vS1(M8, SLIDE1UP    , E16)
+    val vslide1up_e32m1     = DvSvlS2vS1(M1, SLIDE1UP    , E32)
+    val vslide1up_e32m2     = DvSvlS2vS1(M2, SLIDE1UP    , E32)
+    val vslide1up_e32m4     = DvSvlS2vS1(M4, SLIDE1UP    , E32)
+    val vslide1up_e32m8     = DvSvlS2vS1(M8, SLIDE1UP    , E32)
+    val vslide1up_e64m1     = DvSvlS2vS1(M1, SLIDE1UP    , E64)
+    val vslide1up_e64m2     = DvSvlS2vS1(M2, SLIDE1UP    , E64)
+    val vslide1up_e64m4     = DvSvlS2vS1(M4, SLIDE1UP    , E64)
+    val vslide1up_e64m8     = DvSvlS2vS1(M8, SLIDE1UP    , E64)
+    val vslide1down_e8m1    = DvSvlS2vS1(M1, SLIDE1DOWN  , E8 )
+    val vslide1down_e8m2    = DvSvlS2vS1(M2, SLIDE1DOWN  , E8 )
+    val vslide1down_e8m4    = DvSvlS2vS1(M4, SLIDE1DOWN  , E8 )
+    val vslide1down_e8m8    = DvSvlS2vS1(M8, SLIDE1DOWN  , E8 )
+    val vslide1down_e16m1   = DvSvlS2vS1(M1, SLIDE1DOWN  , E16)
+    val vslide1down_e16m2   = DvSvlS2vS1(M2, SLIDE1DOWN  , E16)
+    val vslide1down_e16m4   = DvSvlS2vS1(M4, SLIDE1DOWN  , E16)
+    val vslide1down_e16m8   = DvSvlS2vS1(M8, SLIDE1DOWN  , E16)
+    val vslide1down_e32m1   = DvSvlS2vS1(M1, SLIDE1DOWN  , E32)
+    val vslide1down_e32m2   = DvSvlS2vS1(M2, SLIDE1DOWN  , E32)
+    val vslide1down_e32m4   = DvSvlS2vS1(M4, SLIDE1DOWN  , E32)
+    val vslide1down_e32m8   = DvSvlS2vS1(M8, SLIDE1DOWN  , E32)
+    val vslide1down_e64m1   = DvSvlS2vS1(M1, SLIDE1DOWN  , E64)
+    val vslide1down_e64m2   = DvSvlS2vS1(M2, SLIDE1DOWN  , E64)
+    val vslide1down_e64m4   = DvSvlS2vS1(M4, SLIDE1DOWN  , E64)
+    val vslide1down_e64m8   = DvSvlS2vS1(M8, SLIDE1DOWN  , E64)
 
     def isFunc(f: this.type => BitPat)(implicit op: UInt) = op(6, 2) === f(this)
 
-    def getSew(implicit op: UInt) = op(1, 0)
+    def getSew(implicit op: UInt): UInt = op(1, 0)
+
+    object LitUtil {
+      def getOp(implicit op: BitPat): BitPat = op(6, 2)
+
+      def getLmul(implicit op: BitPat): BitPat = op(9, 7)
+
+      def getSew(implicit op: BitPat): BitPat = op(1, 0)
+
+      def getLat(implicit op: BitPat): Int = {
+        if (getLmul == M1) {
+          2
+        } else {
+          yunsuan.encoding.Opcode.Latency.uncertainLitVal()
+        }
+      }
+    }
+
+    override def getLat(opcode: Opcode): Int = LitUtil.getLat(opcode.encode)
   }
 
   object VIPermOpcode extends VIPermOpcode
@@ -2146,5 +2275,15 @@ object Opcodes {
     protected val E32 = bb"10"
     protected val E64 = bb"11"
     protected val EX  = bb"??"
+  }
+
+  trait LmulType {
+    protected val MF8 = bb"101"
+    protected val MF4 = bb"110"
+    protected val MF2 = bb"111"
+    protected val M1  = bb"000"
+    protected val M2  = bb"001"
+    protected val M4  = bb"010"
+    protected val M8  = bb"011"
   }
 }
