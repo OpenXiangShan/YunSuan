@@ -5,7 +5,6 @@ import chisel3.util._
 import yunsuan.VMoveOpcode
 import yunsuan.VMoveOpcode._
 import yunsuan.vector.BitsExtend
-import yunsuan.vector.Common.SewOH
 import yunsuan.vector.Common.VSew._
 
 class VMoveInfo extends Bundle {
@@ -40,7 +39,6 @@ class VectorMove extends Module {
   val mask = io.in.bits.mask
   private implicit val opcode: UInt = io.in.bits.opcode
 
-  val eewVd = SewOH(vsew)
   val scalarVs1Data = Mux1H(Seq(
     (vsew === e8)  -> Fill(VLEN / 8 , vs1(7 , 0)),
     (vsew === e16) -> Fill(VLEN / 16, vs1(15, 0)),
@@ -51,12 +49,10 @@ class VectorMove extends Module {
 
   // Integer Merge/Move, vmv.s.x
   // Floating-Point Merge/Move, vfmv.s.f
-  val vmaskAdjust = Mux1H(eewVd.oneHot, Seq(1, 2, 4, 8).map(k =>
-    Cat(Seq.tabulate(numBytes/k)(i => Fill(k, mask(i))).reverse)
-  ))
+  // The input mask is already expanded to one bit per destination byte.
   val vmergeTmp = Wire(Vec(numBytes, UInt(8.W)))
   for (i <- 0 until numBytes) {
-    vmergeTmp(i) := Mux(vmaskAdjust(i), vmergeVs1Data(8*i+7, 8*i), vs2(8*i+7, 8*i))
+    vmergeTmp(i) := Mux(mask(i), vmergeVs1Data(8*i+7, 8*i), vs2(8*i+7, 8*i))
   }
   val vmergeResult = Wire(UInt(VLEN.W))
   vmergeResult := Mux(vm, vmergeVs1Data, vmergeTmp.asUInt)
