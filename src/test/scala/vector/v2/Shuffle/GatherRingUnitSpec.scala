@@ -2,26 +2,12 @@ package yunsuan.vector.v2.Shuffle
 
 import chisel3._
 import chisel3.experimental.SourceInfo
-import chisel3.simulator.scalatest.ChiselSim
 import chisel3.simulator.{ChiselOptionsModifications, ExpectationValueFormat, FirtoolOptionsModifications, HasSimulator}
 import chisel3.testing.HasTestingDirectory
-import org.scalatest.ParallelTestExecution
-import org.scalatest.funspec.AnyFunSpec
-import org.scalatest.matchers.must.Matchers
-import svsim.verilator.Backend.CompilationSettings.CoverageSettings
+import yunsuan.util.SpecBase
 import yunsuan.vector.v2.Shuffle.GatherCommon.FakeRobPtr
-import yunsuan.vector.v2.Shuffle.{GatherCommon, GatherRingUnit}
 
-import yunsuan.util.Cli.EmitFst
-
-class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution with EmitFst {
-
-  // Enable Verilator coverage (line, toggle, user) — writes coverage.dat after simulation
-  override implicit def backendSettingsModifications: svsim.BackendSettingsModifications = {
-    case conf: svsim.verilator.Backend.CompilationSettings =>
-      conf.withCoverageSettings(new CoverageSettings(line = true, toggle = true, user = true))
-    case conf => conf
-  }
+class GatherRingUnitSpec extends SpecBase {
 
   val vlen        = 128
   val dlen        = 128
@@ -337,7 +323,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             initUnit,
             Cycle(pNoFlow)(eT0, eI0),
             Cycle(pPlaceTable(tblSize, 0, table))(eT1, eI0, eWb0),
-            Cycle(pPlaceIndex(tblSize, index, indexValid, prefill))(eT1, eI1, eWb1(res)),
+            Cycle(pPlaceIndex(tblSize, index, indexValid, prefill))(eT1, eI1, eWb0, eIndexOrRes(res)),
           )
       }
     }
@@ -356,7 +342,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             dut,
             initUnit,
             Cycle(pNoFlow)(eT0, eI0),
-            Cycle(pPlace(tblSize, 0, table, index, indexValid, prefill))(eT1, eI1, eWb1(res)),
+            Cycle(pPlace(tblSize, 0, table, index, indexValid, prefill))(eT1, eI1, eWb0),
           )
       }
     }
@@ -483,7 +469,7 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid, prefill))(eWb0, eIndexOrRes(res)),
+            Cycle(pPlace(1, 0, table, index, indexValid, prefill))(eWb1(res), eIndexOrRes(res)),
           )
       }
     }
@@ -858,9 +844,10 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             runCycles(
               dut,
               initUnit,
-              Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)))(eCounter(1), eWb1(res)),
-              Cycle(pNoPlace, pFlow, pFlowTbl(1, table), pWbReady())(eCounter(0), eI1, eT1, eWb0),
-              Cycle(pFlow, pNoFlowTbl(), pWbReady(false))(eI0, eT0, eWb0)
+              Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)))(eCounter(1), eWb0, eIndexOrRes(res)),
+              Cycle(pNoPlace, pFlow, pFlowTbl(1, table), pWbReady())(eCounter(0), eI1, eT1, eWb1(res)),
+              Cycle(pFlow, pNoFlowTbl(), pWbReady(false))(eI1, eT0, eWb1(res)),
+              Cycle(pFlow, pNoFlowTbl(), pWbReady())(eI0, eT0, eWb0),
             )
         }
 
@@ -904,8 +891,8 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             runCycles(
               dut,
               initUnit,
-              Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)), pWbReady(false))(eCounter(1), eWb1(res)),
-              Cycle(pNoPlace, pFlow, pFlowTbl(1, table), pWbReady())(eCounter(0), eI1, eT1, eWb0),
+              Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)), pWbReady(false))(eCounter(1), eWb0, eIndexOrRes(res)),
+              Cycle(pNoPlace, pFlow, pFlowTbl(1, table), pWbReady())(eCounter(0), eI1, eT1, eWb1(res)),
               Cycle(pFlow, pNoFlowTbl())(eI0, eT0, eWb0)
             )
         }
@@ -919,10 +906,11 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             runCycles(
               dut,
               initUnit,
-              Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)))(eCounter(1), eWb1(res)),
+              Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)))(eCounter(1), eWb0, eIndexOrRes(res)),
               Cycle(pNoPlace, pWbReady())(eWb0),
-              Cycle(pNoPlace, pFlow, pFlowTbl(1, table), pWbReady())(eCounter(0), eI1, eT1, eWb0),
-              Cycle(pFlow, pNoFlowTbl(), pWbReady(false))(eI0, eT0, eWb0)
+              Cycle(pNoPlace, pFlow, pFlowTbl(1, table), pWbReady())(eCounter(0), eI1, eT1, eWb1(res)),
+              Cycle(pFlow, pNoFlowTbl(), pWbReady(false))(eI1, eT0, eWb1(res)),
+              Cycle(pNoFlow, pNoFlowTbl(), pWbReady())(eI0, eT0, eWb0)
             )
         }
 
@@ -971,8 +959,8 @@ class GatherRingUnitSpec extends AnyFunSpec with ChiselSim with Matchers with Pa
             runCycles(
               dut,
               initUnit,
-              Cycle(pPlace(2, 1, table, index, Seq.fill(16)(true)), pWbReady())(eCounter(1), eWb1(res)),
-              Cycle(pNoPlace, pFlow, pFlowTbl(0, table), pWbReady())(eCounter(0), eI1, eT1, eWb0),
+              Cycle(pPlace(2, 1, table, index, Seq.fill(16)(true)), pWbReady())(eCounter(1), eWb0, eIndexOrRes(res)),
+              Cycle(pNoPlace, pFlow, pFlowTbl(0, table), pWbReady())(eCounter(0), eI1, eT1, eWb1(res)),
               Cycle(pFlow, pNoFlowTbl())(eI0, eT0, eWb0)
             )
         }

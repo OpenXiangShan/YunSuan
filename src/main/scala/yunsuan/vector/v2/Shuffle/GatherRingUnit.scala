@@ -34,7 +34,7 @@ class GatherRingUnit[T <: Data](
     (blockSize & 4.U).orR -> (unitIdx % 4).U,
     (blockSize & 8.U).orR -> (unitIdx % 8).U,
   ))
-  private val isEntryNext = localPos === 0.U
+  private val passedEntryNext = localPos === 0.U
 
   // ── Table Input MUX ──────────────────────────────────
   private val doPlaceTable = in.placeTable.valid
@@ -52,15 +52,14 @@ class GatherRingUnit[T <: Data](
   private val indexView  = WireInit(VecInit(indexOrRes.map(_.take(IndexWidth))))
   private val resView    = WireInit(VecInit(indexOrRes.map(_.take(ResWidth))))
 
-  private val meta      = RegInit(0.U.asTypeOf(metaGen))
+  private val meta      = Reg(metaGen)
 
   private val hasTable  = RegInit(false.B)
   private val hasIndex  = RegInit(false.B)
-  private val isEntry   = RegInit(false.B)
   private val counter   = RegInit(0.U(log2Up(NumUnits + 1).W))
   private val indexDone = RegInit(VecInit.fill(NumElem)(false.B))
   private val hasWb     = RegInit(false.B)
-  private val done      = indexDone.asUInt.andR
+  private val done      = counter === 0.U && hasIndex
 
   // ── hasTable State Machine ───────────────────────────
   when(flush) {
@@ -83,15 +82,11 @@ class GatherRingUnit[T <: Data](
     // hold
   }
 
-  when(doPlaceIndex) {
-    isEntry := isEntryNext
-  }
-
   private val isFirstTableNext = Mux1H(Seq(
     doPlaceTable -> in.placeTable.isFirstTable,
-    doFlow       -> in.flow.isFirstTable,
+    doFlowTable  -> in.flow.isFirstTable,
   ))
-  when(doPlaceTable || doFlow) {
+  when(doPlaceTable || doFlowTable) {
     isFirstTable := isFirstTableNext
   }.otherwise {
     // hold
@@ -99,8 +94,8 @@ class GatherRingUnit[T <: Data](
 
   when(doPlaceTable) {
     passedEntry := in.placeTable.isFirstTable
-  }.elsewhen(doFlow) {
-    passedEntry := isEntryNext
+  }.elsewhen(doFlowTable) {
+    passedEntry := passedEntryNext
   }.otherwise {
     // hold
   }
@@ -131,7 +126,7 @@ class GatherRingUnit[T <: Data](
     }.otherwise {
       counter := blockSize
     }
-  }.elsewhen(doFlow && hasTable && counter > 0.U) {
+  }.elsewhen(doFlowTable && counter > 0.U) {
     counter := counter - 1.U
   }
 
@@ -188,9 +183,7 @@ class GatherRingUnit[T <: Data](
       ))
       indexDone(i) := !fillIdx(i)
       meta := in.placeIndex.meta
-    }.elsewhen(counter === 0.U && doFlow) {
-      indexDone(i) := true.B
-    }.elsewhen(doFlow) {
+    }.elsewhen(doFlowTable) {
       when (fillRes(i)) {
         indexOrRes(i) := gatherMod.out.result(i)
       }
@@ -221,7 +214,6 @@ class GatherRingUnit[T <: Data](
   out.status.counter      := counter
   out.status.blockBase    := blockBase
   out.status.blockSize    := blockSize
-  out.status.isEntry      := isEntry
   out.status.isFirstTable := isFirstTable
   out.status.passedEntry  := passedEntry
   out.status.done         := indexDone.asUInt.andR
@@ -301,7 +293,7 @@ object GatherRingUnit {
 
   object PlaceIndexRequest {
     def fromPipeInS1[T <: Data](s1: GatherRing.PipeInS1[T])(implicit param: GatherParam): PlaceIndexRequest[T] = {
-      val req = Wire(new PlaceIndexRequest(s1.meta.cloneType))
+      val req = Wire(new PlaceIndexRequest(chiselTypeOf(s1.meta)))
       req.blockBase  := s1.blockBase
       req.blockSize  := s1.blockSize
       req.elemFlags  := s1.elemFlags
@@ -324,7 +316,6 @@ object GatherRingUnit {
     val counter = UInt(log2Ceil(NumUnits + 1).W)
     val blockBase = UnitIdx()
     val blockSize = BlockSize()
-    val isEntry = Bool()
     val isFirstTable = Bool()
     val passedEntry = Bool()
     val done = Bool()
