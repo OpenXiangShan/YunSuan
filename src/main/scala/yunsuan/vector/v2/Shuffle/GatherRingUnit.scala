@@ -216,7 +216,7 @@ class GatherRingUnit[T <: Data](
   out.status.blockSize    := blockSize
   out.status.isFirstTable := isFirstTable
   out.status.passedEntry  := passedEntry
-  out.status.done         := indexDone.asUInt.andR
+  out.status.done         := done
 
   out.debug.foreach {
     debug => debug.indexOrRes := indexOrRes.asUInt
