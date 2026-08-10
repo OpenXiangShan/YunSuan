@@ -5,10 +5,10 @@ import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.ParallelTestExecution
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
+import yunsuan.util.SpecBase
 import yunsuan.vector.v2.Shuffle.GatherCommon.GatherParam
 
-class IndexGenSpec extends AnyFunSpec with ChiselSim with Matchers
-    with ParallelTestExecution with GatherSpecBase with GatherSpecUtils {
+class IndexGenSpec extends SpecBase with GatherSpecUtils {
 
   val dlenb = dlen / 8
 

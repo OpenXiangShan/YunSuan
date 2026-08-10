@@ -5,10 +5,10 @@ import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.ParallelTestExecution
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
+import yunsuan.util.SpecBase
 import yunsuan.vector.v2.Shuffle.GatherCommon.{FakeRobPtr, GatherParam}
 
-class PermUnitSpec extends AnyFunSpec with ChiselSim with Matchers
-    with ParallelTestExecution with GatherSpecBase with GatherSpecUtils {
+class PermUnitSpec extends SpecBase with GatherSpecUtils {
 
   val NumPipes = 4
 

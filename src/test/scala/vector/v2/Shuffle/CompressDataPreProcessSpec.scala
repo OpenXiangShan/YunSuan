@@ -5,10 +5,10 @@ import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.ParallelTestExecution
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
+import yunsuan.util.SpecBase
 import yunsuan.vector.v2.Shuffle.GatherCommon.GatherParam
 
-class CompressDataPreProcessSpec extends AnyFunSpec with ChiselSim with Matchers
-    with ParallelTestExecution with GatherSpecBase with GatherSpecUtils {
+class CompressDataPreProcessSpec extends SpecBase with GatherSpecUtils {
 
   /** Golden: compress active bytes to the front, accounting for groupSel */
   def goldenCompress(data: Seq[Int], mask: BigInt, groupSel: Int): Seq[Option[Int]] = {

@@ -5,9 +5,10 @@ import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.ParallelTestExecution
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.must.Matchers
+import yunsuan.util.SpecBase
 import yunsuan.vector.v2.Shuffle.GatherCommon.GatherParam
 
-class GatherIndexGenSpec extends AnyFunSpec with ChiselSim with Matchers with ParallelTestExecution with GatherSpecBase with GatherSpecUtils {
+class GatherIndexGenSpec extends SpecBase with GatherSpecUtils {
 
 
   // SEW -> number of 8b elements per SEW element
