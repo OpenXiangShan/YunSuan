@@ -1612,20 +1612,20 @@ object Opcodes {
     private val MSOF  = bb"110"
     private val IOTA  = bb"111"
 
-    val vcpop_m = Value(CPOP_M, DX, EX) + GpWen + VlRen + Src2Vp
-    val vfirst  = Value(FIRST , DX, EX) + GpWen + VlRen + Src2Vp
-    val vmsbf   = Value(MSBF  , DM, EX) + VmWen + VlRen + Src2Vp
-    val vmsif   = Value(MSIF  , DM, EX) + VmWen + VlRen + Src2Vp
-    val vmsof   = Value(MSOF  , DM, EX) + VmWen + VlRen + Src2Vp
+    val vcpop_m = Value(CPOP_M, DX, EX) + GpWen + VlRen + Src1Vp + Src2Vp
+    val vfirst  = Value(FIRST , DX, EX) + GpWen + VlRen + Src1Vp + Src2Vp
+    val vmsbf   = Value(MSBF  , DM, EX) + VmWen + VlRen + Src1Vp + Src2Vp
+    val vmsif   = Value(MSIF  , DM, EX) + VmWen + VlRen + Src1Vp + Src2Vp
+    val vmsof   = Value(MSOF  , DM, EX) + VmWen + VlRen + Src1Vp + Src2Vp
 
     val vcpop_v_e8  = Value(CPOP_V, DV, E8 ) + VpWen + VlRen + Src2Vp
     val vcpop_v_e16 = Value(CPOP_V, DV, E16) + VpWen + VlRen + Src2Vp
     val vcpop_v_e32 = Value(CPOP_V, DV, E32) + VpWen + VlRen + Src2Vp
     val vcpop_v_e64 = Value(CPOP_V, DV, E64) + VpWen + VlRen + Src2Vp
-    val viota_e8    = Value(IOTA  , DV, E8 ) + VpWen + VlRen + Src2Vp
-    val viota_e16   = Value(IOTA  , DV, E16) + VpWen + VlRen + Src2Vp
-    val viota_e32   = Value(IOTA  , DV, E32) + VpWen + VlRen + Src2Vp
-    val viota_e64   = Value(IOTA  , DV, E64) + VpWen + VlRen + Src2Vp
+    val viota_e8    = DvSvlS2vS1v(IOTA  , DV, E8 )
+    val viota_e16   = DvSvlS2vS1v(IOTA  , DV, E16)
+    val viota_e32   = DvSvlS2vS1v(IOTA  , DV, E32)
+    val viota_e64   = DvSvlS2vS1v(IOTA  , DV, E64)
     val vid_e8      = Value(ID    , DV, E8 ) + VpWen + VlRen
     val vid_e16     = Value(ID    , DV, E16) + VpWen + VlRen
     val vid_e32     = Value(ID    , DV, E32) + VpWen + VlRen
