@@ -2101,6 +2101,8 @@ object Opcodes {
 
     def getSew(implicit op: UInt): UInt = op(1, 0)
 
+    def getLmul(implicit op: UInt): UInt = op(9, 7)
+
     object LitUtil {
       def getOp(implicit op: BitPat): BitPat = op(6, 2)
 
@@ -2278,12 +2280,16 @@ object Opcodes {
   }
 
   trait LmulType {
-    protected val MF8 = bb"101"
-    protected val MF4 = bb"110"
-    protected val MF2 = bb"111"
-    protected val M1  = bb"000"
-    protected val M2  = bb"001"
-    protected val M4  = bb"010"
-    protected val M8  = bb"011"
+    val MF8 = bb"101"
+    val MF4 = bb"110"
+    val MF2 = bb"111"
+    val M1  = bb"000"
+    val M2  = bb"001"
+    val M4  = bb"010"
+    val M8  = bb"011"
+
+    def lmulIs(f: this.type => BitPat)(lmul: UInt): Bool = {
+      f(this) === lmul
+    }
   }
 }

@@ -161,6 +161,11 @@ object Common {
       checkInputWidth(uint)
       Mux(uint(2), m1, uint)
     }
+
+    def leM1(uint: UInt): Bool = {
+      checkInputWidth(uint)
+      uint(2) || (uint === m1)
+    }
   }
 
 
