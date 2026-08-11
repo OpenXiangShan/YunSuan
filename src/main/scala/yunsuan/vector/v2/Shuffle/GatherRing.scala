@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import yunsuan.vector.v2.Shuffle.GatherCommon._
 import yunsuan.vector.Common._
-import yunsuan.vector.v2.Shuffle.GatherRingUnit.{PlaceIndexRequest, PlaceTableRequest, Status}
+import yunsuan.vector.v2.Shuffle.GatherRingUnit.{PlaceIndexRequest, PlaceTableRequest, Status, Wake}
 
 class GatherRing[T <: Data](
   metaGen: => T
@@ -26,7 +26,6 @@ class GatherRing[T <: Data](
 
   /************************* Reg Definations **********************************/
 
-  val willFlowVec: Vec[Bool] = Reg(Vec(NumUnits, Bool()))
   val pipeTablePos = Reg(Vec(NumPipeIn, UnitIdx()))
   val pipeIndexPos = Reg(Vec(NumPipeIn, UnitIdx()))
 
@@ -36,6 +35,7 @@ class GatherRing[T <: Data](
   controller.in.hasTable := VecInit(units.map(_.out.status.hasTable))
   controller.in.hasIndex := VecInit(units.map(_.out.status.hasIndex))
   controller.in.wbValid := Cat(units.map(_.out.wb.valid).reverse)
+  controller.in.wakeValid := Cat(units.map(_.out.wake.valid).reverse)
 
   // Flow loopback connections (ring topology)
   private val ring2Units = units.grouped(2).toSeq
@@ -64,7 +64,7 @@ class GatherRing[T <: Data](
   }
 
   for (i <- 0 until NumUnits) {
-    units(i).in.willFlow := willFlowVec(i)
+    units(i).in.willFlow := controller.out.willFlow(i)
   }
 
   private val validMatrixPipeUnitTable = WireInit(VecInit.fill(NumPipeIn, NumUnits)(false.B))
@@ -127,8 +127,6 @@ class GatherRing[T <: Data](
     }
   }
 
-  willFlowVec := controller.out.willFlow
-
   /***************************** wb *******************************************/
 
   // wbReady routing: pipe -> unit via wbSelOH
@@ -140,6 +138,22 @@ class GatherRing[T <: Data](
     out.pipes(i).valid := controller.out.wbSelOH(i).orR
     out.pipes(i).bits := Mux1H(controller.out.wbSelOH(i), units.map(_.out.wb.bits))
   }
+
+  /************************* vperm wakeup *************************************/
+
+  // Wakeup requests are arbitrated in the controller (mirror of writeback); route the
+  // per-unit allTableValid gate and the per-pipe acks back to the selected units.
+  for (i <- 0 until NumUnits) {
+    units(i).in.allTableValid := controller.out.unitAllTableValid(i)
+    units(i).in.wakeAck := VecInit(controller.out.wakeSelOH.zip(in.wakeAck).map {
+      case (selOH, ack) => selOH(i) && ack
+    }).asUInt.orR
+  }
+
+  for (p <- 0 until NumPipeOut) {
+    out.wake(p).valid := controller.out.wakeSelOH(p).orR
+    out.wake(p).bits := Mux1H(controller.out.wakeSelOH(p), units.map(_.out.wake.bits))
+  }
 }
 
 object GatherRing {
@@ -149,6 +163,8 @@ object GatherRing {
     val s0pipes = Vec(NumPipeIn, ValidIO(new PipeInS0))
     val s1pipes = Vec(NumPipeIn, ValidIO(new PipeInS1(metaGen)))
     val wbReady = Vec(NumPipeOut, Bool())
+    // VPerm wakeup acks (generated externally, e.g. gated by wb busy table), one per pipe
+    val wakeAck = Vec(NumPipeOut, Bool())
   }
 
   class Out[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
@@ -156,6 +172,8 @@ object GatherRing {
     val pipes = Vec(NumPipeOut, ValidIO(new PipeOut(metaGen)))
     val metas = Vec(NumUnits, metaGen)
     val unitStatus = Vec(NumUnits, new Status)
+    // arbitrated vperm wakeup requests (mirror of pipes)
+    val wake = Vec(NumPipeOut, ValidIO(new GatherRingUnit.Wake(metaGen)))
   }
 
   class PipeInS0(implicit val param: GatherParam) extends GatherBundle {

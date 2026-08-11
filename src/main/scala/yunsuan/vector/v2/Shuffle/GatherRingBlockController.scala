@@ -15,6 +15,8 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   val in = IO(Input(new GatherRingBlockController.In(size)))
   val out = IO(Output(new GatherRingBlockController.Out(size)))
 
+  val inPipePlaceIdx: Vec[ValidIO[UInt]] = VecInit(in.pipePlaceIdx.map(_.map(x => x.take(log2Ceil(size) min x.getWidth))))
+
   val tableFree = ~Cat(Reverse(in.tableValid.drop(1)), in.tableValid.take(1))
   val indexFree = ~in.indexValid
 
@@ -38,17 +40,20 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
 
   // Per-pipe table/index position outputs
   for (i <- 0 until NumPipeIn) {
-    out.tablePos(i).valid := in.pipePlaceIdx(i).valid
-    out.indexPos(i).valid := in.pipePlaceIdx(i).valid
+    out.tablePos(i).valid := inPipePlaceIdx(i).valid
+    out.indexPos(i).valid := inPipePlaceIdx(i).valid
 
     out.tablePos(i).bits := blockBase.U |
-      (entryTable - in.pipePlaceIdx(i).bits)
+      (entryTable - inPipePlaceIdx(i).bits)
     out.indexPos(i).bits := blockBase.U |
-      (entryIndex + willFlow + in.pipePlaceIdx(i).bits)
+      (entryIndex + willFlow + inPipePlaceIdx(i).bits)
   }
 
   // willFlow: block-level signal, computed once outside per-pipe loop
   out.willFlow := Cat(in.tableValid.map(_ && willFlow).reverse)
+
+  // allTableValid: block-level, all tables of this block are valid (gates the vperm wakeup)
+  out.allTableValid := Fill(size, in.tableValid.andR)
 }
 
 object GatherRingBlockController {
@@ -63,6 +68,7 @@ object GatherRingBlockController {
     val tablePos: Vec[ValidIO[UInt]] = Vec(NumPipeIn, ValidIO(UnitIdx()))
     val indexPos: Vec[ValidIO[UInt]] = Vec(NumPipeIn, ValidIO(UnitIdx()))
     val willFlow: UInt = UInt(size.W)
+    val allTableValid: UInt = UInt(size.W)
   }
 
   def main(args: Array[String]): Unit = {

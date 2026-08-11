@@ -74,6 +74,14 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
   private val ring8WillFlowVec = Cat(ring8Controllers.map(_.out.willFlow).reverse)
   out.willFlow := VecInit((ring2WillFlowVec | ring4WillFlowVec | ring8WillFlowVec).asBools)
 
+  // Per-unit "all tables of the corresponding ring block are valid" gate for the vperm wakeup.
+  // Aggregated like willFlow (OR across ring2/4/8); the active controller is the one matching
+  // the current blockSize, the inactive ones do not conflict.
+  private val ring2AllTableValidVec = Cat(ring2Controllers.map(_.out.allTableValid).reverse)
+  private val ring4AllTableValidVec = Cat(ring4Controllers.map(_.out.allTableValid).reverse)
+  private val ring8AllTableValidVec = Cat(ring8Controllers.map(_.out.allTableValid).reverse)
+  out.unitAllTableValid := VecInit((ring2AllTableValidVec | ring4AllTableValidVec | ring8AllTableValidVec).asBools)
+
   // ── Writeback arbitration (interleaved) ──────────────
   // Pipe p serves units where unitIdx % NumPipeOut == p
   private val pipeGroupSize = Seq.tabulate(NumPipeOut) { p =>
@@ -99,6 +107,27 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
       }
     }.asUInt
   }
+
+  // ── VPerm wakeup arbitration (interleaved, mirror of writeback) ──
+  private val pipeWakeValid = Seq.tabulate(NumPipeOut) { p =>
+    Cat(Seq.tabulate(pipeGroupSize(p)) { k =>
+      in.wakeValid(p + k * NumPipeOut)
+    }.reverse)
+  }
+
+  private val localWakeSelOH = pipeWakeValid.map(oh => PriorityEncoderOH(oh))
+
+  out.wakeSelOH := Seq.tabulate(NumPipeOut) { p =>
+    val ohBits = localWakeSelOH(p).asBools
+    VecInit.tabulate(NumUnits) { u =>
+      if (u % NumPipeOut == p) {
+        val k = u / NumPipeOut
+        ohBits(k)
+      } else {
+        false.B
+      }
+    }.asUInt
+  }
 }
 
 object GatherRingController {
@@ -107,6 +136,7 @@ object GatherRingController {
     val hasTable = Input(Vec(NumUnits, Bool()))
     val hasIndex = Input(Vec(NumUnits, Bool()))
     val wbValid = UInt(NumUnits.W)
+    val wakeValid = UInt(NumUnits.W)
   }
 
   class Out(implicit val param: GatherParam) extends GatherBundle {
@@ -114,11 +144,38 @@ object GatherRingController {
     val pipeIndexPos = Vec(NumPipeIn, ValidIO(UnitIdx()))
     val willFlow     = Output(Vec(NumUnits, Bool()))
     val wbSelOH      = Vec(NumPipeOut, UInt(NumUnits.W))
+    val unitAllTableValid = Output(Vec(NumUnits, Bool()))
+    val wakeSelOH      = Vec(NumPipeOut, UInt(NumUnits.W))
     // Debug: per-pipe controller valid bitmap [ring8, ring4, ring2]
     val dbgPipeCtrlValid = Output(Vec(NumPipeIn, UInt(3.W)))
   }
 
   def main(args: Array[String]): Unit = {
+    import _root_.circt.stage._
 
+    val targetDir = "build/vector"
+
+    println(s"Generating the GatherRing hardware in $targetDir")
+
+    val firtoolOpts = Array(
+      "-O=release",
+      "--disable-annotation-unknown",
+      "--lowering-options=explicitBitcast,disallowLocalVariables,disallowPortDeclSharing,locationInfoStyle=none"
+    )
+    val firtoolAnno = firtoolOpts.map(FirtoolOption.apply).toSeq
+
+    (new ChiselStage).execute(
+      Array(
+        "--target",
+        "systemverilog",
+        "--target-dir",
+        targetDir,
+      ) ++ args,
+      chisel3.stage.ChiselGeneratorAnnotation(
+        () => new GatherRingController()(GatherParam.default)
+      ) +: firtoolAnno
+    )
+
+    println("done")
   }
 }

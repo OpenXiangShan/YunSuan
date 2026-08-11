@@ -33,7 +33,7 @@ class GatherRingUnit[T <: Data](
     (blockSize & 2.U).orR -> (unitIdx % 2).U,
     (blockSize & 4.U).orR -> (unitIdx % 4).U,
     (blockSize & 8.U).orR -> (unitIdx % 8).U,
-  ))
+  )).pad(4)
   private val passedEntryNext = localPos === 0.U
 
   // ── Table Input MUX ──────────────────────────────────
@@ -46,6 +46,7 @@ class GatherRingUnit[T <: Data](
   private val tableData    = Reg(Vec(NumElem, UInt(MinDataWidth.W)))
   private val tableIdx     = Reg(UInt(TableIdxWidth.W))
   private val isFirstTable = RegInit(false.B)
+  private val isLastUnit   = RegInit(false.B)
   private val passedEntry  = RegInit(false.B)
 
   private val indexOrRes = Reg(Vec(NumElem, UInt(IndexWidth.max(ResWidth).W)))
@@ -90,6 +91,14 @@ class GatherRingUnit[T <: Data](
     isFirstTable := isFirstTableNext
   }.otherwise {
     // hold
+  }
+
+  private val isLastUnitNext: Bool = unitIdx.U === (blockBase + blockSize - 1.U)
+
+  when(in.placeIndex.valid) {
+    isLastUnit := isLastUnitNext
+  }.elsewhen(in.placeTable.valid) {
+    isLastUnit := false.B
   }
 
   when(doPlaceTable) {
@@ -201,8 +210,24 @@ class GatherRingUnit[T <: Data](
   out.wb.bits.data := resView.asUInt
   out.wb.bits.meta := meta
 
+  // ── VPerm Wakeup (early wake, req-ack) ─────────────
+  // delay = issue2exu - counter: counter == issue2exu -> delay=0 (wbM3, earliest wakeup),
+  // counter == 0 -> delay=issue2exu (writeback is happening).
+  // The request is kept asserted until it is acked (wakedUp set).
+  private val wakedUp = RegInit(false.B)
+
+  when (flush || doPlaceIndex) {
+    wakedUp := false.B
+  }.elsewhen (out.wake.valid && in.wakeAck) {
+    wakedUp := true.B
+  }
+
+  out.wake.valid := in.allTableValid && hasIndex && counter <= param.issue2exu.U && !wakedUp
+  out.wake.bits.delay := (param.issue2exu.U - counter)(WakeDelayWidth - 1, 0)
+  out.wake.bits.meta := meta
+
   // ── Table Output (to next Unit) ──────────────────────
-  out.flow.valid := hasTable
+  out.flow.valid := hasTable && Mux(passedEntry, !isLastUnit, true.B)
   out.flow.data  := tableData
   out.flow.tableIdx := tableIdx
   out.flow.isFirstTable := isFirstTable
@@ -231,12 +256,17 @@ object GatherRingUnit {
     val flow = ValidIO(new RingFlow)
     val willFlow = Bool()
     val wbReady = Bool()
+    // Gate from the ring controller: all tables of the corresponding block are valid
+    val allTableValid = Bool()
+    // Req-ack: set wakedUp once the wakeup has been accepted
+    val wakeAck = Bool()
   }
 
   class Out[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
     val status = new Status
     val flow = ValidIO(new RingFlow)
     val wb = ValidIO(new Res(metaGen))
+    val wake = ValidIO(new Wake(metaGen))
     val debug = Option.when(param.debug)(new Debug)
   }
 
@@ -324,6 +354,14 @@ object GatherRingUnit {
   class Res[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
     val data = UInt(DLEN.W)
     val meta = metaGen
+  }
+
+  /** VPerm wakeup request: the gather result will be available after `delay` bypass stages.
+    * delay=0 corresponds to wbM3 (issue2exu-cycle early wakeup), delay=issue2exu to wb.
+    */
+  class Wake[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
+    val meta = metaGen
+    val delay = UInt(WakeDelayWidth.W)
   }
 
   class Debug()(implicit val param: GatherParam) extends GatherBundle {

@@ -1,7 +1,7 @@
 package yunsuan.vector.v2.Shuffle
 
 import chisel3._
-import chisel3.util.{isPow2, log2Ceil, Mux1H}
+import chisel3.util.{isPow2, log2Ceil, log2Up, Mux1H}
 
 
 object GatherCommon {
@@ -24,12 +24,16 @@ object GatherCommon {
     val dlen      : Int = 128,
     val xlen      : Int = 64,
     val debug     : Boolean = false,
+    // Number of register stages from issue to entering the exu; the vperm wakeup
+    // delay is computed as issue2exu - counter (delay=0 corresponds to wbM3)
+    val issue2exu : Int = 3,
   ) {
     require(numPipeIn > 0)
     require(numPipeOut > 0)
     require(isPow2(dlen) && dlen >= 64)
     require(isPow2(vlen) && vlen >= 128)
     require(vlen >= dlen)
+    require(issue2exu > 0)
   }
 
   object GatherParam {
@@ -86,6 +90,8 @@ object GatherCommon {
     def PipeInIdx() = UInt(PipeInIdxWidth.W)
 
     def UopIdx() = UInt(log2Ceil(VLEN / DLEN * 8).W)
+
+    def WakeDelayWidth: Int = log2Up(param.issue2exu + 1)
   }
 
   /**

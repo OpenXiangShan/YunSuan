@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import yunsuan.vector.v2.Shuffle.GatherCommon._
 import yunsuan.vector.v2.Shuffle.GatherRing._
-import yunsuan.vector.v2.Shuffle.GatherRingUnit.Status
+import yunsuan.vector.v2.Shuffle.GatherRingUnit.{Status, Wake}
 
 /** PermUnit: top-level vector permutation unit integrating IndexGen + GatherRing.
   *
@@ -131,12 +131,14 @@ class PermUnit[T <: Data](
 
   gatherRing.in.flush   := in.flush
   gatherRing.in.wbReady := in.wbReady
+  gatherRing.in.wakeAck := in.wakeAck
 
   /************************** Output Connections *****************************/
 
   out.pipes      := gatherRing.out.pipes
   out.metas      := gatherRing.out.metas
   out.unitStatus := gatherRing.out.unitStatus
+  out.wake       := gatherRing.out.wake
 }
 
 object PermUnit {
@@ -146,6 +148,7 @@ object PermUnit {
     val flush   = Vec(NumUnits, Bool())
     val pipes   = Vec(NumPipeIn, ValidIO(new PipeIn(metaGen)))
     val wbReady = Vec(NumPipeOut, Bool())
+    val wakeAck = Vec(NumPipeOut, Bool())
   }
 
   /** PermUnit top-level output bundle. */
@@ -153,6 +156,7 @@ object PermUnit {
     val pipes      = Vec(NumPipeOut, ValidIO(new GatherRing.PipeOut(metaGen)))
     val metas      = Vec(NumUnits, metaGen)
     val unitStatus = Vec(NumUnits, new Status)
+    val wake       = Vec(NumPipeOut, ValidIO(new GatherRingUnit.Wake(metaGen)))
   }
 
   /** Single pipe input: block placement + IndexGen operands + table/fill/meta.
