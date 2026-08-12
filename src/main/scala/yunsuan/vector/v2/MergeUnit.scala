@@ -9,6 +9,7 @@ object MergeUnit {
     mgu
   }
   class In(vlen: Int) extends Bundle {
+    val valid = Bool()
     val ctrl = new InCtrl
     val data = new InData(vlen)
   }
@@ -46,8 +47,10 @@ class MergeUnit(vlen: Int = 128) extends Module {
   private val vd     = in.data.vd
   private val oldVd  = in.data.oldVd
 
-  assert(begin <= vlenb.U, "begin should less than or equal to vlenb")
-  assert(end   <= vlenb.U, "begin should less than or equal to vlenb")
+  when (in.valid) {
+    assert(begin <= vlenb.U, "begin should less than or equal to vlenb")
+    assert(end   <= vlenb.U, "end should less than or equal to vlenb")
+  }
 
   private val beginMask = Wire(UInt(vlenb.W))
   private val endMask   = Wire(UInt(vlenb.W))
