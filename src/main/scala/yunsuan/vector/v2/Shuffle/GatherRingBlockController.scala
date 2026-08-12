@@ -40,12 +40,14 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   val willFlow = (in.tableValid.orR || in.indexValid.orR) &&
     (allFull || !(tableLeastFreeOH.rotateRight(1) & indexMostValidOH).orR)
 
+  // clearTable(i): the table in unit i is useless if every unit j>i finishes
+  // (counter(j) < j-i) before unit i's table can reach it (distance j-i in the ring).
+  // Empty set (last unit) => true; the unit's hasTable clear is additionally gated by passedEntry.
   val clearTable = Wire(Vec(size, Bool()))
   for (i <- 0 until size) {
-    clearTable(i) :=
-      (in.indexValid.asBools zip in.indexValidNext.asBools)
-        .map{ case (reg, next) => reg && !next}
-        .take(i).fold(false.B)(_ || _)
+    clearTable(i) := (i + 1 until size).map { j =>
+      in.counter(j) < (j - i).U
+    }.fold(true.B)(_ && _)
   }
 
   // Per-pipe table/index position outputs
@@ -75,6 +77,7 @@ object GatherRingBlockController {
     val tableValid: UInt = UInt(size.W)
     val indexValid: UInt = UInt(size.W)
     val indexValidNext: UInt = UInt(size.W)
+    val counter: Vec[UInt] = Vec(size, UInt(log2Up(NumUnits + 1).W))
   }
 
   class Out(size: Int)(implicit val param: GatherParam) extends GatherBundle {

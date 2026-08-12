@@ -64,12 +64,12 @@ class GatherRingUnit[T <: Data](
     hasTable := hasTableNext
   }
 
-  when(in.clearTable) {
-    hasTableNext := false.B
-  }.elsewhen(doPlaceTable || doFlowTable) {
+  when(doPlaceTable) {
     hasTableNext := true.B
-  }.elsewhen(doFlow && !in.flow.valid) {
+  }.elsewhen(in.clearTable && passedEntry) {
     hasTableNext := false.B
+  }.elsewhen(doFlowTable) {
+    hasTableNext := true.B
   }
 
   // ── hasIndex State Machine ───────────────────────────
@@ -113,7 +113,9 @@ class GatherRingUnit[T <: Data](
   when(doPlaceTable) {
     passedEntry := in.placeTable.isFirstTable
   }.elsewhen(doFlowTable) {
-    passedEntry := GatherRingUnit.pow2remIsZero(unitIdx, blockSize)
+    // passedEntry travels with the table: propagate the incoming tag and set
+    // it once the table reaches the block's first (entry) unit.
+    passedEntry := in.flow.passedEntry || GatherRingUnit.pow2remIsZero(unitIdx, blockSize)
   }.otherwise {
     // hold
   }

@@ -17,7 +17,8 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
     hasTable: BigInt,
     hasIndex: BigInt,
     wbValid : BigInt,
-    s0pipes :  Seq[(Boolean, Int, Int)] = Seq.fill(4)((false, 0, 0))
+    s0pipes :  Seq[(Boolean, Int, Int)] = Seq.fill(4)((false, 0, 0)),
+    unitBlockSize: Int = 2
   )(
     check: (Seq[(Boolean, Int)], Seq[(Boolean, Int)], Seq[Boolean], Seq[BigInt]) => Unit
   ): Unit = {
@@ -28,6 +29,9 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
       for (i <- 0 until NumUnits) {
         dut.in.hasTable(i).poke(((hasTable >> i) & 1) != 0)
         dut.in.hasIndex(i).poke(((hasIndex >> i) & 1) != 0)
+        dut.in.blockSize(i).poke(unitBlockSize)
+        dut.in.hasIndexNext(i).poke(false)
+        dut.in.counter(i).poke(0)
       }
       dut.in.wbValid.poke(wbValid)
       for (i <- s0pipes.indices) {
@@ -47,7 +51,7 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
          dut.out.pipeIndexPos(i).bits.peekValue().asBigInt.toInt)
       }
       val willFlow = (0 until NumUnits).map { i =>
-        dut.out.willFlow(i).peekValue().asBigInt != BigInt(0)
+        ((dut.out.willFlow.peekValue().asBigInt >> i) & 1) != 0
       }
       val wbSelOH = (0 until param.numPipeOut).map { i =>
         dut.out.wbSelOH(i).peekValue().asBigInt
@@ -71,6 +75,9 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
       for (i <- 0 until NumUnits) {
         dut.in.hasTable(i).poke(false)
         dut.in.hasIndex(i).poke(false)
+        dut.in.blockSize(i).poke(blockSize)
+        dut.in.hasIndexNext(i).poke(false)
+        dut.in.counter(i).poke(0)
       }
       dut.in.wbValid.poke(0)
       dut.in.s0pipes(0).valid.poke(s0valid)
@@ -126,23 +133,18 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
       }
     }
 
-    it("table and index in ring2 -> willFlow asserted") {
-      // hasTable bit0, hasIndex bit1 (unit 0 has table, unit 1 has index)
-      simulateCtrl(1, 2, 0) { (_, _, wf, _) =>
-        // ring2 at base=0: table at pos0, index at pos1
-        // tableLeastFreeOH(0->rotateRight->pos1?) Actually need to trace...
-        // Just verify at least one willFlow bit is true
-        assert(wf.exists(_ == true), "should have flow when table and index present")
+    it("table and index in ring2, co-located -> flow") {
+      // hasTable=0x3, hasIndex=0x3: units 0,1 hold both table and index (block full).
+      simulateCtrl(0x3, 0x3, 0) { (_, _, wf, _) =>
+        assert(wf(0) && wf(1), s"co-located T&I units must flow: $wf")
       }
     }
 
-    it("willFlow is per-unit mask: table-owning units assert flow") {
-      // hasTable=0x03 (units 0,1), hasIndex=0 -> global willFlow=true
-      // per-unit mask: tableValid(i) && true -> bits 0,1 set
-      simulateCtrl(0x3, 0, 0) { (_, _, wf, _) =>
-        assert(wf(0), "unit 0 has table -> willFlow bit set")
-        assert(wf(1), "unit 1 has table -> willFlow bit set")
-        assert(!wf(2), "unit 2 has no table -> no willFlow")
+    it("willFlow is per-unit mask: only T&I units assert flow") {
+      // hasTable=0x3, hasIndex=0x3 (units 0,1 hold both) -> mask bits 0,1 set.
+      simulateCtrl(0x3, 0x3, 0) { (_, _, wf, _) =>
+        assert(wf(0) && wf(1), s"units 0,1 hold T&I -> flow bits set: $wf")
+        assert(!wf(2), "unit 2 holds nothing -> no flow")
       }
     }
   }

@@ -966,7 +966,10 @@ class GatherRingSpec
         dut.clock.step(); pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 1)
 
         dut.out.pipes(0).valid.expect(false.B)
-        for (_ <- 0 until 2) dut.clock.step()
+        // wbReady already high: wb fires as soon as the flow completes
+        // (flow is combinational from hasTable/hasIndex, consumed the cycle
+        // after delivery), so one step is enough.
+        dut.clock.step()
 
         eWb(dut, pipe = 0, golden)
       }

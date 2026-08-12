@@ -39,6 +39,7 @@ class GatherRing[T <: Data](
   controller.in.hasIndex := (Cat(units.map(_.out.status.hasIndex).reverse) | s1HasIndex).asBools
   controller.in.hasIndexNext := units.map(_.out.status.hasIndexNext)
   controller.in.blockSize := units.map(_.out.status.blockSize)
+  controller.in.counter := units.map(_.out.status.counter)
   controller.in.wbValid := Cat(units.map(_.out.wb.valid).reverse)
   controller.in.wakeValid := Cat(units.map(_.out.wake.valid).reverse)
 
