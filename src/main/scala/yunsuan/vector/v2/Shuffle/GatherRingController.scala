@@ -133,8 +133,8 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
 object GatherRingController {
   class In(implicit val param: GatherParam) extends GatherBundle {
     val s0pipes  = Vec(NumPipeIn, ValidIO(new GatherRing.PipeInS0))
-    val hasTable = Input(Vec(NumUnits, Bool()))
-    val hasIndex = Input(Vec(NumUnits, Bool()))
+    val hasTable = Vec(NumUnits, Bool())
+    val hasIndex = Vec(NumUnits, Bool())
     val wbValid = UInt(NumUnits.W)
     val wakeValid = UInt(NumUnits.W)
   }
@@ -142,12 +142,12 @@ object GatherRingController {
   class Out(implicit val param: GatherParam) extends GatherBundle {
     val pipeTablePos = Vec(NumPipeIn, ValidIO(UnitIdx()))
     val pipeIndexPos = Vec(NumPipeIn, ValidIO(UnitIdx()))
-    val willFlow     = Output(Vec(NumUnits, Bool()))
+    val willFlow     = Vec(NumUnits, Bool())
     val wbSelOH      = Vec(NumPipeOut, UInt(NumUnits.W))
-    val unitAllTableValid = Output(Vec(NumUnits, Bool()))
+    val unitAllTableValid = Vec(NumUnits, Bool())
     val wakeSelOH      = Vec(NumPipeOut, UInt(NumUnits.W))
     // Debug: per-pipe controller valid bitmap [ring8, ring4, ring2]
-    val dbgPipeCtrlValid = Output(Vec(NumPipeIn, UInt(3.W)))
+    val dbgPipeCtrlValid = Vec(NumPipeIn, UInt(3.W))
   }
 
   def main(args: Array[String]): Unit = {

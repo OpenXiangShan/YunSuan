@@ -31,9 +31,12 @@ class GatherRing[T <: Data](
 
   /******************** Connections of controller *****************************/
 
+  val s1HasTable = Mux1H(in.s1pipes.map(_.valid), pipeTablePos.map(pos => UIntToOH(pos, NumUnits))).ensuring(_.getWidth == NumUnits)
+  val s1HasIndex = Mux1H(in.s1pipes.map(_.valid), pipeIndexPos.map(pos => UIntToOH(pos, NumUnits))).ensuring(_.getWidth == NumUnits)
+
   controller.in.s0pipes  := in.s0pipes
-  controller.in.hasTable := VecInit(units.map(_.out.status.hasTable))
-  controller.in.hasIndex := VecInit(units.map(_.out.status.hasIndex))
+  controller.in.hasTable := (Cat(units.map(_.out.status.hasTable).reverse) | s1HasTable).asBools
+  controller.in.hasIndex := (Cat(units.map(_.out.status.hasIndex).reverse) | s1HasIndex).asBools
   controller.in.wbValid := Cat(units.map(_.out.wb.valid).reverse)
   controller.in.wakeValid := Cat(units.map(_.out.wake.valid).reverse)
 
@@ -49,9 +52,18 @@ class GatherRing[T <: Data](
 
     val prevFlowSource: Option[ValidIO[GatherRingUnit.RingFlow]] = Option.when(i > 0)(units(i - 1).out.flow)
 
-    val ring2FlowSource = Option.when(i % 2 == 0)(ring2TailUnits(i / 2).out.flow)
-    val ring4FlowSource = Option.when(i % 4 == 0)(ring4TailUnits(i / 4).out.flow)
-    val ring8FlowSource = Option.when(i % 8 == 0)(ring8TailUnits(i / 8).out.flow)
+    val ring2FlowSource = Option.when(i % 2 == 0)(makeValidIO(
+      ring2TailUnits(i / 2).out.flow.valid && (units(i).out.status.blockSize & 2.U).orR,
+      ring2TailUnits(i / 2).out.flow.bits)
+    )
+    val ring4FlowSource = Option.when(i % 4 == 0)(makeValidIO(
+      ring4TailUnits(i / 4).out.flow.valid && (units(i).out.status.blockSize & 4.U).orR,
+      ring4TailUnits(i / 4).out.flow.bits)
+    )
+    val ring8FlowSource = Option.when(i % 8 == 0)(makeValidIO(
+      ring8TailUnits(i / 8).out.flow.valid && (units(i).out.status.blockSize & 8.U).orR,
+      ring8TailUnits(i / 8).out.flow.bits)
+    )
 
     val flowSources: Seq[ValidIO[GatherRingUnit.RingFlow]] = Seq(
       prevFlowSource,
