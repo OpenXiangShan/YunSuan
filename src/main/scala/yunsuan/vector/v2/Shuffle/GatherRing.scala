@@ -37,6 +37,8 @@ class GatherRing[T <: Data](
   controller.in.s0pipes  := in.s0pipes
   controller.in.hasTable := (Cat(units.map(_.out.status.hasTable).reverse) | s1HasTable).asBools
   controller.in.hasIndex := (Cat(units.map(_.out.status.hasIndex).reverse) | s1HasIndex).asBools
+  controller.in.hasIndexNext := units.map(_.out.status.hasIndexNext)
+  controller.in.blockSize := units.map(_.out.status.blockSize)
   controller.in.wbValid := Cat(units.map(_.out.wb.valid).reverse)
   controller.in.wakeValid := Cat(units.map(_.out.wake.valid).reverse)
 
@@ -77,6 +79,7 @@ class GatherRing[T <: Data](
 
   for (i <- 0 until NumUnits) {
     units(i).in.willFlow := controller.out.willFlow(i)
+    units(i).in.clearTable := controller.out.clearTable(i)
   }
 
   private val validMatrixPipeUnitTable = WireInit(VecInit.fill(NumPipeIn, NumUnits)(false.B))
@@ -96,7 +99,7 @@ class GatherRing[T <: Data](
     units(u).in.placeTable.valid := Cat(validMatrixPipeUnitTable.map(_(u))).orR
     units(u).in.placeTable.bits  := Mux1H(
       validMatrixPipeUnitTable.map(_(u)),
-      in.s1pipes.map(s1 => PlaceTableRequest.fromPipeInS1(s1.bits))
+      in.s1pipes.map(s1 => PlaceTableRequest.fromPipeInS1(s1.bits, u))
     )
     units(u).in.placeIndex.valid := Cat(validMatrixPipeUnitIndex.map(_(u))).orR
     units(u).in.placeIndex.bits  := Mux1H(

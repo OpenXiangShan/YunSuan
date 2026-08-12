@@ -18,8 +18,9 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
   // ── Wire block controllers ───────────────────────────
   for ((bc, i) <- ring2Controllers.zipWithIndex) {
     val base = 2 * i
-    bc.in.tableValid := in.hasTable.asUInt(base + 1, base)
-    bc.in.indexValid := in.hasIndex.asUInt(base + 1, base)
+    bc.in.tableValid := in.hasTable.asUInt(base + 1, base) & Cat(in.blockSize.map(x => (x & 2.U).orR).reverse)
+    bc.in.indexValid := in.hasIndex.asUInt(base + 1, base) & Cat(in.blockSize.map(x => (x & 2.U).orR).reverse)
+    bc.in.indexValidNext := in.hasIndexNext.asUInt(base + 1, base)
     for (j <- 0 until NumPipeIn) {
       // blockSize(1)=m2 gates ring2: only active for LMUL=2, not 4 or 8
       bc.in.pipePlaceIdx(j).valid :=
@@ -31,8 +32,9 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
 
   for ((bc, i) <- ring4Controllers.zipWithIndex) {
     val base = 4 * i
-    bc.in.tableValid := in.hasTable.asUInt(base + 3, base)
-    bc.in.indexValid := in.hasIndex.asUInt(base + 3, base)
+    bc.in.tableValid := in.hasTable.asUInt(base + 3, base) & Cat(in.blockSize.map(x => (x & 4.U).orR).reverse)
+    bc.in.indexValid := in.hasIndex.asUInt(base + 3, base) & Cat(in.blockSize.map(x => (x & 4.U).orR).reverse)
+    bc.in.indexValidNext := in.hasIndexNext.asUInt(base + 3, base)
     for (j <- 0 until NumPipeIn) {
       // blockSize(2) gates ring4: only active for LMUL=4
       bc.in.pipePlaceIdx(j).valid :=
@@ -43,8 +45,9 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
   }
 
   for ((bc, i) <- ring8Controllers.zipWithIndex) {
-    bc.in.tableValid := in.hasTable.asUInt
-    bc.in.indexValid := in.hasIndex.asUInt
+    bc.in.tableValid := in.hasTable.asUInt & Cat(in.blockSize.map(x => (x & 8.U).orR).reverse)
+    bc.in.indexValid := in.hasIndex.asUInt & Cat(in.blockSize.map(x => (x & 8.U).orR).reverse)
+    bc.in.indexValidNext := in.hasIndexNext.asUInt
     for (j <- 0 until NumPipeIn) {
       // blockSize(3) gates ring8: only active for LMUL=8
       bc.in.pipePlaceIdx(j).valid :=
@@ -72,7 +75,12 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
   private val ring2WillFlowVec = Cat(ring2Controllers.map(_.out.willFlow).reverse)
   private val ring4WillFlowVec = Cat(ring4Controllers.map(_.out.willFlow).reverse)
   private val ring8WillFlowVec = Cat(ring8Controllers.map(_.out.willFlow).reverse)
-  out.willFlow := VecInit((ring2WillFlowVec | ring4WillFlowVec | ring8WillFlowVec).asBools)
+  out.willFlow := ring2WillFlowVec | ring4WillFlowVec | ring8WillFlowVec
+
+  private val ring2ClearTable = Cat(ring2Controllers.map(_.out.clearTable).reverse)
+  private val ring4ClearTable = Cat(ring4Controllers.map(_.out.clearTable).reverse)
+  private val ring8ClearTable = Cat(ring8Controllers.map(_.out.clearTable).reverse)
+  out.clearTable := ring2ClearTable | ring4ClearTable | ring8ClearTable
 
   // Per-unit "all tables of the corresponding ring block are valid" gate for the vperm wakeup.
   // Aggregated like willFlow (OR across ring2/4/8); the active controller is the one matching
@@ -135,6 +143,8 @@ object GatherRingController {
     val s0pipes  = Vec(NumPipeIn, ValidIO(new GatherRing.PipeInS0))
     val hasTable = Vec(NumUnits, Bool())
     val hasIndex = Vec(NumUnits, Bool())
+    val hasIndexNext = Vec(NumUnits, Bool())
+    val blockSize = Vec(NumUnits, BlockSize())
     val wbValid = UInt(NumUnits.W)
     val wakeValid = UInt(NumUnits.W)
   }
@@ -142,7 +152,8 @@ object GatherRingController {
   class Out(implicit val param: GatherParam) extends GatherBundle {
     val pipeTablePos = Vec(NumPipeIn, ValidIO(UnitIdx()))
     val pipeIndexPos = Vec(NumPipeIn, ValidIO(UnitIdx()))
-    val willFlow     = Vec(NumUnits, Bool())
+    val willFlow     = UInt(NumUnits.W)
+    val clearTable   = UInt(NumUnits.W)
     val wbSelOH      = Vec(NumPipeOut, UInt(NumUnits.W))
     val unitAllTableValid = Vec(NumUnits, Bool())
     val wakeSelOH      = Vec(NumPipeOut, UInt(NumUnits.W))

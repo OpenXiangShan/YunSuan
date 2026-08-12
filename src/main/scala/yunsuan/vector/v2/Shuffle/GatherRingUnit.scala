@@ -2,9 +2,8 @@ package yunsuan.vector.v2.Shuffle
 
 import chisel3._
 import chisel3.util._
-import GatherCommon._
 import yunsuan.vector.Common._
-import yunsuan.vector.v2.Shuffle.GatherRingUnit.PlaceTableRequest
+import yunsuan.vector.v2.Shuffle.GatherCommon._
 
 class GatherRingUnit[T <: Data](
   val unitIdx: Int,
@@ -28,13 +27,6 @@ class GatherRingUnit[T <: Data](
     in.placeIndex.valid -> in.placeIndex.blockSize,
     in.placeTable.valid -> in.placeTable.blockSize,
   ))
-  private val localPos = Mux1H(Seq(
-    (inBlockSize & 1.U).orR -> 0.U,
-    (inBlockSize & 2.U).orR -> (unitIdx % 2).U,
-    (inBlockSize & 4.U).orR -> (unitIdx % 4).U,
-    (inBlockSize & 8.U).orR -> (unitIdx % 8).U,
-  )).pad(4)
-  private val passedEntryNext = localPos === 0.U
 
   // ── Table Input MUX ──────────────────────────────────
   private val doPlaceTable = in.placeTable.valid
@@ -45,7 +37,7 @@ class GatherRingUnit[T <: Data](
   // ── Registers ────────────────────────────────────────
   private val tableData    = Reg(Vec(NumElem, UInt(MinDataWidth.W)))
   private val tableIdx     = Reg(UInt(TableIdxWidth.W))
-  private val blockSize    = Reg(UnitIdx())
+  private val blockSize    = Reg(BlockSize())
   private val isFirstTable = RegInit(false.B)
   private val isLastUnit   = RegInit(false.B)
   private val passedEntry  = RegInit(false.B)
@@ -64,24 +56,36 @@ class GatherRingUnit[T <: Data](
   private val done      = counter === 0.U && hasIndex
 
   // ── hasTable State Machine ───────────────────────────
+  private val hasTableNext = WireInit(hasTable)
+
   when(flush) {
     hasTable := false.B
-  }.elsewhen(doPlaceTable || doFlowTable) {
-    hasTable := true.B
-  }.elsewhen(doFlow && !in.flow.valid) {
-    hasTable := false.B
   }.otherwise {
-    // hold
+    hasTable := hasTableNext
+  }
+
+  when(in.clearTable) {
+    hasTableNext := false.B
+  }.elsewhen(doPlaceTable || doFlowTable) {
+    hasTableNext := true.B
+  }.elsewhen(doFlow && !in.flow.valid) {
+    hasTableNext := false.B
   }
 
   // ── hasIndex State Machine ───────────────────────────
-  when(doPlaceIndex) {
-    hasIndex := true.B
-  }.elsewhen(flush || (hasIndex && counter === 0.U && (hasWb || in.wbReady))) {
-    // hasWb || in.wbReady means already wb or wb now
+  private val hasIndexNext = WireInit(hasIndex)
+
+  when(flush) {
     hasIndex := false.B
   }.otherwise {
-    // hold
+    hasIndex := hasIndexNext
+  }
+
+  when(doPlaceIndex) {
+    hasIndexNext := true.B
+  }.elsewhen(hasIndex && counter === 0.U && (hasWb || in.wbReady)) {
+    // hasWb || in.wbReady means already wb or wb now
+    hasIndexNext := false.B
   }
 
   when (doPlaceTable || doPlaceIndex) {
@@ -109,7 +113,7 @@ class GatherRingUnit[T <: Data](
   when(doPlaceTable) {
     passedEntry := in.placeTable.isFirstTable
   }.elsewhen(doFlowTable) {
-    passedEntry := passedEntryNext
+    passedEntry := GatherRingUnit.pow2remIsZero(unitIdx, blockSize)
   }.otherwise {
     // hold
   }
@@ -241,6 +245,7 @@ class GatherRingUnit[T <: Data](
   // ── Status Output (for top-level vacancy detection) ───
   out.status.hasTable     := hasTable
   out.status.hasIndex     := hasIndex
+  out.status.hasIndexNext := hasIndexNext
   out.status.counter      := counter
   out.status.blockSize    := blockSize
   out.status.isFirstTable := isFirstTable
@@ -259,6 +264,7 @@ object GatherRingUnit {
     val placeIndex = ValidIO(new PlaceIndexRequest(metaGen))
     val flow = ValidIO(new RingFlow)
     val willFlow = Bool()
+    val clearTable = Bool()
     val wbReady = Bool()
     // Gate from the ring controller: all tables of the corresponding block are valid
     val allTableValid = Bool()
@@ -300,11 +306,11 @@ object GatherRingUnit {
   }
 
   object PlaceTableRequest {
-    def fromPipeInS1[T <: Data](s1: GatherRing.PipeInS1[T])(implicit param: GatherParam): PlaceTableRequest = {
+    def fromPipeInS1[T <: Data](s1: GatherRing.PipeInS1[T], unitIdx: Int)(implicit param: GatherParam): PlaceTableRequest = {
       val req = Wire(new PlaceTableRequest)
       req.tableIdx := s1.tableIdx
       req.table    := s1.table
-      req.isFirstTable := s1.placeIdx === 0.U
+      req.isFirstTable := GatherRingUnit.pow2remIsZero(unitIdx, s1.blockSize)
       req.blockSize    := s1.blockSize
       req
     }
@@ -347,6 +353,7 @@ object GatherRingUnit {
   class Status(implicit val param: GatherParam) extends GatherBundle {
     val hasTable = Bool()
     val hasIndex = Bool()
+    val hasIndexNext = Bool()
     val counter = UInt(log2Ceil(NumUnits + 1).W)
     val blockSize = BlockSize()
     val isFirstTable = Bool()
@@ -369,6 +376,15 @@ object GatherRingUnit {
 
   class Debug()(implicit val param: GatherParam) extends GatherBundle {
     val indexOrRes = UInt(DLEN.W)
+  }
+
+  def pow2remIsZero(dividend: Int, divisor: UInt): Bool = {
+    Mux1H(Seq(
+      (divisor & 1.U).orR -> true.B,
+      (divisor & 2.U).orR -> (dividend % 2 == 0).B,
+      (divisor & 4.U).orR -> (dividend % 4 == 0).B,
+      (divisor & 8.U).orR -> (dividend % 8 == 0).B,
+    ))
   }
 
   def main(args: Array[String]): Unit = {

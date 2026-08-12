@@ -2,13 +2,15 @@ package yunsuan.vector.v2.Shuffle
 
 import chisel3._
 import chisel3.util._
-import yunsuan.vector.v2.Shuffle.GatherCommon._
 import yunsuan.vector.Common._
+import yunsuan.vector.v2.Shuffle.GatherCommon._
 
 
 class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val param: GatherParam) extends GatherModule {
   require(Seq(2, 4, 8).contains(size))
   require(blockBase % size == 0)
+
+  override def desiredName: String = super.desiredName + s"_size${size}" + s"_base${blockBase}"
 
   val localIndexWidth = log2Ceil(size)
 
@@ -38,19 +40,29 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   val willFlow = (in.tableValid.orR || in.indexValid.orR) &&
     (allFull || !(tableLeastFreeOH.rotateRight(1) & indexMostValidOH).orR)
 
+  val clearTable = Wire(Vec(size, Bool()))
+  for (i <- 0 until size) {
+    clearTable(i) :=
+      (in.indexValid.asBools zip in.indexValidNext.asBools)
+        .map{ case (reg, next) => reg && !next}
+        .take(i).fold(false.B)(_ || _)
+  }
+
   // Per-pipe table/index position outputs
   for (i <- 0 until NumPipeIn) {
     out.tablePos(i).valid := inPipePlaceIdx(i).valid
     out.indexPos(i).valid := inPipePlaceIdx(i).valid
 
     out.tablePos(i).bits := blockBase.U |
-      (entryTable - inPipePlaceIdx(i).bits)
+      (entryTable + willFlow - inPipePlaceIdx(i).bits)
     out.indexPos(i).bits := blockBase.U |
-      (entryIndex + willFlow + inPipePlaceIdx(i).bits)
+      (entryIndex + inPipePlaceIdx(i).bits)
   }
 
   // willFlow: block-level signal, computed once outside per-pipe loop
-  out.willFlow := Cat(in.tableValid.map(_ && willFlow).reverse)
+  out.willFlow := Cat((in.tableValid & in.indexValid).map(_ && willFlow).reverse)
+
+  out.clearTable := clearTable.asUInt
 
   // allTableValid: block-level, all tables of this block are valid (gates the vperm wakeup)
   out.allTableValid := Fill(size, in.tableValid.andR)
@@ -62,12 +74,14 @@ object GatherRingBlockController {
 
     val tableValid: UInt = UInt(size.W)
     val indexValid: UInt = UInt(size.W)
+    val indexValidNext: UInt = UInt(size.W)
   }
 
   class Out(size: Int)(implicit val param: GatherParam) extends GatherBundle {
     val tablePos: Vec[ValidIO[UInt]] = Vec(NumPipeIn, ValidIO(UnitIdx()))
     val indexPos: Vec[ValidIO[UInt]] = Vec(NumPipeIn, ValidIO(UnitIdx()))
     val willFlow: UInt = UInt(size.W)
+    val clearTable: UInt = UInt(size.W)
     val allTableValid: UInt = UInt(size.W)
   }
 
