@@ -656,6 +656,9 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
       it("M8: emu vrgather m4 vl=31 tu/mu, cy0 pipes1-3 cy1 pipe0") {
         simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
           initDut(dut)
+          // wbReady constant 1 from the start, as in the real pipeline / IT
+          // (the emu pipeline always accepts writeback).
+          for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
           // vs1 (index) per-uop slices: v16..v19
           val vs1 = Seq(
             Seq(0x00,0x01,0x03,0xf8,0xf8,0x7f,0x7f,0x7f,0xff,0xff,0x00,0x01,0x03,0xf8,0xf8,0x7f),
@@ -698,18 +701,28 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
             vta = false, vma = false)
           dut.clock.step()
           pPipeOff(dut, 0)
-          // first-free landing -> uop0 unit0, uop1 unit1, uop2 unit2, uop3 unit3
-          eWbAfter(dut, 0, golden(0), 12)
-          eWbAfter(dut, 1, golden(1), 0)
-          eWbAfter(dut, 2, golden(2), 0)
-          eWbAfter(dut, 3, golden(3), 0)
-          // ack writeback so the flow fully drains (hasIndex -> 0); the emu
-          // failure was exactly the flow not completing, so verify it here.
-          for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
-          dut.clock.step()
-          for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(false)
+          // first-free landing -> uop0 unit0, uop1 unit1, uop2 unit2, uop3 unit3.
+          // With wbReady=1 the writeback is consumed immediately (valid for one
+          // cycle), so collect each pipe's data as it appears, then check that
+          // the whole block drains (hasIndex -> 0). Repro: IT shows hasTable
+          // stays set after writeback, so also assert hasTable -> 0.
+          val wbData = Array.fill(NumPipes)(Option.empty[BigInt])
+          var drained = false
+          for (cy <- 0 until 40; if !drained) {
+            for (p <- 0 until NumPipes) {
+              if (dut.out.pipes(p).valid.peekBoolean() && wbData(p).isEmpty) {
+                wbData(p) = Some(dut.out.pipes(p).bits.data.peekValue().asBigInt)
+              }
+            }
+            drained = (0 until NumUnits).forall(u => !dut.out.unitStatus(u).hasIndex.peekBoolean())
+            dut.clock.step()
+          }
+          for (p <- 0 until NumPipes) {
+            wbData(p).getOrElse(fail(s"pipe $p never wrote back")) mustBe golden(p)
+          }
           for (u <- 0 until NumUnits) {
             dut.out.unitStatus(u).hasIndex.expect(false.B, s"unit $u hasIndex drained")
+            dut.out.unitStatus(u).hasTable.expect(false.B, s"unit $u hasTable drained")
           }
         }
       }

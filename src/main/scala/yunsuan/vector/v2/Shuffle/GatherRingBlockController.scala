@@ -18,7 +18,8 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   val out = IO(Output(new GatherRingBlockController.Out(size)))
 
   // Merged occupancy for placement: registered (unit) + in-flight (s1).
-  // clearTable only trusts the registered (unit) indices (see allIndexPlaced).
+  // clearTable only trusts the registered (unit) indices, never the in-flight
+  // s1 ones (see the per-j unitIndexValid gate below).
   val tableValid = in.unitTableValid | in.s1TableValid
   val indexValid = in.unitIndexValid | in.s1IndexValid
 
@@ -46,16 +47,18 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
     (allFull || !(tableLeastFreeOH.rotateRight(1) & indexMostValidOH).orR)
 
   // clearTable(i): the table in unit i is useless if every unit j>i finishes
-  // (counter(j) < j-i) before unit i's table can reach it (distance j-i in the ring).
-  // Empty set (last unit) => true; the unit's hasTable clear is additionally gated by passedEntry.
-  // All clears require the whole block's indices to be PLACED (registered in
-  // units). An in-flight s1 index has counter still unset, so it must not count
-  // as "placed" (see Q10: s1-merged indexValid would bypass this gate).
-  val allIndexPlaced = in.unitIndexValid.andR
+  // (counter(j) < j-i) before unit i's table can reach it (distance j-i in the
+  // ring). Empty set (last unit) => true; the unit's hasTable clear is
+  // additionally gated by passedEntry.
+  // Each j>i must have its index PLACED (registered unitIndexValid(j)): an
+  // in-flight s1 index has counter still unset, so without this it would be
+  // misread as "finished" and clear an earlier unit's table prematurely
+  // (Q7/Q10). Unit i's own index is intentionally not required, so a unit can
+  // still clear its table after it writes back (Q14).
   val clearTable = Wire(Vec(size, Bool()))
   for (i <- 0 until size) {
-    clearTable(i) := allIndexPlaced && (i + 1 until size).map { j =>
-      in.counter(j) < (j - i).U
+    clearTable(i) := (i + 1 until size).map { j =>
+      in.counter(j) < (j - i).U && in.unitIndexValid(j)
     }.fold(true.B)(_ && _)
   }
 

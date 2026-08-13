@@ -102,12 +102,23 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
   private val ring2WillFlowVec = Cat(ring2Controllers.map(_.out.willFlow).reverse)
   private val ring4WillFlowVec = Cat(ring4Controllers.map(_.out.willFlow).reverse)
   private val ring8WillFlowVec = Cat(ring8Controllers.map(_.out.willFlow).reverse)
-  out.willFlow := ring2WillFlowVec | ring4WillFlowVec | ring8WillFlowVec
+  // Mask each ring's willFlow by its active units before ORing (same reasoning
+  // as clearTable): only the ring matching the unit's blockSize should drive it.
+  out.willFlow :=
+    (ring2WillFlowVec & ring2UnitMask) |
+    (ring4WillFlowVec & ring4UnitMask) |
+    (ring8WillFlowVec & ring8UnitMask)
 
   private val ring2ClearTable = Cat(ring2Controllers.map(_.out.clearTable).reverse)
   private val ring4ClearTable = Cat(ring4Controllers.map(_.out.clearTable).reverse)
   private val ring8ClearTable = Cat(ring8Controllers.map(_.out.clearTable).reverse)
-  out.clearTable := ring2ClearTable | ring4ClearTable | ring8ClearTable
+  // Mask each ring's clearTable by its active units before ORing: inactive
+  // rings (e.g. ring2/ring8 for an m4 block) would otherwise leak spurious
+  // always-1 bits (empty-set last unit) and clear tables prematurely.
+  out.clearTable :=
+    (ring2ClearTable & ring2UnitMask) |
+    (ring4ClearTable & ring4UnitMask) |
+    (ring8ClearTable & ring8UnitMask)
 
   // Per-unit "all tables of the corresponding ring block are valid" gate for the vperm wakeup.
   // Aggregated like willFlow (OR across ring2/4/8); the active controller is the one matching
