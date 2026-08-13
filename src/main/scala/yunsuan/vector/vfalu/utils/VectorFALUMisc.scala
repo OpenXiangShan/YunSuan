@@ -88,14 +88,14 @@ class VectorFALUMisc extends VFModule {
     isFp64 -> (if (i < 1) src1F64IsNan       else true.B)
   )))
   private val src0IsSNanSeq: Seq[Bool] = Seq.tabulate(4)(i => Mux1H(Seq(
-    isFp16 ->             !src0F16Vec(i)(significandWidth("fp16") - 1),
-    isFp32 -> (if (i < 2) !src0F32Vec(i)(significandWidth("fp32") - 1) else true.B),
-    isFp64 -> (if (i < 1) !src0(significandWidth("fp64") - 1)          else true.B)
+    isFp16 ->             !src0F16Vec(i)(quiteBit("fp16")),
+    isFp32 -> (if (i < 2) !src0F32Vec(i)(quiteBit("fp32")) else true.B),
+    isFp64 -> (if (i < 1) !src0(quiteBit("fp64"))          else true.B)
   )) && src0IsNanSeq(i))
   private val src1IsSNanSeq: Seq[Bool] = Seq.tabulate(4)(i => Mux1H(Seq(
-    isFp16 ->             !src1F16Vec(i)(significandWidth("fp16") - 1),
-    isFp32 -> (if (i < 2) !src1F32Vec(i)(significandWidth("fp32") - 1) else true.B),
-    isFp64 -> (if (i < 1) !src1(significandWidth("fp64") - 1)          else true.B)
+    isFp16 ->             !src1F16Vec(i)(quiteBit("fp16")),
+    isFp32 -> (if (i < 2) !src1F32Vec(i)(quiteBit("fp32")) else true.B),
+    isFp64 -> (if (i < 1) !src1(quiteBit("fp64"))          else true.B)
   )) && src1IsNanSeq(i))
   private val isSNanSeq = src0IsSNanSeq.zip(src1IsSNanSeq).map { case (src0IsSNan, src1IsSNan) => src0IsSNan || src1IsSNan }
   private val fflagsEach16bit = isSNanSeq.map(isSNan => Mux(isFsgn, 0.U(5.W), Cat(isSNan, 0.U(4.W))))

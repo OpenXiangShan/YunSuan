@@ -814,12 +814,12 @@ object Opcodes {
     def isFgt(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FGT && getDestType === DM
     def isFge(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FGE && getDestType === DM
     def isFclass(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FCLASS && getDestType === DV
-    def isVfCompare(implicit op: UInt): Bool = isVectorMisc && getDestType === DM
+    def isVfCompare(implicit op: UInt): Bool = isFeq || isFne || isFlt || isFle || isFgt || isFge
     def isDstMask(implicit op: UInt): Bool = isVfCompare
 
     override def getLat(opcode: Opcode): Int = {
       require(this.all.contains(opcode))
-      0
+      1
     }
   }
 
