@@ -68,8 +68,8 @@ class GatherRingUnit[T <: Data](
     hasTableNext := true.B
   }.elsewhen(in.clearTable && passedEntry) {
     hasTableNext := false.B
-  }.elsewhen(doFlowTable) {
-    hasTableNext := true.B
+  }.elsewhen(doFlow) {
+    hasTableNext := in.flow.valid
   }
 
   // ── hasIndex State Machine ───────────────────────────
@@ -131,7 +131,8 @@ class GatherRingUnit[T <: Data](
 
   private val tableIdxNext = Mux1H(Seq(
     doPlaceTable ->  in.placeTable.tableIdx,
-    doFlowTable -> in.flow.tableIdx
+    doFlowTable -> in.flow.tableIdx,
+    (!doPlaceTable && !doFlowTable) -> tableIdx,
   ))
   when (doPlaceTable || doFlowTable) {
     tableIdx := tableIdxNext
@@ -263,6 +264,8 @@ class GatherRingUnit[T <: Data](
   out.debug.foreach {
     debug => debug.indexOrRes := indexOrRes.asUInt
   }
+
+  dontTouch(in)
 }
 
 object GatherRingUnit {

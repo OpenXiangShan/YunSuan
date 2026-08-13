@@ -17,11 +17,14 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   val in = IO(Input(new GatherRingBlockController.In(size)))
   val out = IO(Output(new GatherRingBlockController.Out(size)))
 
+  val unitTableValid = in.unitTableValid
+  val unitIndexValid = in.unitIndexValid
+  
   // Merged occupancy for placement: registered (unit) + in-flight (s1).
   // clearTable only trusts the registered (unit) indices, never the in-flight
   // s1 ones (see the per-j unitIndexValid gate below).
-  val tableValid = in.unitTableValid | in.s1TableValid
-  val indexValid = in.unitIndexValid | in.s1IndexValid
+  val tableValid = unitTableValid | in.s1TableValid
+  val indexValid = unitIndexValid | in.s1IndexValid
 
   val inPipePlaceIdx: Vec[ValidIO[UInt]] = VecInit(in.pipePlaceIdx.map(_.map(x => x.take(log2Ceil(size) min x.getWidth))))
 
@@ -33,18 +36,22 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   // size = 8, tableSeq should be Seq(0, 7, 6, ..., 1)
   val tableMap = VecInit((0 +: Seq.tabulate(size - 1)(x => size - 1 - x)).map(_.U))
 
-  val entryTable: UInt = tableMap(PriorityEncoder(tableFree))
-  val entryIndex: UInt = PriorityEncoder(indexFree)
+  val entryTable: UInt = WireInit(tableMap(PriorityEncoder(tableFree)))
+  val entryIndex: UInt = WireInit(PriorityEncoder(indexFree))
 
   // will flow
   // The least significant free position of tableValid less than the most significant valid position of indexValid
   val tableLeastFreeOH = PriorityEncoderOH(~tableValid)
   val indexMostValidOH = Reverse(PriorityEncoderOH(Reverse(indexValid)))
-  val allFull = tableValid.andR
   // Either one suffices: a uop entering GatherRing always carries both table and index groups
   // allFull: when all table slots are occupied, existing tables must still circulate
-  val willFlow = (tableValid.orR || indexValid.orR) &&
-    (allFull || !(tableLeastFreeOH.rotateRight(1) & indexMostValidOH).orR)
+  val s1WillFlow = (tableValid.orR || indexValid.orR) &&
+    (tableValid.head(1).asBool || !(tableLeastFreeOH.rotateRight(1) & indexMostValidOH).orR)
+
+  val unitTableLeastFreeOH = PriorityEncoderOH(~unitTableValid)
+  val unitIndexMaskValidOH = Reverse(PriorityEncoderOH(Reverse(unitIndexValid)))
+  val unitWillFlow = (unitTableValid.orR || unitIndexValid.orR) &&
+    (in.counter.last > 0.U || !(unitTableLeastFreeOH.rotateRight(1) & unitIndexMaskValidOH).orR)
 
   // clearTable(i): the table in unit i is useless if every unit j>i finishes
   // (counter(j) < j-i) before unit i's table can reach it (distance j-i in the
@@ -58,7 +65,7 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   val clearTable = Wire(Vec(size, Bool()))
   for (i <- 0 until size) {
     clearTable(i) := (i + 1 until size).map { j =>
-      in.counter(j) < (j - i).U && in.unitIndexValid(j)
+      in.counter(j) < (j - i).U && unitIndexValid(j)
     }.fold(true.B)(_ && _)
   }
 
@@ -68,18 +75,22 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
     out.indexPos(i).valid := inPipePlaceIdx(i).valid
 
     out.tablePos(i).bits := blockBase.U |
-      (entryTable + willFlow - inPipePlaceIdx(i).bits)
+      (entryTable + s1WillFlow - inPipePlaceIdx(i).bits)
     out.indexPos(i).bits := blockBase.U |
       (entryIndex + inPipePlaceIdx(i).bits)
   }
 
   // willFlow: block-level signal, computed once outside per-pipe loop
-  out.willFlow := Cat((tableValid | indexValid).map(_ && willFlow).reverse)
+  out.willFlow := Cat((unitTableValid | unitIndexValid).map(_ && unitWillFlow).reverse)
 
   out.clearTable := clearTable.asUInt
 
   // allTableValid: block-level, all tables of this block are valid (gates the vperm wakeup)
   out.allTableValid := Fill(size, tableValid.andR)
+
+  dontTouch(entryIndex)
+  dontTouch(entryTable)
+  dontTouch(out.clearTable)
 }
 
 object GatherRingBlockController {

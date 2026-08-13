@@ -726,6 +726,79 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           }
         }
       }
+
+      // Emu-derived (logs/vrgather_vv-20260813-200244.log): vrgather.vv v20, v28, v16,
+      // e8/m4/tu/mu, vl=64 (full m4). The emu core DEADLOCKED (no commit for 15000
+      // cycles). Dispatch: uop0-2 at cy0 on pipes 1-3 (placeIdx 0,1,2), uop3 at
+      // cy3 on pipe0 (placeIdx 0) - a 3-cycle gap before the last uop.
+      it("M9: emu vrgather m4 vl=64 deadlock, cy0 pipes1-3 cy3 pipe0") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+          // vs1 (index) per-uop slices: v16..v19
+          val vs1 = Seq(
+            Seq(0x00,0x01,0x03,0xf8,0xf8,0x7f,0x7f,0x7f,0xff,0xff,0x00,0x01,0x03,0xf8,0xf8,0x7f),
+            Seq(0x7f,0x7f,0xff,0xff,0x00,0x01,0x03,0xf8,0xf8,0x7f,0x7f,0x7f,0xff,0xff,0x00,0x01),
+            Seq(0x03,0xf8,0xf8,0x7f,0x7f,0x7f,0xff,0xff,0x00,0x01,0x03,0xf8,0xf8,0x7f,0x7f,0x7f),
+            Seq(0xff,0xff,0x00,0x01,0x03,0xf8,0xf8,0x7f,0x7f,0x7f,0xff,0xff,0x00,0x01,0x03,0xf8)
+          )
+          // vs2 (table) per-uop slices: v28..v31
+          val table = Seq(
+            Seq(0x00,0x02,0x0f,0x00,0x08,0x00,0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00),
+            Seq(0x07,0x00,0x01,0xff,0x00,0x02,0x0f,0x00,0x08,0x00,0x07,0x01,0x00,0xff,0x00,0x02),
+            Seq(0x0f,0x00,0x08,0x00,0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00,0x07,0x01),
+            Seq(0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00,0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00)
+          )
+          // vs3 (REF vd): v20..v23
+          val vs3 = Seq(
+            Seq(0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00),
+            Seq(0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02),
+            Seq(0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00),
+            Seq(0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00)
+          )
+          val fullTable = table.flatten
+          val golden = (0 until 4).map(u =>
+            gatherGolden(foldBytes(vs1(u)), 8, 8, 32, u, fullTable, 0 until 4, vs3(u), 64,
+              vta = false, vma = false))
+          // cy0: uop0-2 into pipes 1-3 (same robIdx, placeIdx 0,1,2)
+          for (p <- 1 to 3) {
+            val u = p - 1
+            pGather(dut, p, 8, 8, foldBytes(vs1(u)), table(u), vs3(u),
+              lmulFrac = 32, uopIdx = u, placeIdx = p - 1, vl = 64,
+              vta = false, vma = false)
+          }
+          dut.clock.step()
+          for (p <- 1 to 3) pPipeOff(dut, p)
+          // cy1, cy2 idle
+          dut.clock.step(); dut.clock.step()
+          // cy3: uop3 into pipe0
+          pGather(dut, 0, 8, 8, foldBytes(vs1(3)), table(3), vs3(3),
+            lmulFrac = 32, uopIdx = 3, placeIdx = 0, vl = 64,
+            vta = false, vma = false)
+          dut.clock.step()
+          pPipeOff(dut, 0)
+          // collect writeback + drain (like M8); wide window to distinguish a
+          // true deadlock (never completes) from a very slow flow
+          val wbData = Array.fill(NumPipes)(Option.empty[BigInt])
+          var drained = false
+          for (cy <- 0 until 80; if !drained) {
+            for (p <- 0 until NumPipes) {
+              if (dut.out.pipes(p).valid.peekBoolean() && wbData(p).isEmpty) {
+                wbData(p) = Some(dut.out.pipes(p).bits.data.peekValue().asBigInt)
+              }
+            }
+            drained = (0 until NumUnits).forall(u => !dut.out.unitStatus(u).hasIndex.peekBoolean())
+            dut.clock.step()
+          }
+          for (p <- 0 until NumPipes) {
+            wbData(p).getOrElse(fail(s"pipe $p never wrote back")) mustBe golden(p)
+          }
+          for (u <- 0 until NumUnits) {
+            dut.out.unitStatus(u).hasIndex.expect(false.B, s"unit $u hasIndex drained")
+            dut.out.unitStatus(u).hasTable.expect(false.B, s"unit $u hasTable drained")
+          }
+        }
+      }
     }
   }
 

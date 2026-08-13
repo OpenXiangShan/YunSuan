@@ -19,7 +19,9 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
     tableValid:   Int,
     indexValid:   Int,
     pipePlaceIdx: Seq[(Boolean, Int)],
-    counter:      Seq[Int] = Seq.fill(8)(0)
+    counter:      Seq[Int] = Seq.fill(8)(0),
+    s1TableValid: Int = 0,
+    s1IndexValid: Int = 0
   )(
     check: (Seq[(Boolean, Int)], Seq[(Boolean, Int)], Int, Int) => Unit
   ): Unit = {
@@ -30,8 +32,8 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
       dut.in.unitIndexValid.poke(BigInt(indexValid).U(size.W))
       // no s1 in-flight by default: placement sees unit valid only, clearTable
       // uses unit valid (registered) only.
-      dut.in.s1TableValid.poke(0.U)
-      dut.in.s1IndexValid.poke(0.U)
+      dut.in.s1TableValid.poke(BigInt(s1TableValid).U(size.W))
+      dut.in.s1IndexValid.poke(BigInt(s1IndexValid).U(size.W))
       for (i <- pipePlaceIdx.indices) {
         dut.in.pipePlaceIdx(i).valid.poke(pipePlaceIdx(i)._1)
         dut.in.pipePlaceIdx(i).bits.poke(pipePlaceIdx(i)._2)
@@ -185,6 +187,18 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
       // T={1}, I={0}: mask = T|I = {0,1}.
       simulateBlock(4, 0, 0x2, 0x1, boolSeq(4)) { (_, _, wf, _) =>
         assert(wf == 0x3, s"mask=${Integer.toBinaryString(wf)}")
+      }
+    }
+
+    it("s1 index not yet placed -> no flow") {
+      // Units 0-2 hold both a table and an index (0x7). Unit 3's table+index are
+      // in s1 (0x8), NOT yet registered. The first table is at unit 2 (0x4); if
+      // the block flows now, that table would circulate past unit 3 before its
+      // index is filled (unconsumed), breaking the flow. So willFlow must be 0.
+      // (unit-only view: free table at 3 sits just above the highest registered
+      // index at 2 -> no circulation needed yet.)
+      simulateBlock(4, 0, 0x7, 0x7, boolSeq(4), s1TableValid = 0x8, s1IndexValid = 0x8) { (_, _, wf, _) =>
+        assert(wf == 0, s"willFlow must be 0 (got ${Integer.toBinaryString(wf)})")
       }
     }
   }
