@@ -381,6 +381,22 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
     eWb(dut, pipe, dest)
   }
 
+  /** Step maxSteps cycles, latching each pipe's first writeback; used when
+    * wbReady=1 fires the writeback for a single cycle (timing varies).
+    */
+  def collectWb(dut: PermUnit[FakePermMeta], maxSteps: Int): Array[Option[BigInt]] = {
+    val wbData = Array.fill(NumPipes)(Option.empty[BigInt])
+    for (_ <- 0 until maxSteps) {
+      for (p <- 0 until NumPipes) {
+        if (dut.out.pipes(p).valid.peekBoolean() && wbData(p).isEmpty) {
+          wbData(p) = Some(dut.out.pipes(p).bits.data.peekValue().asBigInt)
+        }
+      }
+      dut.clock.step()
+    }
+    wbData
+  }
+
   // ---- Tests ---------------------------------------------------------------
 
   describe("Scaling") {
@@ -1225,6 +1241,122 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         pGather(dut, 0, 8, 8, vs1, table, vs3)
         dut.clock.step(); pPipeOff(dut, 0)
         eWbAfter(dut, 0, golden, 2)
+      }
+    }
+  }
+
+  // ── Writeback: wbReady / arbitration / status ────────
+  describe("Writeback") {
+    it("W1: wbReady=0 holds wb.valid until ready") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val golden = gatherGolden(0, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
+        pGather(dut, 0, 8, 8, 0, table, Prefill.default(1))
+        dut.clock.step(); pPipeOff(dut, 0)
+        var cy = 0
+        while (cy < 10 && !dut.out.pipes(0).valid.peekBoolean()) { dut.clock.step(); cy += 1 }
+        dut.out.pipes(0).valid.expect(true.B, "wb.valid asserts when done")
+        dut.out.pipes(0).bits.data.expect(golden)
+        dut.clock.step(); dut.out.pipes(0).valid.expect(true.B, "wb.valid holds while wbReady=0")
+        dut.clock.step(); dut.out.pipes(0).valid.expect(true.B, "wb.valid holds while wbReady=0 (2)")
+        dut.in.wbReady(0).poke(true)
+        dut.clock.step()
+        dut.out.pipes(0).valid.expect(false.B, "wb.valid drops after wbReady=1")
+      }
+    }
+
+    it("W2: early wbReady -> wb fires as soon as done") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+        val table = Table.inc(1)
+        val golden = gatherGolden(0, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
+        pGather(dut, 0, 8, 8, 0, table, Prefill.default(1))
+        dut.clock.step(); pPipeOff(dut, 0)
+        val wb = collectWb(dut, 8)
+        wb(0).getOrElse(fail("pipe 0 never wrote back")) mustBe golden
+      }
+    }
+
+    it("W3: two results same cycle, different pipes") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+        val table = Table.inc(1)
+        val golden = gatherGolden(0, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
+        pGather(dut, 0, 8, 8, 0, table, Prefill.default(1), blockBase = 0)
+        pGather(dut, 2, 8, 8, 0, table, Prefill.default(1), blockBase = 2)
+        dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 2)
+        val wb = collectWb(dut, 8)
+        wb(0).getOrElse(fail("pipe 0 never wrote back")) mustBe golden
+        wb(2).getOrElse(fail("pipe 2 never wrote back")) mustBe golden
+      }
+    }
+
+    it("W4: same-pipe arbitration U0+U4 -> lower index wins") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val golden = gatherGolden(0, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
+        // U0 and U4 both map to pipe0 (interleaved). Dispatch sequentially; keep
+        // wbReady=0 so both hold done -> pipe0 must show U0 (lower index first).
+        pGather(dut, 0, 8, 8, 0, table, Prefill.default(1), blockBase = 0)
+        dut.clock.step(); pPipeOff(dut, 0)
+        pGather(dut, 0, 8, 8, 0, table, Prefill.default(1), blockBase = 4)
+        dut.clock.step(); pPipeOff(dut, 0)
+        var cy = 0
+        while (cy < 12 && !(dut.out.unitStatus(0).done.peekBoolean() &&
+                            dut.out.unitStatus(4).done.peekBoolean())) { dut.clock.step(); cy += 1 }
+        dut.out.unitStatus(0).done.expect(true.B)
+        dut.out.unitStatus(4).done.expect(true.B)
+        // both hold (wbReady=0); arbitration picks U0 on pipe0
+        dut.out.pipes(0).valid.expect(true.B, "pipe0 valid with U0/U4 holding")
+        dut.out.pipes(0).bits.data.expect(golden, "pipe0 shows U0 (lower index)")
+        // consume U0 -> pipe0 now shows U4
+        dut.in.wbReady(0).poke(true)
+        dut.clock.step()
+        dut.out.pipes(0).bits.data.expect(golden, "pipe0 shows U4 after U0 consumed")
+      }
+    }
+
+    it("W5: interleaved mapping LMUL=2 -> pipes 0/1") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+        val table = Table.inc(2)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        val g0 = gatherGolden(vs1, 8, 8, 16, 0, table, 0 until 2, Prefill.default(2), 32)
+        val g1 = gatherGolden(vs1, 8, 8, 16, 1, table, 0 until 2, Prefill.default(2), 32)
+        pGather(dut, 0, 8, 8, vs1, table.slice(0, 16), Prefill.default(2).slice(0, 16),
+          lmulFrac = 16, uopIdx = 0, placeIdx = 0, vl = 32)
+        pGather(dut, 1, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32),
+          lmulFrac = 16, uopIdx = 1, placeIdx = 1, vl = 32)
+        dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+        val wb = collectWb(dut, 8)
+        wb(0).getOrElse(fail("pipe 0 never wrote back")) mustBe g0
+        wb(1).getOrElse(fail("pipe 1 never wrote back")) mustBe g1
+      }
+    }
+
+    it("W6: unitStatus cleared after drain") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+        val table = Table.inc(1)
+        val golden = gatherGolden(0, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
+        pGather(dut, 0, 8, 8, 0, table, Prefill.default(1))
+        dut.clock.step(); pPipeOff(dut, 0)
+        val wb = collectWb(dut, 8)
+        wb(0).getOrElse(fail("pipe 0 never wrote back")) mustBe golden
+        // after drain: index/counter/done cleared; m1 (blockSize=1) has no ring
+        // flow/clearTable (not covered by any block controller), so the table
+        // stays registered until flush or a new placement.
+        val s = dut.out.unitStatus(0)
+        s.hasIndex.expect(false.B, "hasIndex cleared after drain")
+        s.counter.expect(0.U, "counter back to 0")
+        s.done.expect(false.B, "done false after drain")
+        s.hasTable.expect(true.B, "m1 table stays until flush/reuse")
       }
     }
   }
