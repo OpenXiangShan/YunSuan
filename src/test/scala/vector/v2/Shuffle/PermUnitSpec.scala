@@ -789,6 +789,27 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           eWbAfter(dut, 0, golden, 2)
         }
       }
+
+      // Q12: masked-off elements must preserve vs3 (vma=0) even when their index
+      // is out of range (fz). The RTL's isPrefill = !fz && (...) wrongly lets fz
+      // override the mask (writes 0 instead of vs3). Contrast G6 which uses
+      // in-range (iv) indices for the masked-off elements.
+      it("G7: masked-off out-of-range preserves vs3") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(1)
+          // even elements: masked-off (mask bit 0) with out-of-range index 0xff;
+          // odd elements: active (mask bit 1) with in-range index 0 -> vs2[0].
+          val vs1 = foldBytes(Seq.tabulate(16)(i => if (i % 2 == 0) 0xff else 0x00))
+          val vs3 = Seq.fill(16)(0xaa)
+          val mask = 0xaaaa
+          val golden = gatherGolden(vs1, 8, 8, 8, 0, table, 0 until 1, vs3, 16,
+            vta = false, vma = false, mask = mask)
+          pGather(dut, 0, 8, 8, vs1, table, vs3, mask = mask)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
     }
 
     // ---- vslideup ----
