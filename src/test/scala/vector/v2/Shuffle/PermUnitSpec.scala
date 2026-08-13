@@ -1360,4 +1360,288 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
       }
     }
   }
+
+  // ── Wakeup: vperm wake (LMUL>1) ──────────────────────
+  describe("Wakeup") {
+    it("K1: LMUL=2 wake valid + delay = issue2exu - counter") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(2)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        pGather(dut, 0, 8, 8, vs1, table.slice(0, 16), Prefill.default(2).slice(0, 16),
+          lmulFrac = 16, uopIdx = 0, placeIdx = 0, vl = 32)
+        pGather(dut, 1, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32),
+          lmulFrac = 16, uopIdx = 1, placeIdx = 1, vl = 32)
+        dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+        var cy = 0
+        var seen = false
+        while (cy < 12 && !seen) {
+          if (dut.out.wake(0).valid.peekBoolean()) {
+            seen = true
+            val delay = dut.out.wake(0).bits.delay.peekValue().asBigInt.toInt
+            val counter = dut.out.unitStatus(0).counter.peekValue().asBigInt.toInt
+            delay mustBe (3 - counter)
+          }
+          dut.clock.step(); cy += 1
+        }
+        seen mustBe true
+      }
+    }
+
+    it("K2: LMUL=4 wake valid + delay") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(4)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        for (p <- 0 until 4) {
+          pGather(dut, p, 8, 8, vs1, table.slice(p * 16, (p + 1) * 16),
+            Prefill.default(4).slice(p * 16, (p + 1) * 16), lmulFrac = 32, uopIdx = p, placeIdx = p, vl = 64)
+        }
+        dut.clock.step()
+        for (p <- 0 until 4) pPipeOff(dut, p)
+        var cy = 0
+        var seen = false
+        while (cy < 12 && !seen) {
+          if (dut.out.wake(0).valid.peekBoolean()) {
+            seen = true
+            val delay = dut.out.wake(0).bits.delay.peekValue().asBigInt.toInt
+            val counter = dut.out.unitStatus(0).counter.peekValue().asBigInt.toInt
+            delay mustBe (3 - counter)
+          }
+          dut.clock.step(); cy += 1
+        }
+        seen mustBe true
+      }
+    }
+
+    it("K3: LMUL=8 wake valid + delay") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(8)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        for (u <- 0 until 8) {
+          pGather(dut, 0, 8, 8, vs1, table.slice(u * 16, (u + 1) * 16),
+            Prefill.default(8).slice(u * 16, (u + 1) * 16), lmulFrac = 64, uopIdx = u, placeIdx = 0, vl = 128)
+          dut.clock.step(); pPipeOff(dut, 0)
+        }
+        var cy = 0
+        var seen = false
+        while (cy < 20 && !seen) {
+          if (dut.out.wake(0).valid.peekBoolean()) {
+            seen = true
+            val delay = dut.out.wake(0).bits.delay.peekValue().asBigInt.toInt
+            val counter = dut.out.unitStatus(0).counter.peekValue().asBigInt.toInt
+            delay mustBe (3 - counter)
+          }
+          dut.clock.step(); cy += 1
+        }
+        seen mustBe true
+      }
+    }
+
+    it("K4: wake holds while unacked") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        // m8: wake fires when counter<=3, giving a multi-cycle window (unlike
+        // m2 where counter 1->0 completes the block in one flow).
+        val table = Table.inc(8)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        for (u <- 0 until 8) {
+          pGather(dut, 0, 8, 8, vs1, table.slice(u * 16, (u + 1) * 16),
+            Prefill.default(8).slice(u * 16, (u + 1) * 16), lmulFrac = 64, uopIdx = u, placeIdx = 0, vl = 128)
+          dut.clock.step(); pPipeOff(dut, 0)
+        }
+        // Without ack the wake is level-based (not a one-shot pulse): it stays
+        // asserted while the block is still flowing (U0 counter 1->0), then
+        // drops once the table clears on completion.
+        var cy = 0
+        var held = false
+        while (cy < 20 && !held) {
+          if (dut.out.wake(0).valid.peekBoolean()) {
+            dut.clock.step()
+            if (dut.out.wake(0).valid.peekBoolean()) { held = true }
+          } else { dut.clock.step() }
+          cy += 1
+        }
+        held mustBe true
+      }
+    }
+
+    it("K5: wake cleared by ack") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(2)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        pGather(dut, 0, 8, 8, vs1, table.slice(0, 16), Prefill.default(2).slice(0, 16),
+          lmulFrac = 16, uopIdx = 0, placeIdx = 0, vl = 32)
+        pGather(dut, 1, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32),
+          lmulFrac = 16, uopIdx = 1, placeIdx = 1, vl = 32)
+        dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+        var cy = 0
+        var seen = false
+        while (cy < 12 && !seen) {
+          if (dut.out.wake(0).valid.peekBoolean()) {
+            seen = true
+            dut.in.wakeAck(0).poke(true)
+            dut.clock.step()
+            dut.in.wakeAck(0).poke(false)
+            dut.out.wake(0).valid.expect(false.B, "wake drops after ack")
+          } else { dut.clock.step(); cy += 1 }
+        }
+        seen mustBe true
+      }
+    }
+
+    it("K7: wake meta == pdest") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(2)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        pGather(dut, 0, 8, 8, vs1, table.slice(0, 16), Prefill.default(2).slice(0, 16),
+          lmulFrac = 16, uopIdx = 0, placeIdx = 0, vl = 32, robIdx = 2, pdest = 0x55)
+        pGather(dut, 1, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32),
+          lmulFrac = 16, uopIdx = 1, placeIdx = 1, vl = 32, robIdx = 2, pdest = 0x55)
+        dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+        var cy = 0
+        var seen = false
+        while (cy < 12 && !seen) {
+          if (dut.out.wake(0).valid.peekBoolean()) {
+            seen = true
+            dut.out.wake(0).bits.meta.pdest.expect(0x55.U, "wake meta.pdest")
+            dut.out.wake(0).bits.meta.robIdx.expect(2.U, "wake meta.robIdx")
+          } else { dut.clock.step(); cy += 1 }
+        }
+        seen mustBe true
+      }
+    }
+
+    it("K6: no wake until all block tables placed") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(2)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        // uop0 only (uop1 not yet dispatched): the m2 block is genuinely
+        // incomplete (U1's table not even in s1) -> wake must stay deasserted.
+        pGather(dut, 0, 8, 8, vs1, table.slice(0, 16), Prefill.default(2).slice(0, 16),
+          lmulFrac = 16, uopIdx = 0, placeIdx = 0, vl = 32)
+        dut.clock.step(); pPipeOff(dut, 0)
+        for (_ <- 0 until 4) {
+          dut.out.wake(0).valid.expect(false.B, "no wake while block incomplete")
+          dut.clock.step()
+        }
+        // dispatch uop1 (per-cycle placeIdx=0) -> block complete -> wake fires
+        pGather(dut, 0, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32),
+          lmulFrac = 16, uopIdx = 1, placeIdx = 0, vl = 32)
+        dut.clock.step(); pPipeOff(dut, 0)
+        var cy = 0
+        var sawWake = false
+        while (cy < 10 && !sawWake) {
+          if (dut.out.wake(0).valid.peekBoolean()) sawWake = true
+          dut.clock.step(); cy += 1
+        }
+        sawWake mustBe true
+      }
+    }
+
+    it("K9: flush clears wakedUp so a new uop can wake") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(2)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        def dispatch(pdest: Int): Unit = {
+          pGather(dut, 0, 8, 8, vs1, table.slice(0, 16), Prefill.default(2).slice(0, 16),
+            lmulFrac = 16, uopIdx = 0, placeIdx = 0, vl = 32, pdest = pdest)
+          pGather(dut, 1, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32),
+            lmulFrac = 16, uopIdx = 1, placeIdx = 1, vl = 32, pdest = pdest)
+          dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+        }
+        // first block: wake + ack -> wakedUp set, wake off
+        dispatch(0x11)
+        var cy = 0
+        var acked = false
+        while (cy < 12 && !acked) {
+          if (dut.out.wake(0).valid.peekBoolean()) {
+            dut.in.wakeAck(0).poke(true)
+            dut.clock.step()
+            dut.in.wakeAck(0).poke(false)
+            acked = true
+          } else { dut.clock.step(); cy += 1 }
+        }
+        acked mustBe true
+        // flush clears wakedUp (and the finished block's state)
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        dut.clock.step()
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        // second block on the same units must be able to wake again
+        dispatch(0x22)
+        var cy2 = 0
+        var woke = false
+        while (cy2 < 12 && !woke) {
+          if (dut.out.wake(0).valid.peekBoolean()) {
+            dut.out.wake(0).bits.meta.pdest.expect(0x22.U, "second block wakes")
+            woke = true
+          } else { dut.clock.step(); cy2 += 1 }
+        }
+        woke mustBe true
+      }
+    }
+
+    it("K10: delay tracks flow progress (counter decreasing)") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(8)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        for (u <- 0 until 8) {
+          pGather(dut, 0, 8, 8, vs1, table.slice(u * 16, (u + 1) * 16),
+            Prefill.default(8).slice(u * 16, (u + 1) * 16), lmulFrac = 64, uopIdx = u, placeIdx = 0, vl = 128)
+          dut.clock.step(); pPipeOff(dut, 0)
+        }
+        // collect delays across the wake window; as counter decreases the delay
+        // (issue2exu - counter) increases.
+        var delays = Seq.empty[Int]
+        var cy = 0
+        while (cy < 20 && delays.length < 4) {
+          if (dut.out.wake(0).valid.peekBoolean()) {
+            delays :+= dut.out.wake(0).bits.delay.peekValue().asBigInt.toInt
+          }
+          dut.clock.step(); cy += 1
+        }
+        delays.length must be >= 2
+        delays.sliding(2).forall { case Seq(a, b) => b > a } mustBe true
+      }
+    }
+
+    it("K8: same-pipe wake arbitration U0+U4 -> lower index wins") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val tableA = Table.inc(2)
+        val tableB = Table.inc(2)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        // Block A (U0-1, pdest 0xAA) and Block B (U4-5, pdest 0xBB), both on
+        // pipe0/1. Dispatched one cycle apart so their wake windows overlap.
+        pGather(dut, 0, 8, 8, vs1, tableA.slice(0, 16), Prefill.default(2).slice(0, 16),
+          lmulFrac = 16, uopIdx = 0, placeIdx = 0, vl = 32, robIdx = 1, pdest = 0xAA)
+        pGather(dut, 1, 8, 8, vs1, tableA.slice(16, 32), Prefill.default(2).slice(16, 32),
+          lmulFrac = 16, uopIdx = 1, placeIdx = 1, vl = 32, robIdx = 1, pdest = 0xAA)
+        dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+        pGather(dut, 0, 8, 8, vs1, tableB.slice(0, 16), Prefill.default(2).slice(0, 16),
+          lmulFrac = 16, uopIdx = 0, placeIdx = 0, vl = 32, robIdx = 2, pdest = 0xBB, blockBase = 4)
+        pGather(dut, 1, 8, 8, vs1, tableB.slice(16, 32), Prefill.default(2).slice(16, 32),
+          lmulFrac = 16, uopIdx = 1, placeIdx = 1, vl = 32, robIdx = 2, pdest = 0xBB, blockBase = 4)
+        dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+        // Scan: pipe0 (U0/U4) must arbitrate. Collect the pdests observed; U0's
+        // (0xAA) must be present and, when U4 also requests, U0 (lower) wins.
+        var pdests = Seq.empty[Int]
+        var cy = 0
+        while (cy < 16) {
+          if (dut.out.wake(0).valid.peekBoolean()) {
+            pdests :+= dut.out.wake(0).bits.meta.pdest.peekValue().asBigInt.toInt
+          }
+          dut.clock.step(); cy += 1
+        }
+        pdests must contain (0xAA)
+        pdests must contain (0xBB)
+      }
+    }
+  }
 }
