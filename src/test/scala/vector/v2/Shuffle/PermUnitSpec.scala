@@ -1644,4 +1644,130 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
       }
     }
   }
+
+  // ── Flush ────────────────────────────────────────────
+  describe("Flush") {
+    it("H1: flush before dispatch does not break a following gather") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        dut.clock.step()
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        val table = Table.inc(1)
+        val golden = gatherGolden(0, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
+        pGather(dut, 0, 8, 8, 0, table, Prefill.default(1))
+        dut.clock.step(); pPipeOff(dut, 0)
+        eWbAfter(dut, 0, golden, 2)
+      }
+    }
+
+    it("H2: unit flush does not cancel an in-flight (s1) uop") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val golden = gatherGolden(0, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
+        pGather(dut, 0, 8, 8, 0, table, Prefill.default(1))
+        // Flush right after dispatch (uop still in s0/s1). The unit-level flush
+        // clears the ring units, but the in-flight uop is not cancelled
+        // (IndexGen is not flushed) and still places/completes. Pins this
+        // behavior; if a pipeline-level flush is later added, this changes.
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        dut.clock.step()
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        pPipeOff(dut, 0)
+        val wb = collectWb(dut, 8)
+        wb(0).getOrElse(fail("pipe 0 never wrote back")) mustBe golden
+      }
+    }
+
+    it("H3: flush during m2 flow resets units (no wb)") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(2)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        pGather(dut, 0, 8, 8, vs1, table.slice(0, 16), Prefill.default(2).slice(0, 16),
+          lmulFrac = 16, uopIdx = 0, placeIdx = 0, vl = 32)
+        pGather(dut, 1, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32),
+          lmulFrac = 16, uopIdx = 1, placeIdx = 1, vl = 32)
+        dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+        dut.clock.step() // let tables place
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        dut.clock.step()
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        var cy = 0
+        var wbSeen = false
+        while (cy < 8) {
+          if (dut.out.pipes(0).valid.peekBoolean() || dut.out.pipes(1).valid.peekBoolean()) wbSeen = true
+          dut.clock.step(); cy += 1
+        }
+        wbSeen mustBe false
+        for (u <- 0 until 4) {
+          dut.out.unitStatus(u).hasIndex.expect(false.B)
+          dut.out.unitStatus(u).hasTable.expect(false.B)
+        }
+      }
+    }
+
+    it("H4: flush after wb.valid clears without leakage") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val golden = gatherGolden(0, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
+        pGather(dut, 0, 8, 8, 0, table, Prefill.default(1))
+        dut.clock.step(); pPipeOff(dut, 0)
+        var cy = 0
+        while (cy < 10 && !dut.out.pipes(0).valid.peekBoolean()) { dut.clock.step(); cy += 1 }
+        dut.out.pipes(0).valid.expect(true.B, "wb.valid holds (wbReady=0)")
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        dut.clock.step()
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        dut.out.pipes(0).valid.expect(false.B, "wb cleared by flush")
+        for (i <- 0 until NumUnits) {
+          dut.out.unitStatus(i).hasIndex.expect(false.B)
+          dut.out.unitStatus(i).hasTable.expect(false.B)
+        }
+      }
+    }
+
+    it("H5: back-to-back reuse after flush") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val golden = gatherGolden(0, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
+        pGather(dut, 0, 8, 8, 0, table, Prefill.default(1))
+        dut.clock.step(); pPipeOff(dut, 0)
+        eWbAfter(dut, 0, golden, 2)
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        dut.clock.step()
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        pGather(dut, 0, 8, 8, 0, table, Prefill.default(1))
+        dut.clock.step(); pPipeOff(dut, 0)
+        val wb = collectWb(dut, 8)
+        wb(0).getOrElse(fail("pipe 0 never wrote back")) mustBe golden
+      }
+    }
+
+    it("H6: flush clears unit status (hasTable/hasIndex/counter)") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(2)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        pGather(dut, 0, 8, 8, vs1, table.slice(0, 16), Prefill.default(2).slice(0, 16),
+          lmulFrac = 16, uopIdx = 0, placeIdx = 0, vl = 32)
+        pGather(dut, 1, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32),
+          lmulFrac = 16, uopIdx = 1, placeIdx = 1, vl = 32)
+        dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        dut.clock.step()
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        for (u <- 0 until NumUnits) {
+          val s = dut.out.unitStatus(u)
+          s.hasTable.expect(false.B, s"unit $u hasTable cleared")
+          s.hasIndex.expect(false.B, s"unit $u hasIndex cleared")
+          s.counter.expect(0.U, s"unit $u counter cleared")
+          s.done.expect(false.B, s"unit $u done false")
+        }
+      }
+    }
+  }
 }
