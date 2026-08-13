@@ -231,4 +231,40 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
       }
     }
   }
-}
+  // ══════════════════════════════════════════════════════
+  //  Tests: unitAllTableValid (vperm wakeup gate)
+  // ══════════════════════════════════════════════════════
+  describe("unitAllTableValid") {
+    it("m4 unit not driven by ring2 s1 of another block size") {
+      val param = GatherCommon.GatherParam.default
+      val NumUnits = 8
+      simulate(new GatherRingController()(param)) { dut =>
+        // U0/U2/U3: m4 block, only U0's table placed (block incomplete).
+        // U1: m2 block with a registered table. An m2 s1 pipe targets U0:
+        // ring2's allTableValid (U0-1) is raised via the in-flight s1 table,
+        // but U0 is m4 and its block is not complete -> U0 must stay 0 (the
+        // ring2 contribution is masked out by U0's blockSize).
+        val blockSize = Seq(4, 2, 4, 4, 0, 0, 0, 0)
+        for (i <- 0 until NumUnits) {
+          dut.in.hasTable(i).poke(i < 2) // U0, U1 registered tables
+          dut.in.hasIndex(i).poke(false)
+          dut.in.blockSize(i).poke(blockSize(i))
+          dut.in.hasIndexNext(i).poke(false)
+          dut.in.counter(i).poke(0)
+        }
+        for (i <- 0 until param.numPipeIn) {
+          val s1 = i == 0
+          dut.in.s1pipes(i).valid.poke(s1)
+          dut.in.s1pipes(i).bits.tablePos.poke(if (s1) 0 else 0)
+          dut.in.s1pipes(i).bits.indexPos.poke(if (s1) 0 else 0)
+          dut.in.s1pipes(i).bits.blockSize.poke(if (s1) 2 else 0)
+        }
+        dut.in.wbValid.poke(0)
+        dut.clock.step()
+        val v = (0 until NumUnits).map(i => dut.out.unitAllTableValid(i).peekBoolean())
+        assert(!v(0), s"U0 (m4, block incomplete) must not be allTableValid (got $v)")
+        assert(!v(2) && !v(3), s"U2/U3 (m4, no table) must not be allTableValid (got $v)")
+        assert(!v(4) && !v(5) && !v(6) && !v(7), s"unused units must not be allTableValid (got $v)")
+      }
+    }
+  }}
