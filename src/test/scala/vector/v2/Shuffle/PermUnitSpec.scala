@@ -1770,4 +1770,62 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
       }
     }
   }
+
+  // ── Meta: robIdx/pdest round-trip ────────────────────
+  describe("Meta") {
+    it("T1: meta round-trips to out.metas") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        pGather(dut, 0, 8, 8, 0, table, Prefill.default(1), robIdx = 3, pdest = 0x5a)
+        dut.clock.step(); pPipeOff(dut, 0)
+        var cy = 0
+        while (cy < 6 && !dut.out.unitStatus(0).hasTable.peekBoolean()) { dut.clock.step(); cy += 1 }
+        dut.out.metas(0).pdest.expect(0x5a.U, "metas(0).pdest")
+        dut.out.metas(0).robIdx.expect(3.U, "metas(0).robIdx")
+      }
+    }
+
+    it("T2: meta round-trips to writeback") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        pGather(dut, 0, 8, 8, 0, table, Prefill.default(1), robIdx = 3, pdest = 0x5a)
+        dut.clock.step(); pPipeOff(dut, 0)
+        var cy = 0
+        var seen = false
+        while (cy < 8 && !seen) {
+          if (dut.out.pipes(0).valid.peekBoolean()) {
+            seen = true
+            dut.out.pipes(0).bits.meta.pdest.expect(0x5a.U, "wb meta.pdest")
+            dut.out.pipes(0).bits.meta.robIdx.expect(3.U, "wb meta.robIdx")
+          } else { dut.clock.step(); cy += 1 }
+        }
+        seen mustBe true
+      }
+    }
+
+    it("T3: meta round-trips to wake (LMUL>1)") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(2)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        pGather(dut, 0, 8, 8, vs1, table.slice(0, 16), Prefill.default(2).slice(0, 16),
+          lmulFrac = 16, uopIdx = 0, placeIdx = 0, vl = 32, robIdx = 3, pdest = 0x5a)
+        pGather(dut, 1, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32),
+          lmulFrac = 16, uopIdx = 1, placeIdx = 1, vl = 32, robIdx = 3, pdest = 0x5a)
+        dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+        var cy = 0
+        var seen = false
+        while (cy < 10 && !seen) {
+          if (dut.out.wake(0).valid.peekBoolean()) {
+            seen = true
+            dut.out.wake(0).bits.meta.pdest.expect(0x5a.U, "wake meta.pdest")
+            dut.out.wake(0).bits.meta.robIdx.expect(3.U, "wake meta.robIdx")
+          } else { dut.clock.step(); cy += 1 }
+        }
+        seen mustBe true
+      }
+    }
+  }
 }
