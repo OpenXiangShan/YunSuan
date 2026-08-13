@@ -17,10 +17,15 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   val in = IO(Input(new GatherRingBlockController.In(size)))
   val out = IO(Output(new GatherRingBlockController.Out(size)))
 
+  // Merged occupancy for placement: registered (unit) + in-flight (s1).
+  // clearTable only trusts the registered (unit) indices (see allIndexPlaced).
+  val tableValid = in.unitTableValid | in.s1TableValid
+  val indexValid = in.unitIndexValid | in.s1IndexValid
+
   val inPipePlaceIdx: Vec[ValidIO[UInt]] = VecInit(in.pipePlaceIdx.map(_.map(x => x.take(log2Ceil(size) min x.getWidth))))
 
-  val tableFree = ~Cat(Reverse(in.tableValid.drop(1)), in.tableValid.take(1))
-  val indexFree = ~in.indexValid
+  val tableFree = ~Cat(Reverse(tableValid.drop(1)), tableValid.take(1))
+  val indexFree = ~indexValid
 
   // size = 2, tableSeq should be Seq(0, 1)
   // size = 4, tableSeq should be Seq(0, 3, 2, 1)
@@ -32,21 +37,21 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
 
   // will flow
   // The least significant free position of tableValid less than the most significant valid position of indexValid
-  val tableLeastFreeOH = PriorityEncoderOH(~in.tableValid)
-  val indexMostValidOH = Reverse(PriorityEncoderOH(Reverse(in.indexValid)))
-  val allFull = in.tableValid.andR
+  val tableLeastFreeOH = PriorityEncoderOH(~tableValid)
+  val indexMostValidOH = Reverse(PriorityEncoderOH(Reverse(indexValid)))
+  val allFull = tableValid.andR
   // Either one suffices: a uop entering GatherRing always carries both table and index groups
   // allFull: when all table slots are occupied, existing tables must still circulate
-  val willFlow = (in.tableValid.orR || in.indexValid.orR) &&
+  val willFlow = (tableValid.orR || indexValid.orR) &&
     (allFull || !(tableLeastFreeOH.rotateRight(1) & indexMostValidOH).orR)
 
   // clearTable(i): the table in unit i is useless if every unit j>i finishes
   // (counter(j) < j-i) before unit i's table can reach it (distance j-i in the ring).
   // Empty set (last unit) => true; the unit's hasTable clear is additionally gated by passedEntry.
-  // All clears require the whole block's indices to be placed (indexValid.andR):
-  // a not-yet-placed uop has counter=0 which would otherwise be misread as
-  // "that unit has finished" and prematurely clear an earlier unit's table.
-  val allIndexPlaced = in.indexValid.andR
+  // All clears require the whole block's indices to be PLACED (registered in
+  // units). An in-flight s1 index has counter still unset, so it must not count
+  // as "placed" (see Q10: s1-merged indexValid would bypass this gate).
+  val allIndexPlaced = in.unitIndexValid.andR
   val clearTable = Wire(Vec(size, Bool()))
   for (i <- 0 until size) {
     clearTable(i) := allIndexPlaced && (i + 1 until size).map { j =>
@@ -66,20 +71,24 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   }
 
   // willFlow: block-level signal, computed once outside per-pipe loop
-  out.willFlow := Cat((in.tableValid & in.indexValid).map(_ && willFlow).reverse)
+  out.willFlow := Cat((tableValid | indexValid).map(_ && willFlow).reverse)
 
   out.clearTable := clearTable.asUInt
 
   // allTableValid: block-level, all tables of this block are valid (gates the vperm wakeup)
-  out.allTableValid := Fill(size, in.tableValid.andR)
+  out.allTableValid := Fill(size, tableValid.andR)
 }
 
 object GatherRingBlockController {
   class In(size: Int)(implicit val param: GatherParam) extends GatherBundle {
     val pipePlaceIdx: Vec[ValidIO[UInt]] = Vec(NumPipeIn, ValidIO(PipeInIdx()))
 
-    val tableValid: UInt = UInt(size.W)
-    val indexValid: UInt = UInt(size.W)
+    // Registered (in-unit) and in-flight (s1) occupancy, kept separate so that
+    // placement can use both but clearTable only trusts registered indices.
+    val unitTableValid: UInt = UInt(size.W)
+    val unitIndexValid: UInt = UInt(size.W)
+    val s1TableValid: UInt = UInt(size.W)
+    val s1IndexValid: UInt = UInt(size.W)
     val indexValidNext: UInt = UInt(size.W)
     val counter: Vec[UInt] = Vec(size, UInt(log2Up(NumUnits + 1).W))
   }

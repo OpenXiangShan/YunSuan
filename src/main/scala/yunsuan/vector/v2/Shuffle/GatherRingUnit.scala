@@ -163,8 +163,10 @@ class GatherRingUnit[T <: Data](
   gatherMod.in.table    := tableDataNext
 
   for (i <- 0 until NumElem) {
-    val shouldQuery = (hasIndex || doPlaceIndex) && (doPlaceIndex || !indexDone(i)) &&
-      (hasTable || doPlaceTable || doFlowTable)
+    val shouldQuery = Mux1H(Seq(
+      doPlaceIndex -> (hasTable || doPlaceTable),
+      hasIndex -> ((hasTable || doPlaceTable || doFlowTable) && !indexDone(i)),
+    ))
     gatherMod.in.indexValid(i) := shouldQuery && Mux(
       doPlaceIndex,
       ElemFlags.isLOOKUP(in.placeIndex.bits.elemFlags(i)),
@@ -178,30 +180,34 @@ class GatherRingUnit[T <: Data](
   }
 
   // ── Index/Result Update ──────────────────────────────
+  private val placeIndexFillIdx = Wire(Vec(NumElem, Bool()))
+  private val placeIndexFillRes = Wire(Vec(NumElem, Bool()))
+  private val placeIndexPrefill   = Wire(Vec(NumElem, Bool()))
+  private val placeIndexFillZeros = Wire(Vec(NumElem, Bool()))
   private val fillRes   = Wire(Vec(NumElem, Bool()))
   private val fillIdx   = Wire(Vec(NumElem, Bool()))
-  private val fillZeros = Wire(Vec(NumElem, Bool()))
-  private val prefill   = Wire(Vec(NumElem, Bool()))
 
   import ElemFlags._
 
   for (i <- 0 until NumElem) {
     val f = in.placeIndex.bits.elemFlags(i)
-    prefill(i)   := isPREFILL(f)
-    fillZeros(i) := isZERO(f) && doPlaceIndex
-    fillRes(i)   := (doPlaceIndex || hasIndex) && gatherMod.out.resultValid(i)
-    fillIdx(i)   := (doPlaceIndex || hasIndex) && gatherMod.out.notfound(i)
+    placeIndexFillIdx(i) := isLOOKUP(f) && !gatherMod.in.indexValid(i) || gatherMod.in.indexValid(i) && gatherMod.out.notfound(i)
+    placeIndexFillRes(i) := isLOOKUP(f) && gatherMod.in.indexValid(i) && gatherMod.out.resultValid(i)
+    placeIndexPrefill(i) := isPREFILL(f)
+    placeIndexFillZeros(i) := isZERO(f) && doPlaceIndex
+    fillRes(i)   := gatherMod.in.indexValid(i) && gatherMod.out.resultValid(i)
+    fillIdx(i)   := gatherMod.in.indexValid(i) && gatherMod.out.notfound(i)
 
     when(flush) {
       indexDone(i)  := false.B
     }.elsewhen(doPlaceIndex) {
       indexOrRes(i) := Mux1H(Seq(
-        prefill(i)   -> in.placeIndex.bits.elemData(i),
-        fillZeros(i) -> 0.U,
-        fillIdx(i)   -> in.placeIndex.bits.elemData(i),
-        fillRes(i)   -> gatherMod.out.result(i),
+        placeIndexFillIdx(i) -> in.placeIndex.bits.elemData(i),
+        placeIndexFillRes(i) -> gatherMod.out.result(i),
+        placeIndexPrefill(i) -> in.placeIndex.bits.elemData(i),
+        placeIndexFillZeros(i) -> 0.U,
       ))
-      indexDone(i) := !fillIdx(i)
+      indexDone(i) := placeIndexFillRes(i) || placeIndexPrefill(i) || placeIndexFillZeros(i)
       meta := in.placeIndex.meta
     }.elsewhen(doFlowTable) {
       when (fillRes(i)) {

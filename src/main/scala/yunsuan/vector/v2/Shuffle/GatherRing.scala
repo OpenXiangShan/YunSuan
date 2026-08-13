@@ -26,6 +26,7 @@ class GatherRing[T <: Data](
 
   /************************* Reg Definations **********************************/
 
+  val pipeBlockSize = Reg(Vec(NumPipeIn, BlockSize()))
   val pipeTablePos = Reg(Vec(NumPipeIn, UnitIdx()))
   val pipeIndexPos = Reg(Vec(NumPipeIn, UnitIdx()))
 
@@ -35,8 +36,14 @@ class GatherRing[T <: Data](
   val s1HasIndex = Mux1H(in.s1pipes.map(_.valid), pipeIndexPos.map(pos => UIntToOH(pos, NumUnits))).ensuring(_.getWidth == NumUnits)
 
   controller.in.s0pipes  := in.s0pipes
-  controller.in.hasTable := (Cat(units.map(_.out.status.hasTable).reverse) | s1HasTable).asBools
-  controller.in.hasIndex := (Cat(units.map(_.out.status.hasIndex).reverse) | s1HasIndex).asBools
+  controller.in.s1pipes.zipWithIndex.foreach { case (s1, i) =>
+    s1.valid := in.s1pipes(i).valid
+    s1.bits.tablePos := pipeTablePos(i)
+    s1.bits.indexPos := pipeIndexPos(i)
+    s1.bits.blockSize := pipeBlockSize(i)
+  }
+  controller.in.hasTable := units.map(_.out.status.hasTable)
+  controller.in.hasIndex := units.map(_.out.status.hasIndex)
   controller.in.hasIndexNext := units.map(_.out.status.hasIndexNext)
   controller.in.blockSize := units.map(_.out.status.blockSize)
   controller.in.counter := units.map(_.out.status.counter)
@@ -132,6 +139,7 @@ class GatherRing[T <: Data](
   for (i <- 0 until NumPipeIn) {
     when (in.s0pipes(i).valid) {
       val isSingle = (in.s0pipes(i).bits.blockSize & 1.U).orR
+      pipeBlockSize(i) := in.s0pipes(i).bits.blockSize
       pipeTablePos(i) := Mux(isSingle,
         in.s0pipes(i).bits.blockBase,
         controller.out.pipeTablePos(i).bits,

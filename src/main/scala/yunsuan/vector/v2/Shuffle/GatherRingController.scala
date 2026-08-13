@@ -15,12 +15,21 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
   private val ring4Controllers = Seq.tabulate(NumUnits / 4)(i => Module(new GatherRingBlockController(4, 4 * i)))
   private val ring8Controllers = Seq.tabulate(NumUnits / 8)(i => Module(new GatherRingBlockController(8, 8 * i)))
 
+  private val s1PipesTableValid = in.s1pipes.map(x => UIntToOH(x.bits.tablePos, NumUnits))
+  private val s1PipesIndexValid = in.s1pipes.map(x => UIntToOH(x.bits.indexPos, NumUnits))
+
   // ── Wire block controllers ───────────────────────────
+
+  private val ring2UnitMask = Cat(in.blockSize.map(x => (x & 2.U).orR).reverse)
+  private val ring2S1TableValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 2.U).orR), s1PipesTableValid)
+  private val ring2S1IndexValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 2.U).orR), s1PipesIndexValid)
+
   for ((bc, i) <- ring2Controllers.zipWithIndex) {
     val base = 2 * i
-    val mask2 = Cat(in.blockSize.map(x => (x & 2.U).orR).reverse)
-    bc.in.tableValid := in.hasTable.asUInt(base + 1, base) & mask2(base + 1, base)
-    bc.in.indexValid := in.hasIndex.asUInt(base + 1, base) & mask2(base + 1, base)
+    bc.in.unitTableValid := (in.hasTable.asUInt & ring2UnitMask)(base + 1, base)
+    bc.in.unitIndexValid := (in.hasIndex.asUInt & ring2UnitMask)(base + 1, base)
+    bc.in.s1TableValid := ring2S1TableValid(base + 1, base)
+    bc.in.s1IndexValid := ring2S1IndexValid(base + 1, base)
     bc.in.indexValidNext := in.hasIndexNext.asUInt(base + 1, base)
     bc.in.counter := VecInit(in.counter.slice(base, base + 2))
     for (j <- 0 until NumPipeIn) {
@@ -32,11 +41,17 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
     }
   }
 
+  private val ring4UnitMask = Cat(in.blockSize.map(x => (x & 4.U).orR).reverse)
+  private val s1Ring4TableValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 4.U).orR), s1PipesTableValid)
+  private val s1Ring4IndexValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 4.U).orR), s1PipesIndexValid)
+
   for ((bc, i) <- ring4Controllers.zipWithIndex) {
     val base = 4 * i
-    val mask4 = Cat(in.blockSize.map(x => (x & 4.U).orR).reverse)
-    bc.in.tableValid := in.hasTable.asUInt(base + 3, base) & mask4(base + 3, base)
-    bc.in.indexValid := in.hasIndex.asUInt(base + 3, base) & mask4(base + 3, base)
+
+    bc.in.unitTableValid := (in.hasTable.asUInt & ring4UnitMask)(base + 3, base)
+    bc.in.unitIndexValid := (in.hasIndex.asUInt & ring4UnitMask)(base + 3, base)
+    bc.in.s1TableValid := s1Ring4TableValid(base + 3, base)
+    bc.in.s1IndexValid := s1Ring4IndexValid(base + 3, base)
     bc.in.indexValidNext := in.hasIndexNext.asUInt(base + 3, base)
     bc.in.counter := VecInit(in.counter.slice(base, base + 4))
     for (j <- 0 until NumPipeIn) {
@@ -48,12 +63,18 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
     }
   }
 
+  private val ring8UnitMask = Cat(in.blockSize.map(x => (x & 8.U).orR).reverse)
+  private val s1Ring8TableValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 8.U).orR), s1PipesTableValid)
+  private val s1Ring8IndexValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 8.U).orR), s1PipesIndexValid)
+
   for ((bc, i) <- ring8Controllers.zipWithIndex) {
-    val mask8 = Cat(in.blockSize.map(x => (x & 8.U).orR).reverse)
-    bc.in.tableValid := in.hasTable.asUInt & mask8
-    bc.in.indexValid := in.hasIndex.asUInt & mask8
-    bc.in.indexValidNext := in.hasIndexNext.asUInt
-    bc.in.counter := in.counter
+    val base = 8 * i
+    bc.in.unitTableValid := (in.hasTable.asUInt & ring8UnitMask)(base + 7, base)
+    bc.in.unitIndexValid := (in.hasIndex.asUInt & ring8UnitMask)(base + 7, base)
+    bc.in.s1TableValid := s1Ring8TableValid(base + 7, base)
+    bc.in.s1IndexValid := s1Ring8IndexValid(base + 7, base)
+    bc.in.indexValidNext := in.hasIndexNext.asUInt(base + 7, base)
+    bc.in.counter := VecInit(in.counter.slice(base, base + 8))
     for (j <- 0 until NumPipeIn) {
       // blockSize(3) gates ring8: only active for LMUL=8
       bc.in.pipePlaceIdx(j).valid :=
@@ -147,6 +168,7 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
 object GatherRingController {
   class In(implicit val param: GatherParam) extends GatherBundle {
     val s0pipes  = Vec(NumPipeIn, ValidIO(new GatherRing.PipeInS0))
+    val s1pipes  = Vec(NumPipeIn, ValidIO(new InPipe1))
     val hasTable = Vec(NumUnits, Bool())
     val hasIndex = Vec(NumUnits, Bool())
     val hasIndexNext = Vec(NumUnits, Bool())
@@ -154,6 +176,12 @@ object GatherRingController {
     val wbValid = UInt(NumUnits.W)
     val wakeValid = UInt(NumUnits.W)
     val counter = Vec(NumUnits, UInt(log2Up(NumUnits + 1).W))
+  }
+
+  class InPipe1(implicit val param: GatherParam) extends GatherBundle {
+    val tablePos = UnitIdx()
+    val indexPos = UnitIdx()
+    val blockSize = BlockSize()
   }
 
   class Out(implicit val param: GatherParam) extends GatherBundle {

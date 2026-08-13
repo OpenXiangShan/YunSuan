@@ -541,9 +541,11 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           val vs1 = foldBytes(Index.allInTable0(1))
           val golden = gatherGolden(vs1, 8, 8, 16, 0, table, 0 until 2, Prefill.default(2), 32)
           // uop0 arrives cycle 0, uop1 one cycle later, both on pipe0
+          // placeIdx is the same-cycle index among same-robIdx uops: single uop
+          // per cycle => placeIdx is always 0.
           pGather(dut, 0, 8, 8, vs1, table.slice(0, 16), Prefill.default(2).slice(0, 16), lmulFrac = 16, uopIdx = 0, placeIdx = 0)
           dut.clock.step(); pPipeOff(dut, 0)
-          pGather(dut, 0, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32), lmulFrac = 16, uopIdx = 1, placeIdx = 1)
+          pGather(dut, 0, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32), lmulFrac = 16, uopIdx = 1, placeIdx = 0)
           dut.clock.step(); pPipeOff(dut, 0)
           eWbAfter(dut, 0, golden, 6)
         }
@@ -553,14 +555,19 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
           initDut(dut)
           val table = Table.inc(2)
-          val vs1 = foldBytes(Index.allInTable0(1))
-          val golden = gatherGolden(vs1, 8, 8, 16, 0, table, 0 until 2, Prefill.default(2), 32)
-          // uopIdx 1 arrives first, uopIdx 0 one cycle later
-          pGather(dut, 0, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32), lmulFrac = 16, uopIdx = 1, placeIdx = 1)
+          // each uop's index points to its own table segment (reversed), so the
+          // two results are distinguishable.
+          def idxOwn(u: Int) = foldBytes(Seq.tabulate(16)(x => u * 16 + 15 - x))
+          val res0 = gatherGolden(idxOwn(0), 8, 8, 16, 0, table, 0 until 2, Prefill.default(2), 32)
+          val res1 = gatherGolden(idxOwn(1), 8, 8, 16, 1, table, 0 until 2, Prefill.default(2), 32)
+          // uopIdx 1 arrives first -> first free unit0 (wbPort 0); uopIdx 0 next
+          // -> unit1 (wbPort 1). Check each port's own result.
+          pGather(dut, 0, 8, 8, idxOwn(1), table.slice(16, 32), Prefill.default(2).slice(16, 32), lmulFrac = 16, uopIdx = 1, placeIdx = 0)
           dut.clock.step(); pPipeOff(dut, 0)
-          pGather(dut, 0, 8, 8, vs1, table.slice(0, 16), Prefill.default(2).slice(0, 16), lmulFrac = 16, uopIdx = 0, placeIdx = 0)
+          pGather(dut, 0, 8, 8, idxOwn(0), table.slice(0, 16), Prefill.default(2).slice(0, 16), lmulFrac = 16, uopIdx = 0, placeIdx = 0)
           dut.clock.step(); pPipeOff(dut, 0)
-          eWbAfter(dut, 0, golden, 6)
+          eWbAfter(dut, 1, res0, 6)   // uop0 -> unit1 -> pipe1
+          eWbAfter(dut, 0, res1, 0)   // uop1 -> unit0 -> pipe0
         }
       }
 
@@ -570,10 +577,10 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           val table = Table.inc(4)
           val vs1 = foldBytes(Index.allInTable0(1))
           val golden = gatherGolden(vs1, 8, 8, 32, 0, table, 0 until 4, Prefill.default(4), 64)
-          // 4 uops, one per cycle, all on pipe0
+          // 4 uops, one per cycle, all on pipe0 (placeIdx=0: single uop per cycle)
           for (u <- 0 until 4) {
             pGather(dut, 0, 8, 8, vs1, table.slice(u * 16, (u + 1) * 16),
-              Prefill.default(4).slice(u * 16, (u + 1) * 16), lmulFrac = 32, uopIdx = u, placeIdx = u)
+              Prefill.default(4).slice(u * 16, (u + 1) * 16), lmulFrac = 32, uopIdx = u, placeIdx = 0)
             dut.clock.step(); pPipeOff(dut, 0)
           }
           eWbAfter(dut, 0, golden, 12)
@@ -587,10 +594,10 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           val vs1 = foldBytes(Index.allInTable0(1))
           val golden = gatherGolden(vs1, 8, 8, 64, 0, table, 0 until 8, Prefill.default(8), 128)
           // 8 uops, one per cycle, all on pipe0 (deeper back-to-back than the
-          // 2x4 scaling case)
+          // 2x4 scaling case); placeIdx=0 (single uop per cycle)
           for (u <- 0 until 8) {
             pGather(dut, 0, 8, 8, vs1, table.slice(u * 16, (u + 1) * 16),
-              Prefill.default(8).slice(u * 16, (u + 1) * 16), lmulFrac = 64, uopIdx = u, placeIdx = u)
+              Prefill.default(8).slice(u * 16, (u + 1) * 16), lmulFrac = 64, uopIdx = u, placeIdx = 0)
             dut.clock.step(); pPipeOff(dut, 0)
           }
           eWbAfter(dut, 0, golden, 16)
@@ -601,15 +608,19 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
           initDut(dut)
           val table = Table.inc(4)
-          val vs1 = foldBytes(Index.allInTable0(1))
-          val golden = gatherGolden(vs1, 8, 8, 32, 0, table, 0 until 4, Prefill.default(4), 64)
+          def idxOwn(u: Int) = foldBytes(Seq.tabulate(16)(x => u * 16 + 15 - x))
+          val res = (0 until 4).map(u => gatherGolden(idxOwn(u), 8, 8, 32, u, table, 0 until 4, Prefill.default(4), 64))
           val order = Seq(2, 0, 3, 1)
           for (u <- order) {
-            pGather(dut, 0, 8, 8, vs1, table.slice(u * 16, (u + 1) * 16),
-              Prefill.default(4).slice(u * 16, (u + 1) * 16), lmulFrac = 32, uopIdx = u, placeIdx = u)
+            pGather(dut, 0, 8, 8, idxOwn(u), table.slice(u * 16, (u + 1) * 16),
+              Prefill.default(4).slice(u * 16, (u + 1) * 16), lmulFrac = 32, uopIdx = u, placeIdx = 0)
             dut.clock.step(); pPipeOff(dut, 0)
           }
-          eWbAfter(dut, 0, golden, 12)
+          // arrival order -> first-free units 0..3 -> wbPort = unitIdx % 4
+          eWbAfter(dut, 0, res(2), 12)   // uop2 -> unit0 -> pipe0
+          eWbAfter(dut, 1, res(0), 0)    // uop0 -> unit1 -> pipe1
+          eWbAfter(dut, 2, res(3), 0)    // uop3 -> unit2 -> pipe2
+          eWbAfter(dut, 3, res(1), 0)    // uop1 -> unit3 -> pipe3
         }
       }
     }
@@ -633,6 +644,73 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           dut.in.wbReady(0).poke(false); dut.in.wbReady(2).poke(false)
           eWb(dut, 0, golden)          // unit4
           eWb(dut, 2, golden)          // unit6
+        }
+      }
+    }
+
+    // Emu-derived (logs/vrgather_vv-20260813-141215.log): vrgather.vv v20, v28, v16,
+    // e8/m4/tu/mu, vl=31, masked with the log's v0. All uops share robIdx.
+    // Dispatch: uop0-2 land in one block at cy0 on pipes 1-3 (placeIdx 0,1,2);
+    // uop3 arrives cy1 on pipe0 (placeIdx 0).
+    describe("mixed 3+1 same block") {
+      it("M8: emu vrgather m4 vl=31 tu/mu, cy0 pipes1-3 cy1 pipe0") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          // vs1 (index) per-uop slices: v16..v19
+          val vs1 = Seq(
+            Seq(0x00,0x01,0x03,0xf8,0xf8,0x7f,0x7f,0x7f,0xff,0xff,0x00,0x01,0x03,0xf8,0xf8,0x7f),
+            Seq(0x7f,0x7f,0xff,0xff,0x00,0x01,0x03,0xf8,0xf8,0x7f,0x7f,0x7f,0xff,0xff,0x00,0x01),
+            Seq(0x03,0xf8,0xf8,0x7f,0x7f,0x7f,0xff,0xff,0x00,0x01,0x03,0xf8,0xf8,0x7f,0x7f,0x7f),
+            Seq(0xff,0xff,0x00,0x01,0x03,0xf8,0xf8,0x7f,0x7f,0x7f,0xff,0xff,0x00,0x01,0x03,0xf8)
+          )
+          // vs2 (table) per-uop slices: v28..v31
+          val table = Seq(
+            Seq(0x00,0x02,0x0f,0x00,0x08,0x00,0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00),
+            Seq(0x07,0x00,0x01,0xff,0x00,0x02,0x0f,0x00,0x08,0x00,0x07,0x01,0x00,0xff,0x00,0x02),
+            Seq(0x0f,0x00,0x08,0x00,0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00,0x07,0x01),
+            Seq(0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00,0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00)
+          )
+          // vs3 (undisturbed source, REF vd): v20..v23
+          val vs3 = Seq(
+            Seq(0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00),
+            Seq(0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x0b),
+            Seq(0x2b,0x7f,0x5f,0xf0,0x11,0x5d,0xfd,0x9e,0x9a,0x0a,0x60,0x39,0x3b,0x0b,0x50,0x15),
+            Seq(0xf5,0x89,0x1b,0x42,0x6a,0x56,0xb9,0x90,0x3a,0x19,0x69,0x9a,0xf8,0xac,0x6e,0x0d)
+          )
+          // unmasked (nomask emu test): mask is all-ones -> gather only, no
+          // masked-off disturbance; vs3 still applies to the tail (uop2/uop3)
+          val fullTable = table.flatten
+          val golden = (0 until 4).map(u =>
+            gatherGolden(foldBytes(vs1(u)), 8, 8, 32, u, fullTable, 0 until 4, vs3(u), 31,
+              vta = false, vma = false))
+          // cy0: uop0-2 into pipes 1-3 (same robIdx, placeIdx 0,1,2)
+          for (p <- 1 to 3) {
+            val u = p - 1
+            pGather(dut, p, 8, 8, foldBytes(vs1(u)), table(u), vs3(u),
+              lmulFrac = 32, uopIdx = u, placeIdx = p - 1, vl = 31,
+              vta = false, vma = false)
+          }
+          dut.clock.step()
+          for (p <- 1 to 3) pPipeOff(dut, p)
+          // cy1: uop3 into pipe0
+          pGather(dut, 0, 8, 8, foldBytes(vs1(3)), table(3), vs3(3),
+            lmulFrac = 32, uopIdx = 3, placeIdx = 0, vl = 31,
+            vta = false, vma = false)
+          dut.clock.step()
+          pPipeOff(dut, 0)
+          // first-free landing -> uop0 unit0, uop1 unit1, uop2 unit2, uop3 unit3
+          eWbAfter(dut, 0, golden(0), 12)
+          eWbAfter(dut, 1, golden(1), 0)
+          eWbAfter(dut, 2, golden(2), 0)
+          eWbAfter(dut, 3, golden(3), 0)
+          // ack writeback so the flow fully drains (hasIndex -> 0); the emu
+          // failure was exactly the flow not completing, so verify it here.
+          for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+          dut.clock.step()
+          for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(false)
+          for (u <- 0 until NumUnits) {
+            dut.out.unitStatus(u).hasIndex.expect(false.B, s"unit $u hasIndex drained")
+          }
         }
       }
     }

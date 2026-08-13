@@ -26,8 +26,12 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
     simulate(
       new GatherRingBlockController(size, blockBase)(GatherCommon.GatherParam.default)
     ) { dut =>
-      dut.in.tableValid.poke(BigInt(tableValid).U(size.W))
-      dut.in.indexValid.poke(BigInt(indexValid).U(size.W))
+      dut.in.unitTableValid.poke(BigInt(tableValid).U(size.W))
+      dut.in.unitIndexValid.poke(BigInt(indexValid).U(size.W))
+      // no s1 in-flight by default: placement sees unit valid only, clearTable
+      // uses unit valid (registered) only.
+      dut.in.s1TableValid.poke(0.U)
+      dut.in.s1IndexValid.poke(0.U)
       for (i <- pipePlaceIdx.indices) {
         dut.in.pipePlaceIdx(i).valid.poke(pipePlaceIdx(i)._1)
         dut.in.pipePlaceIdx(i).bits.poke(pipePlaceIdx(i)._2)
@@ -105,7 +109,7 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
         simulateBlock(4, 0, 0x1, 0, pipeSeq(4)) { (t, i, wf, _) =>
           assert(t.map(_._2) == Seq(0, 3, 2, 1), s"tablePos=${t.map(_._2)}")
           assert(i.map(_._2) == Seq(0, 1, 2, 3), s"indexPos=${i.map(_._2)}")
-          assert(wf == 0, s"mask empty: no unit holds both T and I (got ${Integer.toBinaryString(wf)})")
+          assert(wf == 0x1, s"table-only unit0 must flow (got ${Integer.toBinaryString(wf)})")
         }
       }
       it("placeIdx wraps within the block") {
@@ -121,7 +125,7 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
   // ── willFlow ──────────────────────────────────────────────────────────────
 
   describe("willFlow") {
-    // out.willFlow(i) = tableValid(i) & indexValid(i) & blockWillFlow.
+    // out.willFlow(i) = (tableValid(i) | indexValid(i)) & blockWillFlow.
     // Values below are the calibrated block-level outcomes for size=4.
 
     it("empty block -> no flow") {
@@ -130,16 +134,16 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
       }
     }
 
-    it("table-only -> block flows but mask empty (no T&I unit)") {
+    it("table-only -> the table unit flows") {
       simulateBlock(4, 0, 0x1, 0, boolSeq(4)) { (_, _, wf, _) =>
-        assert(wf == 0, s"block willFlow=1 but (T&I)=0, mask must be 0 (got ${Integer.toBinaryString(wf)})")
+        assert(wf == 0x1, s"table-only unit0 must flow (got ${Integer.toBinaryString(wf)})")
       }
     }
 
-    it("table at head, index at tail -> block flows") {
-      // T={0}, I={3}: block willFlow=1; mask empty because no unit has both.
+    it("table at head, index at tail -> both units flow") {
+      // T={0}, I={3}: block willFlow=1; mask covers both the table and index units.
       simulateBlock(4, 0, 0x1, 0x8, boolSeq(4)) { (_, _, wf, _) =>
-        assert(wf == 0)
+        assert(wf == 0x9, s"mask=${Integer.toBinaryString(wf)}")
       }
     }
 
@@ -163,10 +167,10 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
       }
     }
 
-    it("mask gated by tableValid & indexValid") {
-      // T={0,1}, I={0}: only unit0 holds both -> mask bit0 only.
+    it("mask gated by tableValid | indexValid") {
+      // T={0,1}, I={0}: mask covers the union of table and index units.
       simulateBlock(4, 0, 0x3, 0x1, boolSeq(4)) { (_, _, wf, _) =>
-        assert(wf == 0x1, s"mask=${Integer.toBinaryString(wf)}")
+        assert(wf == 0x3, s"mask=${Integer.toBinaryString(wf)}")
       }
     }
 
@@ -177,10 +181,10 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
       }
     }
 
-    it("table-only and index-only units never flow") {
-      // T={2}, I={1}: no co-located unit, block willFlow=0 too.
+    it("table-only and index-only units both flow") {
+      // T={1}, I={0}: mask = T|I = {0,1}.
       simulateBlock(4, 0, 0x2, 0x1, boolSeq(4)) { (_, _, wf, _) =>
-        assert(wf == 0)
+        assert(wf == 0x3, s"mask=${Integer.toBinaryString(wf)}")
       }
     }
   }
