@@ -1129,4 +1129,103 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
       }
     }
   }
+
+  // ── Fill: tail / mask strategies ─────────────────────
+  describe("Fill") {
+    it("F1: tail undisturbed mf8 vl=2") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val vs1 = foldBytes(Seq.tabulate(16)(identity))
+        val vs3 = Prefill.default(1)
+        // mf8 (lmulFrac=1): vlmax=2 bytes; elements 2..15 are tail (vta=0 ->
+        // vs3 undisturbed).
+        val golden = gatherGolden(vs1, 8, 8, 1, 0, table, 0 until 1, vs3, 2)
+        pGather(dut, 0, 8, 8, vs1, table, vs3, lmulFrac = 1, vl = 2)
+        dut.clock.step(); pPipeOff(dut, 0)
+        eWbAfter(dut, 0, golden, 2)
+      }
+    }
+
+    it("F2: tail undisturbed mf2 vl=4") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val vs1 = foldBytes(Seq.tabulate(16)(identity))
+        val vs3 = Prefill.default(1)
+        val golden = gatherGolden(vs1, 8, 8, 2, 0, table, 0 until 1, vs3, 4)
+        pGather(dut, 0, 8, 8, vs1, table, vs3, lmulFrac = 2, vl = 4)
+        dut.clock.step(); pPipeOff(dut, 0)
+        eWbAfter(dut, 0, golden, 2)
+      }
+    }
+
+    it("F3: tail undisturbed mf4 vl=1") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val vs1 = foldBytes(Seq.tabulate(16)(identity))
+        val vs3 = Prefill.default(1)
+        val golden = gatherGolden(vs1, 8, 8, 4, 0, table, 0 until 1, vs3, 1)
+        pGather(dut, 0, 8, 8, vs1, table, vs3, lmulFrac = 4, vl = 1)
+        dut.clock.step(); pPipeOff(dut, 0)
+        eWbAfter(dut, 0, golden, 2)
+      }
+    }
+
+    it("F4: tail agnostic vta=1 -> 0xff") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val vs1 = foldBytes(Seq.tabulate(16)(identity))
+        val vs3 = Prefill.default(1)
+        // vl=12 -> elements 12..15 tail; vta=1 -> agnostic (expect 0xff).
+        val golden = gatherGolden(vs1, 8, 8, 8, 0, table, 0 until 1, vs3, 12, vta = true)
+        pGather(dut, 0, 8, 8, vs1, table, vs3, vl = 12, vta = true)
+        dut.clock.step(); pPipeOff(dut, 0)
+        eWbAfter(dut, 0, golden, 2)
+      }
+    }
+
+    it("F5: masked-off vma=0 mask=0 -> all vs3") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val vs1 = foldBytes(Seq.tabulate(16)(identity))
+        val vs3 = Prefill.default(1)
+        val golden = gatherGolden(vs1, 8, 8, 8, 0, table, 0 until 1, vs3, 16, mask = 0)
+        pGather(dut, 0, 8, 8, vs1, table, vs3, mask = 0)
+        dut.clock.step(); pPipeOff(dut, 0)
+        eWbAfter(dut, 0, golden, 2)
+      }
+    }
+
+    it("F6: mixed mask + tail") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val vs1 = foldBytes(Seq.tabulate(16)(identity))
+        val vs3 = Prefill.default(1)
+        // vl=12 -> elements 12..15 tail (vs3); mask bit 3 clear -> elem 3 vs3.
+        val mask = (BigInt(1) << numElem) - 1 - (BigInt(1) << 3)
+        val golden = gatherGolden(vs1, 8, 8, 8, 0, table, 0 until 1, vs3, 12, mask = mask)
+        pGather(dut, 0, 8, 8, vs1, table, vs3, vl = 12, mask = mask)
+        dut.clock.step(); pPipeOff(dut, 0)
+        eWbAfter(dut, 0, golden, 2)
+      }
+    }
+
+    it("F7: m1 vl=16 all active") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val vs1 = foldBytes(Seq.tabulate(16)(identity))
+        val vs3 = Prefill.default(1)
+        val golden = gatherGolden(vs1, 8, 8, 8, 0, table, 0 until 1, vs3, 16)
+        pGather(dut, 0, 8, 8, vs1, table, vs3)
+        dut.clock.step(); pPipeOff(dut, 0)
+        eWbAfter(dut, 0, golden, 2)
+      }
+    }
+  }
 }
