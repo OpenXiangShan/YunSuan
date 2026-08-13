@@ -16,7 +16,8 @@ class VectorFALUS1 extends VFModule{
   val isArithFp16 = io.fromS0.isArithFp16
   val isArithFp32 = io.fromS0.isArithFp32
   val isArithFp64 = io.fromS0.isArithFp64
-  val isMisc      = io.fromS0.isMisc
+  val isFaluMisc  = io.fromS0.isFaluMisc
+  val isVfMisc    = io.fromS0.isVfMisc
   val isArith = isArithFp16 || isArithFp32 || isArithFp64
 
   val arithS1Fp16 = Seq.fill(elemNum("fp16"))(Module(new FALUAddS1(16)))
@@ -40,17 +41,21 @@ class VectorFALUS1 extends VFModule{
 
   val arithFFlags = VFAlgoUtils.expandFflags(arithFp16FFlags, arithFp32FFlags, arithFp64FFlags, isArithFp16, isArithFp32, isArithFp64)
 
-  val vfmiscOutRes    = io.fromS0.vfmiscS0ToS1.result
-  val vfmiscOutFFlags = io.fromS0.vfmiscS0ToS1.fflags
+  val faluMiscOutRes    = io.fromS0.faluMiscS0ToS1.result
+  val faluMiscOutFFlags = io.fromS0.faluMiscS0ToS1.fflags
+  val vfMiscOutRes      = io.fromS0.vfMiscS0ToS1.result
+  val vfMiscOutFFlags   = io.fromS0.vfMiscS0ToS1.fflags
 
   io.out.fpResult := Mux1H(Seq(
     isArithFp16 -> arithFp16OutRes,
     isArithFp32 -> arithFp32OutRes,
     isArithFp64 -> arithFp64OutRes,
-    isMisc      -> vfmiscOutRes
+    isFaluMisc  -> faluMiscOutRes,
+    isVfMisc    -> vfMiscOutRes
   ))
   io.out.fflagsVec := Mux1H(Seq(
     isArith -> arithFFlags,
-    isMisc  -> vfmiscOutFFlags
+    isFaluMisc -> faluMiscOutFFlags,
+    isVfMisc -> vfMiscOutFFlags
   ))
 }

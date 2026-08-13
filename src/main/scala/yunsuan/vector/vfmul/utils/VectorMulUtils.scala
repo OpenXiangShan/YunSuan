@@ -26,6 +26,7 @@ trait VFParas {
   def floatWidth(implicit fpType: String) = floatWidthSeq(getIdx)
   def exponentWidth(implicit fpType: String) = exponentWidthSeq(getIdx)
   def significandWidth(implicit fpType: String) = floatWidth - signWidth - exponentWidth // 10, 23, 52
+  def quiteBit(implicit fpType: String) = significandWidth(fpType) - 1 // 9, 22, 51
   def decimalWidth(implicit fpType: String) = significandWidth + 1 // 11, 24, 53
   def exponentBias(implicit fpType: String) = (1 << (exponentWidth - 1)) - 1
   def shiftBitsWidth(implicit fpType: String) = shiftBitsWidthSeq(getIdx)
