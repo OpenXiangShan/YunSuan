@@ -199,6 +199,170 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
     dut.in.pipes(pipe).valid.poke(false)
   }
 
+  // ---- Op pokes (vslideup / vslide1up / vslidedown / vslide1down) ----------
+
+  def pSlideUp(dut: PermUnit[FakePermMeta], pipe: Int,
+    offset: Int, vs2: Seq[Int], vs3: Seq[Int],
+    sew: Int = 8, lmulFrac: Int = 8, uopIdx: Int = 0, blockBase: Int = 0, placeIdx: Int = 0,
+    vl: Int = -1, vta: Boolean = false, vma: Boolean = false,
+    mask: BigInt = -1, robIdx: Int = 0, pdest: Int = 0
+  ): Unit = {
+    val p = dut.in.pipes(pipe)
+    p.valid.poke(true)
+    p.bits.op.isSlideUp.poke(true)
+    p.bits.placeIdx.poke(placeIdx); p.bits.blockBase.poke(blockBase)
+    p.bits.uopIdx.poke(uopIdx)
+    pSew(p.bits.sew, sew); pLmul(p.bits.lmul, lmulFrac)
+    p.bits.vl.poke(if (vl < 0) (lmulFrac / 8) * vlen / sew else vl)
+    p.bits.vta.poke(vta); p.bits.vma.poke(vma)
+    p.bits.rs1.poke(offset)
+    p.bits.vs2.poke(foldBytes(vs2)); p.bits.vs3.poke(foldBytes(vs3))
+    p.bits.mask.poke(if (mask < 0) (BigInt(1) << numElem) - 1 else mask)
+    pMeta(dut, pipe, robIdx, pdest)
+  }
+
+  def pSlide1Up(dut: PermUnit[FakePermMeta], pipe: Int,
+    scalar: BigInt, vs2: Seq[Int], vs3: Seq[Int],
+    sew: Int = 8, lmulFrac: Int = 8, uopIdx: Int = 0, blockBase: Int = 0, placeIdx: Int = 0,
+    vl: Int = -1, vta: Boolean = false, vma: Boolean = false,
+    mask: BigInt = -1, robIdx: Int = 0, pdest: Int = 0
+  ): Unit = {
+    val p = dut.in.pipes(pipe)
+    p.valid.poke(true)
+    p.bits.op.isSlide1Up.poke(true)
+    p.bits.placeIdx.poke(placeIdx); p.bits.blockBase.poke(blockBase)
+    p.bits.uopIdx.poke(uopIdx)
+    pSew(p.bits.sew, sew); pLmul(p.bits.lmul, lmulFrac)
+    p.bits.vl.poke(if (vl < 0) (lmulFrac / 8) * vlen / sew else vl)
+    p.bits.vta.poke(vta); p.bits.vma.poke(vma)
+    p.bits.rs1.poke(scalar)
+    p.bits.vs2.poke(foldBytes(vs2)); p.bits.vs3.poke(foldBytes(vs3))
+    p.bits.mask.poke(if (mask < 0) (BigInt(1) << numElem) - 1 else mask)
+    pMeta(dut, pipe, robIdx, pdest)
+  }
+
+  def pSlideDown(dut: PermUnit[FakePermMeta], pipe: Int,
+    offset: Int, vs2: Seq[Int], vs3: Seq[Int],
+    sew: Int = 8, lmulFrac: Int = 8, uopIdx: Int = 0, blockBase: Int = 0, placeIdx: Int = 0,
+    vl: Int = -1, vta: Boolean = false, vma: Boolean = false,
+    mask: BigInt = -1, robIdx: Int = 0, pdest: Int = 0
+  ): Unit = {
+    val p = dut.in.pipes(pipe)
+    p.valid.poke(true)
+    p.bits.op.isSlideDown.poke(true)
+    p.bits.placeIdx.poke(placeIdx); p.bits.blockBase.poke(blockBase)
+    p.bits.uopIdx.poke(uopIdx)
+    pSew(p.bits.sew, sew); pLmul(p.bits.lmul, lmulFrac)
+    p.bits.vl.poke(if (vl < 0) (lmulFrac / 8) * vlen / sew else vl)
+    p.bits.vta.poke(vta); p.bits.vma.poke(vma)
+    p.bits.rs1.poke(offset)
+    p.bits.vs2.poke(foldBytes(vs2)); p.bits.vs3.poke(foldBytes(vs3))
+    p.bits.mask.poke(if (mask < 0) (BigInt(1) << numElem) - 1 else mask)
+    pMeta(dut, pipe, robIdx, pdest)
+  }
+
+  def pSlide1Down(dut: PermUnit[FakePermMeta], pipe: Int,
+    scalar: BigInt, vs2: Seq[Int], vs3: Seq[Int],
+    sew: Int = 8, lmulFrac: Int = 8, uopIdx: Int = 0, blockBase: Int = 0, placeIdx: Int = 0,
+    vl: Int = -1, vta: Boolean = false, vma: Boolean = false,
+    mask: BigInt = -1, robIdx: Int = 0, pdest: Int = 0
+  ): Unit = {
+    val p = dut.in.pipes(pipe)
+    p.valid.poke(true)
+    p.bits.op.isSlide1Down.poke(true)
+    p.bits.placeIdx.poke(placeIdx); p.bits.blockBase.poke(blockBase)
+    p.bits.uopIdx.poke(uopIdx)
+    pSew(p.bits.sew, sew); pLmul(p.bits.lmul, lmulFrac)
+    p.bits.vl.poke(if (vl < 0) (lmulFrac / 8) * vlen / sew else vl)
+    p.bits.vta.poke(vta); p.bits.vma.poke(vma)
+    p.bits.rs1.poke(scalar)
+    p.bits.vs2.poke(foldBytes(vs2)); p.bits.vs3.poke(foldBytes(vs3))
+    p.bits.mask.poke(if (mask < 0) (BigInt(1) << numElem) - 1 else mask)
+    pMeta(dut, pipe, robIdx, pdest)
+  }
+
+  // ---- Golden wrappers (slide ops) ----------------------------------------
+  // slideup / slide1up: indices are relative to the uop's own table segment
+  // (vs2.slice(uopIdx*16, ...)); slidedown / slide1down: indices are absolute
+  // (include tableIdx*16), so they index the full vs2.
+  def slideUpGolden(offset: Int, vs2: Seq[Int], vs3: Seq[Int], sew: Int, lmulFrac: Int,
+    uopIdx: Int, vl: Int, vta: Boolean = false, vma: Boolean = false, mask: BigInt = -1): BigInt = {
+    val flags = goldenSlideUp(offset, sew, vl)
+    val n = lmulFrac / 8
+    goldenPerm(flags, vs2.slice(uopIdx * numElem, (uopIdx + 1) * numElem), Seq(0),
+      vs3.slice(uopIdx * numElem, (uopIdx + 1) * numElem),
+      Seq.fill(8)(0), sew, uopIdx, vl, vta, vma,
+      if (mask < 0) (BigInt(1) << numElem) - 1 else mask)
+  }
+
+  def slide1UpGolden(scalarBytes: Seq[Int], vs2: Seq[Int], vs3: Seq[Int], sew: Int, lmulFrac: Int,
+    uopIdx: Int, vl: Int, vta: Boolean = false, vma: Boolean = false, mask: BigInt = -1): BigInt = {
+    val flags = goldenSlide1Up(sew, uopIdx)
+    goldenPerm(flags, vs2.slice(uopIdx * numElem, (uopIdx + 1) * numElem), Seq(0),
+      vs3.slice(uopIdx * numElem, (uopIdx + 1) * numElem),
+      scalarBytes, sew, uopIdx, vl, vta, vma,
+      if (mask < 0) (BigInt(1) << numElem) - 1 else mask)
+  }
+
+  def slideDownGolden(offset: Int, vs2: Seq[Int], vs3: Seq[Int], sew: Int, lmulFrac: Int,
+    uopIdx: Int, vl: Int, vta: Boolean = false, vma: Boolean = false, mask: BigInt = -1): BigInt = {
+    val flags = goldenSlideDown(uopIdx, offset, sew, lmulFrac)
+    goldenPerm(flags, vs2, 0 until (lmulFrac / 8), vs3,
+      Seq.fill(8)(0), sew, uopIdx, vl, vta, vma,
+      if (mask < 0) (BigInt(1) << numElem) - 1 else mask)
+  }
+
+  def slide1DownGolden(scalarBytes: Seq[Int], vs2: Seq[Int], vs3: Seq[Int], sew: Int, lmulFrac: Int,
+    uopIdx: Int, vl: Int, vta: Boolean = false, vma: Boolean = false, mask: BigInt = -1): BigInt = {
+    val flags = goldenSlide1Down(uopIdx, sew, vl)
+    goldenPerm(flags, vs2, 0 until (lmulFrac / 8), vs3,
+      scalarBytes, sew, uopIdx, vl, vta, vma,
+      if (mask < 0) (BigInt(1) << numElem) - 1 else mask)
+  }
+
+  // ---- Misc helper ---------------------------------------------------------
+  def scalarBytes(v: BigInt): Seq[Int] = (0 until 8).map(i => ((v >> (8 * i)) & 0xff).toInt)
+
+  // ---- vcompress ----
+  def pCompress(dut: PermUnit[FakePermMeta], pipe: Int,
+    mask: BigInt, vs2: Seq[Int], vs3: Seq[Int],
+    lmulFrac: Int = 8, uopIdx: Int = 0, blockBase: Int = 0, placeIdx: Int = 0,
+    vl: Int = -1, vta: Boolean = false, robIdx: Int = 0, pdest: Int = 0
+  ): Unit = {
+    val p = dut.in.pipes(pipe)
+    p.valid.poke(true)
+    p.bits.op.isCompress.poke(true)
+    p.bits.placeIdx.poke(placeIdx); p.bits.blockBase.poke(blockBase)
+    p.bits.uopIdx.poke(uopIdx)
+    pSew(p.bits.sew, 8); pLmul(p.bits.lmul, lmulFrac)
+    p.bits.vl.poke(if (vl < 0) (lmulFrac / 8) * vlen / 8 else vl)
+    p.bits.vta.poke(vta); p.bits.vma.poke(true)  // compress uses byte mask (vs1), merge mask irrelevant
+    p.bits.vs1.poke(mask)   // compress byte mask
+    p.bits.vs2.poke(foldBytes(vs2)); p.bits.vs3.poke(foldBytes(vs3))
+    p.bits.mask.poke((BigInt(1) << numElem) - 1)
+    pMeta(dut, pipe, robIdx, pdest)
+  }
+
+  /** vcompress golden (byte-granular, global packing across chunks):
+    * packed[p] = vs2Full[globalPos of (p+1)-th set bit]; a uop's output byte j
+    * = packed[uopIdx*16 + j] when that global output position < popcount(mask),
+    * else prefill (vta-agnostic or vs3 local).
+    */
+  def compressGolden(mask: BigInt, vs2Full: Seq[Int], vs3: Seq[Int], uopIdx: Int,
+    vl: Int, vta: Boolean = false): BigInt = {
+    val total = mask.bitCount
+    val packed = Array.ofDim[Int](total)
+    var p = 0
+    for (g <- vs2Full.indices) {
+      if (((mask >> g) & 1) == 1) { packed(p) = vs2Full(g); p += 1 }
+    }
+    (0 until numElem).map { j =>
+      val outPos = uopIdx * numElem + j
+      if (outPos < vl && outPos < total) packed(outPos)
+      else if (vta) 0xff else vs3(j % numElem)
+    }.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
+  }
+
   def initDut(dut: PermUnit[FakePermMeta]): Unit = {
     for (p <- 0 until NumPipes) pDefaults(dut, p)
     dut.in.wbReady.foreach(_.poke(false))
@@ -356,6 +520,426 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           }
           dut.clock.step(); for (p <- 0 until 4) pPipeOff(dut, p)
           eWbAfter(dut, 0, golden0, 11)
+        }
+      }
+    }
+  }
+
+  describe("MultiUop") {
+
+    // Per-cycle injection: uops of one instruction arrive in consecutive cycles
+    // (back-to-back dispatch). Placement is dynamic, so a later uop may land in
+    // a different block slot than the previous one.
+    describe("per-cycle") {
+
+      // Per-cycle in-order: uop1's place must not prematurely clear uop0's
+      // table. Guarded by clearTable's indexValid.andR (see questions.md Q7).
+      it("M1: LMUL=2 uopIdx 0->1 same pipe") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(2)
+          val vs1 = foldBytes(Index.allInTable0(1))
+          val golden = gatherGolden(vs1, 8, 8, 16, 0, table, 0 until 2, Prefill.default(2), 32)
+          // uop0 arrives cycle 0, uop1 one cycle later, both on pipe0
+          pGather(dut, 0, 8, 8, vs1, table.slice(0, 16), Prefill.default(2).slice(0, 16), lmulFrac = 16, uopIdx = 0, placeIdx = 0)
+          dut.clock.step(); pPipeOff(dut, 0)
+          pGather(dut, 0, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32), lmulFrac = 16, uopIdx = 1, placeIdx = 1)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 6)
+        }
+      }
+
+      it("M4: LMUL=2 out-of-order uopIdx 1->0") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(2)
+          val vs1 = foldBytes(Index.allInTable0(1))
+          val golden = gatherGolden(vs1, 8, 8, 16, 0, table, 0 until 2, Prefill.default(2), 32)
+          // uopIdx 1 arrives first, uopIdx 0 one cycle later
+          pGather(dut, 0, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32), lmulFrac = 16, uopIdx = 1, placeIdx = 1)
+          dut.clock.step(); pPipeOff(dut, 0)
+          pGather(dut, 0, 8, 8, vs1, table.slice(0, 16), Prefill.default(2).slice(0, 16), lmulFrac = 16, uopIdx = 0, placeIdx = 0)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 6)
+        }
+      }
+
+      it("M2: LMUL=4 per-cycle uopIdx 0..3 same pipe") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(4)
+          val vs1 = foldBytes(Index.allInTable0(1))
+          val golden = gatherGolden(vs1, 8, 8, 32, 0, table, 0 until 4, Prefill.default(4), 64)
+          // 4 uops, one per cycle, all on pipe0
+          for (u <- 0 until 4) {
+            pGather(dut, 0, 8, 8, vs1, table.slice(u * 16, (u + 1) * 16),
+              Prefill.default(4).slice(u * 16, (u + 1) * 16), lmulFrac = 32, uopIdx = u, placeIdx = u)
+            dut.clock.step(); pPipeOff(dut, 0)
+          }
+          eWbAfter(dut, 0, golden, 12)
+        }
+      }
+
+      it("M3: LMUL=8 per-cycle uopIdx 0..7 same pipe") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(8)
+          val vs1 = foldBytes(Index.allInTable0(1))
+          val golden = gatherGolden(vs1, 8, 8, 64, 0, table, 0 until 8, Prefill.default(8), 128)
+          // 8 uops, one per cycle, all on pipe0 (deeper back-to-back than the
+          // 2x4 scaling case)
+          for (u <- 0 until 8) {
+            pGather(dut, 0, 8, 8, vs1, table.slice(u * 16, (u + 1) * 16),
+              Prefill.default(8).slice(u * 16, (u + 1) * 16), lmulFrac = 64, uopIdx = u, placeIdx = u)
+            dut.clock.step(); pPipeOff(dut, 0)
+          }
+          eWbAfter(dut, 0, golden, 16)
+        }
+      }
+
+      it("M5: LMUL=4 out-of-order uopIdx 2,0,3,1") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(4)
+          val vs1 = foldBytes(Index.allInTable0(1))
+          val golden = gatherGolden(vs1, 8, 8, 32, 0, table, 0 until 4, Prefill.default(4), 64)
+          val order = Seq(2, 0, 3, 1)
+          for (u <- order) {
+            pGather(dut, 0, 8, 8, vs1, table.slice(u * 16, (u + 1) * 16),
+              Prefill.default(4).slice(u * 16, (u + 1) * 16), lmulFrac = 32, uopIdx = u, placeIdx = u)
+            dut.clock.step(); pPipeOff(dut, 0)
+          }
+          eWbAfter(dut, 0, golden, 12)
+        }
+      }
+    }
+
+    // Same-cycle injection of independent instructions into distinct blocks.
+    describe("same-cycle distinct blocks") {
+
+      it("M6: 4x LMUL=1 at U0/U2/U4/U6") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(1)
+          val golden = gatherGolden(0, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
+          // 4 independent LMUL=1 instrs, one per pipe, blocks 0/2/4/6
+          for (p <- 0 until 4) pGather(dut, p, 8, 8, 0, table, Prefill.default(1), blockBase = 2 * p)
+          dut.clock.step(); for (p <- 0 until 4) pPipeOff(dut, p)
+          // pipe0 serves unit0+unit4, pipe2 serves unit2+unit6 (priority: lowest unit first)
+          eWbAfter(dut, 0, golden, 3)  // unit0
+          eWbAfter(dut, 2, golden, 0)  // unit2
+          dut.in.wbReady(0).poke(true); dut.in.wbReady(2).poke(true)
+          dut.clock.step()
+          dut.in.wbReady(0).poke(false); dut.in.wbReady(2).poke(false)
+          eWb(dut, 0, golden)          // unit4
+          eWb(dut, 2, golden)          // unit6
+        }
+      }
+    }
+  }
+
+  describe("Ops") {
+
+    // ---- vrgather.vv (ei = sew) ----
+    describe("vrgather") {
+      it("G1: SEW=8 e8 identity") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(1)
+          val vs1 = foldBytes(Seq.tabulate(16)(identity))
+          val golden = gatherGolden(vs1, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
+          pGather(dut, 0, 8, 8, vs1, table, Prefill.default(1))
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("G2: SEW=16 e16") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(1)
+          val vs1 = (0 until 8).foldLeft(BigInt(0))((acc, k) => acc | (BigInt(k) << (16 * k)))
+          val golden = gatherGolden(vs1, 16, 16, 8, 0, table, 0 until 1, Prefill.default(1), 8)
+          pGather(dut, 0, 16, 16, vs1, table, Prefill.default(1))
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("G3: SEW=32 e32") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(1)
+          val vs1 = (0 until 4).foldLeft(BigInt(0))((acc, k) => acc | (BigInt(k) << (32 * k)))
+          val golden = gatherGolden(vs1, 32, 32, 8, 0, table, 0 until 1, Prefill.default(1), 4)
+          pGather(dut, 0, 32, 32, vs1, table, Prefill.default(1))
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("G4: SEW=64 e64") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(1)
+          val vs1 = (0 until 2).foldLeft(BigInt(0))((acc, k) => acc | (BigInt(k) << (64 * k)))
+          val golden = gatherGolden(vs1, 64, 64, 8, 0, table, 0 until 1, Prefill.default(1), 2)
+          pGather(dut, 0, 64, 64, vs1, table, Prefill.default(1))
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("G5: out-of-range -> fillZeros") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(1)
+          // byte 5 indexes 20 >= vlmax(16) -> fillZeros
+          val vs1 = foldBytes(Seq.tabulate(16)(i => if (i == 5) 20 else i))
+          val golden = gatherGolden(vs1, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
+          pGather(dut, 0, 8, 8, vs1, table, Prefill.default(1))
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("G6: masked-off -> prefill (vma)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(1)
+          val vs1 = foldBytes(Seq.tabulate(16)(identity))
+          // mask bit3=0 -> element 3 uses prefill (vma=0 -> vs3, not agnostic)
+          val mask = (BigInt(1) << numElem) - 1 - (BigInt(1) << 3)
+          val golden = gatherGolden(vs1, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16, mask = mask)
+          pGather(dut, 0, 8, 8, vs1, table, Prefill.default(1), mask = mask)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+    }
+
+    // ---- vslideup ----
+    describe("vslideup") {
+      it("SU1: offset=0 (identity from vs2)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val golden = slideUpGolden(0, vs2, vs3, 8, 8, 0, 16)
+          pSlideUp(dut, 0, 0, vs2, vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("SU2: offset=3 (bottom stays vs2, top shifted)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val golden = slideUpGolden(3, vs2, vs3, 8, 8, 0, 16)
+          pSlideUp(dut, 0, 3, vs2, vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("SU3: offset overflow (>= vlmax) -> all vs2 preserved") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val golden = slideUpGolden(20, vs2, vs3, 8, 8, 0, 16)
+          pSlideUp(dut, 0, 20, vs2, vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("SU4: partial vl -> tail prefill") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val golden = slideUpGolden(1, vs2, vs3, 8, 8, 0, 10)
+          pSlideUp(dut, 0, 1, vs2, vs3, vl = 10)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+    }
+
+    // ---- vslide1up ----
+    describe("vslide1up") {
+      it("S1U1: SEW=8 scalar head") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val scalar = BigInt(0x5A)
+          val golden = slide1UpGolden(scalarBytes(scalar), vs2, vs3, 8, 8, 0, 16)
+          pSlide1Up(dut, 0, scalar, vs2, vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("S1U2: SEW=64 scalar replicated") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val scalar = BigInt(0x5A)
+          val golden = slide1UpGolden(scalarBytes(scalar), vs2, vs3, 64, 8, 0, 2)
+          pSlide1Up(dut, 0, scalar, vs2, vs3, sew = 64)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("S1U3: partial vl -> tail prefill") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val scalar = BigInt(0x5A)
+          val golden = slide1UpGolden(scalarBytes(scalar), vs2, vs3, 8, 8, 0, 10)
+          pSlide1Up(dut, 0, scalar, vs2, vs3, vl = 10)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+    }
+
+    // ---- vslidedown ----
+    describe("vslidedown") {
+      it("SD1: offset=2 (top fillZeros)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val golden = slideDownGolden(2, vs2, vs3, 8, 8, 0, 16)
+          pSlideDown(dut, 0, 2, vs2, vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("SD2: offset overflow -> all fillZeros") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val golden = slideDownGolden(20, vs2, vs3, 8, 8, 0, 16)
+          pSlideDown(dut, 0, 20, vs2, vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("SD3: partial vl -> tail prefill") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val golden = slideDownGolden(1, vs2, vs3, 8, 8, 0, 10)
+          pSlideDown(dut, 0, 1, vs2, vs3, vl = 10)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+    }
+
+    // ---- vslide1down ----
+    describe("vslide1down") {
+      it("S1D1: SEW=8 scalar tail (vl-1)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val scalar = BigInt(0x5A)
+          val golden = slide1DownGolden(scalarBytes(scalar), vs2, vs3, 8, 8, 0, 16)
+          pSlide1Down(dut, 0, scalar, vs2, vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("S1D2: SEW=64 scalar replicated") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val scalar = BigInt(0x5A)
+          val golden = slide1DownGolden(scalarBytes(scalar), vs2, vs3, 64, 8, 0, 2)
+          pSlide1Down(dut, 0, scalar, vs2, vs3, sew = 64)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("S1D3: partial vl -> tail prefill") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val scalar = BigInt(0x5A)
+          val golden = slide1DownGolden(scalarBytes(scalar), vs2, vs3, 8, 8, 0, 10)
+          pSlide1Down(dut, 0, scalar, vs2, vs3, vl = 10)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+    }
+
+    // ---- vcompress ----
+    describe("vcompress") {
+      it("C1: mask all-1 -> identity") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val mask = (BigInt(1) << numElem) - 1
+          val golden = compressGolden(mask, vs2, vs3, 0, 16)
+          pCompress(dut, 0, mask, vs2, vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 3)
+        }
+      }
+      it("C2: mask all-0 -> all prefill") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val golden = compressGolden(0, vs2, vs3, 0, 16)
+          pCompress(dut, 0, 0, vs2, vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 3)
+        }
+      }
+      it("C3: mask alternating (0x5555)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val mask = BigInt("5555", 16)
+          val golden = compressGolden(mask, vs2, vs3, 0, 16)
+          pCompress(dut, 0, mask, vs2, vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 3)
+        }
+      }
+      it("C4: mask single-bit -> one element compressed") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(16)(i => 0x10 + i)
+          val vs3 = Prefill.default(1)
+          val mask = BigInt(1) << 7
+          val golden = compressGolden(mask, vs2, vs3, 0, 16)
+          pCompress(dut, 0, mask, vs2, vs3)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 3)
+        }
+      }
+      it("C5: uopIdx=1 chunk offset") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq.tabulate(32)(i => 0x10 + i)
+          val vs3 = Prefill.default(2)
+          // chunk0 active at byte 3, chunk1 all active -> total popcount 17
+          val mask = (BigInt(1) << 3) | ((BigInt(1) << numElem) - 1) << numElem
+          // uop1 output byte0 = 17th active byte (vs2[31]); rest prefill
+          val golden = compressGolden(mask, vs2, vs3.slice(16, 32), 1, 32)
+          pCompress(dut, 0, mask, vs2.slice(16, 32), vs3.slice(16, 32), lmulFrac = 16, uopIdx = 1, placeIdx = 1)
+          pCompress(dut, 1, mask, vs2.slice(0, 16), vs3.slice(0, 16), lmulFrac = 16, uopIdx = 0, placeIdx = 0)
+          dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+          eWbAfter(dut, 1, golden, 5)
         }
       }
     }

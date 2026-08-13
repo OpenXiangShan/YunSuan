@@ -43,9 +43,13 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   // clearTable(i): the table in unit i is useless if every unit j>i finishes
   // (counter(j) < j-i) before unit i's table can reach it (distance j-i in the ring).
   // Empty set (last unit) => true; the unit's hasTable clear is additionally gated by passedEntry.
+  // All clears require the whole block's indices to be placed (indexValid.andR):
+  // a not-yet-placed uop has counter=0 which would otherwise be misread as
+  // "that unit has finished" and prematurely clear an earlier unit's table.
+  val allIndexPlaced = in.indexValid.andR
   val clearTable = Wire(Vec(size, Bool()))
   for (i <- 0 until size) {
-    clearTable(i) := (i + 1 until size).map { j =>
+    clearTable(i) := allIndexPlaced && (i + 1 until size).map { j =>
       in.counter(j) < (j - i).U
     }.fold(true.B)(_ && _)
   }
