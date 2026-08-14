@@ -815,6 +815,194 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           }
         }
       }
+
+      // Emu-derived (logs/vrgather_vv-20260814-105840.log): vrgather.vv v20, v28,
+      // v16, e16/m4/tu/mu, vl=32 (full m4). The emu ABORTED (v22/v23 high wrong,
+      // index-like values instead of the gathered result). Dispatch: uop0-2 at
+      // cy0 on pipes 1-3 (placeIdx 0,1,2), uop3 at cy2 on pipe0 (placeIdx 0) -
+      // a 2-cycle gap before the last uop (between M8's cy1 and M9's cy3).
+      it("M10: emu vrgather e16 m4 vl=32 abort, cy0 pipes1-3 cy2 pipe0") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+          // e16 index elements per-uop: v16..v19
+          val vs1 = Seq(
+            Seq(0x0000,0x0001,0x0003,0xfff8,0xff80,0x7fff,0x7fff,0x7fff),
+            Seq(0xffff,0xffff,0x0000,0x0001,0x0003,0xfff8,0xff80,0x7fff),
+            Seq(0x7fff,0x7fff,0xffff,0xffff,0x0000,0x0001,0x0003,0xfff8),
+            Seq(0xff80,0x7fff,0x7fff,0x7fff,0xffff,0xffff,0x0000,0x0001)
+          )
+          // e16 table bytes per-uop: v28..v31
+          val table = Seq(
+            Seq(0x00,0x00,0x02,0x00,0x0f,0x00,0x00,0x00,0xf8,0xff,0x00,0x00,0xff,0x07,0x01,0x00),
+            Seq(0x00,0x00,0xff,0xff,0x00,0x00,0x02,0x00,0x0f,0x00,0x00,0x00,0xf8,0xff,0x00,0x00),
+            Seq(0xff,0x07,0x01,0x00,0x00,0x00,0xff,0xff,0x00,0x00,0x02,0x00,0x0f,0x00,0x00,0x00),
+            Seq(0xf8,0xff,0x00,0x00,0xff,0x07,0x01,0x00,0x00,0x00,0xff,0xff,0x00,0x00,0x02,0x00)
+          )
+          // vs3 (REF vd): v20..v23 (vl=32 is full m4, no tail/mask -> unused)
+          val vs3 = Seq(
+            Seq(0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00),
+            Seq(0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00),
+            Seq(0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x00),
+            Seq(0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00)
+          )
+          def e16v(elems: Seq[Int]): BigInt =
+            elems.zipWithIndex.foldLeft(BigInt(0)) { case (acc, (e, k)) => acc | (BigInt(e) << (16 * k)) }
+          val fullTable = table.flatten
+          val golden = (0 until 4).map(u =>
+            gatherGolden(e16v(vs1(u)), 16, 16, 32, u, fullTable, 0 until 4, vs3(u), 32,
+              vta = false, vma = false))
+          // cy0: uop0-2 into pipes 1-3 (placeIdx 0,1,2)
+          for (p <- 1 to 3) {
+            val u = p - 1
+            pGather(dut, p, 16, 16, e16v(vs1(u)), table(u), vs3(u),
+              lmulFrac = 32, uopIdx = u, placeIdx = p - 1, vl = 32,
+              vta = false, vma = false)
+          }
+          dut.clock.step()
+          for (p <- 1 to 3) pPipeOff(dut, p)
+          // cy1 idle, then uop3 into pipe0 at cy2 (2-cycle gap)
+          dut.clock.step()
+          pGather(dut, 0, 16, 16, e16v(vs1(3)), table(3), vs3(3),
+            lmulFrac = 32, uopIdx = 3, placeIdx = 0, vl = 32,
+            vta = false, vma = false)
+          dut.clock.step()
+          pPipeOff(dut, 0)
+          // collect writeback + drain
+          val wbData = Array.fill(NumPipes)(Option.empty[BigInt])
+          var drained = false
+          for (cy <- 0 until 80; if !drained) {
+            for (p <- 0 until NumPipes) {
+              if (dut.out.pipes(p).valid.peekBoolean() && wbData(p).isEmpty) {
+                wbData(p) = Some(dut.out.pipes(p).bits.data.peekValue().asBigInt)
+              }
+            }
+            drained = (0 until NumUnits).forall(u => !dut.out.unitStatus(u).hasIndex.peekBoolean())
+            dut.clock.step()
+          }
+          for (p <- 0 until NumPipes) {
+            wbData(p).getOrElse(fail(s"pipe $p never wrote back")) mustBe golden(p)
+          }
+          for (u <- 0 until NumUnits) {
+            dut.out.unitStatus(u).hasIndex.expect(false.B, s"unit $u hasIndex drained")
+            dut.out.unitStatus(u).hasTable.expect(false.B, s"unit $u hasTable drained")
+          }
+        }
+      }
+    }
+
+    // Emu-derived (logs/vrgather_vv-20260814-140042.log): vrgather.vv v16, v8,
+    // v24, e8/m8/tu/mu, vl=63. The core stalled after this instruction (no
+    // commit for 15000 cycles). 8 uops of one LMUL=8 block dispatched
+    // out-of-order with a 4-cycle gap:
+    //   cy0 uop0,1   cy1 uop2   cy2 uop7   (idle cy3-5)   cy6 uop3,4   cy7 uop5,6
+    // Bug: uop3-6 (the last 4 to dispatch) never assert wake.valid, so the
+    // dependent instruction in the core never issues (no commit).
+    describe("mixed out-of-order LMUL=8 (emu 140042)") {
+      it("M11: all 8 uops wake despite a 4-cycle dispatch gap") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+          val table = Table.inc(8)
+          val vs1 = foldBytes(Index.allInTable0(1))
+          // Tag each uop with a distinct pdest so its wake is identifiable.
+          def inj(u: Int, pipe: Int, placeIdx: Int): Unit =
+            pGather(dut, pipe, 8, 8, vs1, table.slice(u * 16, (u + 1) * 16),
+              Prefill.default(8).slice(u * 16, (u + 1) * 16),
+              lmulFrac = 64, uopIdx = u, placeIdx = placeIdx, vl = 128,
+              robIdx = 1, pdest = u)
+          def off(ps: Int*): Unit = ps.foreach(pPipeOff(dut, _))
+          // dispatch schedule
+          inj(0, 1, 0); inj(1, 2, 1)
+          dut.clock.step(); off(1, 2)
+          inj(2, 3, 0)
+          dut.clock.step(); off(3)
+          inj(7, 0, 0)
+          dut.clock.step(); off(0)
+          for (_ <- 0 until 3) dut.clock.step() // cy3-5 idle
+          inj(3, 0, 0); inj(4, 1, 1)
+          dut.clock.step(); off(0, 1)
+          inj(5, 2, 0); inj(6, 3, 1)
+          dut.clock.step(); off(2, 3)
+          // Collect wake events; ack each so the next unit on a pipe is revealed
+          // (wake output is priority-arbitrated per pipe).
+          val seen = scala.collection.mutable.Set[Int]()
+          var cy = 0
+          while (cy < 40 && seen.size < 8) {
+            for (p <- 0 until NumPipes) {
+              if (dut.out.wake(p).valid.peekBoolean()) {
+                val pdest = dut.out.wake(p).bits.meta.pdest.peekValue().asBigInt.toInt
+                seen += pdest
+                dut.in.wakeAck(p).poke(true)
+              }
+            }
+            dut.clock.step()
+            dut.in.wakeAck.foreach(_.poke(false))
+            cy += 1
+          }
+          seen mustBe (0 until 8).toSet
+        }
+      }
+    }
+
+    // Emu-derived (logs/vrgather_vv-20260814-204042.log): vrgather.vv e8/m4
+    // vl=64. Store mismatch: DUT wrote 0x02 where REF wrote 0x00. 4 uops of one
+    // LMUL=4 block dispatched out-of-order:
+    //   cy0 uop0 (first entrant)   cy1 uop3, uop1, uop2
+    // Control-signal check (wake timing) only; the writeback data for this
+    // schedule is a separate gather/flow bug and is not asserted here.
+    describe("mixed 1+3 out-of-order LMUL=4 (emu 204042)") {
+      it("M12: first entrant must not wake before the block is assembled") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+          // vs1 (e8 indices) per uop, from the emu log
+          val vs1 = Seq(
+            Seq(0x7f,0xf8,0xf8,0x03,0x01,0x00,0xff,0xff,0x7f,0x7f,0x7f,0xf8,0xf8,0x03,0x01,0x00),
+            Seq(0x01,0x00,0xff,0xff,0x7f,0x7f,0x7f,0xf8,0xf8,0x03,0x01,0x00,0xff,0xff,0x7f,0x7f),
+            Seq(0x7f,0x7f,0x7f,0xf8,0xf8,0x03,0x01,0x00,0xff,0xff,0x7f,0x7f,0x7f,0xff,0x8f,0x80),
+            Seq(0xf8,0x03,0x01,0x00,0xff,0xff,0x7f,0x7f,0x7f,0xf8,0xf8,0x03,0x01,0x00,0xff,0xff)
+          )
+          // vs2 (e8 table) per uop
+          val table = Seq(
+            Seq(0x00,0x0f,0x02,0x00,0xff,0x00,0x01,0x07,0x00,0x08,0x00,0x0f,0x02,0x00,0xff,0x00),
+            Seq(0x00,0x08,0x00,0x0f,0x02,0x00,0xff,0x00,0x01,0x07,0x00,0x08,0x00,0x0f,0x02,0x00),
+            Seq(0x02,0x00,0xff,0x00,0x01,0x07,0x00,0x08,0x00,0x0f,0x02,0x00,0xff,0x00,0x01,0x07),
+            Seq(0x01,0x07,0x00,0x08,0x00,0x0f,0x02,0x00,0xff,0x00,0x01,0x07,0x00,0x08,0x00,0x0f)
+          )
+          val vs3 = Seq.fill(4)(Seq.fill(16)(0))
+          def inj(u: Int, pipe: Int, placeIdx: Int): Unit =
+            pGather(dut, pipe, 8, 8, foldBytes(vs1(u)), table(u), vs3(u),
+              lmulFrac = 32, uopIdx = u, placeIdx = placeIdx, vl = 64,
+              robIdx = 1, pdest = u)
+          // cy0: uop0 (first entrant)
+          inj(0, 0, 0)
+          dut.clock.step(); pPipeOff(dut, 0)
+          // cy1: uop0 alone -> block incomplete, no wake may fire
+          for (p <- 0 until NumPipes)
+            dut.out.wake(p).valid.expect(false.B, s"no wake before assembly (pipe $p)")
+          // cy1: uop3,1,2 (placeIdx 0,1,2 in pipe order)
+          inj(3, 1, 0); inj(1, 2, 1); inj(2, 3, 2)
+          dut.clock.step(); pPipeOff(dut, 1); pPipeOff(dut, 2); pPipeOff(dut, 3)
+          // Collect wake events (control only); ack each so the next unit on a
+          // pipe is revealed. Every uop of the assembled block must wake.
+          val seen = scala.collection.mutable.Set[Int]()
+          var cy = 0
+          while (cy < 20 && seen.size < 4) {
+            for (p <- 0 until NumPipes) {
+              if (dut.out.wake(p).valid.peekBoolean()) {
+                val pdest = dut.out.wake(p).bits.meta.pdest.peekValue().asBigInt.toInt
+                seen += pdest
+                dut.in.wakeAck(p).poke(true)
+              }
+            }
+            dut.clock.step()
+            dut.in.wakeAck.foreach(_.poke(false))
+            cy += 1
+          }
+          seen mustBe (0 until 4).toSet
+        }
+      }
     }
   }
 
@@ -1607,7 +1795,10 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           dut.clock.step(); cy += 1
         }
         delays.length must be >= 2
-        delays.sliding(2).forall { case Seq(a, b) => b > a } mustBe true
+        // delay = issue2exu - counter: grows as the flow progresses, then holds
+        // at the max (counter=0) until the wake is acked (req-ack), so the
+        // sequence is non-decreasing rather than strictly increasing.
+        delays.sliding(2).forall { case Seq(a, b) => b >= a } mustBe true
       }
     }
 
@@ -1641,6 +1832,46 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         }
         pdests must contain (0xAA)
         pdests must contain (0xBB)
+      }
+    }
+
+    it("K11: flush before all units wake resets allTableHasFilled (no early wake on reuse)") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(8)
+        val vs1 = foldBytes(Index.allInTable0(1))
+        // First m8 block: let uop0 wake (ack), then flush before the late uops
+        // (uop3-6) wake. allTableHasFilled must be reset by the block-empty
+        // condition (flush clears the units), not linger at 1.
+        for (u <- 0 until 8) {
+          pGather(dut, 0, 8, 8, vs1, table.slice(u * 16, (u + 1) * 16),
+            Prefill.default(8).slice(u * 16, (u + 1) * 16), lmulFrac = 64, uopIdx = u, placeIdx = 0, vl = 128)
+          dut.clock.step(); pPipeOff(dut, 0)
+        }
+        var acked = false
+        var cy = 0
+        while (cy < 12 && !acked) {
+          if (dut.out.wake(0).valid.peekBoolean()) {
+            dut.in.wakeAck(0).poke(true); dut.clock.step(); dut.in.wakeAck(0).poke(false)
+            acked = true
+          } else { dut.clock.step(); cy += 1 }
+        }
+        acked mustBe true
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        dut.clock.step()
+        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        // Reuse the same block with a PARTIAL m8 (uop0-3 only, block incomplete).
+        // With allTableHasFilled correctly reset to 0, no unit may wake until the
+        // block is assembled again.
+        for (u <- 0 until 4) {
+          pGather(dut, 0, 8, 8, vs1, table.slice(u * 16, (u + 1) * 16),
+            Prefill.default(8).slice(u * 16, (u + 1) * 16), lmulFrac = 64, uopIdx = u, placeIdx = 0, vl = 128, robIdx = 9, pdest = 0x90 + u)
+          dut.clock.step(); pPipeOff(dut, 0)
+        }
+        for (_ <- 0 until 8) {
+          dut.out.wake(0).valid.expect(false.B, "no premature wake on incomplete reused block")
+          dut.clock.step()
+        }
       }
     }
   }
