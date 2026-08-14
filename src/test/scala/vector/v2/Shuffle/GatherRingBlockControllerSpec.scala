@@ -103,13 +103,14 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
 
     describe("occupied block") {
       // tableValid=0x1 (unit0 holds a table), no index.
-      // block willFlow=1 (a table circulates); entryTable = tableMap(1) = 3.
-      // tablePos(p) = entryTable + willFlow - p = 3 + 1 - p (mod 4) -> uses the
-      // slot about to be vacated by the circulating table (position 0).
+      // The table circulates (unitWillFlow=1): next cycle it is predicted at
+      // unit1 (unitTableValidNextCycle = rotateLeft(0x1) = 0x2). Placement must
+      // avoid that predicted slot: entryTable resolves to 0, so
+      // tablePos(p) = 0 + s1WillFlow - p = 1 - p (mod 4) -> [1,0,3,2].
       // indexPos(p) = entryIndex + p = p.
       it("table at unit0, no index (willFlow=1)") {
         simulateBlock(4, 0, 0x1, 0, pipeSeq(4)) { (t, i, wf, _) =>
-          assert(t.map(_._2) == Seq(0, 3, 2, 1), s"tablePos=${t.map(_._2)}")
+          assert(t.map(_._2) == Seq(1, 0, 3, 2), s"tablePos=${t.map(_._2)}")
           assert(i.map(_._2) == Seq(0, 1, 2, 3), s"indexPos=${i.map(_._2)}")
           assert(wf == 0x1, s"table-only unit0 must flow (got ${Integer.toBinaryString(wf)})")
         }

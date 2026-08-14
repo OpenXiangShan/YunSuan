@@ -19,25 +19,21 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
 
   val unitTableValid = in.unitTableValid
   val unitIndexValid = in.unitIndexValid
-  
+
+  val unitTableValidNextCycle = Wire(UInt(size.W))
+
   // Merged occupancy for placement: registered (unit) + in-flight (s1).
   // clearTable only trusts the registered (unit) indices, never the in-flight
   // s1 ones (see the per-j unitIndexValid gate below).
-  val tableValid = unitTableValid | in.s1TableValid
+  val tableValid = unitTableValidNextCycle | in.s1TableValid
   val indexValid = unitIndexValid | in.s1IndexValid
 
   val inPipePlaceIdx: Vec[ValidIO[UInt]] = VecInit(in.pipePlaceIdx.map(_.map(x => x.take(log2Ceil(size) min x.getWidth))))
-
-  val tableFree = ~Cat(Reverse(tableValid.drop(1)), tableValid.take(1))
-  val indexFree = ~indexValid
 
   // size = 2, tableSeq should be Seq(0, 1)
   // size = 4, tableSeq should be Seq(0, 3, 2, 1)
   // size = 8, tableSeq should be Seq(0, 7, 6, ..., 1)
   val tableMap = VecInit((0 +: Seq.tabulate(size - 1)(x => size - 1 - x)).map(_.U))
-
-  val entryTable: UInt = WireInit(tableMap(PriorityEncoder(tableFree)))
-  val entryIndex: UInt = WireInit(PriorityEncoder(indexFree))
 
   // will flow
   // The least significant free position of tableValid less than the most significant valid position of indexValid
@@ -48,10 +44,27 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   val s1WillFlow = (tableValid.orR || indexValid.orR) &&
     (tableValid.head(1).asBool || !(tableLeastFreeOH.rotateRight(1) & indexMostValidOH).orR)
 
-  val unitTableLeastFreeOH = PriorityEncoderOH(~unitTableValid)
+  val unitTableFirstValid = PriorityEncoderOH(~(unitTableValid).rotateRight(1))
   val unitIndexMaskValidOH = Reverse(PriorityEncoderOH(Reverse(unitIndexValid)))
-  val unitWillFlow = (unitTableValid.orR || unitIndexValid.orR) &&
-    (in.counter.last > 0.U || !(unitTableLeastFreeOH.rotateRight(1) & unitIndexMaskValidOH).orR)
+  val unitWillFlow = unitTableValid.orR &&
+    (in.counter.last > 0.U || !(unitTableFirstValid & unitIndexMaskValidOH).orR)
+
+  // Predict table occupancy next cycle (if flowing, tables rotate right by 1):
+  // placement must not target a slot that the flow will occupy in the same cycle
+  // (fixes the placement-vs-flow collision, Q18/M10).
+  unitTableValidNextCycle := Mux(
+    unitWillFlow,
+    unitTableValid.rotateLeft(1),
+    unitTableValid,
+  )
+
+  val tableBusy = unitTableValidNextCycle | in.s1TableValid
+
+  val tableFree = ~Cat(Reverse(tableBusy.drop(1)), tableBusy.take(1))
+  val indexFree = ~indexValid
+
+  val entryTable: UInt = WireInit(tableMap(PriorityEncoder(tableFree)))
+  val entryIndex: UInt = WireInit(PriorityEncoder(indexFree))
 
   // clearTable(i): the table in unit i is useless if every unit j>i finishes
   // (counter(j) < j-i) before unit i's table can reach it (distance j-i in the
@@ -85,9 +98,29 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
 
   out.clearTable := clearTable.asUInt
 
-  // allTableValid: block-level, all tables of this block are valid (gates the vperm wakeup)
-  out.allTableValid := Fill(size, tableValid.andR)
+  // allTableHasFilled: latched "all tables of the block are placed". Unlike the
+  // pure level unitTableValid.andR (which collapses as soon as an early unit
+  // clears its table), it stays set so uops that arrive late (out-of-order /
+  // multi-cycle dispatch) can still wake once their counter drops to <=3.
+  // Cleared once every unit's flow has completed (counter == 0), so a reused
+  // block always re-assembles from 0 (default 0).
+  val allTableHasFilled = RegInit(false.B)
 
+  when(unitTableValid.andR) {
+    allTableHasFilled := true.B
+  }
+  // All counters zero = every unit's flow has completed (block done). Clearing
+  // here rather than on per-unit wake keeps the latch set through the late uops'
+  // wake window, and the tables clear in the same cycle (clearTable depends on
+  // counter), so the level set cannot re-fire afterwards.
+  when(in.counter.map(_ === 0.U).reduce(_ && _)) {
+    allTableHasFilled := false.B
+  }
+
+  // allTableValid: block-level, all tables of this block are valid (gates the vperm wakeup)
+  out.allTableValid := Fill(size, allTableHasFilled)
+
+  dontTouch(s1WillFlow)
   dontTouch(entryIndex)
   dontTouch(entryTable)
   dontTouch(out.clearTable)
