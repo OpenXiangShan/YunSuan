@@ -1774,7 +1774,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
       }
     }
 
-    it("K10: delay tracks flow progress (counter decreasing)") {
+    it("K10: LMUL=8 wake delay is counter-derived (no monotonicity)") {
       simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
         initDut(dut)
         val table = Table.inc(8)
@@ -1784,21 +1784,26 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
             Prefill.default(8).slice(u * 16, (u + 1) * 16), lmulFrac = 64, uopIdx = u, placeIdx = 0, vl = 128)
           dut.clock.step(); pPipeOff(dut, 0)
         }
-        // collect delays across the wake window; as counter decreases the delay
-        // (issue2exu - counter) increases.
-        var delays = Seq.empty[Int]
+        // Collect (delay, observed-unit counter) across the wake window. Pipe0
+        // arbitrates U0/U4 with U0 winning, so the observed unit is U0.
+        var samples = Seq.empty[(Int, Int)]
         var cy = 0
-        while (cy < 20 && delays.length < 4) {
+        while (cy < 20 && samples.length < 4) {
           if (dut.out.wake(0).valid.peekBoolean()) {
-            delays :+= dut.out.wake(0).bits.delay.peekValue().asBigInt.toInt
+            val d = dut.out.wake(0).bits.delay.peekValue().asBigInt.toInt
+            val c = dut.out.unitStatus(0).counter.peekValue().asBigInt.toInt
+            samples :+= (d, c)
           }
           dut.clock.step(); cy += 1
         }
-        delays.length must be >= 2
-        // delay = issue2exu - counter: grows as the flow progresses, then holds
-        // at the max (counter=0) until the wake is acked (req-ack), so the
-        // sequence is non-decreasing rather than strictly increasing.
-        delays.sliding(2).forall { case Seq(a, b) => b >= a } mustBe true
+        samples.length must be >= 2
+        // delay = issue2exu - counter of the waking unit, minus the 1-cycle
+        // wakeBlocked bump when the wake is not acked. No monotonicity is
+        // asserted: counters are not monotonic under same-block multi-uop
+        // placement (a reused unit is re-placed with counter reset to blockSize).
+        samples.foreach { case (d, c) =>
+          (d == issue2exu - c || d == issue2exu - c - 1) mustBe true
+        }
       }
     }
 
