@@ -52,7 +52,19 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   private val tableIdx       = in.bits.uopIdx
   private val offset         = in.bits.rs1
   private val offsetOverflow = in.bits.rs1 >= in.bits.vl
-  private val byteMask       = in.bits.vs1 // compress mask
+  // vcompress mask: only elements within vl can be selected (RISC-V V spec:
+  // vcompress packs "the first vl elements of vs2"). Gate byteMask to the low
+  // e8vl (= vl in byte-elements) bits; otherwise beyond-vl mask bits inflate
+  // popcount and turn tail elements into a bogus LOOKUP (emu vcompress_vm-0).
+  private val e8vlComb = Mux1H(Seq(
+    in.bits.sew.e8  -> in.bits.vl,
+    in.bits.sew.e16 -> Cat(in.bits.vl, 0.U(1.W)),
+    in.bits.sew.e32 -> Cat(in.bits.vl, 0.U(2.W)),
+    in.bits.sew.e64 -> Cat(in.bits.vl, 0.U(3.W)),
+  ))
+  private val byteMask = VecInit((0 until VLEN).map { i =>
+    Mux(i.U < e8vlComb, in.bits.vs1(i), false.B)
+  }).asUInt
 
   /******************** Sub-module Input Connections *************************/
 
