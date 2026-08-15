@@ -228,6 +228,11 @@ class GatherRingUnit[T <: Data](
   out.wb.bits.data := resView.asUInt
   out.wb.bits.meta := meta
 
+  // Safety: writeback must never fire while any element's index is unresolved
+  // (indexDone all-1). A late-arriving table (progressive / out-of-order
+  // dispatch) would otherwise leave lookups pending and corrupt the result.
+  assert(!out.wb.valid || indexDone.asUInt.andR, "GatherRingUnit wb with unresolved indexDone")
+
   // ── VPerm Wakeup (early wake, req-ack) ─────────────
   // delay = issue2exu - counter: counter == issue2exu -> delay=0 (wbM3, earliest wakeup),
   // counter == 0 -> delay=issue2exu (writeback is happening).
@@ -269,7 +274,9 @@ class GatherRingUnit[T <: Data](
   out.status.done         := done
 
   out.debug.foreach {
-    debug => debug.indexOrRes := indexOrRes.asUInt
+    debug =>
+      debug.indexOrRes := indexOrRes.asUInt
+      debug.indexDone := indexDone.asUInt
   }
 
   dontTouch(in)
@@ -397,6 +404,7 @@ object GatherRingUnit {
 
   class Debug()(implicit val param: GatherParam) extends GatherBundle {
     val indexOrRes = UInt(DLEN.W)
+    val indexDone = UInt(NumElem.W)
   }
 
   def pow2remIsZero(dividend: Int, divisor: UInt): Bool = {

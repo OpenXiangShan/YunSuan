@@ -139,6 +139,7 @@ class PermUnit[T <: Data](
   out.metas      := gatherRing.out.metas
   out.unitStatus := gatherRing.out.unitStatus
   out.wake       := gatherRing.out.wake
+  out.debug.foreach { dbg => dbg := gatherRing.out.debug.get }
 }
 
 object PermUnit {
@@ -157,6 +158,7 @@ object PermUnit {
     val metas      = Vec(NumUnits, metaGen)
     val unitStatus = Vec(NumUnits, new Status)
     val wake       = Vec(NumPipeOut, ValidIO(new GatherRingUnit.Wake(metaGen)))
+    val debug = Option.when(param.debug)(Vec(NumUnits, new GatherRingUnit.Debug))
   }
 
   /** Single pipe input: block placement + IndexGen operands + table/fill/meta.

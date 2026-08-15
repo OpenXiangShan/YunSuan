@@ -129,6 +129,10 @@ class GatherRing[T <: Data](
   for (i <- 0 until NumUnits) {
     out.unitStatus(i) := units(i).out.status
   }
+  // debug (indexOrRes / indexDone) threaded from units
+  out.debug.foreach { dbg =>
+    dbg.zipWithIndex.foreach { case (d, i) => d := units(i).out.debug.get }
+  }
 
   /******************** Connections of controller ****************************/
 
@@ -199,6 +203,7 @@ object GatherRing {
     val unitStatus = Vec(NumUnits, new Status)
     // arbitrated vperm wakeup requests (mirror of pipes)
     val wake = Vec(NumPipeOut, ValidIO(new GatherRingUnit.Wake(metaGen)))
+    val debug = Option.when(param.debug)(Vec(NumUnits, new GatherRingUnit.Debug))
   }
 
   class PipeInS0(implicit val param: GatherParam) extends GatherBundle {
