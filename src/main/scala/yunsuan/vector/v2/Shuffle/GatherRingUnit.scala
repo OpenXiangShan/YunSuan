@@ -113,9 +113,10 @@ class GatherRingUnit[T <: Data](
   when(doPlaceTable) {
     passedEntry := in.placeTable.isFirstTable
   }.elsewhen(doFlowTable) {
-    // passedEntry travels with the table: propagate the incoming tag and set
-    // it once the table reaches the block's first (entry) unit.
-    passedEntry := in.flow.passedEntry || GatherRingUnit.pow2remIsZero(unitIdx, blockSize)
+    // passedEntry travels with the table: propagate the incoming tag. The ring
+    // loopback into the entry unit already forces passedEntry=1, so the entry
+    // unit needs no special-casing here.
+    passedEntry := in.flow.passedEntry
   }.otherwise {
     // hold
   }
@@ -142,12 +143,19 @@ class GatherRingUnit[T <: Data](
   when(flush) {
     counter := 0.U
   }.elsewhen(doPlaceIndex) {
-    when (doPlaceTable || hasTable) {
+    // The first table of the block (isFirstTable, at the entry unit) is already
+    // in place, so one fewer table needs to arrive; a non-first table placement
+    // (or index-only) still needs the full blockSize tables to flow in.
+    when ((hasTable && isFirstTable) || (doPlaceTable && in.placeTable.bits.isFirstTable)) {
       counter := inBlockSize - 1.U
     }.otherwise {
       counter := inBlockSize
     }
-  }.elsewhen(doFlowTable && counter > 0.U) {
+  }.elsewhen(doFlowTable && counter > 0.U && in.flow.passedEntry) {
+    // Only count tables that carry passedEntry: a table that has not passed the
+    // entry has not started a real traversal, so re-circulating partial-block
+    // tables (progressive dispatch) would otherwise exhaust the counter and
+    // fire done before the late tables arrive (M13/emu 20260815-145113).
     counter := counter - 1.U
   }
 

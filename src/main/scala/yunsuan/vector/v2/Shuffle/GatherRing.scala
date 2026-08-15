@@ -62,17 +62,29 @@ class GatherRing[T <: Data](
 
     val prevFlowSource: Option[ValidIO[GatherRingUnit.RingFlow]] = Option.when(i > 0)(units(i - 1).out.flow)
 
+    // A table returning to the block's entry unit via a ring loopback has already
+    // passed the entry, so tag the loopback flow with passedEntry=1. The tail
+    // unit only drives the loopback while its own passedEntry is still 0
+    // (out.flow.valid = hasTable && !isLastUnit once passed), so the looped
+    // table's passedEntry would otherwise always read 0 and the entry unit's
+    // counter (gated on in.flow.passedEntry) would never decrement (M13/uop0).
+    def looped(tail: GatherRingUnit[T]): GatherRingUnit.RingFlow = {
+      val bits = Wire(chiselTypeOf(tail.out.flow.bits))
+      bits := tail.out.flow.bits
+      bits.passedEntry := true.B
+      bits
+    }
     val ring2FlowSource = Option.when(i % 2 == 0)(makeValidIO(
       ring2TailUnits(i / 2).out.flow.valid && (units(i).out.status.blockSize & 2.U).orR,
-      ring2TailUnits(i / 2).out.flow.bits)
+      looped(ring2TailUnits(i / 2)))
     )
     val ring4FlowSource = Option.when(i % 4 == 0)(makeValidIO(
       ring4TailUnits(i / 4).out.flow.valid && (units(i).out.status.blockSize & 4.U).orR,
-      ring4TailUnits(i / 4).out.flow.bits)
+      looped(ring4TailUnits(i / 4)))
     )
     val ring8FlowSource = Option.when(i % 8 == 0)(makeValidIO(
       ring8TailUnits(i / 8).out.flow.valid && (units(i).out.status.blockSize & 8.U).orR,
-      ring8TailUnits(i / 8).out.flow.bits)
+      looped(ring8TailUnits(i / 8)))
     )
 
     val flowSources: Seq[ValidIO[GatherRingUnit.RingFlow]] = Seq(
