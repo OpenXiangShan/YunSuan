@@ -347,14 +347,17 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
     * packed[p] = vs2Full[globalPos of (p+1)-th set bit]; a uop's output byte j
     * = packed[uopIdx*16 + j] when that global output position < popcount(mask),
     * else prefill (vta-agnostic or vs3 local).
+    * Only mask bits within vl select source elements (RISC-V V spec: vcompress
+    * packs "the first vl elements of vs2"); bits beyond vl are ignored.
     */
   def compressGolden(mask: BigInt, vs2Full: Seq[Int], vs3: Seq[Int], uopIdx: Int,
     vl: Int, vta: Boolean = false): BigInt = {
-    val total = mask.bitCount
+    val activeMask = mask & ((BigInt(1) << vl) - 1)
+    val total = activeMask.bitCount
     val packed = Array.ofDim[Int](total)
     var p = 0
     for (g <- vs2Full.indices) {
-      if (((mask >> g) & 1) == 1) { packed(p) = vs2Full(g); p += 1 }
+      if (((activeMask >> g) & 1) == 1) { packed(p) = vs2Full(g); p += 1 }
     }
     (0 until numElem).map { j =>
       val outPos = uopIdx * numElem + j
@@ -1411,6 +1414,21 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           pCompress(dut, 1, mask, vs2.slice(0, 16), vs3.slice(0, 16), lmulFrac = 16, uopIdx = 0, placeIdx = 0)
           dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
           eWbAfter(dut, 1, golden, 5)
+        }
+      }
+      it("C6: mf8 vl=2 mask bit beyond vl -> all tail (emu vcompress_vm-0)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          // vs1=0x0100 (bit 8): element 8 >= vl=2 -> ignored per spec (only the
+          // first vl mask bits select). 0 elements compressed -> all tail (tu).
+          val vs2 = Seq(0x08, 0x00, 0x0F, 0x00, 0x00, 0x02, 0x00, 0xFF,
+                        0x07, 0x01, 0x08, 0x00, 0x0F, 0x00, 0x00, 0x02)
+          val vs3 = Prefill.default(1)
+          val mask = 0x100
+          val golden = compressGolden(mask, vs2, vs3, 0, 2)
+          pCompress(dut, 0, mask, vs2, vs3, lmulFrac = 1, vl = 2)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 3)
         }
       }
     }
