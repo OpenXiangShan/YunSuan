@@ -178,6 +178,18 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
       }
     }.asUInt
   }
+
+  // blockedByEqCounter: unit u is "blocked" when another unit on the same wake
+  // pipe currently has an equal counter (its wake would carry the same delay and
+  // collide on the arbitrated pipe). Drives the wakeBlocked delay bump in the
+  // unit; it only matters once the unit itself is in its wake window.
+  out.blockedByEqCounter := VecInit.tabulate(NumUnits) { u =>
+    val p = u % NumPipeOut
+    Seq.tabulate(pipeGroupSize(p)) { k =>
+      val v = p + k * NumPipeOut
+      if (v == u) false.B else in.counter(v) === in.counter(u)
+    }.foldLeft(false.B)(_ || _)
+  }
 }
 
 object GatherRingController {
@@ -207,6 +219,7 @@ object GatherRingController {
     val wbSelOH      = Vec(NumPipeOut, UInt(NumUnits.W))
     val unitAllTableValid = Vec(NumUnits, Bool())
     val wakeSelOH      = Vec(NumPipeOut, UInt(NumUnits.W))
+    val blockedByEqCounter = Vec(NumUnits, Bool())
     // Debug: per-pipe controller valid bitmap [ring8, ring4, ring2]
     val dbgPipeCtrlValid = Vec(NumPipeIn, UInt(3.W))
   }

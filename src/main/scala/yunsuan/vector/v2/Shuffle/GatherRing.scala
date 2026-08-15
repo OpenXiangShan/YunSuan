@@ -172,6 +172,7 @@ class GatherRing[T <: Data](
     units(i).in.wakeAck := VecInit(controller.out.wakeSelOH.zip(in.wakeAck).map {
       case (selOH, ack) => selOH(i) && ack
     }).asUInt.orR
+    units(i).in.blockedByEqCounter := controller.out.blockedByEqCounter(i)
   }
 
   for (p <- 0 until NumPipeOut) {

@@ -233,6 +233,7 @@ class GatherRingUnit[T <: Data](
   // counter == 0 -> delay=issue2exu (writeback is happening).
   // The request is kept asserted until it is acked (wakedUp set).
   private val wakedUp = RegInit(false.B)
+  private val wakeBlocked = RegInit(false.B)
 
   when (flush || doPlaceIndex) {
     wakedUp := false.B
@@ -240,8 +241,14 @@ class GatherRingUnit[T <: Data](
     wakedUp := true.B
   }
 
+  when (flush || doPlaceIndex) {
+    wakeBlocked := false.B
+  }.elsewhen (out.wake.valid && !in.wakeAck && in.blockedByEqCounter) {
+    wakeBlocked := true.B
+  }
+
   out.wake.valid := in.allTableValid && hasIndex && counter <= param.issue2exu.U && !wakedUp
-  out.wake.bits.delay := (param.issue2exu.U - counter)(WakeDelayWidth - 1, 0)
+  out.wake.bits.delay := (param.issue2exu.U - counter)(WakeDelayWidth - 1, 0) - wakeBlocked
   out.wake.bits.meta := meta
 
   // ── Table Output (to next Unit) ──────────────────────
@@ -281,6 +288,9 @@ object GatherRingUnit {
     val allTableValid = Bool()
     // Req-ack: set wakedUp once the wakeup has been accepted
     val wakeAck = Bool()
+    // From the ring controller: another unit on the same wake pipe has an equal
+    // counter (an equal-delay wake would collide on the arbitrated pipe)
+    val blockedByEqCounter = Bool()
   }
 
   class Out[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
