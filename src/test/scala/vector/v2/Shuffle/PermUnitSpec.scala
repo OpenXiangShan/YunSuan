@@ -1388,6 +1388,130 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           eWbAfter(dut, 0, golden, 2)
         }
       }
+      it("SD4: m4 vl=31 offset=31 cross-chunk source (emu vslidedown_vi)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+          val vs2 = Seq.tabulate(64)(i => 0x10 + i)
+          val vs3 = Prefill.default(4)
+          // golden uses full vs2 (cross-chunk reads) but chunk-local vs3 (tail)
+          val goldens = (0 until 4).map(c =>
+            slideDownGolden(31, vs2, vs3.slice(c * 16, (c + 1) * 16), 8, 32, c, 31))
+          def inj(c: Int, pipe: Int, placeIdx: Int): Unit =
+            pSlideDown(dut, pipe, 31, vs2.slice(c * 16, (c + 1) * 16), vs3.slice(c * 16, (c + 1) * 16),
+              lmulFrac = 32, uopIdx = c, placeIdx = placeIdx, vl = 31, robIdx = 1, pdest = c)
+          def off(ps: Int*): Unit = ps.foreach(pPipeOff(dut, _))
+          // emu dispatch: t0 uop0+uop1, t1 uop3+uop2 (pc 800026a6).
+          // placeIdx = per-cycle uop index (0-based each cycle), not the uop number.
+          inj(0, 0, 0); inj(1, 1, 1)
+          dut.clock.step(); off(0, 1)
+          inj(3, 0, 0); inj(2, 1, 1)
+          dut.clock.step(); off(0, 1)
+          // collect writeback tagged by pdest, then drain
+          val wbData = Array.fill(4)(Option.empty[BigInt])
+          var drained = false
+          for (cy <- 0 until 80; if !drained) {
+            for (p <- 0 until NumPipes) {
+              if (dut.out.pipes(p).valid.peekBoolean()) {
+                val pd = dut.out.pipes(p).bits.meta.pdest.peekValue().asBigInt.toInt
+                if (wbData(pd).isEmpty) {
+                  wbData(pd) = Some(dut.out.pipes(p).bits.data.peekValue().asBigInt)
+                }
+              }
+            }
+            drained = (0 until NumUnits).forall(u => !dut.out.unitStatus(u).hasIndex.peekBoolean())
+            dut.clock.step()
+          }
+          for (c <- 0 until 4) {
+            wbData(c).getOrElse(fail(s"uop $c never wrote back")) mustBe goldens(c)
+          }
+        }
+      }
+      it("SD5: m4 vl=31 offset=1 (emu vslidedown_vi-1 pc 26de)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+          val vs2 = Seq.tabulate(64)(i => 0x10 + i)
+          val vs3 = Prefill.default(4)
+          val goldens = (0 until 4).map(c =>
+            slideDownGolden(1, vs2, vs3.slice(c * 16, (c + 1) * 16), 8, 32, c, 31))
+          def inj(c: Int, pipe: Int, placeIdx: Int): Unit =
+            pSlideDown(dut, pipe, 1, vs2.slice(c * 16, (c + 1) * 16), vs3.slice(c * 16, (c + 1) * 16),
+              lmulFrac = 32, uopIdx = c, placeIdx = placeIdx, vl = 31, robIdx = 1, pdest = c)
+          def off(ps: Int*): Unit = ps.foreach(pPipeOff(dut, _))
+          // emu dispatch: t0 uop0+uop1, t1 uop3+uop2 (placeIdx = per-cycle uop index)
+          inj(0, 0, 0); inj(1, 1, 1)
+          dut.clock.step(); off(0, 1)
+          inj(3, 0, 0); inj(2, 1, 1)
+          dut.clock.step(); off(0, 1)
+          val wbData = Array.fill(4)(Option.empty[BigInt])
+          var drained = false
+          for (cy <- 0 until 80; if !drained) {
+            for (p <- 0 until NumPipes) {
+              if (dut.out.pipes(p).valid.peekBoolean()) {
+                val pd = dut.out.pipes(p).bits.meta.pdest.peekValue().asBigInt.toInt
+                if (wbData(pd).isEmpty) {
+                  wbData(pd) = Some(dut.out.pipes(p).bits.data.peekValue().asBigInt)
+                }
+              }
+            }
+            drained = (0 until NumUnits).forall(u => !dut.out.unitStatus(u).hasIndex.peekBoolean())
+            dut.clock.step()
+          }
+          for (c <- 0 until 4) {
+            wbData(c).getOrElse(fail(s"uop $c never wrote back")) mustBe goldens(c)
+          }
+        }
+      }
+      it("SD6: m4 vl=31 rs1=0xff..ff sign-extended imm31 (emu vslidedown_vi)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+          val vs2 = Seq.tabulate(64)(i => 0x10 + i)
+          val vs3 = Prefill.default(4)
+          // regression: with the decoder fixed (VSLIDEDOWN_VI -> OPIVIU), the
+          // zero-extended imm31 reaches the PermUnit as rs1=0x1f (offset=31).
+          val goldens = (0 until 4).map(c =>
+            slideDownGolden(31, vs2, vs3.slice(c * 16, (c + 1) * 16), 8, 32, c, 31))
+          def inj(c: Int, pipe: Int, placeIdx: Int): Unit = {
+            val p = dut.in.pipes(pipe)
+            p.valid.poke(true)
+            p.bits.op.isSlideDown.poke(true)
+            p.bits.placeIdx.poke(placeIdx); p.bits.blockBase.poke(0); p.bits.uopIdx.poke(c)
+            pSew(p.bits.sew, 8); pLmul(p.bits.lmul, 32)
+            p.bits.vl.poke(31)
+            p.bits.vta.poke(false); p.bits.vma.poke(false)
+            p.bits.rs1.poke(0x1f)
+            p.bits.vs2.poke(foldBytes(vs2.slice(c * 16, (c + 1) * 16)))
+            p.bits.vs3.poke(foldBytes(vs3.slice(c * 16, (c + 1) * 16)))
+            p.bits.mask.poke((BigInt(1) << numElem) - 1)
+            pMeta(dut, pipe, 1, c)
+          }
+          def off(ps: Int*): Unit = ps.foreach(pPipeOff(dut, _))
+          // emu dispatch: t0 uop0+uop1, t1 uop3+uop2 (placeIdx = per-cycle uop index)
+          inj(0, 0, 0); inj(1, 1, 1)
+          dut.clock.step(); off(0, 1)
+          inj(3, 0, 0); inj(2, 1, 1)
+          dut.clock.step(); off(0, 1)
+          val wbData = Array.fill(4)(Option.empty[BigInt])
+          var drained = false
+          for (cy <- 0 until 80; if !drained) {
+            for (p <- 0 until NumPipes) {
+              if (dut.out.pipes(p).valid.peekBoolean()) {
+                val pd = dut.out.pipes(p).bits.meta.pdest.peekValue().asBigInt.toInt
+                if (wbData(pd).isEmpty) {
+                  wbData(pd) = Some(dut.out.pipes(p).bits.data.peekValue().asBigInt)
+                }
+              }
+            }
+            drained = (0 until NumUnits).forall(u => !dut.out.unitStatus(u).hasIndex.peekBoolean())
+            dut.clock.step()
+          }
+          for (c <- 0 until 4) {
+            wbData(c).getOrElse(fail(s"uop $c never wrote back")) mustBe goldens(c)
+          }
+        }
+      }
     }
 
     // ---- vslide1down ----
