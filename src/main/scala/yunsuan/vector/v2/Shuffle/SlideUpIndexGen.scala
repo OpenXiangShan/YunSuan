@@ -52,14 +52,16 @@ class SlideUpIndexGen(implicit val param: GatherParam) extends GatherModule {
   )
 
   out.slideup.valid := in.valid && !in.bits.isSlide1Up
-  // i < min(vl, max(vstart, offset))
-  // Since vstart is always 0, we get
-  // i < min(vl, offset) <=>
-  // i < vl && i < offset
+  // Absolute index within the whole LMUL group (like SlideDownIndexGen): dest
+  // byte at group position tableIdx*16+i reads source tableIdx*16+i-offset.
+  // Without the tableIdx base, uop1+ looks up the first register's data
+  // (emu vslideup_vi-1 pc=0x800008d2: uop1 got v4's bytes instead of v5's).
+  // i < min(vl, max(vstart, offset)); vstart always 0 -> i < vl && i < offset
   for (i <- out.slideup.bits.index.indices) {
-    val isStay = offsetOverflow || (i.U < e8Vl && i.U < e8Off)
+    val iAbs = (in.bits.tableIdx ## i.U(IndexWidthInDLEN.W))
+    val isStay = offsetOverflow || (iAbs < e8Vl && iAbs < e8Off)
     out.slideup.bits.index(i) :=
-      Mux(isStay, i.U, i.U - e8Off)
+      Mux(isStay, iAbs, iAbs - e8Off)
     // The stay elements (i < offset, or all when offset >= vl) are "unchanged"
     // (old vd), so they must be PREFILL (iv=false -> vs3), not a LOOKUP of
     // vs2[i] (emu vslideup_vi-0 block3: offset=3>=vl=2, byte1 got 0x02=vs2[1]).
@@ -68,16 +70,29 @@ class SlideUpIndexGen(implicit val param: GatherParam) extends GatherModule {
     out.slideup.bits.fillScala(i)  := false.B
   }
   out.slide1up.valid := in.valid && in.bits.isSlide1Up
+  // Absolute source: group byte tableIdx*16+i minus SEW bytes; cross-segment
+  // reads (e.g. uop1 byte 0 <- uop0 last byte) are handled by the ring. The
+  // only underflow (iAbs < sewb) is uop0's scalar head bytes (indexValid=false
+  // / fillScala), so clamp to 0 (matches golden .max(0)).
   for (i <- out.slide1up.bits.index.indices) {
-    out.slide1up.bits.index(i) :=
-      Mux1H(
-        Seq(
-          sew.e8  -> (i - 1).max(0).U,
-          sew.e16 -> (i - 2).max(0).U,
-          sew.e32 -> (i - 4).max(0).U,
-          sew.e64 -> (i - 8).max(0).U
-        )
+    val iAbs = (in.bits.tableIdx ## i.U(IndexWidthInDLEN.W))
+    val sewb = Mux1H(
+      Seq(
+        sew.e8  -> 1.U,
+        sew.e16 -> 2.U,
+        sew.e32 -> 4.U,
+        sew.e64 -> 8.U
       )
+    )
+    val sub = Mux1H(
+      Seq(
+        sew.e8  -> (iAbs - 1.U),
+        sew.e16 -> (iAbs - 2.U),
+        sew.e32 -> (iAbs - 4.U),
+        sew.e64 -> (iAbs - 8.U)
+      )
+    )
+    out.slide1up.bits.index(i) := Mux(iAbs >= sewb, sub, 0.U)
     out.slide1up.bits.indexValid(i) := !iIsZero(i)
     out.slide1up.bits.fillScala(i)  := iIsZero(i)
     out.slide1up.bits.fillZeros(i)  := false.B

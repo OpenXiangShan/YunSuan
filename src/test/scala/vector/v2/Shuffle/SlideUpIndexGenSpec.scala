@@ -15,13 +15,15 @@ class SlideUpIndexGenSpec extends SpecBase with GatherSpecUtils {
   // Golden model: slideup index
   // i < min(vl_e8, offset_e8) -> stay (index = i), else -> shift down (index = i - offset_e8)
   // Stay elements are "unchanged" (old vd) -> PREFILL (iv=false), not LOOKUP.
-  def goldenSlideUp(offset: Int, sew: Int, vl: Int): Seq[(Int, Boolean, Boolean, Boolean)] = {
+  def goldenSlideUp(offset: Int, sew: Int, vl: Int, tableIdx: Int = 0): Seq[(Int, Boolean, Boolean, Boolean)] = {
     val shift = sewShift(sew)
     val e8Off = offset << shift
     val e8Vl  = vl << shift
+    val tableBase = tableIdx * numElem
     (0 until numElem).map { i =>
-      val isStay = e8Off >= e8Vl || (i < e8Vl && i < e8Off)
-      val idx = if (isStay) i else i - e8Off
+      val absPos = tableBase + i
+      val isStay = e8Off >= e8Vl || (absPos < e8Vl && absPos < e8Off)
+      val idx = if (isStay) absPos else absPos - e8Off
       (idx.max(0), !isStay, false, false) // (index, indexValid, fillZeros, fillScala)
     }
   }
@@ -29,10 +31,11 @@ class SlideUpIndexGenSpec extends SpecBase with GatherSpecUtils {
   // Golden model: slide1up index. tableIdx ≠ 0 means no fillScala (no element has global SEW index 0)
   def goldenSlide1Up(sew: Int, tableIdx: Int = 0): Seq[(Int, Boolean, Boolean, Boolean)] = {
     val sewb = sew / 8
+    val tableBase = tableIdx * numElem
     (0 until numElem).map { i =>
       val elemIdx = tableIdx * numElem / sewb + i / sewb
       val isFirst = tableIdx == 0 && elemIdx == 0
-      val idx = (i - sewb).max(0)
+      val idx = (tableBase + i - sewb).max(0)
       (idx, !isFirst, false, isFirst)
     }
   }
@@ -284,7 +287,7 @@ class SlideUpIndexGenSpec extends SpecBase with GatherSpecUtils {
   describe("tableIdx variation") {
     it("tableIdx=1, offset=3, SEW=8, vl=14") {
       simulate(new SlideUpIndexGen()(GatherParam.default)) { dut =>
-        val golden = goldenSlideUp(offset = 3, sew = 8, vl = 14)
+        val golden = goldenSlideUp(offset = 3, sew = 8, vl = 14, tableIdx = 1)
         pSlideUp(dut, offset = 3, sew = 8, vl = 14, tableIdx = 1)
         dut.clock.step()
         eSlideUp(dut, golden)

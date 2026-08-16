@@ -1,6 +1,7 @@
 package yunsuan.vector.v2.Shuffle
 
 import chisel3._
+import chisel3.simulator.ExpectationValueFormat
 import chisel3.simulator.scalatest.ChiselSim
 import org.scalatest.ParallelTestExecution
 import org.scalatest.funspec.AnyFunSpec
@@ -63,14 +64,17 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
     res.toSeq
   }
 
-  def goldenSlideUp(offset: Int, sew: Int, vl: Int): Seq[(Int, Boolean, Boolean, Boolean)] = {
+  def goldenSlideUp(tableIdx: Int, offset: Int, sew: Int, vl: Int): Seq[(Int, Boolean, Boolean, Boolean)] = {
     val shift = sewShift(sew)
     val e8Off = offset << shift
     val e8Vl = vl << shift
     val offsetOverflow = e8Off >= e8Vl // offset >= vl: no element is shifted
+    val tableBase = tableIdx * numElem // absolute byte base of this uop's segment
     (0 until numElem).map { i =>
-      val isStay = offsetOverflow || (i < e8Vl && i < e8Off)
-      val idx = if (isStay) i else i - e8Off
+      val absPos = tableBase + i
+      // stay region is global (whole LMUL group): absPos < min(e8Vl, e8Off)
+      val isStay = offsetOverflow || (absPos < e8Vl && absPos < e8Off)
+      val idx = if (isStay) absPos else absPos - e8Off
       // stay elements are "unchanged" (old vd) -> PREFILL (iv=false), not
       // a LOOKUP of vs2[i] (emu vslideup_vi-0 block3).
       (idx.max(0), !isStay, false, false)
@@ -79,10 +83,11 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
 
   def goldenSlide1Up(sew: Int, tableIdx: Int = 0): Seq[(Int, Boolean, Boolean, Boolean)] = {
     val sb = sewb(sew)
+    val tableBase = tableIdx * numElem
     (0 until numElem).map { i =>
       val elemIdx = tableIdx * numElem / sb + i / sb
       val isFirst = tableIdx == 0 && elemIdx == 0
-      ((i - sb).max(0), !isFirst, false, isFirst)
+      ((tableBase + i - sb).max(0), !isFirst, false, isFirst)
     }
   }
 
@@ -290,10 +295,9 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
   // (include tableIdx*16), so they index the full vs2.
   def slideUpGolden(offset: Int, vs2: Seq[Int], vs3: Seq[Int], sew: Int, lmulFrac: Int,
     uopIdx: Int, vl: Int, vta: Boolean = false, vma: Boolean = false, mask: BigInt = -1): BigInt = {
-    val flags = goldenSlideUp(offset, sew, vl)
-    val n = lmulFrac / 8
-    goldenPerm(flags, vs2.slice(uopIdx * numElem, (uopIdx + 1) * numElem), Seq(0),
-      vs3.slice(uopIdx * numElem, (uopIdx + 1) * numElem),
+    val flags = goldenSlideUp(uopIdx, offset, sew, vl)
+    // table = full group (absolute index); prefill = uop's own vs3 slice
+    goldenPerm(flags, vs2, 0 until Math.max(1, lmulFrac / 8), vs3,
       Seq.fill(8)(0), sew, uopIdx, vl, vta, vma,
       if (mask < 0) (BigInt(1) << numElem) - 1 else mask)
   }
@@ -301,8 +305,8 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
   def slide1UpGolden(scalarBytes: Seq[Int], vs2: Seq[Int], vs3: Seq[Int], sew: Int, lmulFrac: Int,
     uopIdx: Int, vl: Int, vta: Boolean = false, vma: Boolean = false, mask: BigInt = -1): BigInt = {
     val flags = goldenSlide1Up(sew, uopIdx)
-    goldenPerm(flags, vs2.slice(uopIdx * numElem, (uopIdx + 1) * numElem), Seq(0),
-      vs3.slice(uopIdx * numElem, (uopIdx + 1) * numElem),
+    // table = full group (absolute index); prefill = uop's own vs3 slice
+    goldenPerm(flags, vs2, 0 until Math.max(1, lmulFrac / 8), vs3,
       scalarBytes, sew, uopIdx, vl, vta, vma,
       if (mask < 0) (BigInt(1) << numElem) - 1 else mask)
   }
@@ -1309,6 +1313,38 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           pMeta(dut, 0, 0, 0)
           dut.clock.step(); pPipeOff(dut, 0)
           eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("SU8: LMUL=2 e8 vl=32 offset=0 uop1 must read vs5 not vs4 (emu vslideup_vi-1 pc=0x800008d2)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          // emu vslideup_vi-1: vslideup.vi v2, v4, 0 @ pc 0x800008d2 (e8/m2/vl=32).
+          // DUT wrote uop1 (=v3) with v4's bytes instead of v5's. Feed each uop
+          // its own source register; offset=0 -> identity per uop.
+          val vs4 = Seq(0x00, 0x02, 0x0f, 0x00, 0xff, 0x7f, 0xff, 0x00,
+                        0x02, 0x00, 0x0f, 0x00, 0xff, 0x7f, 0xff, 0x02)
+          val vs5 = Seq(0x0f, 0x00, 0xff, 0x7f, 0xff, 0x00, 0x02, 0x0f,
+                        0x00, 0xff, 0x7f, 0xff, 0x00, 0x02, 0x0f, 0x00)
+          val vs45 = vs4 ++ vs5 // full 32-byte source group
+          val vs3 = Seq.fill(32)(0) // no stay elements at offset=0
+          val g0 = slideUpGolden(0, vs45, vs3.take(16), 8, 16, 0, 32)
+          val g1 = slideUpGolden(0, vs45, vs3.drop(16), 8, 16, 1, 32)
+          pSlideUp(dut, 0, 0, vs4, vs3.take(16), sew = 8, lmulFrac = 16, uopIdx = 0, placeIdx = 0, vl = 32)
+          pSlideUp(dut, 1, 0, vs5, vs3.drop(16), sew = 8, lmulFrac = 16, uopIdx = 1, placeIdx = 1, vl = 32)
+          dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+          // Latch each pipe's first wb; compare in Hex (readable vs decimal).
+          val seen = Array(false, false)
+          for (_ <- 0 until 12) {
+            if (!seen(0) && dut.out.pipes(0).valid.peekBoolean()) {
+              dut.out.pipes(0).bits.data.expect(g0, ExpectationValueFormat.Hex); seen(0) = true
+            }
+            if (!seen(1) && dut.out.pipes(1).valid.peekBoolean()) {
+              dut.out.pipes(1).bits.data.expect(g1, ExpectationValueFormat.Hex); seen(1) = true
+            }
+            dut.clock.step()
+          }
+          seen(0) mustBe true
+          seen(1) mustBe true
         }
       }
     }
