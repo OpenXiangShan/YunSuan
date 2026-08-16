@@ -73,7 +73,16 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
     in.bits.sew.e64 -> Cat(in.bits.vl, 0.U(3.W)),
   ))
   private val byteMask = VecInit((0 until VLEN).map { i =>
-    Mux(i.U < e8vlComb, in.bits.vs1(i), false.B)
+    // SEW-expand the element-granular vs1: mask bit i selects byte i (e8) or
+    // the SEW/8 bytes of element i/sewShift (e16/e32/e64). Without this,
+    // CompressIndexGen packs 1 byte per element instead of SEW/8 (Q27).
+    val srcBit = Mux1H(Seq(
+      in.bits.sew.e8  -> in.bits.vs1(i),
+      in.bits.sew.e16 -> in.bits.vs1(i >> 1),
+      in.bits.sew.e32 -> in.bits.vs1(i >> 2),
+      in.bits.sew.e64 -> in.bits.vs1(i >> 3),
+    ))
+    Mux(i.U < e8vlComb, srcBit, false.B)
   }).asUInt
 
   /******************** Sub-module Input Connections *************************/
