@@ -330,17 +330,18 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
   def pCompress(dut: PermUnit[FakePermMeta], pipe: Int,
     mask: BigInt, vs2: Seq[Int], vs3: Seq[Int],
     lmulFrac: Int = 8, uopIdx: Int = 0, blockBase: Int = 0, placeIdx: Int = 0,
-    vl: Int = -1, vta: Boolean = false, robIdx: Int = 0, pdest: Int = 0
+    vl: Int = -1, vta: Boolean = false, robIdx: Int = 0, pdest: Int = 0,
+    sew: Int = 8
   ): Unit = {
     val p = dut.in.pipes(pipe)
     p.valid.poke(true)
     p.bits.op.isCompress.poke(true)
     p.bits.placeIdx.poke(placeIdx); p.bits.blockBase.poke(blockBase)
     p.bits.uopIdx.poke(uopIdx)
-    pSew(p.bits.sew, 8); pLmul(p.bits.lmul, lmulFrac)
-    p.bits.vl.poke(if (vl < 0) (lmulFrac / 8) * vlen / 8 else vl)
+    pSew(p.bits.sew, sew); pLmul(p.bits.lmul, lmulFrac)
+    p.bits.vl.poke(if (vl < 0) (lmulFrac / 8) * vlen / sew else vl)
     p.bits.vta.poke(vta); p.bits.vma.poke(true)  // compress uses byte mask (vs1), merge mask irrelevant
-    p.bits.vs1.poke(mask)   // compress byte mask
+    p.bits.vs1.poke(mask)   // compress element mask (SEW-expanded inside IndexGen)
     p.bits.vs2.poke(foldBytes(vs2)); p.bits.vs3.poke(foldBytes(vs3))
     p.bits.mask.poke((BigInt(1) << numElem) - 1)
     pMeta(dut, pipe, robIdx, pdest)
@@ -1506,6 +1507,27 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           pCompress(dut, 0, mask, vs2, vs3, lmulFrac = 1, vl = 2)
           dut.clock.step(); pPipeOff(dut, 0)
           eWbAfter(dut, 0, golden, 3)
+        }
+      }
+      it("C7: e16 m2 vl=7 mask SEW-expanded (emu vcompress_vm-0)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          // e16: mask bit i selects the 2-byte element i; the byteMask consumed
+          // by CompressIndexGen must be SEW-expanded (bits 2i & 2i+1), not the
+          // element-granular vs1 (emu vcompress_vm-0, e16/m2).
+          val vs2 = Seq.tabulate(32)(i => 0x10 + i) // m2 = 2 chunks
+          val vs3 = Prefill.default(2)
+          // element mask for chunk 0: elements 0,1,4 selected (vl=7)
+          val elemMask = BigInt(1) | (BigInt(1) << 1) | (BigInt(1) << 4)
+          val byteMask = (0 until 16).foldLeft(BigInt(0))((acc, b) =>
+            if (((elemMask >> (b / 2)) & 1) == 1) acc | (BigInt(1) << b) else acc)
+          val golden = compressGolden(byteMask, vs2.slice(0, 16), vs3.slice(0, 16), 0, 14)
+          pCompress(dut, 1, elemMask, vs2.slice(0, 16), vs3.slice(0, 16),
+            lmulFrac = 16, uopIdx = 0, placeIdx = 0, vl = 7, sew = 16)
+          pCompress(dut, 0, 0, vs2.slice(16, 32), vs3.slice(16, 32),
+            lmulFrac = 16, uopIdx = 1, placeIdx = 1, vl = 7, sew = 16)
+          dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+          eWbAfter(dut, 0, golden, 5) // placeIdx=0 -> output pipe 0
         }
       }
     }
