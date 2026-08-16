@@ -281,7 +281,10 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
     // PREFILL data: tail elements follow vta, mask-inactive follow vma;
     // compress has no mask, all PREFILL are tail -> vta
     isTail(i) := Cat(uopIdxReg, i.U(dlenBits.W)) >= e8vl
-    val agnostic = Mux(outIsCompress || isTail(i), vtaReg, vmaReg)
+    // vslideup stay (i < offset) elements are "unchanged" (old vd = vs3),
+    // independent of vma/vta: ma must not clobber them with 0xFF (Q26).
+    val slideStay = opReg.isSlideUp && !iv && !maskInactive && !isTail(i)
+    val agnostic = Mux(slideStay, false.B, Mux(outIsCompress || isTail(i), vtaReg, vmaReg))
     prefillByte(i) := Mux(agnostic, Fill(8, 1.B), vs3Bytes(i))
 
     val effectiveFs = fs && !maskInactive

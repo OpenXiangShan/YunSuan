@@ -35,13 +35,15 @@ class IndexGenSpec extends SpecBase with GatherSpecUtils {
   def eIndex(dut: IndexGen,
     goldenIdx: Seq[Int], goldenValid: Seq[Boolean],
     goldenFillZ: Seq[Boolean] = Seq.fill(numElem)(false),
-    goldenFillS: Seq[Boolean] = Seq.fill(numElem)(false)
+    goldenFillS: Seq[Boolean] = Seq.fill(numElem)(false),
+    prefillData: Int = -1
   ): Unit = {
     import ElemFlags._
     dut.out.valid.expect(true.B)
     for (i <- 0 until numElem) {
       val flags = if (goldenFillZ(i)) ZERO else if (goldenValid(i)) LOOKUP else PREFILL
-      val data  = if (goldenFillZ(i)) 0 else goldenIdx(i)
+      val data  = if (goldenFillZ(i)) 0 else if (goldenValid(i)) goldenIdx(i)
+                  else if (prefillData >= 0) prefillData else goldenIdx(i)
       dut.out.elemFlags(i).expect(flags, s"elemFlags($i)")
       dut.out.elemData(i).expect(data.U, s"elemData($i)")
     }
@@ -75,7 +77,7 @@ class IndexGenSpec extends SpecBase with GatherSpecUtils {
         (idx, i >= s, false, i < s)
       } else {
         val overflow = offset >= vl
-        if (overflow || (i < e8Vl && i < e8Off)) (i, true, false, false)
+        if (overflow || (i < e8Vl && i < e8Off)) (i, false, false, false)
         else (i - e8Off, true, false, false)
       }
     }
@@ -239,7 +241,8 @@ class IndexGenSpec extends SpecBase with GatherSpecUtils {
           dut.in.valid.poke(true); dut.in.bits.op.isSlideUp.poke(true)
           pSew(dut.in.bits.sew, 32); dut.in.bits.rs1.poke(2); dut.in.bits.vl.poke(4)
           dut.clock.step()
-          eIndex(dut, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4))
+          // stay elements are PREFILL with vs3=0 (pDefaults), not index
+          eIndex(dut, g.map(_._1), g.map(_._2), g.map(_._3), g.map(_._4), prefillData = 0)
         }
       }
       it("vslide1up SEW=64") {
@@ -264,7 +267,11 @@ class IndexGenSpec extends SpecBase with GatherSpecUtils {
           import ElemFlags._
           dut.out.valid.expect(true.B)
           for (i <- 0 until 16) {
-            if (i < 8) {
+            if (i < 4) {
+              // stay (i < offset): unchanged -> PREFILL with vs3, not vma-agnostic
+              dut.out.elemFlags(i).expect(PREFILL, s"elemFlags($i): stay")
+              dut.out.elemData(i).expect(0.U, s"elemData($i): vs3=0")
+            } else if (i < 8) {
               dut.out.elemFlags(i).expect(LOOKUP, s"elemFlags($i): active")
             } else {
               dut.out.elemFlags(i).expect(PREFILL, s"elemFlags($i): mask-inactive")

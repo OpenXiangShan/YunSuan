@@ -67,10 +67,13 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
     val shift = sewShift(sew)
     val e8Off = offset << shift
     val e8Vl = vl << shift
+    val offsetOverflow = e8Off >= e8Vl // offset >= vl: no element is shifted
     (0 until numElem).map { i =>
-      val isStay = e8Off > dlen || (i < e8Vl && i < e8Off)
+      val isStay = offsetOverflow || (i < e8Vl && i < e8Off)
       val idx = if (isStay) i else i - e8Off
-      (idx.max(0), true, false, false)
+      // stay elements are "unchanged" (old vd) -> PREFILL (iv=false), not
+      // a LOOKUP of vs2[i] (emu vslideup_vi-0 block3).
+      (idx.max(0), !isStay, false, false)
     }
   }
 
@@ -1251,6 +1254,55 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           // rs1 carries the .vi imm replicated per byte (emu wave); offset must
           // be the SEW-truncated low byte 0x01, not the full pattern.
           p.bits.rs1.poke(BigInt("0101010101010101", 16))
+          p.bits.vs2.poke(foldBytes(vs2)); p.bits.vs3.poke(foldBytes(vs3))
+          p.bits.mask.poke((BigInt(1) << numElem) - 1)
+          pMeta(dut, 0, 0, 0)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("SU6: mf8 vl=2 offset>=vl (rs1=0x0303...) all unchanged (emu block3)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          // offset=3 >= vl=2 -> ISA: every element unchanged (old vd = vs3);
+          // current RTL does identity LOOKUP (vs2[i]) -> byte1=0x02 != 0x00.
+          val vs2 = Seq(0x00, 0x02, 0x0f, 0x00, 0xff, 0x7f, 0xff, 0x00,
+                        0x02, 0x0f, 0x00, 0xff, 0x7f, 0xff, 0x00, 0x02)
+          val vs3 = Seq(0x00, 0x00, 0x80, 0x32, 0xdc, 0x75, 0xac, 0x30,
+                        0x95, 0x12, 0x76, 0x5b, 0xaa, 0xc0, 0x44, 0x83)
+          val golden = foldBytes(vs3) // all unchanged (old v1 after block2)
+          val p = dut.in.pipes(0)
+          p.valid.poke(true)
+          p.bits.op.isSlideUp.poke(true)
+          p.bits.placeIdx.poke(0); p.bits.blockBase.poke(0); p.bits.uopIdx.poke(0)
+          pSew(p.bits.sew, 8); pLmul(p.bits.lmul, 1)
+          p.bits.vl.poke(2)
+          p.bits.vta.poke(false); p.bits.vma.poke(false)
+          p.bits.rs1.poke(BigInt("0303030303030303", 16)) // SEW-truncated -> 0x03
+          p.bits.vs2.poke(foldBytes(vs2)); p.bits.vs3.poke(foldBytes(vs3))
+          p.bits.mask.poke((BigInt(1) << numElem) - 1)
+          pMeta(dut, 0, 0, 0)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
+      it("SU7: mf8 vl=2 offset>=vl vma=1 hole keeps vs3 (not 0xFF)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          // ma: the stay (hole) elements are still "unchanged" (vs3), only
+          // mask-inactive/tail follow agnostic policy (Q26).
+          val vs2 = Seq(0x00, 0x02, 0x0f, 0x00, 0xff, 0x7f, 0xff, 0x00,
+                        0x02, 0x0f, 0x00, 0xff, 0x7f, 0xff, 0x00, 0x02)
+          val vs3 = Seq.fill(16)(0x01) // distinctive: hole must keep 0x01, not 0xFF
+          val golden = foldBytes(vs3)
+          val p = dut.in.pipes(0)
+          p.valid.poke(true)
+          p.bits.op.isSlideUp.poke(true)
+          p.bits.placeIdx.poke(0); p.bits.blockBase.poke(0); p.bits.uopIdx.poke(0)
+          pSew(p.bits.sew, 8); pLmul(p.bits.lmul, 1)
+          p.bits.vl.poke(2)
+          p.bits.vta.poke(false); p.bits.vma.poke(true)
+          p.bits.rs1.poke(BigInt("0303030303030303", 16))
           p.bits.vs2.poke(foldBytes(vs2)); p.bits.vs3.poke(foldBytes(vs3))
           p.bits.mask.poke((BigInt(1) << numElem) - 1)
           pMeta(dut, 0, 0, 0)

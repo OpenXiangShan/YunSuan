@@ -57,13 +57,13 @@ class SlideUpIndexGen(implicit val param: GatherParam) extends GatherModule {
   // i < min(vl, offset) <=>
   // i < vl && i < offset
   for (i <- out.slideup.bits.index.indices) {
+    val isStay = offsetOverflow || (i.U < e8Vl && i.U < e8Off)
     out.slideup.bits.index(i) :=
-      Mux(
-        offsetOverflow || i.U < e8Vl && i.U < e8Off,
-        i.U,
-        i.U - e8Off
-      )
-    out.slideup.bits.indexValid(i) := true.B
+      Mux(isStay, i.U, i.U - e8Off)
+    // The stay elements (i < offset, or all when offset >= vl) are "unchanged"
+    // (old vd), so they must be PREFILL (iv=false -> vs3), not a LOOKUP of
+    // vs2[i] (emu vslideup_vi-0 block3: offset=3>=vl=2, byte1 got 0x02=vs2[1]).
+    out.slideup.bits.indexValid(i) := !isStay
     out.slideup.bits.fillZeros(i)  := false.B
     out.slideup.bits.fillScala(i)  := false.B
   }

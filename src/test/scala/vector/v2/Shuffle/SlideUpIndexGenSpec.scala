@@ -14,14 +14,15 @@ class SlideUpIndexGenSpec extends SpecBase with GatherSpecUtils {
 
   // Golden model: slideup index
   // i < min(vl_e8, offset_e8) -> stay (index = i), else -> shift down (index = i - offset_e8)
+  // Stay elements are "unchanged" (old vd) -> PREFILL (iv=false), not LOOKUP.
   def goldenSlideUp(offset: Int, sew: Int, vl: Int): Seq[(Int, Boolean, Boolean, Boolean)] = {
     val shift = sewShift(sew)
     val e8Off = offset << shift
     val e8Vl  = vl << shift
     (0 until numElem).map { i =>
-      val isStay = e8Off > dlen || (i < e8Vl && i < e8Off)
+      val isStay = e8Off >= e8Vl || (i < e8Vl && i < e8Off)
       val idx = if (isStay) i else i - e8Off
-      (idx.max(0), true, false, false) // (index, indexValid, fillZeros, fillScala)
+      (idx.max(0), !isStay, false, false) // (index, indexValid, fillZeros, fillScala)
     }
   }
 
@@ -41,7 +42,7 @@ class SlideUpIndexGenSpec extends SpecBase with GatherSpecUtils {
     dut.in.bits.isSlide1Up.poke(false)
     pSew(dut.in.bits.sew, sew)
     dut.in.bits.offset.poke(offset)
-    dut.in.bits.offsetOverflow.poke(offset > dlen)
+    dut.in.bits.offsetOverflow.poke(offset >= vl)
     dut.in.bits.vl.poke(vl)
     dut.in.bits.tableIdx.poke(tableIdx)
   }
