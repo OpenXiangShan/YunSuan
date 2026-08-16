@@ -1233,6 +1233,31 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           eWbAfter(dut, 0, golden, 2)
         }
       }
+      it("SU5: mf8 vl=2 rs1=0x0101... truncated to SEW (emu vslideup_vi-0)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val vs2 = Seq(0x00, 0x02, 0x0f, 0x00, 0xff, 0x7f, 0xff, 0x00,
+                        0x02, 0x0f, 0x00, 0xff, 0x7f, 0xff, 0x00, 0x02)
+          val vs3 = Seq(0x00, 0x02, 0x80, 0x32, 0xdc, 0x75, 0xac, 0x30,
+                        0x95, 0x12, 0x76, 0x5b, 0xaa, 0xc0, 0x44, 0x83)
+          val golden = slideUpGolden(1, vs2, vs3, 8, 1, 0, 2)
+          val p = dut.in.pipes(0)
+          p.valid.poke(true)
+          p.bits.op.isSlideUp.poke(true)
+          p.bits.placeIdx.poke(0); p.bits.blockBase.poke(0); p.bits.uopIdx.poke(0)
+          pSew(p.bits.sew, 8); pLmul(p.bits.lmul, 1)
+          p.bits.vl.poke(2)
+          p.bits.vta.poke(false); p.bits.vma.poke(false)
+          // rs1 carries the .vi imm replicated per byte (emu wave); offset must
+          // be the SEW-truncated low byte 0x01, not the full pattern.
+          p.bits.rs1.poke(BigInt("0101010101010101", 16))
+          p.bits.vs2.poke(foldBytes(vs2)); p.bits.vs3.poke(foldBytes(vs3))
+          p.bits.mask.poke((BigInt(1) << numElem) - 1)
+          pMeta(dut, 0, 0, 0)
+          dut.clock.step(); pPipeOff(dut, 0)
+          eWbAfter(dut, 0, golden, 2)
+        }
+      }
     }
 
     // ---- vslide1up ----
