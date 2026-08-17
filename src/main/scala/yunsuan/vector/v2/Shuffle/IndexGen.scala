@@ -62,6 +62,26 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   ))
   private val offset         = offsetSew
   private val offsetOverflow = offset >= in.bits.vl
+  // vslidedown: offset >= VLMAX (whole LMUL group) makes every element fall out
+  // of range -> all zeros. slideup keeps the vl-based offsetOverflow (offset
+  // >= vl -> all unchanged); slidedown needs the group boundary because offset
+  // in [vl, VLMAX) still has valid lookups (emu vslidedown_vx-0 pc 0x8000200a).
+  private val lmulFrac = Mux1H(Seq(
+    in.bits.lmul.mf8  -> 1.U,
+    in.bits.lmul.mf4  -> 2.U,
+    in.bits.lmul.mf2  -> 4.U,
+    in.bits.lmul.m1   -> 8.U,
+    in.bits.lmul.m2   -> 16.U,
+    in.bits.lmul.m4   -> 32.U,
+    in.bits.lmul.m8   -> 64.U,
+  ))
+  private val vlmaxElems = Mux1H(Seq(
+    in.bits.sew.e8  -> (lmulFrac << 1),
+    in.bits.sew.e16 -> lmulFrac,
+    in.bits.sew.e32 -> (lmulFrac >> 1),
+    in.bits.sew.e64 -> (lmulFrac >> 2),
+  ))
+  private val offsetOverflowVlmax = offset >= vlmaxElems
   // vcompress mask: only elements within vl can be selected (RISC-V V spec:
   // vcompress packs "the first vl elements of vs2"). Gate byteMask to the low
   // e8vl (= vl in byte-elements) bits; otherwise beyond-vl mask bits inflate
@@ -111,7 +131,7 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   slideDownMod.in.bits.tableIdx     := tableIdx
   slideDownMod.in.bits.lmul         := in.bits.lmul
   slideDownMod.in.bits.sew          := in.bits.sew
-  slideDownMod.in.bits.offsetOverflow := offsetOverflow
+  slideDownMod.in.bits.offsetOverflow := offsetOverflowVlmax
   slideDownMod.in.bits.offset        := offset
   slideDownMod.in.bits.vl           := in.bits.vl
 
