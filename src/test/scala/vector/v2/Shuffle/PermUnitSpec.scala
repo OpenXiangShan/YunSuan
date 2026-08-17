@@ -1548,6 +1548,25 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           }
         }
       }
+      it("SD7: mf4 e16 vl=2 rs1=0xff80 overflowed offset (emu vslidedown_vx-0 pc 0x8000200a)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+          // v2 loaded e16/m1 from testdata+992: elems {0000,0200,000f,0000,...}
+          val vs2 = Seq(0x00, 0x00, 0x00, 0x02, 0x0f, 0x00, 0x00, 0x00,
+                        0xf8, 0xff, 0x00, 0x00, 0xff, 0x07, 0x01, 0x00)
+          val vs3 = Seq.fill(16)(0xaa) // old v1, unchanged tail (tu)
+          // ISA: offset=0xff80 >= VLMAX(2) -> active elems fillZeros (0).
+          // Bug: SlideDownIndexGen offset field is 7 bits -> 0xff80 truncates
+          // to 0 -> identity LOOKUP (vs2[i]); offsetOverflow unused there.
+          val golden = slideDownGolden(0xff80, vs2, vs3, 16, 2, 0, 2)
+          pSlideDown(dut, 0, 0xff80, vs2, vs3, sew = 16, lmulFrac = 2,
+            uopIdx = 0, blockBase = 0, placeIdx = 0, vl = 2)
+          dut.clock.step(); pPipeOff(dut, 0)
+          val wbs = collectWb(dut, 30)
+          wbs(0).getOrElse(fail("pipe 0 never wrote back")) mustBe golden
+        }
+      }
     }
 
     // ---- vslide1down ----
