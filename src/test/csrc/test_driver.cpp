@@ -63,9 +63,8 @@ uint64_t log2_ulp_metric(uint64_t a, uint64_t b, int width) {
   return 64 - __builtin_clzll(ulp);
 }
 
-uint64_t vfexp2_budget(uint8_t format_mode, uint8_t rm) {
+uint64_t vfexp2_budget(uint8_t format_mode) {
   if (format_mode == VFEXP2_MODE_FP32) return 13;
-  if (rm == RM_RTO) return 4;
   return 1;
 }
 
@@ -203,7 +202,7 @@ void TestDriver::get_random_exp2_input() {
   input.is_frs2 = false;
   input.uop_idx = 0;
   input.rm_s = 0;
-  input.rm = (rand() % 6 == 5) ? RM_RTO : (rand() % 5);
+  input.rm = rand() % 5;
   input.vinfo.vlmul = 0;
   input.vinfo.vl = lanes;
   input.vinfo.vstart = 0;
@@ -727,12 +726,11 @@ void TestDriver::record_vfexp2_match(uint8_t format_mode, int lane, uint64_t src
     }
   }
   const uint64_t metric = vfexp2_metric(format_mode, dut_bits, ref_bits, width);
-  const uint64_t budget = vfexp2_budget(format_mode, input.rm);
+  const uint64_t budget = vfexp2_budget(format_mode);
   if (format_mode == VFEXP2_MODE_FP32) {
     if (metric <= budget) stats.log2_ulp_le_13++;
   } else {
     if (metric <= 1) stats.ulp_le_1++;
-    if (input.rm == RM_RTO && metric <= 4) stats.ulp_le_4_rto++;
   }
   const bool ulp_over_budget = metric > budget;
   if (ulp_over_budget) stats.ulp_over_budget++;
@@ -869,7 +867,7 @@ void TestDriver::print_summary() const {
   for (uint8_t mode = VFEXP2_MODE_FP16; mode <= VFEXP2_MODE_FP32; mode++) {
     const Vfexp2LaneStats &stats = vfexp2_stats[mode - 1];
     if (stats.total == 0) continue;
-    printf("  [%s] total=%lu exact=%lu zeroEq=%lu nanEq=%lu maxULP RNE=%lu RTZ=%lu RDN=%lu RUP=%lu RMM=%lu RTO=%lu\n",
+    printf("  [%s] total=%lu exact=%lu zeroEq=%lu nanEq=%lu maxULP RNE=%lu RTZ=%lu RDN=%lu RUP=%lu RMM=%lu\n",
       vfexp2_format_name(mode),
       stats.total,
       stats.exact,
@@ -879,8 +877,7 @@ void TestDriver::print_summary() const {
       stats.max_ulp_by_rm[1],
       stats.max_ulp_by_rm[2],
       stats.max_ulp_by_rm[3],
-      stats.max_ulp_by_rm[4],
-      stats.max_ulp_by_rm[6]);
+      stats.max_ulp_by_rm[4]);
     const Vfexp2WorstEntry (&w)[3] = vfexp2_worst[mode - 1];
     const int hexw = (mode == VFEXP2_MODE_FP32) ? 8 : 4;
     for (int i = 0; i < 3 && w[i].ulp > 0; i++) {

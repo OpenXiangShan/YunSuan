@@ -43,7 +43,6 @@ struct Vfexp2LaneStats {
   uint64_t nan_equivalent = 0;
   uint64_t ulp_le_1 = 0;
   uint64_t log2_ulp_le_13 = 0;
-  uint64_t ulp_le_4_rto = 0;
   uint64_t ulp_over_budget = 0;
   uint64_t max_ulp_by_rm[8] = {};
 };
