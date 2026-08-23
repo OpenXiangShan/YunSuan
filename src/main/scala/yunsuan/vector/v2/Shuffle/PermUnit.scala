@@ -100,6 +100,12 @@ class PermUnit[T <: Data](
     gatherRing.in.s0pipes(i).bits.placeIdx  := in.pipes(i).bits.placeIdx
     gatherRing.in.s0pipes(i).bits.blockBase := in.pipes(i).bits.blockBase
     gatherRing.in.s0pipes(i).bits.blockSize := in.pipes(i).bits.blockSize
+    // SEW=8 vrgatherei16: route index deterministically by uopIdx%blockSize
+    // (blockBase | placeIdx) so gather i and rvs3 i share a unit regardless of
+    // the ring's dynamic entryIndex / hasIndex.
+    gatherRing.in.s0pipes(i).bits.isEi16E8 :=
+      (in.pipes(i).bits.op.isGatherEI16 || in.pipes(i).bits.op.isGatherEI16Rvs3) &&
+        in.pipes(i).bits.sew.e8
   }
 
   /*********************** GatherRing s1 Connections *************************/
@@ -116,6 +122,10 @@ class PermUnit[T <: Data](
     gatherRing.in.s1pipes(i).bits.elemFlags := indexGens(i).out.elemFlags
     gatherRing.in.s1pipes(i).bits.elemData  := indexGens(i).out.elemData
 
+    // SEW=8 vrgatherei16 placement kind (gather vs rvs3) for the unit merge
+    gatherRing.in.s1pipes(i).bits.isRvs3   := indexGens(i).out.isRvs3
+    gatherRing.in.s1pipes(i).bits.waitRvs3 := indexGens(i).out.waitRvs3
+
     // Table: merged register (compressData or vs2)
     gatherRing.in.s1pipes(i).bits.table := Mux(
       regCompress(i),
@@ -124,7 +134,11 @@ class PermUnit[T <: Data](
     )
 
     gatherRing.in.s1pipes(i).bits.tableIdx    := regTableIdx(i)
-    gatherRing.in.s1pipes(i).bits.meta        := regMeta(i)
+    // SEW=8 vrgatherei16 gather (waitRvs3) has no writeback and carries no meta:
+    // zero it so the same-unit merge's meta OR yields the rvs3's (whose pdest is
+    // the writeback target). The rvs3 uop carries the real meta.
+    gatherRing.in.s1pipes(i).bits.meta := Mux(indexGens(i).out.waitRvs3,
+      0.U.asTypeOf(chiselTypeOf(regMeta(i))), regMeta(i))
   }
 
   /*********************** GatherRing Control Connections ********************/

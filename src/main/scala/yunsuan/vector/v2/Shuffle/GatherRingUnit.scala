@@ -53,6 +53,13 @@ class GatherRingUnit[T <: Data](
   private val counter   = RegInit(0.U(log2Up(NumUnits + 1).W))
   private val indexDone = RegInit(VecInit.fill(NumElem)(false.B))
   private val hasWb     = RegInit(false.B)
+  // SEW=8 ei16 gather+rvs3 pair: which half has been placed in the current block.
+  // Kept so the slot merge and hasIndex are order-independent under out-of-order
+  // dispatch (an rvs3 may arrive before its gather).
+  private val gatherPlaced = RegInit(false.B)
+  private val rvs3Placed   = RegInit(false.B)
+  // done waits on hasIndex, which is only set once both the index (gather) and the
+  // old-data (rvs3) are in place (see the hasIndex state machine below).
   private val done      = counter === 0.U && hasIndex
 
   // ── hasTable State Machine ───────────────────────────
@@ -82,10 +89,30 @@ class GatherRingUnit[T <: Data](
   }
 
   when(doPlaceIndex) {
-    hasIndexNext := true.B
+    // hasIndex = "both the index (gather) and its old-data (rvs3) are in place",
+    // robust to arrival order: a gather completes when it is not waiting for an
+    // rvs3 or its rvs3 already arrived; an rvs3 completes only when its gather is
+    // present. A lone rvs3 (out-of-order) must not set hasIndex by itself.
+    hasIndexNext := Mux(
+      in.placeIndex.bits.isRvs3,
+      gatherPlaced,
+      !in.placeIndex.bits.waitRvs3 || rvs3Placed
+    )
   }.elsewhen(hasIndex && counter === 0.U && (hasWb || in.wbReady)) {
     // hasWb || in.wbReady means already wb or wb now
     hasIndexNext := false.B
+  }
+
+  // ── Pair-half Placed State Machine ───────────────────
+  when (flush) {
+    gatherPlaced := false.B
+    rvs3Placed   := false.B
+  }.elsewhen (doPlaceIndex) {
+    gatherPlaced := !in.placeIndex.bits.isRvs3
+    rvs3Placed   := in.placeIndex.bits.isRvs3
+  }.elsewhen (hasIndex && counter === 0.U && (hasWb || in.wbReady)) {
+    gatherPlaced := false.B
+    rvs3Placed   := false.B
   }
 
   when (doPlaceTable || doPlaceIndex) {
@@ -142,7 +169,9 @@ class GatherRingUnit[T <: Data](
   // ── Counter ─────────────────────────────────────────
   when(flush) {
     counter := 0.U
-  }.elsewhen(doPlaceIndex) {
+  }.elsewhen(doPlaceIndex && !in.placeIndex.bits.isRvs3) {
+    // Only the gather (index) placement initializes the counter; the paired rvs3
+    // (old-data) placement is a continuation of the same block and must not.
     // The first table of the block (isFirstTable, at the entry unit) is already
     // in place, so one fewer table needs to arrive; a non-first table placement
     // (or index-only) still needs the full blockSize tables to flow in.
@@ -159,7 +188,7 @@ class GatherRingUnit[T <: Data](
     counter := counter - 1.U
   }
 
-  when (doPlaceIndex) {
+  when (doPlaceIndex && !in.placeIndex.bits.isRvs3) {
     hasWb := false.B
   }.elsewhen(hasIndex && out.wb.valid && in.wbReady) {
     hasWb := true.B
@@ -198,6 +227,9 @@ class GatherRingUnit[T <: Data](
 
   import ElemFlags._
 
+  private val placeIsRvs3   = in.placeIndex.bits.isRvs3
+  private val placeWaitRvs3 = in.placeIndex.bits.waitRvs3
+
   for (i <- 0 until NumElem) {
     val f = in.placeIndex.bits.elemFlags(i)
     placeIndexFillIdx(i) := isLOOKUP(f) && !gatherMod.in.indexValid(i) || gatherMod.in.indexValid(i) && gatherMod.out.notfound(i)
@@ -209,14 +241,38 @@ class GatherRingUnit[T <: Data](
 
     when(flush) {
       indexDone(i)  := false.B
-    }.elsewhen(doPlaceIndex) {
+    }.elsewhen(doPlaceIndex && !placeIsRvs3) {
+      // gather placement: LOOKUP -> lookup result, ZERO -> 0, PREFILL -> elemData.
+      // For a gather with paired rvs3 uops (waitRvs3) the PREFILL slots carry a
+      // 0 placeholder and stay pending (indexDone=0) until the rvs3 merges; if the
+      // rvs3 already merged (out-of-order arrival, rvs3Placed) OR preserves it.
       indexOrRes(i) := Mux1H(Seq(
         placeIndexFillIdx(i) -> in.placeIndex.bits.elemData(i),
         placeIndexFillRes(i) -> gatherMod.out.result(i),
-        placeIndexPrefill(i) -> in.placeIndex.bits.elemData(i),
+        placeIndexPrefill(i) -> Mux(rvs3Placed,
+          indexOrRes(i) | in.placeIndex.bits.elemData(i), in.placeIndex.bits.elemData(i)),
         placeIndexFillZeros(i) -> 0.U,
       ))
-      indexDone(i) := placeIndexFillRes(i) || placeIndexPrefill(i) || placeIndexFillZeros(i)
+      // PREFILL slots of a waitRvs3 gather stay pending (indexDone=0) until the
+      // rvs3 (old-data) placement merges; if the rvs3 already finalized them
+      // (rvs3Placed), keep indexDone. Other slots are resolved here (found /
+      // notfound lookups, ZERO, and PREFILL without a paired rvs3).
+      indexDone(i) := placeIndexFillRes(i) ||
+        (isPREFILL(f) && !placeWaitRvs3) || placeIndexFillZeros(i) ||
+        (isPREFILL(f) && rvs3Placed)
+      // The rvs3's meta (writeback target) wins once it has merged.
+      when (!rvs3Placed) { meta := in.placeIndex.meta }
+    }.elsewhen(doPlaceIndex && placeIsRvs3) {
+      // rvs3 (old-data) placement: bit-OR the incoming PREFILL data into the
+      // pending PREFILL slots (gather's 0 | old/0xFF = old/0xFF) and finalize;
+      // if the rvs3 arrives before its gather (gatherPlaced=0) it seeds the slots
+      // instead. ZERO slots (active) are resolved by the gather lookup. The meta
+      // is updated to the rvs3's (its pdest is the writeback target).
+      when(isPREFILL(f)) {
+        indexOrRes(i) := Mux(gatherPlaced,
+          indexOrRes(i) | in.placeIndex.bits.elemData(i), in.placeIndex.bits.elemData(i))
+        indexDone(i)  := true.B
+      }
       meta := in.placeIndex.meta
     }.elsewhen(doFlowTable) {
       when (fillRes(i)) {
@@ -364,6 +420,12 @@ object GatherRingUnit {
     val elemFlags = Vec(NumElem, ElemFlags())
     val elemData  = Vec(NumElem, UInt(8.W))
 
+    // SEW=8 vrgatherei16: 1 = this placement is the rvs3 (old-data) uop of a gather
+    val isRvs3   = Bool()
+    // 1 = this gather (isRvs3=0) has paired rvs3 uops whose old-data must be merged
+    // before writeback (PREFILL slots are left pending until the rvs3 arrives)
+    val waitRvs3 = Bool()
+
     val meta       = metaGen
   }
 
@@ -374,9 +436,12 @@ object GatherRingUnit {
       req.blockSize  := s1.blockSize
       req.elemFlags  := s1.elemFlags
       req.elemData   := s1.elemData
+      req.isRvs3     := s1.isRvs3
+      req.waitRvs3   := s1.waitRvs3
       req.meta       := s1.meta
       req
     }
+
   }
 
   class RingFlow(implicit val param: GatherParam) extends GatherBundle {

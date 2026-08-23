@@ -106,26 +106,59 @@ class GatherRing[T <: Data](
   private val validMatrixPipeUnitIndex = WireInit(VecInit.fill(NumPipeIn, NumUnits)(false.B))
 
   for (i <- 0 until NumPipeIn) {
-    validMatrixPipeUnitTable(i)(pipeTablePos(i)) := in.s1pipes(i).valid
+    // Table is placed only by the gather uop: the paired rvs3 (isRvs3=1) carries
+    // old-data, no table, and must not re-place/overwrite the gather's table
+    // (same-cycle pair would otherwise create a second table writer to the unit).
+    validMatrixPipeUnitTable(i)(pipeTablePos(i)) := in.s1pipes(i).valid && !in.s1pipes(i).bits.isRvs3
     validMatrixPipeUnitIndex(i)(pipeIndexPos(i)) := in.s1pipes(i).valid
   }
 
   for (u <- 0 until NumUnits) {
     assert(PopCount(validMatrixPipeUnitTable.map(_(u))) <= 1.U,
       s"multiple table writers target GatherRing unit $u")
-    assert(PopCount(validMatrixPipeUnitIndex.map(_(u))) <= 1.U,
-      s"multiple index writers target GatherRing unit $u")
+    // 2 index writers to the same unit are only legal for SEW=8 vrgatherei16:
+    // a gather (waitRvs3=1) and its paired rvs3 (isRvs3=1) landing on the same unit.
+    val uIdxWriters = validMatrixPipeUnitIndex.map(_(u))
+    val uEi16Pair =
+      PopCount(uIdxWriters.zip(in.s1pipes.map(_.bits.isRvs3)).map { case (v, r) => v && r }) === 1.U &&
+      PopCount(uIdxWriters.zip(in.s1pipes.map(_.bits.waitRvs3)).map { case (v, r) => v && r }) === 1.U
+    assert(PopCount(uIdxWriters) <= 1.U || (PopCount(uIdxWriters) === 2.U && uEi16Pair),
+      s"more than 1 index writer to GatherRing unit $u is only legal for SEW=8 ei16 gather+rvs3")
 
     units(u).in.placeTable.valid := Cat(validMatrixPipeUnitTable.map(_(u))).orR
     units(u).in.placeTable.bits  := Mux1H(
       validMatrixPipeUnitTable.map(_(u)),
       in.s1pipes.map(s1 => PlaceTableRequest.fromPipeInS1(s1.bits, u))
     )
-    units(u).in.placeIndex.valid := Cat(validMatrixPipeUnitIndex.map(_(u))).orR
-    units(u).in.placeIndex.bits  := Mux1H(
-      validMatrixPipeUnitIndex.map(_(u)),
-      in.s1pipes.map(s1 => PlaceIndexRequest.fromPipeInS1(s1.bits))
-    )
+
+    // Same-unit same-cycle index writers (SEW=8 ei16 gather + its rvs3) are merged
+    // per-field inline: identical fields (blockBase/blockSize) and complementary
+    // flags/data/meta (gather PREFILL-0 & meta-0 | rvs3 old-data & meta) merge by
+    // OR; waitRvs3 is ANDed so the rvs3 writer (waitRvs3=0) clears the wait.
+    {
+      val idxWriters = validMatrixPipeUnitIndex.map(_(u))
+      val uIdx = Wire(new PlaceIndexRequest(chiselTypeOf(units(u).in.placeIndex.bits.meta)))
+      uIdx.blockBase := (0 until NumPipeIn).map(p => Mux(idxWriters(p), in.s1pipes(p).bits.blockBase, 0.U)).reduce(_ | _)
+      uIdx.blockSize := (0 until NumPipeIn).map(p => Mux(idxWriters(p), in.s1pipes(p).bits.blockSize, 0.U)).reduce(_ | _)
+      // isRvs3: true only when EVERY writer is an rvs3 (a lone cross-cycle rvs3
+      // continuing its gather). A merged gather+rvs3 pair is a complete placement
+      // (gather's isRvs3=0 clears the AND), and a lone gather is not an rvs3.
+      uIdx.isRvs3    := (0 until NumPipeIn).map(p =>
+        Mux(idxWriters(p), in.s1pipes(p).bits.isRvs3, true.B)).reduce(_ && _)
+      // Wait for a paired rvs3 only if every writer is a waitRvs3 gather: the
+      // rvs3 writer (waitRvs3=0) clears the wait via AND.
+      uIdx.waitRvs3  := (0 until NumPipeIn).map(p => Mux(idxWriters(p), in.s1pipes(p).bits.waitRvs3, true.B)).reduce(_ && _)
+      uIdx.meta      := (0 until NumPipeIn).map(p =>
+        Mux(idxWriters(p), in.s1pipes(p).bits.meta.asUInt, 0.U)).reduce(_ | _).asTypeOf(chiselTypeOf(uIdx.meta))
+      for (i <- 0 until NumElem) {
+        uIdx.elemFlags(i) := (0 until NumPipeIn).map(p =>
+          Mux(idxWriters(p), in.s1pipes(p).bits.elemFlags(i), 0.U(2.W))).reduce(_ | _)
+        uIdx.elemData(i) := (0 until NumPipeIn).map(p =>
+          Mux(idxWriters(p), in.s1pipes(p).bits.elemData(i), 0.U(8.W))).reduce(_ | _)
+      }
+      units(u).in.placeIndex.valid := Cat(validMatrixPipeUnitIndex.map(_(u))).orR
+      units(u).in.placeIndex.bits  := uIdx
+    }
   }
 
   // out.metas: collect meta from each unit's wb
@@ -234,6 +267,12 @@ object GatherRing {
      */
     val blockSize   = BlockSize()
 
+    // SEW=8 vrgatherei16: index routing is deterministic (blockBase | placeIdx,
+    // placeIdx = uopIdx % blockSize), bypassing the entryIndex free-slot search.
+    // Index slots of a freshly allocated block are always clean, so skipping the
+    // search cannot collide; it guarantees gather i and rvs3 i land on the same unit.
+    val isEi16E8    = Bool()
+
   }
 
   class PipeInS1[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
@@ -244,6 +283,11 @@ object GatherRing {
     // Per-element merged: 2b flags + 8b data (index or prefill)
     val elemFlags = Vec(NumElem, ElemFlags())
     val elemData  = Vec(NumElem, UInt(8.W))
+
+    // SEW=8 vrgatherei16: 1 = this uop is the rvs3 (old-data) uop of a gather
+    val isRvs3   = Bool()
+    // 1 = this gather uop has paired rvs3 uops (PREFILL slots wait for old-data)
+    val waitRvs3 = Bool()
 
     val tableIdx   = UnitIdx()
     val table      = Vec(NumElem, Elem())

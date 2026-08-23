@@ -89,8 +89,10 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
 
     out.tablePos(i).bits := blockBase.U |
       (entryTable + s1WillFlow - inPipePlaceIdx(i).bits)
+    // SEW=8 vrgatherei16: deterministic same-unit routing for gather i / rvs3 i
+    // (placeIdx = uopIdx % blockSize), independent of the dynamic entryIndex.
     out.indexPos(i).bits := blockBase.U |
-      (entryIndex + inPipePlaceIdx(i).bits)
+      Mux(in.pipeIsEi16E8(i), inPipePlaceIdx(i).bits, entryIndex + inPipePlaceIdx(i).bits)
   }
 
   // willFlow: block-level signal, computed once outside per-pipe loop
@@ -129,6 +131,9 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
 object GatherRingBlockController {
   class In(size: Int)(implicit val param: GatherParam) extends GatherBundle {
     val pipePlaceIdx: Vec[ValidIO[UInt]] = Vec(NumPipeIn, ValidIO(PipeInIdx()))
+    // SEW=8 vrgatherei16: 1 = route this pipe's index deterministically
+    // (blockBase | placeIdx), bypassing the entryIndex free-slot search.
+    val pipeIsEi16E8: Vec[Bool] = Vec(NumPipeIn, Bool())
 
     // Registered (in-unit) and in-flight (s1) occupancy, kept separate so that
     // placement can use both but clearTable only trusts registered indices.
