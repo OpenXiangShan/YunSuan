@@ -62,7 +62,10 @@ class GatherIndexGen(implicit val param: GatherParam) extends GatherModule {
 
   val e32ei16MinSewIdx = Wire(Vec(DLEN / 2 / 16, Vec(32 / MinDataWidth, Index)))
 
-  val e8ei16MinSewIdx = Wire(Vec(DLEN / 16, Vec(8 / MinDataWidth, Index)))
+  // SEW=8 EI16 (new scheme): each gather uop reads 2 vs1 regs (2nd via vs3 port).
+  // 16 slots = slots 0-7 from vs1 (src1), slots 8-15 from vs3 (src3); index = raw e16 value.
+  val e8Vs1High = in.bits.vs3.to16bitVec
+  val e8ei16Idx = Wire(Vec(NumElem, Index()))
 
   /**
    * For example, if sew = 64,
@@ -115,11 +118,9 @@ class GatherIndexGen(implicit val param: GatherParam) extends GatherModule {
     }
   }
 
-  for (i <- e8ei16MinSewIdx.indices) {
-    for (j <- e8ei16MinSewIdx.head.indices) {
-      e8ei16MinSewIdx(i)(j) :=
-        Cat(e16Vs1(i).takeOrPad(E16ValidBits), j.U((log2Ceil(16) - log2Ceil(MinDataWidth - 1)).W))
-    }
+  for (i <- 0 until DLEN / 16) {
+    e8ei16Idx(i) := e16Vs1(i).takeOrPad(IndexWidth)
+    e8ei16Idx(i + DLEN / 16) := e8Vs1High(i).takeOrPad(IndexWidth)
   }
 
   val e64ei64Idx = e64ei64MinSewIdx.flatten
@@ -133,9 +134,6 @@ class GatherIndexGen(implicit val param: GatherParam) extends GatherModule {
   val e64ei16Idx = e64ei16MinSewIdx.flatten
 
   val e32ei16Idx = e32ei16MinSewIdx.flatten
-
-  // when sew is less than index width, pad to DLEN / MinDataWidth
-  val e8ei16Idx = e8ei16MinSewIdx.flatten.padTo(DLEN / MinDataWidth, 0.U)
 
   val e64ei64 = dontTouch(sew.e64 && ei.e64)
 
@@ -179,7 +177,12 @@ class GatherIndexGen(implicit val param: GatherParam) extends GatherModule {
   // EI=16 cases: element value is 16-bit, same upper-bits check via E16ValidBits
   val e64ei16ElemOor = expandElemOor(e16Vs1, 16, E16ValidBits)
   val e32ei16ElemOor = expandElemOor(e16Vs1, 16, E16ValidBits)
-  val e8ei16ElemOor  = expandElemOor(e16Vs1, 16, E16ValidBits)
+  // SEW=8: index = raw e16 value (IndexWidth bits); element OOR = e16 bits above index width
+  val e8ei16ElemOor = Wire(Vec(NumElem, Bool()))
+  for (i <- 0 until DLEN / 16) {
+    e8ei16ElemOor(i) := e16Vs1(i)(15, IndexWidth).orR
+    e8ei16ElemOor(i + DLEN / 16) := e8Vs1High(i)(15, IndexWidth).orR
+  }
 
   for (i <- 0 until NumElem) {
     val elemOor = Mux1H(Seq(
@@ -240,6 +243,8 @@ object GatherIndexGen {
     val ei           = new GatherSewBundle
     // Todo: if vrgatherei16, vs1 should be selected before the register of EXU
     val vs1  = UInt(DLEN.W)
+    // SEW=8 vrgatherei16: the 2nd vs1 register (vs1+2i+1) arrives via the vs3 port
+    val vs3  = UInt(DLEN.W)
   }
 
   class Out(implicit val param: GatherParam) extends GatherBundle {

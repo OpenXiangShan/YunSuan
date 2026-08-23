@@ -115,6 +115,8 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   gatherMod.in.bits.sew           := in.bits.sew
   gatherMod.in.bits.ei            := in.bits.ei
   gatherMod.in.bits.vs1           := in.bits.vs1
+  // SEW=8 vrgatherei16: 2nd vs1 register via the vs3 input (see GatherIndexGen)
+  gatherMod.in.bits.vs3           := in.bits.vs3
 
   // --- SlideUpIndexGen ---
   slideUpMod.in.valid              := in.valid && isSlideUp
@@ -244,11 +246,23 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   private val maskReg   = RegEnable(in.bits.mask, in.valid)
 
   private val outIsGather    = opReg.isGather || opReg.isGatherEI16
+  private val outIsGatherEI16 = opReg.isGatherEI16
   private val outIsSlideUp   = opReg.isSlideUp || opReg.isSlide1Up
   private val outIsSlideDown = opReg.isSlideDown || opReg.isSlide1Down
   private val outIsZip       = opReg.isZip
   private val outIsUnzip     = opReg.isUnzip
   private val outIsCompress  = opReg.isCompress
+  private val outIsGatherEI16Rvs3 = opReg.isGatherEI16Rvs3
+
+  // SEW=8 ei16 gather/rvs3: the rvs3 uopIdx = m..2m-1 but it handles vd register
+  // i = uopIdx % blockSize, so the tail/vl position uses the wrapped index.
+  private val lmulReg = RegEnable(in.bits.lmul, in.valid)
+  private val blockSizeVal = Mux1H(Seq(
+    lmulReg.mf8 -> 1.U, lmulReg.mf4 -> 1.U, lmulReg.mf2 -> 1.U, lmulReg.m1 -> 1.U,
+    lmulReg.m2 -> 2.U, lmulReg.m4 -> 4.U, lmulReg.m8 -> 8.U,
+  ))
+  private val e8Ei16    = (outIsGatherEI16 || outIsGatherEI16Rvs3) && sewReg.e8
+  private val effUopIdx = Mux(e8Ei16, uopIdxReg % blockSizeVal, uopIdxReg)
 
   // -- Final output: encode to merged flags+data --
   // e8vl = vl in 8b elements = vl << sewShift(sew)
@@ -309,7 +323,7 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
 
     // PREFILL data: tail elements follow vta, mask-inactive follow vma;
     // compress has no mask, all PREFILL are tail -> vta
-    isTail(i) := Cat(uopIdxReg, i.U(dlenBits.W)) >= e8vl
+    isTail(i) := Cat(effUopIdx, i.U(dlenBits.W)) >= e8vl
     // vslideup stay (i < offset) elements are "unchanged" (old vd = vs3),
     // independent of vma/vta: ma must not clobber them with 0xFF (Q26).
     val slideStay = opReg.isSlideUp && !iv && !maskInactive && !isTail(i)
@@ -341,6 +355,21 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
       out.elemFlags(i) := ElemFlags.PREFILL
       out.elemData(i)  := prefillByte(i)
     }
+
+    // SEW=8 vrgatherei16 rvs3 (old-data) uop: active -> ZERO(data=0) so the bit-OR
+    // with the paired gather keeps its index; inactive/tail -> PREFILL(old-vd or
+    // agnostic). The unit merges these into the gather's pending PREFILL slots.
+    val rvs3Active  = maskReg(i) && !isTail(i)
+    val rvs3Prefill = Mux(Mux(isTail(i), vtaReg, vmaReg), Fill(8, 1.B), vs3Bytes(i))
+    when(outIsGatherEI16Rvs3) {
+      out.elemFlags(i) := Mux(rvs3Active, ElemFlags.ZERO, ElemFlags.PREFILL)
+      out.elemData(i)  := Mux(rvs3Active, 0.U, rvs3Prefill)
+    }
+    // SEW=8 vrgatherei16 gather: PREFILL slots carry a 0 placeholder (the gather's
+    // vs3 port is the 2nd vs1, not old vd; the paired rvs3 provides the old-data).
+    when(outIsGatherEI16 && sewReg.e8 && ElemFlags.isPREFILL(out.elemFlags(i))) {
+      out.elemData(i) := 0.U
+    }
   }
 
   /******************* Compress-specific Outputs *****************************/
@@ -351,6 +380,10 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   /**************************** Valid Signal *********************************/
 
   out.valid := validReg
+
+  // SEW=8 vrgatherei16 placement kind for the GatherRing unit merge
+  out.isRvs3   := validReg && opReg.isGatherEI16Rvs3
+  out.waitRvs3 := validReg && opReg.isGatherEI16 && sewReg.e8
 
   when(validReg && outIsCompress) {
     assert(compressMod.out.valid, "compress payload must align with IndexGen valid")
@@ -363,6 +396,7 @@ object IndexGen {
   class OpSel extends Bundle {
     val isGather     = Bool()  // vrgather.vv
     val isGatherEI16 = Bool()  // vrgatherei16
+    val isGatherEI16Rvs3 = Bool()  // vrgatherei16 SEW=8 old-vd (vs3) data uop
     val isSlideUp    = Bool()  // vslideup
     val isSlide1Up   = Bool()  // vslide1up
     val isSlideDown  = Bool()  // vslidedown
@@ -410,6 +444,10 @@ object IndexGen {
     // Compress-specific
     val compressData    = Vec(NumElem, UInt(MinDataWidth.W))  // compressed vs2 (becomes table)
     val compressCount1s = UInt(VlWidth.W)                     // total popcount
+
+    // SEW=8 vrgatherei16: placement kind for the GatherRing unit merge
+    val isRvs3   = Bool()  // this uop is the rvs3 (old-data) uop
+    val waitRvs3 = Bool()  // this e8 gather has paired rvs3 uops (PREFILL slots pending)
   }
 }
 
