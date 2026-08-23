@@ -220,6 +220,18 @@ abstract class Opcodes {
     Value(bp1, bp2: _*)(name) + VpWen + VlRen + Src2Vp + Src1En + Src3Vp
   }
 
+  // SEW=8 vrgatherei16 gather uop: reads vs1(2nd via vs3 port) + vs2 + vs3, no vp write
+  // (the masked/tail writeback is carried by the paired vrgatherei16_rvs3 uop).
+  def DvSvlS2vS1S3vNw(bp1: BitPat, bp2: BitPat*)(implicit name: SourceName): Type = {
+    Value(bp1, bp2: _*)(name) + VlRen + Src2Vp + Src1En + Src3Vp
+  }
+
+  // rvs3 uop: reads only old vd (vs3), writes vd; provides the old-data for the
+  // masked/tail merge of the paired SEW=8 gather uop in the GatherRing unit.
+  def DvSvlS3v(bp1: BitPat, bp2: BitPat*)(implicit name: SourceName): Type = {
+    Value(bp1, bp2: _*)(name) + VpWen + VlRen + Src3Vp
+  }
+
   def DmSvlS2vS1(bp1: BitPat, bp2: BitPat*)(implicit name: SourceName): Type = {
     Value(bp1, bp2: _*)(name) + VmWen + VlRen + Src2Vp + Src1En
   }
@@ -1947,6 +1959,7 @@ object Opcodes {
     val RGATHER_X     = bb"00010"
     val RGATHER_I     = bb"00001"
     val RGATHER_EI16  = bb"01000"
+    val RGATHER_EI16_RVS3 = bb"01111" // SEW=8 vrgatherei16 old-vd (vs3) data uop
     val SLIDEUP       = bb"01010"
     val SLIDEDOWN     = bb"01110"
     val COMPRESS      = bb"11101"
@@ -2001,9 +2014,14 @@ object Opcodes {
     val vrgather_i_e64m2    = DvSvlS2vS1(M2, RGATHER_I   , E64)
     val vrgather_i_e64m4    = DvSvlS2vS1(M4, RGATHER_I   , E64)
     val vrgather_i_e64m8    = DvSvlS2vS1(M8, RGATHER_I   , E64)
-    val vrgather_ei16_e8m1  = DvSvlS2vS1(M1, RGATHER_EI16, E8 )
-    val vrgather_ei16_e8m2  = DvSvlS2vS1(M2, RGATHER_EI16, E8 )
-    val vrgather_ei16_e8m4  = DvSvlS2vS1(M4, RGATHER_EI16, E8 )
+    val vrgather_ei16_e8m1  = DvSvlS2vS1S3vNw(M1, RGATHER_EI16, E8 )
+    val vrgather_ei16_e8m2  = DvSvlS2vS1S3vNw(M2, RGATHER_EI16, E8 )
+    val vrgather_ei16_e8m4  = DvSvlS2vS1S3vNw(M4, RGATHER_EI16, E8 )
+    val vrgather_ei16_e8m8  = DvSvlS2vS1S3vNw(M8, RGATHER_EI16, E8 )
+    val vrgatherei16_rvs3_m1 = DvSvlS3v(M1, RGATHER_EI16_RVS3, E8)
+    val vrgatherei16_rvs3_m2 = DvSvlS3v(M2, RGATHER_EI16_RVS3, E8)
+    val vrgatherei16_rvs3_m4 = DvSvlS3v(M4, RGATHER_EI16_RVS3, E8)
+    val vrgatherei16_rvs3_m8 = DvSvlS3v(M8, RGATHER_EI16_RVS3, E8)
     val vrgather_ei16_e16m1 = DvSvlS2vS1(M1, RGATHER_EI16, E16)
     val vrgather_ei16_e16m2 = DvSvlS2vS1(M2, RGATHER_EI16, E16)
     val vrgather_ei16_e16m4 = DvSvlS2vS1(M4, RGATHER_EI16, E16)
