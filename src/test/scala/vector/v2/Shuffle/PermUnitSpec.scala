@@ -2441,5 +2441,236 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         seen mustBe true
       }
     }
+
+    // ---- vrgatherei16 SEW=8: gather + rvs3 old-data pair ----
+    describe("vrgatherei16") {
+
+      // e16 index bytes (little-endian: lo byte first)
+      def e16idx(vals: Seq[Int]): Seq[Int] = vals.flatMap(v => Seq(v & 0xff, v >> 8))
+
+      // ei16e8 dual-vs1 index: slots 0-7 <- vs1 (vs1+2i), slots 8-15 <- vs3 (vs1+2i+1)
+      def goldenEi16e8Idx(vs1Lo: BigInt, vs1Hi: BigInt, lmulFrac: Int): Seq[(Int, Boolean, Boolean, Boolean)] = {
+        val vlmax = lmulFrac * vlen / 64
+        def idx16(v: BigInt, ie: Int) = ((v >> (ie * 16)) & 0xffff).toInt
+        (0 until 8).map { ie => val i = idx16(vs1Lo, ie); (i, i < vlmax, i >= vlmax, false) } ++
+          (0 until 8).map { ie => val i = idx16(vs1Hi, ie); (i, i < vlmax, i >= vlmax, false) }
+      }
+
+      // Merged gather+rvs3 output for vd register effUopIdx: active -> gather's
+      // table lookup / zero (rvs3 contributes ZERO(0)); tail/mask-inactive ->
+      // rvs3 old-vd or agnostic. effUopIdx = uopIdx % blockSize (SEW=8).
+      def ei16e8Golden(vs1Lo: BigInt, vs1Hi: BigInt, lmulFrac: Int, table: Seq[Int],
+        oldVd: Seq[Int], effUopIdx: Int, vl: Int, vta: Boolean, vma: Boolean, mask: BigInt): BigInt = {
+        val flags = goldenEi16e8Idx(vs1Lo, vs1Hi, lmulFrac)
+        goldenPerm(flags, table, 0 until Math.max(1, lmulFrac / 8), oldVd, Seq.fill(8)(0), 8, effUopIdx, vl, vta, vma, mask)
+      }
+
+      def pGatherEi16(dut: PermUnit[FakePermMeta], pipe: Int,
+        vs1Lo: Seq[Int], vs1Hi: Seq[Int], vs2: Seq[Int],
+        lmulFrac: Int = 8, uopIdx: Int = 0, blockBase: Int = 0, placeIdx: Int = 0,
+        vl: Int = -1, vta: Boolean = false, vma: Boolean = false,
+        mask: BigInt = -1, robIdx: Int = 0, pdest: Int = 0
+      ): Unit = {
+        val p = dut.in.pipes(pipe)
+        p.valid.poke(true)
+        pOpReset(dut, pipe) // cross-cycle tests reuse a pipe with a different op
+        p.bits.op.isGatherEI16.poke(true)
+        p.bits.placeIdx.poke(placeIdx); p.bits.blockBase.poke(blockBase)
+        p.bits.uopIdx.poke(uopIdx)
+        pSew(p.bits.sew, 8); pSew(p.bits.ei, 16); pLmul(p.bits.lmul, lmulFrac)
+        p.bits.vl.poke(if (vl < 0) (lmulFrac / 8) * vlen / 8 else vl)
+        p.bits.vta.poke(vta); p.bits.vma.poke(vma)
+        p.bits.vs1.poke(foldBytes(vs1Lo))
+        p.bits.vs2.poke(foldBytes(vs2))
+        p.bits.vs3.poke(foldBytes(vs1Hi))
+        p.bits.mask.poke(if (mask < 0) (BigInt(1) << numElem) - 1 else mask)
+        pMeta(dut, pipe, robIdx, pdest)
+      }
+
+      def pRvs3(dut: PermUnit[FakePermMeta], pipe: Int,
+        oldVd: Seq[Int],
+        lmulFrac: Int = 8, uopIdx: Int = 1, blockBase: Int = 0, placeIdx: Int = 0,
+        vl: Int = -1, vta: Boolean = false, vma: Boolean = false,
+        mask: BigInt = -1, robIdx: Int = 0, pdest: Int = 0
+      ): Unit = {
+        val p = dut.in.pipes(pipe)
+        p.valid.poke(true)
+        pOpReset(dut, pipe) // cross-cycle tests reuse a pipe with a different op
+        p.bits.op.isGatherEI16Rvs3.poke(true)
+        p.bits.placeIdx.poke(placeIdx); p.bits.blockBase.poke(blockBase)
+        p.bits.uopIdx.poke(uopIdx)
+        pSew(p.bits.sew, 8); pSew(p.bits.ei, 16); pLmul(p.bits.lmul, lmulFrac)
+        p.bits.vl.poke(if (vl < 0) (lmulFrac / 8) * vlen / 8 else vl)
+        p.bits.vta.poke(vta); p.bits.vma.poke(vma)
+        p.bits.vs3.poke(foldBytes(oldVd))
+        p.bits.mask.poke(if (mask < 0) (BigInt(1) << numElem) - 1 else mask)
+        pMeta(dut, pipe, robIdx, pdest)
+      }
+
+      // Clear all op flags (cross-cycle tests reuse a pipe with a different op).
+      def pOpReset(dut: PermUnit[FakePermMeta], pipe: Int): Unit = {
+        val o = dut.in.pipes(pipe).bits.op
+        o.isGather.poke(false); o.isGatherEI16.poke(false); o.isGatherEI16Rvs3.poke(false)
+        o.isSlideUp.poke(false); o.isSlide1Up.poke(false)
+        o.isSlideDown.poke(false); o.isSlide1Down.poke(false)
+        o.isZip.poke(false); o.isUnzip.poke(false); o.isCompress.poke(false)
+      }
+
+      describe("NOMASK") {
+        it("E1: m1 same-cycle pair (wb uses rvs3 pdest)") {
+          simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+            initDut(dut)
+            val table = Table.inc(1)
+            val idxLo = e16idx((0 until 8).toList)
+            val idxHi = e16idx((8 until 16).toList)
+            val oldVd = (0 until 16).map(i => 0xa0 + i)
+            val golden = ei16e8Golden(foldBytes(idxLo), foldBytes(idxHi), 8, table, oldVd, 0, 16, false, false, -1)
+            pGatherEi16(dut, 0, idxLo, idxHi, table, lmulFrac = 8, uopIdx = 0, blockBase = 0, placeIdx = 0, vl = 16, robIdx = 1, pdest = 0x11)
+            pRvs3(dut, 1, oldVd, lmulFrac = 8, uopIdx = 1, blockBase = 0, placeIdx = 0, vl = 16, robIdx = 1, pdest = 0x22)
+            dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+            var cy = 0
+            while (cy < 12 && !dut.out.pipes(0).valid.peekBoolean()) { dut.clock.step(); cy += 1 }
+            dut.out.pipes(0).valid.expect(true.B, "m1 pair writes back")
+            dut.out.pipes(0).bits.data.expect(golden, "merged gather+old-vd")
+            dut.out.pipes(0).bits.meta.pdest.expect(0x22.U, "wb target = rvs3 pdest")
+          }
+        }
+        it("E2: m2 same-cycle pairs") {
+          simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+            initDut(dut)
+            for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+            val table = Table.inc(2)
+            val oldVd = Seq((0 until 16).map(i => 0xa0 + i), (0 until 16).map(i => 0xb0 + i))
+            val idxLo = Seq(e16idx((0 until 8).toList), e16idx((16 until 24).toList))
+            val idxHi = Seq(e16idx((8 until 16).toList), e16idx((24 until 32).toList))
+            val g0 = ei16e8Golden(foldBytes(idxLo(0)), foldBytes(idxHi(0)), 16, table, oldVd(0), 0, 32, false, false, -1)
+            val g1 = ei16e8Golden(foldBytes(idxLo(1)), foldBytes(idxHi(1)), 16, table, oldVd(1), 1, 32, false, false, -1)
+            pGatherEi16(dut, 0, idxLo(0), idxHi(0), table.slice(0, 16), lmulFrac = 16, uopIdx = 0, blockBase = 0, placeIdx = 0, vl = 32, pdest = 0)
+            pRvs3(dut, 1, oldVd(0), lmulFrac = 16, uopIdx = 2, blockBase = 0, placeIdx = 0, vl = 32, pdest = 0)
+            pGatherEi16(dut, 2, idxLo(1), idxHi(1), table.slice(16, 32), lmulFrac = 16, uopIdx = 1, blockBase = 0, placeIdx = 1, vl = 32, pdest = 1)
+            pRvs3(dut, 3, oldVd(1), lmulFrac = 16, uopIdx = 3, blockBase = 0, placeIdx = 1, vl = 32, pdest = 1)
+            dut.clock.step(); for (p <- 0 until 4) pPipeOff(dut, p)
+            val wb = collectWb(dut, 20)
+            wb(0).getOrElse(fail("pair0 never wrote back")) mustBe g0
+            wb(1).getOrElse(fail("pair1 never wrote back")) mustBe g1
+          }
+        }
+        it("E3: m2 cross-cycle (gathers then rvs3s)") {
+          simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+            initDut(dut)
+            for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+            val table = Table.inc(2)
+            val oldVd = Seq((0 until 16).map(i => 0xa0 + i), (0 until 16).map(i => 0xb0 + i))
+            val idxLo = Seq(e16idx((0 until 8).toList), e16idx((16 until 24).toList))
+            val idxHi = Seq(e16idx((8 until 16).toList), e16idx((24 until 32).toList))
+            val g0 = ei16e8Golden(foldBytes(idxLo(0)), foldBytes(idxHi(0)), 16, table, oldVd(0), 0, 32, false, false, -1)
+            val g1 = ei16e8Golden(foldBytes(idxLo(1)), foldBytes(idxHi(1)), 16, table, oldVd(1), 1, 32, false, false, -1)
+            // cy0: gathers only; each unit's hasIndex stays 0 (waitRvs3) until rvs3
+            pGatherEi16(dut, 0, idxLo(0), idxHi(0), table.slice(0, 16), lmulFrac = 16, uopIdx = 0, blockBase = 0, placeIdx = 0, vl = 32, pdest = 0)
+            pGatherEi16(dut, 1, idxLo(1), idxHi(1), table.slice(16, 32), lmulFrac = 16, uopIdx = 1, blockBase = 0, placeIdx = 1, vl = 32, pdest = 1)
+            dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+            // cy1: rvs3s merge the old-data and release writeback
+            pRvs3(dut, 0, oldVd(0), lmulFrac = 16, uopIdx = 2, blockBase = 0, placeIdx = 0, vl = 32, pdest = 0)
+            pRvs3(dut, 1, oldVd(1), lmulFrac = 16, uopIdx = 3, blockBase = 0, placeIdx = 1, vl = 32, pdest = 1)
+            dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+            val wb = collectWb(dut, 20)
+            wb(0).getOrElse(fail("pair0 never wrote back")) mustBe g0
+            wb(1).getOrElse(fail("pair1 never wrote back")) mustBe g1
+          }
+        }
+        it("E6: mf8 rvs3-before-gather (out-of-order pair)") {
+          simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+            initDut(dut)
+            for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+            val table = Table.inc(1)
+            val idxLo = e16idx(Seq(0, 1))
+            val idxHi = Seq.fill(16)(0)
+            val oldVd = (0 until 16).map(i => 0xa0 + i)
+            // mf8 (lmulFrac=1), vl=2: bytes 0,1 active, 2-15 tail (tu)
+            val golden = ei16e8Golden(foldBytes(idxLo), foldBytes(idxHi), 1, table, oldVd, 0, 2, false, false, -1)
+            // cy0: rvs3 (uop1) arrives before its gather (out-of-order dispatch)
+            pRvs3(dut, 1, oldVd, lmulFrac = 1, uopIdx = 1, blockBase = 0, placeIdx = 0, vl = 2, robIdx = 1, pdest = 0x22)
+            dut.clock.step(); pPipeOff(dut, 1)
+            // cy1: gather (uop0)
+            pGatherEi16(dut, 0, idxLo, idxHi, table, lmulFrac = 1, uopIdx = 0, blockBase = 0, placeIdx = 0, vl = 2, robIdx = 1, pdest = 0x11)
+            dut.clock.step(); pPipeOff(dut, 0)
+            var cy = 0
+            while (cy < 12 && !dut.out.pipes(0).valid.peekBoolean()) { dut.clock.step(); cy += 1 }
+            dut.out.pipes(0).valid.expect(true.B, "mf8 out-of-order pair writes back")
+            dut.out.pipes(0).bits.data.expect(golden, "active gathered, tail = old vd")
+            dut.out.pipes(0).bits.meta.pdest.expect(0x22.U, "wb target = rvs3 pdest")
+          }
+        }
+        // emu 波形 (build/2026-08-23-22-48-57_1.fst) 提取的真实激励重放:
+        //   vrgatherei16_vv-0.bin, e8/mf8/tu/mu, vl=2。rvs3(uop1,pipe2@cy4925)
+        //   先于 gather(uop0,pipe1@cy4926) 到达（乱序配对）。
+        it("E7: emu replay mf8 rvs3-before-gather") {
+          simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+            initDut(dut)
+            for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+            // 波形值 (MSB-first VCD -> LSB-first bytes)
+            val vs1Lo = Seq(0x00,0x01,0x03,0xf8,0xf8,0x7f,0x7f,0x7f,0xff,0xff,0x00,0x01,0x03,0xf8,0xf8,0x7f) // gather vs1 (slots 0-7)
+            val vs1Hi = Seq(0x00,0x81,0x07,0x00,0x04,0x00,0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00) // gather vs3 (2nd vs1, slots 8-15 tail)
+            val table = Seq(0x00,0x81,0x07,0x00,0x04,0x00,0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00) // gather vs2
+            val oldVd = Seq(0x52,0x45,0x80,0x32,0xdc,0x75,0xac,0x30,0x95,0x12,0x76,0x5b,0xaa,0xc0,0x44,0x83) // rvs3 vs3
+            // 期望: 活跃槽0/1 索引越界(vlmax=2)->0; tail 2-15 = 旧 vd (tu)
+            val golden = ei16e8Golden(foldBytes(vs1Lo), foldBytes(vs1Hi), 1, table, oldVd, 0, 2, false, false, -1)
+            // cy0: rvs3 (uop1) 先到
+            pRvs3(dut, 0, oldVd, lmulFrac = 1, uopIdx = 1, blockBase = 0, placeIdx = 0, vl = 2, robIdx = 0x71, pdest = 0x53)
+            dut.clock.step(); pPipeOff(dut, 0)
+            // cy1: gather (uop0)
+            pGatherEi16(dut, 0, vs1Lo, vs1Hi, table, lmulFrac = 1, uopIdx = 0, blockBase = 0, placeIdx = 0, vl = 2, robIdx = 0x71, pdest = 0x53)
+            dut.clock.step(); pPipeOff(dut, 0)
+            var cy = 0
+            while (cy < 12 && !dut.out.pipes(0).valid.peekBoolean()) { dut.clock.step(); cy += 1 }
+            dut.out.pipes(0).valid.expect(true.B, "emu mf8 replay writes back")
+            dut.out.pipes(0).bits.data.expect(golden, "index out-of-range -> 0, tail -> old vd")
+            dut.out.pipes(0).bits.meta.pdest.expect(0x53.U, "wb target = rvs3 pdest")
+          }
+        }
+      }
+
+      describe("MASK") {
+        it("E4: m1 masked-off keeps old vd") {
+          simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+            initDut(dut)
+            val table = Table.inc(1)
+            val idxLo = e16idx((0 until 8).toList)
+            val idxHi = e16idx((8 until 16).toList)
+            val oldVd = (0 until 16).map(i => 0xa0 + i)
+            val mask = 0x00ff // bytes 0-7 active, 8-15 masked-off
+            val golden = ei16e8Golden(foldBytes(idxLo), foldBytes(idxHi), 8, table, oldVd, 0, 16, false, false, mask)
+            pGatherEi16(dut, 0, idxLo, idxHi, table, lmulFrac = 8, uopIdx = 0, blockBase = 0, placeIdx = 0, vl = 16, mask = mask, pdest = 0x22)
+            pRvs3(dut, 1, oldVd, lmulFrac = 8, uopIdx = 1, blockBase = 0, placeIdx = 0, vl = 16, mask = mask, pdest = 0x22)
+            dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+            var cy = 0
+            while (cy < 12 && !dut.out.pipes(0).valid.peekBoolean()) { dut.clock.step(); cy += 1 }
+            dut.out.pipes(0).valid.expect(true.B)
+            dut.out.pipes(0).bits.data.expect(golden, "active gathered, masked-off = old vd")
+          }
+        }
+        it("E5: m2 tail agnostic (vta)") {
+          simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+            initDut(dut)
+            for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+            val table = Table.inc(2)
+            val oldVd = Seq((0 until 16).map(i => 0xa0 + i), (0 until 16).map(i => 0xb0 + i))
+            val idxLo = Seq(e16idx((0 until 8).toList), e16idx((16 until 24).toList))
+            val idxHi = Seq(e16idx((8 until 16).toList), e16idx((24 until 32).toList))
+            // vl=20: uop1 bytes 16-19 active, 20-31 tail -> vta agnostic (0xff)
+            val g0 = ei16e8Golden(foldBytes(idxLo(0)), foldBytes(idxHi(0)), 16, table, oldVd(0), 0, 20, true, false, -1)
+            val g1 = ei16e8Golden(foldBytes(idxLo(1)), foldBytes(idxHi(1)), 16, table, oldVd(1), 1, 20, true, false, -1)
+            pGatherEi16(dut, 0, idxLo(0), idxHi(0), table.slice(0, 16), lmulFrac = 16, uopIdx = 0, blockBase = 0, placeIdx = 0, vl = 20, vta = true, pdest = 0)
+            pRvs3(dut, 1, oldVd(0), lmulFrac = 16, uopIdx = 2, blockBase = 0, placeIdx = 0, vl = 20, vta = true, pdest = 0)
+            pGatherEi16(dut, 2, idxLo(1), idxHi(1), table.slice(16, 32), lmulFrac = 16, uopIdx = 1, blockBase = 0, placeIdx = 1, vl = 20, vta = true, pdest = 1)
+            pRvs3(dut, 3, oldVd(1), lmulFrac = 16, uopIdx = 3, blockBase = 0, placeIdx = 1, vl = 20, vta = true, pdest = 1)
+            dut.clock.step(); for (p <- 0 until 4) pPipeOff(dut, p)
+            val wb = collectWb(dut, 20)
+            wb(0).getOrElse(fail("pair0 never wrote back")) mustBe g0
+            wb(1).getOrElse(fail("pair1 never wrote back")) mustBe g1
+          }
+        }
+      }
+    }
   }
 }

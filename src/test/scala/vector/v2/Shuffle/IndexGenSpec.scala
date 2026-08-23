@@ -455,5 +455,61 @@ class IndexGenSpec extends SpecBase with GatherSpecUtils {
         }
       }
     }
+
+    // SEW=8 vrgatherei16: gather + rvs3 (old-data) placement-kind encoding
+    describe("vrgatherei16 SEW=8") {
+      it("gather: waitRvs3, PREFILL placeholder 0") {
+        simulate(new IndexGen()(GatherParam.default)) { dut =>
+          pDefaults(dut)
+          dut.in.valid.poke(true); dut.in.bits.op.isGatherEI16.poke(true)
+          pSew(dut.in.bits.sew, 8); pSew(dut.in.bits.ei, 16)
+          // slots 0-7 <- vs1 (e16 0..7), slots 8-15 <- vs3 (e16 8..15)
+          val vs1 = (0 until 8).foldLeft(BigInt(0))((acc, k) => acc | (BigInt(k) << (16 * k)))
+          val vs3 = (0 until 8).foldLeft(BigInt(0))((acc, k) => acc | (BigInt(k + 8) << (16 * k)))
+          dut.in.bits.vs1.poke(vs1); dut.in.bits.vs3.poke(vs3)
+          dut.in.bits.mask.poke(0x00ff) // bytes 8-15 mask-inactive
+          dut.clock.step()
+          import ElemFlags._
+          dut.out.valid.expect(true.B)
+          dut.out.waitRvs3.expect(true.B, "gather waits for its rvs3")
+          dut.out.isRvs3.expect(false.B)
+          for (i <- 0 until 8) {
+            dut.out.elemFlags(i).expect(LOOKUP, s"slot $i active")
+            dut.out.elemData(i).expect(i.U, s"slot $i index")
+          }
+          for (i <- 8 until 16) {
+            dut.out.elemFlags(i).expect(PREFILL, s"slot $i mask-inactive")
+            dut.out.elemData(i).expect(0.U, s"slot $i PREFILL placeholder 0")
+          }
+        }
+      }
+      it("rvs3: active ZERO(0), tail PREFILL old-vd") {
+        simulate(new IndexGen()(GatherParam.default)) { dut =>
+          pDefaults(dut)
+          dut.in.valid.poke(true); dut.in.bits.op.isGatherEI16Rvs3.poke(true)
+          pSew(dut.in.bits.sew, 8); pSew(dut.in.bits.ei, 16)
+          pLmul(dut.in.bits.lmul, 8) // m1: effUopIdx = uopIdx % 1
+          dut.in.bits.uopIdx.poke(1) // rvs3 uop of an m1 pair (uopIdx = m+i = 1)
+          dut.in.bits.vl.poke(8)     // bytes 8-15 tail
+          dut.in.bits.vta.poke(false) // tail undisturbed -> old vd
+          val oldVd = BigInt("AABBCCDDEEFF00112233445566778899", 16)
+          dut.in.bits.vs3.poke(oldVd)
+          dut.clock.step()
+          import ElemFlags._
+          dut.out.valid.expect(true.B)
+          dut.out.isRvs3.expect(true.B, "rvs3 uop")
+          dut.out.waitRvs3.expect(false.B)
+          for (i <- 0 until 8) {
+            dut.out.elemFlags(i).expect(ZERO, s"slot $i active -> ZERO(0)")
+            dut.out.elemData(i).expect(0.U, s"slot $i active data 0")
+          }
+          for (i <- 8 until 16) {
+            dut.out.elemFlags(i).expect(PREFILL, s"slot $i tail")
+            val eb = ((oldVd >> (i * 8)) & 0xff).toInt
+            dut.out.elemData(i).expect(eb.U, s"slot $i tail old-vd")
+          }
+        }
+      }
+    }
   }
 }
