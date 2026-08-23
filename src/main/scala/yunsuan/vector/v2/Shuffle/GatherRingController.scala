@@ -129,10 +129,14 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
   private val ring2AllTableValidVec = Cat(ring2Controllers.map(_.out.allTableValid).reverse)
   private val ring4AllTableValidVec = Cat(ring4Controllers.map(_.out.allTableValid).reverse)
   private val ring8AllTableValidVec = Cat(ring8Controllers.map(_.out.allTableValid).reverse)
+  // blockSize=1 (m1/fractional) has no ring: the single table is valid as soon as it is
+  // placed, so the vperm wake is gated directly on the unit's hasTable.
+  private val singleUnitMask = Cat(in.blockSize.map(_ === 1.U).reverse)
   out.unitAllTableValid := VecInit((
     ring2AllTableValidVec & ring2UnitMask |
     ring4AllTableValidVec & ring4UnitMask |
-    ring8AllTableValidVec & ring8UnitMask
+    ring8AllTableValidVec & ring8UnitMask |
+    in.hasTable.asUInt & singleUnitMask
   ).asBools)
 
   // ── Writeback arbitration (interleaved) ──────────────
