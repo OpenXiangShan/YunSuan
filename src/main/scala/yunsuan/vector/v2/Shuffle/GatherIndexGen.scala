@@ -104,17 +104,27 @@ class GatherIndexGen(implicit val param: GatherParam) extends GatherModule {
   )
   calculateMinSewIdx(e8ei8MinSewIdx, e8Vs1, E8ValidBits, 8)
 
+  // SEW=32/EI=16: the e16 index is half the dest width, so 2 uops share one
+  // vs1 register (Src1Select INCF2). splitToVecByWidth(64) gives 2 groups of
+  // 4 e16; uopIdx(0) directly selects the group (synthesizes to a 2-to-1 mux).
+  val e32ei16Grp = in.bits.vs1.splitToVecByWidth(64)
+  val e32ei16Elems = e32ei16Grp(uopIdx(0, 0)).splitToVecByWidth(16)
   for (i <- e32ei16MinSewIdx.indices) {
     for (j <- e32ei16MinSewIdx.head.indices) {
       e32ei16MinSewIdx(i)(j) :=
-        Cat(e16Vs1(i).takeOrPad(E16ValidBits - 1), j.U((log2Ceil(16) - log2Ceil(MinDataWidth) + 1).W))
+        Cat(e32ei16Elems(i).takeOrPad(E16ValidBits - 1), j.U((log2Ceil(16) - log2Ceil(MinDataWidth) + 1).W))
     }
   }
 
+  // SEW=64/EI=16: 4 uops share one vs1 register (Src1Select INCF4).
+  // splitToVecByWidth(32) gives 4 groups of 2 e16; uopIdx(1,0) directly selects
+  // the group (synthesizes to a 4-to-1 mux).
+  val e64ei16Grp = in.bits.vs1.splitToVecByWidth(32)
+  val e64ei16Elems = e64ei16Grp(uopIdx(1, 0)).splitToVecByWidth(16)
   for (i <- e64ei16MinSewIdx.indices) {
     for (j <- e64ei16MinSewIdx.head.indices) {
       e64ei16MinSewIdx(i)(j) :=
-        Cat(e16Vs1(i).takeOrPad(E16ValidBits - 2), j.U((log2Ceil(16) - log2Ceil(MinDataWidth) + 2).W))
+        Cat(e64ei16Elems(i).takeOrPad(E16ValidBits - 2), j.U((log2Ceil(16) - log2Ceil(MinDataWidth) + 2).W))
     }
   }
 
