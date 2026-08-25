@@ -154,6 +154,8 @@ abstract class Opcodes {
 
   private val records: mutable.Set[Type] = collection.mutable.Set.empty
 
+  Opcodes.allOpcodesObj.addOne(this)
+
   def all: Seq[Type] = records.toSeq
 
   def allBitPats: Seq[BitPat] = records.map(_.encode).toSeq
@@ -380,11 +382,18 @@ abstract class Opcodes {
 
 object Opcodes {
   def main(args: Array[String]): Unit = {
-    for (opcodeCls <- opcodeObjects) {
-      for (opcode <- opcodeCls.all.sortBy(_.encode.value)) {
+    // Force registration of every opcode family before dumping, so that the
+    // derived maxFixLat is complete even when `main` runs standalone.
+    initOpcodes
+
+    for (opcodesObj <- Opcodes.allOpcodesObj) {
+      for (opcode <- opcodesObj.all.sortBy(_.encode.value)) {
         println(s"${opcode}")
       }
     }
+
+    println(s"${Opcodes.getMaxFixLat}")
+    println(s"${Latency().getWidth}")
   }
 
   def apply(): UInt = UInt(width.W)
@@ -425,11 +434,18 @@ object Opcodes {
 
   def updateWidth(w: Int): Unit = Opcodes.width = w.max(Opcodes.width)
 
-  private var maxFixLat: Int = 0
+  var allOpcodesObj: mutable.Set[Opcodes] = collection.mutable.Set.empty
 
-  def getMaxFixLat: Int = maxFixLat
+  lazy val maxFixLat: Int = allOpcodesObj.map(_.maxLat).max
 
-  def updateMaxFixLat(lat: Int): Unit = this.maxFixLat = lat.max(this.maxFixLat)
+  def getMaxFixLat: Int = {
+    // Make sure every opcode family registered itself before the derived value
+    // is memoized by the lazy val.
+    initOpcodes
+    maxFixLat
+  }
+
+  def updateMaxFixLat(lat: Int): Unit = ()
 
   /**
    * Shared encoding layout of the float multiply-add / float ALU space: the pattern fields, the
