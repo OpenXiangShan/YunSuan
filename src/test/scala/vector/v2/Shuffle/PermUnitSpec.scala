@@ -2487,6 +2487,30 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         pMeta(dut, pipe, robIdx, pdest)
       }
 
+      // vrgatherei16 with SEW>8 (single vs1 index register, no dual-vs1): poke a
+      // gatherEI16 uop with arbitrary SEW, vs1 = e16 index register, vs3 = old-vd.
+      def pGatherEi16Sew(dut: PermUnit[FakePermMeta], pipe: Int,
+        vs1: Seq[Int], vs2: Seq[Int], vs3: Seq[Int], sew: Int,
+        lmulFrac: Int = 8, uopIdx: Int = 0, blockBase: Int = 0, placeIdx: Int = 0,
+        vl: Int = -1, vta: Boolean = false, vma: Boolean = false,
+        mask: BigInt = -1, robIdx: Int = 0, pdest: Int = 0
+      ): Unit = {
+        val p = dut.in.pipes(pipe)
+        p.valid.poke(true)
+        pOpReset(dut, pipe)
+        p.bits.op.isGatherEI16.poke(true)
+        p.bits.placeIdx.poke(placeIdx); p.bits.blockBase.poke(blockBase)
+        p.bits.uopIdx.poke(uopIdx)
+        pSew(p.bits.sew, sew); pSew(p.bits.ei, 16); pLmul(p.bits.lmul, lmulFrac)
+        p.bits.vl.poke(if (vl < 0) (lmulFrac / 8) * vlen / sew else vl)
+        p.bits.vta.poke(vta); p.bits.vma.poke(vma)
+        p.bits.vs1.poke(foldBytes(vs1))
+        p.bits.vs2.poke(foldBytes(vs2))
+        p.bits.vs3.poke(foldBytes(vs3))
+        p.bits.mask.poke(if (mask < 0) (BigInt(1) << numElem) - 1 else mask)
+        pMeta(dut, pipe, robIdx, pdest)
+      }
+
       def pRvs3(dut: PermUnit[FakePermMeta], pipe: Int,
         oldVd: Seq[Int],
         lmulFrac: Int = 8, uopIdx: Int = 1, blockBase: Int = 0, placeIdx: Int = 0,
@@ -2601,21 +2625,16 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
             dut.out.pipes(0).bits.meta.pdest.expect(0x22.U, "wb target = rvs3 pdest")
           }
         }
-        // emu 波形 (build/2026-08-23-22-48-57_1.fst) 提取的真实激励重放:
-        //   vrgatherei16_vv-0.bin, e8/mf8/tu/mu, vl=2。rvs3(uop1,pipe2@cy4925)
-        //   先于 gather(uop0,pipe1@cy4926) 到达（乱序配对）。
         it("E7: emu replay mf8 rvs3-before-gather") {
           simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
             initDut(dut)
             for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
-            // 波形值 (MSB-first VCD -> LSB-first bytes)
             val vs1Lo = Seq(0x00,0x01,0x03,0xf8,0xf8,0x7f,0x7f,0x7f,0xff,0xff,0x00,0x01,0x03,0xf8,0xf8,0x7f) // gather vs1 (slots 0-7)
             val vs1Hi = Seq(0x00,0x81,0x07,0x00,0x04,0x00,0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00) // gather vs3 (2nd vs1, slots 8-15 tail)
             val table = Seq(0x00,0x81,0x07,0x00,0x04,0x00,0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00) // gather vs2
             val oldVd = Seq(0x52,0x45,0x80,0x32,0xdc,0x75,0xac,0x30,0x95,0x12,0x76,0x5b,0xaa,0xc0,0x44,0x83) // rvs3 vs3
-            // 期望: 活跃槽0/1 索引越界(vlmax=2)->0; tail 2-15 = 旧 vd (tu)
             val golden = ei16e8Golden(foldBytes(vs1Lo), foldBytes(vs1Hi), 1, table, oldVd, 0, 2, false, false, -1)
-            // cy0: rvs3 (uop1) 先到
+            // rvs3 (uop1) arrives before its gather
             pRvs3(dut, 0, oldVd, lmulFrac = 1, uopIdx = 1, blockBase = 0, placeIdx = 0, vl = 2, robIdx = 0x71, pdest = 0x53)
             dut.clock.step(); pPipeOff(dut, 0)
             // cy1: gather (uop0)
@@ -2626,6 +2645,30 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
             dut.out.pipes(0).valid.expect(true.B, "emu mf8 replay writes back")
             dut.out.pipes(0).bits.data.expect(golden, "index out-of-range -> 0, tail -> old vd")
             dut.out.pipes(0).bits.meta.pdest.expect(0x53.U, "wb target = rvs3 pdest")
+          }
+        }
+        // vrgatherei16.vv v2,v6,v4, e32/m2/tu/mu, vl=8. uop0->unit0(v2), uop1->unit1(v3).
+        it("E8: emu replay e32 m2 vl=8 gatherEI16") {
+          simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+            initDut(dut)
+            for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+            val idx = Seq(0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0xf8,0xff,0xff,0xff) // v4 e16 [0,0,1,0,3,0,0xfff8,0xffff]
+            val srcLo = Seq(0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x0f,0x00,0x00,0x00,0x00,0x00,0x00,0x00) // v6 e32 [0,2,15,0]
+            val srcHi = Seq(0xf8,0xff,0xff,0xff,0x00,0x00,0x00,0x00,0xff,0x07,0x00,0x00,0x01,0x00,0x00,0x00) // v7 e32 [0xfffffff8,0,0x7ff,1]
+            val oldV2 = Seq(0xcc,0x8c,0x67,0xad,0x62,0xd4,0xb3,0xb1,0xee,0x30,0x02,0xa3,0x7a,0x51,0x03,0x5f)
+            val oldV3 = Seq(0xac,0xef,0x65,0x23,0xed,0x27,0xcf,0x7d,0x27,0x35,0xba,0x00,0xf8,0x50,0x67,0x0a)
+            // Correct result (nemu reference): uop0 (v2) -> [0,0,2,0],
+            // uop1 (v3) should use e4-e7=[3,0,0xfff8,0xffff] -> [0,0,0,0]
+            val gV2 = foldBytes(Seq(0,0,0,0, 0,0,0,0, 2,0,0,0, 0,0,0,0))
+            val gV3 = BigInt(0)
+            pGatherEi16Sew(dut, 0, idx, srcLo, oldV2, sew = 32, lmulFrac = 16, uopIdx = 0, blockBase = 0, placeIdx = 0, vl = 8, robIdx = 0x141, pdest = 0x67)
+            pGatherEi16Sew(dut, 1, idx, srcHi, oldV3, sew = 32, lmulFrac = 16, uopIdx = 1, blockBase = 0, placeIdx = 1, vl = 8, robIdx = 0x141, pdest = 0x68)
+            dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+            val wb = collectWb(dut, 20)
+            println(s"[E8-diag] wb0(v2)=0x${wb(0).map(_.toString(16)).getOrElse("NA")} golden=0x${gV2.toString(16)}")
+            println(s"[E8-diag] wb1(v3)=0x${wb(1).map(_.toString(16)).getOrElse("NA")} golden=0x${gV3.toString(16)}")
+            wb(0).getOrElse(fail("v2 (pdest 0x67) never wrote back")) mustBe gV2
+            wb(1).getOrElse(fail("v3 (pdest 0x68) never wrote back")) mustBe gV3
           }
         }
       }
