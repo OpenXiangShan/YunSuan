@@ -10,7 +10,7 @@ import yunsuan.util.GatedValidRegNext
 class FloatFMAV2Input extends Bundle {
   val fire                 = Bool()
   val fp_fmt               = UInt(2.W)
-  val op_code              = UInt(4.W)
+  val op_code              = FMacOpcode()
   val fp_a, fp_b, fp_c     = UInt(64.W)
   val round_mode           = UInt(3.W)
 }
