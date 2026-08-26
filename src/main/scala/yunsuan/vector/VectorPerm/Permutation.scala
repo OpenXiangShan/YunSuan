@@ -509,7 +509,7 @@ class Permutation extends Module {
   val vs2_bytes_max = Mux1H(Seq(
     (vs2Id === 0.U) -> vlmax_bytes,
   ) ++ (1 until 8).map(i => (vs2Id === i.U) -> (vlenb * (i + 1)).U))
-  
+
   // dontTouch(vs2_bytes_min)
   // dontTouch(vs2_bytes_max)
   val vrgather_vd_reg0 = Wire(Vec(vlenb, UInt(8.W)))

@@ -22,6 +22,9 @@ import chisel3.util._
 object LookupTree {
   def apply[T <: Data](key: UInt, mapping: Iterable[(UInt, T)]): T =
     Mux1H(mapping.map(p => (p._1 === key, p._2)))
+
+  def apply[T <: Data](key: UInt, mapping: Iterable[(BitPat, T)])(implicit d: DummyImplicit): T =
+    Mux1H(mapping.map(p => (p._1 === key, p._2)))
 }
 
 object LookupTreeDefault {

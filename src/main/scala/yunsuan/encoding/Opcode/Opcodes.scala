@@ -124,7 +124,10 @@ abstract class Opcode(val factory: Opcodes) extends Cloneable {
 }
 
 object Opcode {
-  def apply() = UInt(Opcodes.getWidth.W)
+  def apply() = {
+    Opcodes.initOpcodes
+    UInt(Opcodes.getWidth.W)
+  }
 }
 
 object Latency {
@@ -133,7 +136,10 @@ object Latency {
   // use all 1s to specify uncertain latency like div
   def uncertain(): UInt = Fill(width, 1.U)
 
-  lazy val width: Int = log2Up(Opcodes.getMaxFixLat + 2)
+  lazy val width: Int = {
+    Opcodes.initOpcodes
+    log2Up(Opcodes.getMaxFixLat + 2)
+  }
 }
 
 abstract class Opcodes {
@@ -381,6 +387,31 @@ object Opcodes {
   }
 
   def apply(): UInt = UInt(width.W)
+
+  // Force initialization of all opcode objects so that the global width/max
+  // latency are populated before `Opcode()`/`Latency()` are used during module
+  // elaboration, regardless of initialization order.
+  private[encoding] lazy val initOpcodes: Unit = {
+    FMacOpcode
+    VFMacOpcode
+    FMiscOpcode
+    FAluOpcode
+    VFMiscOpcode
+    VFRedOpcode
+    VFDivOpcode
+    FCvtOpcode
+    VFCvtOpcode
+    VIAluOpcode
+    VMAluOpcode
+    VIMacOpcode
+    VIDivOpcode
+    VIRedOpcode
+    VIPermOpcode
+    VMoveOpcode
+    VSha256msOpcode
+    VSha256cOpcode
+    ()
+  }
 
   private var width: Int = 0
 
