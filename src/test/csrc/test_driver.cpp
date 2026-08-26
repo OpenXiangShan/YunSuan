@@ -670,9 +670,6 @@ void TestDriver::get_expected_output() {
     case FloatFMA:
       if (verbose) { printf("FuType:%d, choose FloatFMA %d\n", input.fuType, FloatFMA); }
       expect_output = sfma.get_expected_output(input); return;
-    case IntegerMul:
-      if (verbose) { printf("FuType:%d, choose IntegerMul %d\n", input.fuType, IntegerMul); }
-      expect_output = smul.get_expected_output(input); return;
     default:
       printf("Unsupported FuType %d\n", input.fuType);
       exit(1);

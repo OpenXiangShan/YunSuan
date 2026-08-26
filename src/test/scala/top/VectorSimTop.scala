@@ -17,13 +17,10 @@ trait VSPParameter {
   val VLEN       : Int = 128
   val XLEN       : Int = 64
   val VIA_latency: Int = 0 // TODO: change to 1
-  val VIAF_latency: Int = 1
   val VFF_latency: Int = 3 // TODO: check only mul and mul+add, different or not
   val VFD_latency: Int = 99
   val VFA_latency: Int = 1
   val VPERM_latency: Int = 1
-  val VID_latency: Int = 99
-  val VIMAC_latency: Int = 2
   val IMUL_latency: Int = 2
   val FCMP_latency: Int = 0
   val FALU_latency: Int = 1
@@ -37,9 +34,6 @@ object VPUTestFuType { // only use in test, difftest with xs
   def vfd = "b0000_0010".U(8.W)
   def via = "b0000_0011".U(8.W)
   def vperm = "b0000_0100".U(8.W)
-  def viaf = "b0000_0101".U(8.W)
-  def vid = "b0000_0110".U(8.W)
-  def vimac = "b0000_1010".U(8.W) // not used
   def imul = "b0000_1011".U(8.W)
   def fcmp = "b0000_1100".U(8.W)
   def falu = "b0000_1101".U(8.W)
@@ -118,9 +112,6 @@ class SimTop() extends VPUTestModule {
       VPUTestFuType.vfd -> VFD_latency.U,
       VPUTestFuType.via -> VIA_latency.U,
       VPUTestFuType.vperm -> VPERM_latency.U,
-      VPUTestFuType.viaf -> VIAF_latency.U,
-      VPUTestFuType.vid -> VID_latency.U,
-      VPUTestFuType.vimac -> VIMAC_latency.U,
       VPUTestFuType.imul -> IMUL_latency.U,
       VPUTestFuType.fcmp -> FCMP_latency.U,
       VPUTestFuType.falu -> FALU_latency.U,
@@ -135,7 +126,7 @@ class SimTop() extends VPUTestModule {
   when (busy) { counter := counter + 1.U }
   val finish_fixLatency = busy && (counter >= latency)
   val finish_uncertain = Wire(Bool())
-  val is_uncertain = (in.fuType === VPUTestFuType.vfd) || (in.fuType === VPUTestFuType.vid)
+  val is_uncertain = (in.fuType === VPUTestFuType.vfd)
 
   val (sew, uop_idx, rm, rm_s, fuType, opcode, src_widen, widen, is_frs1, is_frs2) = (
     in.sew, in.uop_idx, in.rm, in.rm_s, in.fuType, in.fuOpType,
@@ -181,11 +172,7 @@ class SimTop() extends VPUTestModule {
   val vfd_result = Reg(new VSTOutputIO)
   val via_result = Wire(new VSTOutputIO)
   val vperm_result = Wire(new VSTOutputIO)
-  val viaf_result = Wire(new VSTOutputIO)
   val vfd_result_valid = RegInit(VecInit(Seq.fill(VLEN/XLEN)(false.B)))
-  val vid_result = Wire(new VSTOutputIO)
-  val vid_result_valid = Wire(Bool())
-  val vimac_result = Wire(new VSTOutputIO)
   val imul_result = Wire(new VSTOutputIO)
   val fcmp_result = Wire(new VSTOutputIO)
   val falu_result = Wire(new VSTOutputIO)
@@ -195,7 +182,7 @@ class SimTop() extends VPUTestModule {
     vfd_result_valid.map(_ := false.B)
   }
 
-  finish_uncertain := Mux(in.fuType === VPUTestFuType.vid, vid_result_valid,vfd_result_valid.reduce(_&&_))
+  finish_uncertain := vfd_result_valid.reduce(_&&_)
 
   for (i <- 0 until (VLEN / XLEN)) {
     val (src1, src2, src3) = (in.src(0)(i), in.src(1)(i), in.src(2)(i))
@@ -405,8 +392,6 @@ class SimTop() extends VPUTestModule {
     VPUTestFuType.vfd -> vfd_result,
     VPUTestFuType.via -> via_result,
     VPUTestFuType.vperm -> vperm_result,
-    VPUTestFuType.viaf -> viaf_result,
-    VPUTestFuType.vimac -> vimac_result,
     VPUTestFuType.imul -> imul_result,
     VPUTestFuType.fcmp -> fcmp_result,
     VPUTestFuType.falu -> falu_result,
