@@ -55,18 +55,21 @@ uint16_t TestDriver::gen_random_optype() {
   switch (input.fuType)
   {
     case VFloatAdder: {
-      uint16_t vfadd_all_optype[VFA_NUM] = VFA_ALL_OPTYPES;
-      return vfadd_all_optype[rand() % VFA_NUM];
+      if (input.sew == 1) { uint16_t l[VFA_NUM] = VFA_ALL_OPTYPES_FP16; return l[rand() % VFA_NUM]; }
+      if (input.sew == 2) { uint16_t l[VFA_NUM] = VFA_ALL_OPTYPES_FP32; return l[rand() % VFA_NUM]; }
+      uint16_t l[VFA_NUM] = VFA_ALL_OPTYPES_FP64; return l[rand() % VFA_NUM];
       break;
     }
     case VFloatFMA: {
-      uint16_t vffma_all_optype[VFF_NUM] = VFF_ALL_OPTYPES;
-      return vffma_all_optype[rand() % VFF_NUM];
+      if (input.sew == 1) { uint16_t l[VFF_NUM] = VFF_ALL_OPTYPES_FP16; return l[rand() % VFF_NUM]; }
+      if (input.sew == 2) { uint16_t l[VFF_NUM] = VFF_ALL_OPTYPES_FP32; return l[rand() % VFF_NUM]; }
+      uint16_t l[VFF_NUM] = VFF_ALL_OPTYPES_FP64; return l[rand() % VFF_NUM];
       break;
-      }
+    }
     case VFloatDivider: {
-      uint16_t vfd_all_optype[VFD_NUM] = VFD_ALL_OPTYPES;
-      return vfd_all_optype[rand() % VFD_NUM];
+      if (input.sew == 1) { uint16_t l[VFD_NUM] = VFD_ALL_OPTYPES_FP16; return l[rand() % VFD_NUM]; }
+      if (input.sew == 2) { uint16_t l[VFD_NUM] = VFD_ALL_OPTYPES_FP32; return l[rand() % VFD_NUM]; }
+      uint16_t l[VFD_NUM] = VFD_ALL_OPTYPES_FP64; return l[rand() % VFD_NUM];
       break;
     }
     case VIntegerALU: break;
@@ -130,13 +133,15 @@ uint16_t TestDriver::gen_random_optype() {
         break;
     }
     case FloatCompare: {
-      uint8_t fcmp_all_optype[FCMP_NUM] = FCMP_ALL_OPTYPES;
-      return fcmp_all_optype[rand() % FCMP_NUM];
+      if (input.sew == 1) { uint16_t l[FCMP_NUM] = FCMP_ALL_OPTYPES_FP16; return l[rand() % FCMP_NUM]; }
+      if (input.sew == 2) { uint16_t l[FCMP_NUM] = FCMP_ALL_OPTYPES_FP32; return l[rand() % FCMP_NUM]; }
+      uint16_t l[FCMP_NUM] = FCMP_ALL_OPTYPES_FP64; return l[rand() % FCMP_NUM];
       break;
     }
     case FloatALU: {
-      uint16_t falu_all_optype[FALU_NUM] = FALU_ALL_OPTYPES;
-      return falu_all_optype[rand() % FALU_NUM];
+      if (input.sew == 1) { uint16_t l[FALU_NUM] = FALU_ALL_OPTYPES_FP16; return l[rand() % FALU_NUM]; }
+      if (input.sew == 2) { uint16_t l[FALU_NUM] = FALU_ALL_OPTYPES_FP32; return l[rand() % FALU_NUM]; }
+      uint16_t l[FALU_NUM] = FALU_ALL_OPTYPES_FP64; return l[rand() % FALU_NUM];
       break;
     }
     case FloatMul: {
@@ -145,8 +150,9 @@ uint16_t TestDriver::gen_random_optype() {
       break;
     }
     case FloatFMA: {
-      uint16_t fma_all_optype[FMA_NUM] = FMA_ALL_OPTYPES;
-      return fma_all_optype[rand() % FMA_NUM];
+      if (input.sew == 1) { uint16_t l[FMA_NUM] = FMA_ALL_OPTYPES_FP16; return l[rand() % FMA_NUM]; }
+      if (input.sew == 2) { uint16_t l[FMA_NUM] = FMA_ALL_OPTYPES_FP32; return l[rand() % FMA_NUM]; }
+      uint16_t l[FMA_NUM] = FMA_ALL_OPTYPES_FP64; return l[rand() % FMA_NUM];
       break;
     }
     case IntegerMul: {
@@ -223,14 +229,15 @@ bool TestDriver::gen_random_widen() {
     switch (input.fuType)
     {
       case VFloatAdder: {
-        if( input.fuOpType == VFADD || input.fuOpType == VFSUB )  return rand()%2 == 1; 
-        else return false;
+        if (input.sew == 1) { uint16_t a[2] = VFA_WIDEN_OPTYPES_FP16; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==1; return false; }
+        if (input.sew == 2) { uint16_t a[2] = VFA_WIDEN_OPTYPES_FP32; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==1; return false; }
+        uint16_t a[2] = VFA_WIDEN_OPTYPES_FP64; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==1; return false;
         break;
       }
       case VFloatFMA: {
-        if(input.fuOpType==VFMUL || input.fuOpType==VFMACC || input.fuOpType==VFNMACC || input.fuOpType==VFMSAC || input.fuOpType==VFNMSAC) 
-          return rand()%2 == 1;
-        else return false;
+        if (input.sew == 1) { uint16_t a[5] = VFF_WIDEN_OPTYPES_FP16; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==1; return false; }
+        if (input.sew == 2) { uint16_t a[5] = VFF_WIDEN_OPTYPES_FP32; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==1; return false; }
+        uint16_t a[5] = VFF_WIDEN_OPTYPES_FP64; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==1; return false;
         break;
       }
       default: return false; break;
@@ -253,23 +260,21 @@ bool TestDriver::gen_random_src_widen() {
 bool TestDriver::gen_random_is_frs1() {
   switch(input.fuType){
     case VFloatAdder: {
-      uint8_t need_frs1_ops[] = VFA_NEED_FRS1_OPTYPES;
-      uint8_t must_frs1_ops[] = VFA_MUST_FRS1_OPTYPES;
-      bool need_frs1 = std::find(std::begin(need_frs1_ops), std::end(need_frs1_ops), input.fuOpType) != std::end(need_frs1_ops);
-      bool must_frs1 = std::find(std::begin(must_frs1_ops), std::end(must_frs1_ops), input.fuOpType) != std::end(must_frs1_ops);
-      if (must_frs1) {return true; break;}
-      else if (need_frs1) {return rand() % 2 == 0; break;}
-      else {return false; break;}
+      if (input.sew == 1) { uint16_t a[VFA_NUM] = VFA_NEED_FRS1_OPTYPES_FP16; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==0; return false; }
+      if (input.sew == 2) { uint16_t a[VFA_NUM] = VFA_NEED_FRS1_OPTYPES_FP32; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==0; return false; }
+      uint16_t a[VFA_NUM] = VFA_NEED_FRS1_OPTYPES_FP64; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==0; return false;
+      break;
     }
     case VFloatFMA: {
-      uint8_t need_frs1_ops[] = VFF_NEED_FRS1_OPTYPES;
-      bool need_frs1 = std::find(std::begin(need_frs1_ops), std::end(need_frs1_ops), input.fuOpType) != std::end(need_frs1_ops);
-      if (need_frs1) {return rand() % 2 == 0; break;}
-      else {return false; break;}
+      // all vff ops need frs1
+      return rand() % 2 == 0;
+      break;
     }
     case VFloatDivider: {
-      if(input.fuOpType == VFDIV) {return rand() % 2 == 0; break;}
-      else {return false; break;}
+      if (input.sew == 1) { uint16_t a[1] = VFD_DIV_OPTYPES_FP16; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==0; return false; }
+      if (input.sew == 2) { uint16_t a[1] = VFD_DIV_OPTYPES_FP32; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==0; return false; }
+      uint16_t a[1] = VFD_DIV_OPTYPES_FP64; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==0; return false;
+      break;
     }
     default: return false; break;
   }
@@ -278,8 +283,10 @@ bool TestDriver::gen_random_is_frs1() {
 bool TestDriver::gen_random_is_frs2() {
   switch(input.fuType){
     case VFloatDivider: {
-      if(input.fuOpType == VFDIV && (!input.is_frs2)) {return rand() % 2 == 0; break;}
-      else {return false; break;}
+      if (input.sew == 1) { uint16_t a[1] = VFD_DIV_OPTYPES_FP16; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a) && (!input.is_frs2)) return rand()%2==0; return false; }
+      if (input.sew == 2) { uint16_t a[1] = VFD_DIV_OPTYPES_FP32; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a) && (!input.is_frs2)) return rand()%2==0; return false; }
+      uint16_t a[1] = VFD_DIV_OPTYPES_FP64; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a) && (!input.is_frs2)) return rand()%2==0; return false;
+      break;
     }
     default: return false; break;
   }
@@ -580,9 +587,9 @@ void TestDriver::get_random_input() {
     input.is_frs2 = false;
     input.widen = false;
   }else{
+    input.sew = gen_random_sew();
     if (!test_type.pick_fuOpType) { input.fuOpType = gen_random_optype(); }
     else { input.fuOpType = test_type.fuOpType; }
-    input.sew = gen_random_sew();
     input.widen = gen_random_widen();
     input.src_widen = gen_random_src_widen();
     input.is_frs1 = false;

@@ -39,13 +39,13 @@ ElementOutput SGMFloatFMA::calculation_e16(ElementInput input) {
   ElementOutput output = {0, 0, false};
 
   switch(input.fuOpType) {
-    case FMA_FMACC:
+    case FMACOPCODE_VFMACC_FP16:
       output.result = box_f16(f16_mulAdd(src1, src2, src3).v); break;
-    case FMA_FNMACC:
+    case FMACOPCODE_VFNMACC_FP16:
       output.result = box_f16(f16_mulAdd(f16(src1.v ^ F16_SIGN), src2, f16(src3.v ^ F16_SIGN)).v); break;
-    case FMA_FMSAC:
+    case FMACOPCODE_VFMSAC_FP16:
       output.result = box_f16(f16_mulAdd(src1, src2, f16(src3.v ^ F16_SIGN)).v); break;
-    case FMA_FNMSAC:
+    case FMACOPCODE_VFNMSAC_FP16:
       output.result = box_f16(f16_mulAdd(f16(src1.v ^ F16_SIGN), src2, src3).v); break;
     default:
       printf("Scalar Float FMA Unsupported fuOpType %d\n", input.fuOpType);
@@ -74,13 +74,13 @@ ElementOutput SGMFloatFMA::calculation_e32(ElementInput input) {
   ElementOutput output = {0, 0, false};
 
   switch(input.fuOpType) {
-    case FMA_FMACC:
+    case FMACOPCODE_VFMACC_FP32:
       output.result = box_f32(f32_mulAdd(src1, src2, src3).v); break;
-    case FMA_FNMACC:
+    case FMACOPCODE_VFNMACC_FP32:
       output.result = box_f32(f32_mulAdd(f32(src1.v ^ F32_SIGN), src2, f32(src3.v ^ F32_SIGN)).v); break;
-    case FMA_FMSAC:
+    case FMACOPCODE_VFMSAC_FP32:
       output.result = box_f32(f32_mulAdd(src1, src2, f32(src3.v ^ F32_SIGN)).v); break;
-    case FMA_FNMSAC:
+    case FMACOPCODE_VFNMSAC_FP32:
       output.result = box_f32(f32_mulAdd(f32(src1.v ^ F32_SIGN), src2, src3).v); break;
     default:
       printf("Scalar Float FMA Unsupported fuOpType %d\n", input.fuOpType);
@@ -109,13 +109,13 @@ ElementOutput SGMFloatFMA::calculation_e64(ElementInput input) {
   ElementOutput output = {0, 0, false};
 
   switch(input.fuOpType) {
-    case FMA_FMACC:
+    case FMACOPCODE_VFMACC_FP64:
       output.result = f64_mulAdd(src1, src2, src3).v; break;
-    case FMA_FNMACC:
+    case FMACOPCODE_VFNMACC_FP64:
       output.result = f64_mulAdd(f64(src1.v ^ F64_SIGN), src2, f64(src3.v ^ F64_SIGN)).v; break;
-    case FMA_FMSAC:
+    case FMACOPCODE_VFMSAC_FP64:
       output.result = f64_mulAdd(src1, src2, f64(src3.v ^ F64_SIGN)).v; break;
-    case FMA_FNMSAC:
+    case FMACOPCODE_VFNMSAC_FP64:
       output.result = f64_mulAdd(f64(src1.v ^ F64_SIGN), src2, src3).v; break;
     default:
       printf("Scalar Float FMA Unsupported fuOpType %d\n", input.fuOpType);
