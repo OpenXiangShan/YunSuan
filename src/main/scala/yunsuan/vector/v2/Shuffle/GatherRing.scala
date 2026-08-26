@@ -37,7 +37,11 @@ class GatherRing[T <: Data](
 
   controller.in.s0pipes  := in.s0pipes
   controller.in.s1pipes.zipWithIndex.foreach { case (s1, i) =>
-    s1.valid := in.s1pipes(i).valid
+    // An rvs3 (SEW=8 ei16) places no table (and its index is routed
+    // deterministically by uopIdx), so it must not contribute to the controller's
+    // s1 occupancy: otherwise the (stale) pipeTablePos would claim a phantom
+    // table slot and corrupt the block's table occupancy (s1TableValid / entryTable).
+    s1.valid := in.s1pipes(i).valid && !in.s1pipes(i).bits.isRvs3
     s1.bits.tablePos := pipeTablePos(i)
     s1.bits.indexPos := pipeIndexPos(i)
     s1.bits.blockSize := pipeBlockSize(i)
@@ -189,14 +193,22 @@ class GatherRing[T <: Data](
     when (in.s0pipes(i).valid) {
       val isSingle = (in.s0pipes(i).bits.blockSize & 1.U).orR
       pipeBlockSize(i) := in.s0pipes(i).bits.blockSize
-      pipeTablePos(i) := Mux(isSingle,
-        in.s0pipes(i).bits.blockBase,
-        controller.out.pipeTablePos(i).bits,
-      )
-      pipeIndexPos(i) := Mux(isSingle,
-        in.s0pipes(i).bits.blockBase,
-        controller.out.pipeIndexPos(i).bits,
-      )
+      // Only latch a position when the controller actually assigned one for this
+      // pipe. An rvs3 (SEW=8 ei16) places no table, so the controller's
+      // pipeTablePos.valid is 0 and the register must not capture an uncontrolled
+      // value. For blockSize=1 the position is the block base itself.
+      when (isSingle || controller.out.pipeTablePos(i).valid) {
+        pipeTablePos(i) := Mux(isSingle,
+          in.s0pipes(i).bits.blockBase,
+          controller.out.pipeTablePos(i).bits,
+        )
+      }
+      when (isSingle || controller.out.pipeIndexPos(i).valid) {
+        pipeIndexPos(i) := Mux(isSingle,
+          in.s0pipes(i).bits.blockBase,
+          controller.out.pipeIndexPos(i).bits,
+        )
+      }
     }
   }
 
@@ -272,6 +284,15 @@ object GatherRing {
     // Index slots of a freshly allocated block are always clean, so skipping the
     // search cannot collide; it guarantees gather i and rvs3 i land on the same unit.
     val isEi16E8    = Bool()
+
+    // SEW=8 vrgatherei16: 1 = this uop is the rvs3 (old-data) half of a gather
+    // pair; it places an index (PREFILL) but no table, so the block controller
+    // must not generate a tablePos for it.
+    val isRvs3      = Bool()
+
+    // uop index within the instruction; the block controller uses it for the
+    // SEW=8 ei16 index routing (indexPos = uopIdx % blockSize).
+    val uopIdx      = UopIdx()
 
   }
 

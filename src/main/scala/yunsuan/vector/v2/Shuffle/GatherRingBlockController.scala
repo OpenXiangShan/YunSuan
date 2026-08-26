@@ -84,15 +84,18 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
 
   // Per-pipe table/index position outputs
   for (i <- 0 until NumPipeIn) {
-    out.tablePos(i).valid := inPipePlaceIdx(i).valid
+    // A table is placed only by the gather uop: an rvs3 (isRvs3=1) carries
+    // old-data (PREFILL index only), so it must not assert tablePos.valid.
+    out.tablePos(i).valid := inPipePlaceIdx(i).valid && !in.pipeIsRvs3(i)
     out.indexPos(i).valid := inPipePlaceIdx(i).valid
 
     out.tablePos(i).bits := blockBase.U |
       (entryTable + s1WillFlow - inPipePlaceIdx(i).bits)
-    // SEW=8 vrgatherei16: deterministic same-unit routing for gather i / rvs3 i
-    // (placeIdx = uopIdx % blockSize), independent of the dynamic entryIndex.
+    // SEW=8 ei16: deterministic same-unit routing for gather i / rvs3 i
+    // (indexPos = uopIdx % blockSize = low log2(size) bits of uopIdx), bypassing
+    // the dynamic entryIndex free-slot search.
     out.indexPos(i).bits := blockBase.U |
-      Mux(in.pipeIsEi16E8(i), inPipePlaceIdx(i).bits, entryIndex + inPipePlaceIdx(i).bits)
+      Mux(in.pipeIsEi16E8(i), in.pipeUopIdx(i).take(log2Ceil(size)), entryIndex + inPipePlaceIdx(i).bits)
   }
 
   // willFlow: block-level signal, computed once outside per-pipe loop
@@ -134,6 +137,12 @@ object GatherRingBlockController {
     // SEW=8 vrgatherei16: 1 = route this pipe's index deterministically
     // (blockBase | placeIdx), bypassing the entryIndex free-slot search.
     val pipeIsEi16E8: Vec[Bool] = Vec(NumPipeIn, Bool())
+    // SEW=8 vrgatherei16: 1 = this pipe's uop is an rvs3 (old-data) half; it
+    // places an index but no table, so tablePos.valid must stay 0 for it.
+    val pipeIsRvs3: Vec[Bool] = Vec(NumPipeIn, Bool())
+    // SEW=8 vrgatherei16: per-pipe uop index, used for the deterministic
+    // same-unit routing (indexPos = uopIdx % blockSize).
+    val pipeUopIdx: Vec[UInt] = Vec(NumPipeIn, UopIdx())
 
     // Registered (in-unit) and in-flight (s1) occupancy, kept separate so that
     // placement can use both but clearTable only trusts registered indices.

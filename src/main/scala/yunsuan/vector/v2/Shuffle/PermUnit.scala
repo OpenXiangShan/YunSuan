@@ -106,6 +106,10 @@ class PermUnit[T <: Data](
     gatherRing.in.s0pipes(i).bits.isEi16E8 :=
       (in.pipes(i).bits.op.isGatherEI16 || in.pipes(i).bits.op.isGatherEI16Rvs3) &&
         in.pipes(i).bits.sew.e8
+    // rvs3 (old-data) uop places an index but no table: tell the block controller
+    // so it does not assert tablePos.valid for it.
+    gatherRing.in.s0pipes(i).bits.isRvs3 := in.pipes(i).bits.op.isGatherEI16Rvs3
+    gatherRing.in.s0pipes(i).bits.uopIdx := in.pipes(i).bits.uopIdx
   }
 
   /*********************** GatherRing s1 Connections *************************/

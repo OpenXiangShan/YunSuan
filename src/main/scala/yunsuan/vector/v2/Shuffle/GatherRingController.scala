@@ -39,6 +39,8 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
         in.s0pipes(j).bits.blockBase.drop(1) === bc.blockBase.U(UnitIdx().getWidth.W).drop(1)
       bc.in.pipePlaceIdx(j).bits := in.s0pipes(j).bits.placeIdx
       bc.in.pipeIsEi16E8(j) := bc.in.pipePlaceIdx(j).valid && in.s0pipes(j).bits.isEi16E8
+      bc.in.pipeIsRvs3(j) := bc.in.pipePlaceIdx(j).valid && in.s0pipes(j).bits.isRvs3
+      bc.in.pipeUopIdx(j) := in.s0pipes(j).bits.uopIdx
     }
   }
 
@@ -62,6 +64,8 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
         in.s0pipes(j).bits.blockBase.drop(2) === bc.blockBase.U(UnitIdx().getWidth.W).drop(2)
       bc.in.pipePlaceIdx(j).bits := in.s0pipes(j).bits.placeIdx
       bc.in.pipeIsEi16E8(j) := bc.in.pipePlaceIdx(j).valid && in.s0pipes(j).bits.isEi16E8
+      bc.in.pipeIsRvs3(j) := bc.in.pipePlaceIdx(j).valid && in.s0pipes(j).bits.isRvs3
+      bc.in.pipeUopIdx(j) := in.s0pipes(j).bits.uopIdx
     }
   }
 
@@ -83,6 +87,8 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
         in.s0pipes(j).valid && in.s0pipes(j).bits.blockSize(3)
       bc.in.pipePlaceIdx(j).bits := in.s0pipes(j).bits.placeIdx
       bc.in.pipeIsEi16E8(j) := bc.in.pipePlaceIdx(j).valid && in.s0pipes(j).bits.isEi16E8
+      bc.in.pipeIsRvs3(j) := bc.in.pipePlaceIdx(j).valid && in.s0pipes(j).bits.isRvs3
+      bc.in.pipeUopIdx(j) := in.s0pipes(j).bits.uopIdx
     }
   }
 
