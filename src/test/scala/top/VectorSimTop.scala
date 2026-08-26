@@ -4,17 +4,14 @@ import chisel3._
 import chisel3.stage.ChiselGeneratorAnnotation
 import circt.stage._
 import chisel3.util._
-import yunsuan.util._
-import yunsuan.vector.VectorConvert.VectorCvt
-import yunsuan.vector.mac.VIMac
-import yunsuan.vector._
-import yunsuan.scalar.INT2FP
-import yunsuan.scalar.FPCVT
+import yunsuan.encoding.Opcode.Opcodes.FMiscOpcode
 import yunsuan.fpu.falu.FloatAdderV2
 import yunsuan.fpu.fmul.FloatMUL
 import yunsuan.fpu.{FloatCompare, FloatFMAV2}
 import yunsuan.scalar.Mul
-import yunsuan.encoding.Opcode.Opcodes.FMiscOpcode
+import yunsuan.util._
+import yunsuan.vector._
+import yunsuan.vector.Common._
 
 trait VSPParameter {
   val VLEN       : Int = 128
@@ -26,7 +23,6 @@ trait VSPParameter {
   val VFA_latency: Int = 1
   val VPERM_latency: Int = 1
   val VID_latency: Int = 99
-  val VCVT_latency: Int = 2 // ??
   val VIMAC_latency: Int = 2
   val IMUL_latency: Int = 2
   val FCMP_latency: Int = 0
@@ -43,9 +39,6 @@ object VPUTestFuType { // only use in test, difftest with xs
   def vperm = "b0000_0100".U(8.W)
   def viaf = "b0000_0101".U(8.W)
   def vid = "b0000_0110".U(8.W)
-  def vcvt = "b0000_0111".U(8.W)
-  def fcvtf2x = "b0000_1000".U(8.W)
-  def fcvti2f = "b0000_1001".U(8.W)
   def vimac = "b0000_1010".U(8.W) // not used
   def imul = "b0000_1011".U(8.W)
   def fcmp = "b0000_1100".U(8.W)
@@ -127,9 +120,6 @@ class SimTop() extends VPUTestModule {
       VPUTestFuType.vperm -> VPERM_latency.U,
       VPUTestFuType.viaf -> VIAF_latency.U,
       VPUTestFuType.vid -> VID_latency.U,
-      VPUTestFuType.vcvt -> VCVT_latency.U,
-      VPUTestFuType.fcvtf2x -> VCVT_latency.U,
-      VPUTestFuType.fcvti2f -> VCVT_latency.U,
       VPUTestFuType.vimac -> VIMAC_latency.U,
       VPUTestFuType.imul -> IMUL_latency.U,
       VPUTestFuType.fcmp -> FCMP_latency.U,
@@ -156,52 +146,31 @@ class SimTop() extends VPUTestModule {
     in.vinfo.vstart, in.vinfo.vl, in.vinfo.vlmul, in.vinfo.vm, in.vinfo.ta, in.vinfo.ma
   )
 
-  val fcmpOpcodeFp16 = LookupTreeDefault(opcode(3, 0), FMiscOpcode.feq_fp16, List(
+  val fcmpOpcodeFp16 = LookupTree(opcode(3, 0), Seq(
     "b0000".U(4.W) -> FMiscOpcode.feq_fp16,
     "b0001".U(4.W) -> FMiscOpcode.flt_fp16,
     "b0010".U(4.W) -> FMiscOpcode.fle_fp16,
-    "b0011".U(4.W) -> FMiscOpcode.fmin_fp16,
-    "b0100".U(4.W) -> FMiscOpcode.fmax_fp16,
-    "b0101".U(4.W) -> FMiscOpcode.fsgnj_fp16,
-    "b0110".U(4.W) -> FMiscOpcode.fsgnjx_fp16,
-    "b0111".U(4.W) -> FMiscOpcode.fsgnjn_fp16,
-    "b1000".U(4.W) -> FMiscOpcode.fminm_fp16,
-    "b1001".U(4.W) -> FMiscOpcode.fmaxm_fp16,
     "b1010".U(4.W) -> FMiscOpcode.fltq_fp16,
     "b1011".U(4.W) -> FMiscOpcode.fleq_fp16,
     "b1100".U(4.W) -> FMiscOpcode.fclass_fp16
-  ))
-  val fcmpOpcodeFp32 = LookupTreeDefault(opcode(3, 0), FMiscOpcode.feq_fp32, List(
+  ).map { case (k, v) => (k, BitPat.bitPatToUInt(v.encode)) })
+  val fcmpOpcodeFp32 = LookupTree(opcode(3, 0), Seq(
     "b0000".U(4.W) -> FMiscOpcode.feq_fp32,
     "b0001".U(4.W) -> FMiscOpcode.flt_fp32,
     "b0010".U(4.W) -> FMiscOpcode.fle_fp32,
-    "b0011".U(4.W) -> FMiscOpcode.fmin_fp32,
-    "b0100".U(4.W) -> FMiscOpcode.fmax_fp32,
-    "b0101".U(4.W) -> FMiscOpcode.fsgnj_fp32,
-    "b0110".U(4.W) -> FMiscOpcode.fsgnjx_fp32,
-    "b0111".U(4.W) -> FMiscOpcode.fsgnjn_fp32,
-    "b1000".U(4.W) -> FMiscOpcode.fminm_fp32,
-    "b1001".U(4.W) -> FMiscOpcode.fmaxm_fp32,
     "b1010".U(4.W) -> FMiscOpcode.fltq_fp32,
     "b1011".U(4.W) -> FMiscOpcode.fleq_fp32,
     "b1100".U(4.W) -> FMiscOpcode.fclass_fp32
-  ))
-  val fcmpOpcodeFp64 = LookupTreeDefault(opcode(3, 0), FMiscOpcode.feq_fp64, List(
+  ).map { case (k, v) => (k, BitPat.bitPatToUInt(v.encode)) })
+  val fcmpOpcodeFp64 = LookupTree(opcode(3, 0), Seq(
     "b0000".U(4.W) -> FMiscOpcode.feq_fp64,
     "b0001".U(4.W) -> FMiscOpcode.flt_fp64,
     "b0010".U(4.W) -> FMiscOpcode.fle_fp64,
-    "b0011".U(4.W) -> FMiscOpcode.fmin_fp64,
-    "b0100".U(4.W) -> FMiscOpcode.fmax_fp64,
-    "b0101".U(4.W) -> FMiscOpcode.fsgnj_fp64,
-    "b0110".U(4.W) -> FMiscOpcode.fsgnjx_fp64,
-    "b0111".U(4.W) -> FMiscOpcode.fsgnjn_fp64,
-    "b1000".U(4.W) -> FMiscOpcode.fminm_fp64,
-    "b1001".U(4.W) -> FMiscOpcode.fmaxm_fp64,
     "b1010".U(4.W) -> FMiscOpcode.fltq_fp64,
     "b1011".U(4.W) -> FMiscOpcode.fleq_fp64,
     "b1100".U(4.W) -> FMiscOpcode.fclass_fp64
-  ))
-  val fcmpOpCode = LookupTreeDefault(sew, FMiscOpcode.feq_fp16, List(
+  ).map { case (k, v) => (k, BitPat.bitPatToUInt(v.encode)) })
+  val fcmpOpCode = LookupTreeDefault(sew, BitPat.bitPatToUInt(FMiscOpcode.feq_fp16.encode), List(
     1.U -> fcmpOpcodeFp16,
     2.U -> fcmpOpcodeFp32,
     3.U -> fcmpOpcodeFp64
@@ -216,9 +185,6 @@ class SimTop() extends VPUTestModule {
   val vfd_result_valid = RegInit(VecInit(Seq.fill(VLEN/XLEN)(false.B)))
   val vid_result = Wire(new VSTOutputIO)
   val vid_result_valid = Wire(Bool())
-  val vcvt_result = Wire(new VSTOutputIO)
-  val i2f_result = Wire(new VSTOutputIO)
-  val fpcvt_result = Wire(new VSTOutputIO)
   val vimac_result = Wire(new VSTOutputIO)
   val imul_result = Wire(new VSTOutputIO)
   val fcmp_result = Wire(new VSTOutputIO)
@@ -237,9 +203,6 @@ class SimTop() extends VPUTestModule {
     val vff = Module(new VectorFloatFMA)
     val vfd = Module(new VectorFloatDivider)
     val via = Module(new VectorIntAdder)
-    val vcvt = Module(new VectorCvt(XLEN))
-    val i2fcvt = Module(new INT2FP(2, XLEN))
-    val fpcvt = Module(new FPCVT(XLEN))
     val imul = Module(new Mul(XLEN))
     val fcmp = Module(new FloatCompare)
     val falu = Module(new FloatAdderV2)
@@ -353,44 +316,6 @@ class SimTop() extends VPUTestModule {
     vff_result.fflags(i) := vff.io.fflags
     vff_result.vxsat := 0.U // DontCare
 
-    // connect vcvt's io
-    vcvt.io.fire := busy
-    vcvt.io.sew := sew
-    vcvt.io.opType := opcode
-    vcvt.io.rm := rm
-    vcvt.io.src := src1 // 128 bit->vcvt
-    vcvt.io.isFpToVecInst := false.B
-    vcvt.io.isFround := 0.U
-    vcvt.io.isFcvtmod := false.B
-    vcvt_result.vxsat := 0.U
-    vcvt_result.result(i) := vcvt.io.result
-    vcvt_result.fflags(i) := vcvt.io.fflags
-
-    // i2fcvt
-    i2fcvt.regEnables(0) := true.B
-    i2fcvt.regEnables(1) := true.B
-    i2fcvt.io.wflags := busy
-    i2fcvt.io.opType := opcode(4,0)
-    i2fcvt.io.rm := rm
-    i2fcvt.io.rmInst := 7.U
-    i2fcvt.io.src := src1
-    i2f_result.vxsat := 0.U
-    i2f_result.result(i) := i2fcvt.io.result
-    i2f_result.fflags(i) := i2fcvt.io.fflags
-
-    //fpcvt
-    fpcvt.io.fire := busy
-    fpcvt.io.sew := sew
-    fpcvt.io.opType := opcode
-    fpcvt.io.rm := rm
-    fpcvt.io.src := src1
-    fpcvt.io.isFpToVecInst := true.B
-    fpcvt.io.isFround := 0.U
-    fpcvt.io.isFcvtmod := false.B
-    fpcvt_result.vxsat := 0.U
-    fpcvt_result.result(i) := fpcvt.io.result
-    fpcvt_result.fflags(i) := fpcvt.io.fflags
-
     // mul
     imul.io.in.valid := busy
     imul.io.in.bits.fuOpType := opcode
@@ -407,6 +332,8 @@ class SimTop() extends VPUTestModule {
     fcmp_result.vxsat := 0.U
     fcmp_result.result(i) := fcmp.io.result
     fcmp_result.fflags(i) := ZeroExt(fcmp.io.fflags, 20)
+
+
 
     // falu
     falu.io.fire := busy
@@ -470,79 +397,6 @@ class SimTop() extends VPUTestModule {
   vperm_result.fflags(1) := 0.U
   vperm_result.vxsat := 0.U
 
-  val viaf = Module(new VIAluFixPointWrapper)
-  viaf.io.in.valid := busy
-  viaf.io.in.bits.fuOpType := opcode
-  viaf.io.in.bits.info.vsew := sew
-  viaf.io.in.bits.info.vl := in.vinfo.vl
-  viaf.io.in.bits.info.vlmul := in.vinfo.vlmul
-  viaf.io.in.bits.info.vm := in.vinfo.vm
-  viaf.io.in.bits.info.ta := in.vinfo.ta
-  viaf.io.in.bits.info.ma := in.vinfo.ma
-  viaf.io.in.bits.info.uopIdx := in.uop_idx
-  viaf.io.in.bits.info.vxrm := in.rm_s
-  viaf.io.out.ready := true.B
-  viaf.io.in.bits.src.zip(in.src).foreach { case (a, b) => a := b.asUInt }
-  viaf_result.result.zipWithIndex.foreach { case (rs, i) => rs := viaf.io.out.bits.data(XLEN * (i + 1) - 1, XLEN * i) }
-  viaf_result.fflags := 0.U.asTypeOf(viaf_result.fflags.cloneType) // DontCare
-  viaf_result.vxsat := viaf.io.out.bits.vxsat
-  // vid
-  val vid_opcode = opcode
-  val vid_sign = vid_opcode(0)
-  val vid_rem = vid_opcode(1)
-  val vid = Module(new VectorIdiv)
-  val src1 = Cat(in.src(0)(1), in.src(0)(0))
-  val src2 = Cat(in.src(1)(1), in.src(1)(0))
-  vid.io.div_in_valid := busy && !has_issued && fuType === VPUTestFuType.vid
-  vid.io.sign := vid_sign
-  vid.io.dividend_v := src1
-  vid.io.divisor_v := src2
-  vid.io.flush := false.B
-  vid.io.sew := sew
-  vid.io.div_out_ready := busy
-  val vid_fflags_0 = LookupTreeDefault(sew, 0.U, List(
-    0.U -> vid.io.d_zero(7, 0),
-    1.U -> vid.io.d_zero(3, 0),
-    2.U -> vid.io.d_zero(1, 0),
-    3.U -> vid.io.d_zero(0, 0)
-  ))
-  val vid_fflags_1 = LookupTreeDefault(sew, 0.U, List(
-    0.U -> vid.io.d_zero(15, 8),
-    1.U -> vid.io.d_zero(15, 4),
-    2.U -> vid.io.d_zero(15, 2),
-    3.U -> vid.io.d_zero(15, 1)
-  ))
-  vid_result_valid := vid.io.div_out_valid
-  vid_result.result(0) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(XLEN - 1, 0)
-  vid_result.result(1) := Mux(vid_rem, vid.io.div_out_rem_v, vid.io.div_out_q_v)(VLEN - 1, XLEN)
-  vid_result.fflags(0) := ZeroExt(vid_fflags_0, 20)
-  vid_result.fflags(1) := ZeroExt(vid_fflags_1, 20)
-  vid_result.vxsat := 0.U
-
-  val vimac = Module(new VIMac)
-  vimac.io.in.valid := true.B
-
-  vimac.io.in.bits.opcode.op := Cat(0.U(3.W), opcode(2,0))
-  vimac.io.in.bits.info.vm := vm
-  vimac.io.in.bits.info.ma := ma
-  vimac.io.in.bits.info.ta := ta
-  vimac.io.in.bits.info.vlmul := vlmul
-  vimac.io.in.bits.info.vl := vl
-  vimac.io.in.bits.info.vstart := vstart
-  vimac.io.in.bits.info.uopIdx := uop_idx
-  vimac.io.in.bits.info.vxrm := in.rm_s
-  vimac.io.in.bits.srcType(0) := Cat(0.U(1.W), opcode(6), sew)  // vs2
-  vimac.io.in.bits.srcType(1) := Cat(0.U(1.W), opcode(5), sew)  // vs1
-  vimac.io.in.bits.vdType := Cat(0.U(1.W), opcode(4), Mux(widen, sew + 1.U(1.W), sew))
-  vimac.io.in.bits.vs1 := Cat(in.src(0)(1), in.src(0)(0))
-  vimac.io.in.bits.vs2 := Cat(in.src(1)(1), in.src(1)(0))
-  vimac.io.in.bits.old_vd := Cat(in.src(2)(1), in.src(2)(0))
-  vimac.io.in.bits.mask := Cat(in.src(3)(1), in.src(3)(0))
-
-  vimac_result.result.zip(UIntSplit(vimac.io.out.bits.vd, XLEN)).foreach { case (vstOut, vimacOut) => vstOut := vimacOut }
-  vimac_result.vxsat := vimac.io.out.bits.vxsat
-  vimac_result.fflags := 0.U.asTypeOf(io.out.bits.fflags.cloneType) // DontCare
-
   // arbiter
   io.out.valid := Mux(is_uncertain, finish_uncertain, finish_fixLatency)
   io.out.bits := LookupTreeDefault(in.fuType, 0.U.asTypeOf(new VSTOutputIO), List(
@@ -552,10 +406,6 @@ class SimTop() extends VPUTestModule {
     VPUTestFuType.via -> via_result,
     VPUTestFuType.vperm -> vperm_result,
     VPUTestFuType.viaf -> viaf_result,
-    VPUTestFuType.vid -> vid_result,
-    VPUTestFuType.vcvt -> vcvt_result,
-    VPUTestFuType.fcvtf2x -> fpcvt_result,
-    VPUTestFuType.fcvti2f -> i2f_result,
     VPUTestFuType.vimac -> vimac_result,
     VPUTestFuType.imul -> imul_result,
     VPUTestFuType.fcmp -> fcmp_result,

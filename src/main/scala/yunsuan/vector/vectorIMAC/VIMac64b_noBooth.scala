@@ -6,7 +6,7 @@ import yunsuan.vector._
 import yunsuan.vector.Common._
 
 /** 64-bit vector multiply and accumlation unit
- *  
+ *
  *  Support these instructions: 11.10, 11.12, 11.13, 11.14, 12.3
  */
 class VIMac64b_noBooth extends Module {
@@ -17,7 +17,7 @@ class VIMac64b_noBooth extends Module {
     val vdType  = Input(UInt(4.W))
     val vs1 = Input(UInt(64.W))
     val vs2 = Input(UInt(64.W))
-    val oldVd = Input(UInt(64.W)) 
+    val oldVd = Input(UInt(64.W))
     val highHalf = Input(Bool())
     val isMacc = Input(Bool()) // (w)macc(nmsac)/madd(nmsub)
     val isSub = Input(Bool())
@@ -42,10 +42,10 @@ class VIMac64b_noBooth extends Module {
    *    (1) Partial products generation (2) Wallace tree
    */
   val partProd = Wire(Vec(64, UInt(128.W)))
-  partProd(0) := Mux(!vs1(0), 0.U, Mux1H(sew.oneHot, Seq(8,16,32,64).map(k => 
+  partProd(0) := Mux(!vs1(0), 0.U, Mux1H(sew.oneHot, Seq(8,16,32,64).map(k =>
                  Cat(Fill(128-k, vs2_is_signed && vs2(k-1)), vs2(k-1, 0)))))
   for (i <- 1 until 64) {
-    partProd(i) := Mux(!vs1(i), 0.U, Mux1H(sew.oneHot, Seq(8,16,32,64).map(k => 
+    partProd(i) := Mux(!vs1(i), 0.U, Mux1H(sew.oneHot, Seq(8,16,32,64).map(k =>
                    Cat(Fill(128-k-i-i/k*k, vs2_is_signed && vs2(i/k * k + k-1)), vs2(i/k * k + k-1, i/k * k), 0.U((i + i/k * k).W)))))
   }
   // If the highest bit of signed vs1 element is 1, reverse partial product and +1 (+1 is handled in next next code block)
@@ -93,23 +93,23 @@ class VIMac64b_noBooth extends Module {
       partProdFinal(i) := partProdSet0(i)
     // } else {
     } else if (i == 32) {
-      partProdFinal(i) := Mux(vs1(i-1) && vs1_is_signed && !sew.is64, partProdSet0(i) | 
+      partProdFinal(i) := Mux(vs1(i-1) && vs1_is_signed && !sew.is64, partProdSet0(i) |
                               Mux1H(sew.oneHot(2, 0), Seq(8, 16, 32).map(n => 1.U << (2*i - 2*n))), partProdSet0(i))
     } else if (i % 16 == 0) {
-      partProdFinal(i) := Mux(vs1(i-1) && vs1_is_signed && (sew.is16 || sew.is8), partProdSet0(i) | 
+      partProdFinal(i) := Mux(vs1(i-1) && vs1_is_signed && (sew.is16 || sew.is8), partProdSet0(i) |
                               Mux1H(sew.oneHot(1, 0), Seq(8, 16).map(n => 1.U << (2*i - 2*n))), partProdSet0(i))
     } else {
       partProdFinal(i) := Mux(vs1(i-1) && vs1_is_signed && sew.is8, partProdSet0(i) | 1.U << (2*i - 16), partProdSet0(i))
     }
   }
-  partProdFinal(64) := Mux(vs1(63) && vs1_is_signed, 
+  partProdFinal(64) := Mux(vs1(63) && vs1_is_signed,
     Mux1H(sew.oneHot, Seq(8, 16, 32, 64).map(n => 1.U << (128 - 2*n))), 0.U)
 
   /**
    *  Wallace tree
    */
   // Add old_vd and its reverse+1 as an additional addend
-  val oldVdReorg = Mux1H(sew.oneHot, Seq(8,16,32,64).map(sew => 
+  val oldVdReorg = Mux1H(sew.oneHot, Seq(8,16,32,64).map(sew =>
                    VecInit(UIntSplit(oldVd, sew).map(x => BitsExtend(x, 2*sew, false.B))).asUInt))
   partProdFinal(65) := Mux(io.isMacc, Mux(io.widen, Cat(oldVd, oldVd), Mux(io.isSub, ~oldVdReorg, oldVdReorg)), 0.U)
   partProdFinal(66) := Mux(io.isSub, Mux1H(sew.oneHot, Seq(8,16,32,64).map(sew =>
@@ -203,7 +203,7 @@ class VIMac64b_noBooth extends Module {
   val isSubS2 = RegNext(RegNext(io.isSub))
   val isFixPS2 = RegNext(RegNext(io.isFixP))
   val vdS2 = PriorityMux(Seq(
-           (sewS2.is64 || widenS2) -> Mux(sewS2.is64 && highHalfS2 || widenS2 && uopIdxS2(0), 
+           (sewS2.is64 || widenS2) -> Mux(sewS2.is64 && highHalfS2 || widenS2 && uopIdxS2(0),
                                           walOut(127, 64), walOut(63, 0)),
            sewS2.is32 -> VecInit(UIntSplit(walOut, 64).map(x => Mux(highHalfS2, x(63, 32), x(31, 0)))).asUInt,
            sewS2.is16 -> VecInit(UIntSplit(walOut, 32).map(x => Mux(highHalfS2, x(31, 16), x(15, 0)))).asUInt,

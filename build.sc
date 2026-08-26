@@ -15,6 +15,7 @@ object ivys{
   val chisel3Plugin = mvn"org.chipsalliance:::chisel-plugin:7.13.0"
   val chiseltest = mvn"edu.berkeley.cs::chiseltest:6.0.0"
   val scalatest = mvn"org.scalatest::scalatest:3.2.20"
+  val sourcecode = mvn"com.lihaoyi::sourcecode:0.4.4"
 }
 
 trait YSModule extends ScalaModule with PublishModule {
@@ -55,7 +56,10 @@ trait CommonYunSuan extends YSModule with SbtModule { m =>
   val envPATH = sys.env("PATH") + ":" + resourcesPATH
   override def forkEnv = Map("PATH" -> envPATH)
 
-  override def ivyDeps = super.ivyDeps() ++ Seq(ivys.chiseltest)
+  override def ivyDeps = super.ivyDeps() ++ Seq(
+    ivys.chiseltest,
+    ivys.sourcecode,
+  )
 
   override def moduleDeps = super.moduleDeps ++ Seq(
   )
