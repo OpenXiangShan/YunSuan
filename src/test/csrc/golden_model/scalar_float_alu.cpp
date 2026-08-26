@@ -116,23 +116,23 @@ ElementOutput SGMFloatALU::calculation_e16(ElementInput input) {
   ElementOutput output = {0, 0, false};
 
   switch(input.fuOpType) {
-    case FALU_FADD:
+    case FMACOPCODE_FADD_FP16:
       output.result = box_f16(f16_add(src1, src2).v); break;
-    case FALU_FSUB:
+    case FMACOPCODE_FSUB_FP16:
       output.result = box_f16(f16_sub(src1, src2).v); break;
-    case FALU_FMIN:
+    case FMACOPCODE_FMIN_FP16:
       output.result = box_f16(f16_min(src1, src2).v); break;
-    case FALU_FMAX:
+    case FMACOPCODE_FMAX_FP16:
       output.result = box_f16(f16_max(src1, src2).v); break;
-    case FALU_FSGNJ:
+    case FMACOPCODE_FSGNJ_FP16:
       output.result = box_f16(f16_sgnj(src1, src2, false, false).v); break;
-    case FALU_FSGNJN:
+    case FMACOPCODE_FSGNJN_FP16:
       output.result = box_f16(f16_sgnj(src1, src2, true, false).v); break;
-    case FALU_FSGNJX:
+    case FMACOPCODE_FSGNJX_FP16:
       output.result = box_f16(f16_sgnj(src1, src2, false, true).v); break;
-    case FALU_FMINM:
+    case FMACOPCODE_FMINM_FP16:
       output.result = box_f16(f16_minm(src1, src2).v); break;
-    case FALU_FMAXM:
+    case FMACOPCODE_FMAXM_FP16:
       output.result = box_f16(f16_maxm(src1, src2).v); break;
     default:
       printf("Scalar Float ALU Unsupported fuOpType %d\n", input.fuOpType);
@@ -159,23 +159,23 @@ ElementOutput SGMFloatALU::calculation_e32(ElementInput input) {
   ElementOutput output = {0, 0, false};
 
   switch(input.fuOpType) {
-    case FALU_FADD:
+    case FMACOPCODE_FADD_FP32:
       output.result = box_f32(f32_add(src1, src2).v); break;
-    case FALU_FSUB:
+    case FMACOPCODE_FSUB_FP32:
       output.result = box_f32(f32_sub(src1, src2).v); break;
-    case FALU_FMIN:
+    case FMACOPCODE_FMIN_FP32:
       output.result = box_f32(f32_min(src1, src2).v); break;
-    case FALU_FMAX:
+    case FMACOPCODE_FMAX_FP32:
       output.result = box_f32(f32_max(src1, src2).v); break;
-    case FALU_FSGNJ:
+    case FMACOPCODE_FSGNJ_FP32:
       output.result = box_f32(f32_sgnj(src1, src2, false, false).v); break;
-    case FALU_FSGNJN:
+    case FMACOPCODE_FSGNJN_FP32:
       output.result = box_f32(f32_sgnj(src1, src2, true, false).v); break;
-    case FALU_FSGNJX:
+    case FMACOPCODE_FSGNJX_FP32:
       output.result = box_f32(f32_sgnj(src1, src2, false, true).v); break;
-    case FALU_FMINM:
+    case FMACOPCODE_FMINM_FP32:
       output.result = box_f32(f32_minm(src1, src2).v); break;
-    case FALU_FMAXM:
+    case FMACOPCODE_FMAXM_FP32:
       output.result = box_f32(f32_maxm(src1, src2).v); break;
     default:
       printf("Scalar Float ALU Unsupported fuOpType %d\n", input.fuOpType);
@@ -202,23 +202,23 @@ ElementOutput SGMFloatALU::calculation_e64(ElementInput input) {
   ElementOutput output = {0, 0, false};
 
   switch(input.fuOpType) {
-    case FALU_FADD:
+    case FMACOPCODE_FADD_FP64:
       output.result = f64_add(src1, src2).v; break;
-    case FALU_FSUB:
+    case FMACOPCODE_FSUB_FP64:
       output.result = f64_sub(src1, src2).v; break;
-    case FALU_FMIN:
+    case FMACOPCODE_FMIN_FP64:
       output.result = f64_min(src1, src2).v; break;
-    case FALU_FMAX:
+    case FMACOPCODE_FMAX_FP64:
       output.result = f64_max(src1, src2).v; break;
-    case FALU_FSGNJ:
+    case FMACOPCODE_FSGNJ_FP64:
       output.result = f64_sgnj(src1, src2, false, false).v; break;
-    case FALU_FSGNJN:
+    case FMACOPCODE_FSGNJN_FP64:
       output.result = f64_sgnj(src1, src2, true, false).v; break;
-    case FALU_FSGNJX:
+    case FMACOPCODE_FSGNJX_FP64:
       output.result = f64_sgnj(src1, src2, false, true).v; break;
-    case FALU_FMINM:
+    case FMACOPCODE_FMINM_FP64:
       output.result = f64_minm(src1, src2).v; break;
-    case FALU_FMAXM:
+    case FMACOPCODE_FMAXM_FP64:
       output.result = f64_maxm(src1, src2).v; break;
     default:
       printf("Scalar Float ALU Unsupported fuOpType %d\n", input.fuOpType);

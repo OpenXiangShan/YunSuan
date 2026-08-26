@@ -137,36 +137,6 @@ class SimTop() extends VPUTestModule {
     in.vinfo.vstart, in.vinfo.vl, in.vinfo.vlmul, in.vinfo.vm, in.vinfo.ta, in.vinfo.ma
   )
 
-  val fcmpOpcodeFp16 = LookupTree(opcode(3, 0), Seq(
-    "b0000".U(4.W) -> FMiscOpcode.feq_fp16,
-    "b0001".U(4.W) -> FMiscOpcode.flt_fp16,
-    "b0010".U(4.W) -> FMiscOpcode.fle_fp16,
-    "b1010".U(4.W) -> FMiscOpcode.fltq_fp16,
-    "b1011".U(4.W) -> FMiscOpcode.fleq_fp16,
-    "b1100".U(4.W) -> FMiscOpcode.fclass_fp16
-  ).map { case (k, v) => (k, BitPat.bitPatToUInt(v.encode)) })
-  val fcmpOpcodeFp32 = LookupTree(opcode(3, 0), Seq(
-    "b0000".U(4.W) -> FMiscOpcode.feq_fp32,
-    "b0001".U(4.W) -> FMiscOpcode.flt_fp32,
-    "b0010".U(4.W) -> FMiscOpcode.fle_fp32,
-    "b1010".U(4.W) -> FMiscOpcode.fltq_fp32,
-    "b1011".U(4.W) -> FMiscOpcode.fleq_fp32,
-    "b1100".U(4.W) -> FMiscOpcode.fclass_fp32
-  ).map { case (k, v) => (k, BitPat.bitPatToUInt(v.encode)) })
-  val fcmpOpcodeFp64 = LookupTree(opcode(3, 0), Seq(
-    "b0000".U(4.W) -> FMiscOpcode.feq_fp64,
-    "b0001".U(4.W) -> FMiscOpcode.flt_fp64,
-    "b0010".U(4.W) -> FMiscOpcode.fle_fp64,
-    "b1010".U(4.W) -> FMiscOpcode.fltq_fp64,
-    "b1011".U(4.W) -> FMiscOpcode.fleq_fp64,
-    "b1100".U(4.W) -> FMiscOpcode.fclass_fp64
-  ).map { case (k, v) => (k, BitPat.bitPatToUInt(v.encode)) })
-  val fcmpOpCode = LookupTreeDefault(sew, BitPat.bitPatToUInt(FMiscOpcode.feq_fp16.encode), List(
-    1.U -> fcmpOpcodeFp16,
-    2.U -> fcmpOpcodeFp32,
-    3.U -> fcmpOpcodeFp64
-  ))
-
   val vfa_result = Wire(new VSTOutputIO)
   val vff_result = Wire(new VSTOutputIO)
   val vfd_result = Reg(new VSTOutputIO)
@@ -244,7 +214,7 @@ class SimTop() extends VPUTestModule {
     vfd.io.frs1_i := in.src(1)(0) // VS1(63,0)
     vfd.io.is_frs2_i := is_frs2
     vfd.io.is_frs1_i := is_frs1
-    vfd.io.is_sqrt_i := opcode
+    vfd.io.is_sqrt_i := false.B // RTL does not support sqrt yet
     vfd.io.rm_i := rm
     vfd.io.is_vec_i := true.B // TODO: check it
     vfd.io.fp_aIsFpCanonicalNAN := false.B
@@ -315,7 +285,7 @@ class SimTop() extends VPUTestModule {
     // fcmp
     fcmp.io.src0 := src1
     fcmp.io.src1 := src2
-    fcmp.io.opCode := fcmpOpCode
+    fcmp.io.opCode := opcode
     fcmp_result.vxsat := 0.U
     fcmp_result.result(i) := fcmp.io.result
     fcmp_result.fflags(i) := ZeroExt(fcmp.io.fflags, 20)
@@ -325,7 +295,7 @@ class SimTop() extends VPUTestModule {
     // falu
     falu.io.fire := busy
     falu.io.in.fp_fmt := sew
-    falu.io.in.op_code := opcode(4, 0)
+    falu.io.in.op_code := opcode
     falu.io.in.fp_a := src1
     falu.io.in.fp_b := src2
     falu.io.in.fpAAppend := 0.U
@@ -351,7 +321,7 @@ class SimTop() extends VPUTestModule {
     // fma
     fma.io.in.fire := busy
     fma.io.in.fp_fmt := sew
-    fma.io.in.op_code := opcode(3, 0)
+    fma.io.in.op_code := opcode
     fma.io.in.fp_a := src1
     fma.io.in.fp_b := src2
     fma.io.in.fp_c := src3

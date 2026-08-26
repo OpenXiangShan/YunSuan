@@ -3,6 +3,7 @@ include Makefile.softfloat
 TOP ?= SimTop
 BUILD_DIR = ./build
 TOP_V = $(BUILD_DIR)/$(TOP).v
+OPCODES_H = $(BUILD_DIR)/opcodes.h
 
 SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
@@ -10,6 +11,10 @@ TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 $(TOP_V): $(SCALA_FILE) $(TEST_FILE)
 	mkdir -p $(@D)
 	mill YunSuan.test.runMain yunsuan.top.$(TOP) -td $(@D) --full-stacktrace --target verilog
+
+$(OPCODES_H): $(SCALA_FILE)
+	mkdir -p $(@D)
+	mill -i YunSuan.runMain yunsuan.encoding.Opcode.OpcodeHeaderGen $(abspath $(OPCODES_H))
 
 .DEFUALT_GOAL = emu
 
@@ -42,7 +47,7 @@ EMU_LDFLAGS  += -lpthread -ldl
 EMU_LDFLAGS  += $(SOFTFLOAT)
 
 VEXTRA_FLAGS += -LDFLAGS "$(EMU_LDFLAGS)"
-VEXTRA_FLAGS += -CFLAGS "-I$(EMU_CSRC_DIR) $(SOFTFLOAT_HEADER) $(EMU_CXXFLAGS)"
+VEXTRA_FLAGS += -CFLAGS "-I$(EMU_CSRC_DIR) -I$(abspath $(BUILD_DIR)) $(SOFTFLOAT_HEADER) $(EMU_CXXFLAGS)"
 
 VERILATOR_FLAGS = --top-module $(TOP) \
 	--assert \
@@ -55,10 +60,10 @@ VERILATOR_FLAGS = --top-module $(TOP) \
 EMU_MK := $(BUILD_DIR)/emu-compile/V$(TOP).mk
 EMU = $(BUILD_DIR)/emu
 
-$(EMU_MK): $(TOP_V) | $(EMU_DEPS)
+$(EMU_MK): $(TOP_V) $(OPCODES_H) | $(EMU_DEPS)
 	@mkdir -p $(@D)
 	verilator --cc --exe $(VERILATOR_FLAGS)  \
-		-o $(abspath $(EMU)) -Mdir $(@D) $^ $(EMU_DEPS)
+		-o $(abspath $(EMU)) -Mdir $(@D) $(TOP_V) $(EMU_DEPS)
 
 $(EMU): $(EMU_MK) $(EMU_DEPS) $(EMU_HEADERS)
 	$(MAKE) VM_PARRLLEL_BUILDS=1 -C $(dir $(EMU_MK)) -j33 -f $(abspath $(EMU_MK))

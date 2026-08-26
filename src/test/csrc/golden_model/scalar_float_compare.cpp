@@ -38,22 +38,22 @@ ElementOutput SGMFloatCompare::calculation_e16(ElementInput input) {
   ElementOutput output = {0, 0, false};
 
   switch(input.fuOpType) {
-    case FCMP_FEQ:
+    case FMISCOPCODE_FEQ_FP16:
       output.result = f16_eq(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FLT:
+    case FMISCOPCODE_FLT_FP16:
       output.result = f16_lt(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FLE:
+    case FMISCOPCODE_FLE_FP16:
       output.result = f16_le(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FLTQ:
+    case FMISCOPCODE_FLTQ_FP16:
       output.result = f16_lt_quiet(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FLEQ:
+    case FMISCOPCODE_FLEQ_FP16:
       output.result = f16_le_quiet(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FCLASS:
+    case FMISCOPCODE_FCLASS_FP16:
       output.result = f16_classify(src1);
       break;
     default:
@@ -74,22 +74,22 @@ ElementOutput SGMFloatCompare::calculation_e32(ElementInput input) {
   ElementOutput output = {0, 0, false};
 
   switch(input.fuOpType) {
-    case FCMP_FEQ:
+    case FMISCOPCODE_FEQ_FP32:
       output.result = f32_eq(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FLT:
+    case FMISCOPCODE_FLT_FP32:
       output.result = f32_lt(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FLE:
+    case FMISCOPCODE_FLE_FP32:
       output.result = f32_le(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FLTQ:
+    case FMISCOPCODE_FLTQ_FP32:
       output.result = f32_lt_quiet(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FLEQ:
+    case FMISCOPCODE_FLEQ_FP32:
       output.result = f32_le_quiet(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FCLASS:
+    case FMISCOPCODE_FCLASS_FP32:
       output.result = f32_classify(src1);
       break;
     default:
@@ -110,22 +110,22 @@ ElementOutput SGMFloatCompare::calculation_e64(ElementInput input) {
   ElementOutput output = {0, 0, false};
 
   switch(input.fuOpType) {
-    case FCMP_FEQ:
+    case FMISCOPCODE_FEQ_FP64:
       output.result = f64_eq(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FLT:
+    case FMISCOPCODE_FLT_FP64:
       output.result = f64_lt(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FLE:
+    case FMISCOPCODE_FLE_FP64:
       output.result = f64_le(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FLTQ:
+    case FMISCOPCODE_FLTQ_FP64:
       output.result = f64_lt_quiet(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FLEQ:
+    case FMISCOPCODE_FLEQ_FP64:
       output.result = f64_le_quiet(src1, src2) ? (uint64_t)1 : (uint64_t)0;
       break;
-    case FCMP_FCLASS:
+    case FMISCOPCODE_FCLASS_FP64:
       output.result = f64_classify(src1);
       break;
     default:
