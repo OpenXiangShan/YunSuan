@@ -25,7 +25,10 @@ class FloatCompare extends Module {
   val isFltq = FMiscOpcode.isFltq(io.opCode)
   val isFleq = FMiscOpcode.isFleq(io.opCode)
   val isCmp = isFeq || isFlt || isFle || isFltq || isFleq
-  val isCmpNQ = isFlt || isFle
+  // FLTQ/FLEQ are quiet compares (encoded by op(5,4) being all-1, see
+  // FMiscOpcode.isQuiet); only FLT/FLE are signaling and raise NV on any NaN.
+  val isQuiet = FMiscOpcode.isQuiet(io.opCode)
+  val isCmpNQ = (isFlt || isFle) && !isQuiet
   val isFclass = FMiscOpcode.isFclass(io.opCode)
   val src0 = io.src0
   val src1 = io.src1
