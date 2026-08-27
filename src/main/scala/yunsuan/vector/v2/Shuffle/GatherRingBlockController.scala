@@ -38,14 +38,32 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   // will flow
   // The least significant free position of tableValid less than the most significant valid position of indexValid
   val tableLeastFreeOH = PriorityEncoderOH(~tableValid)
-  val indexMostValidOH = Reverse(PriorityEncoderOH(Reverse(indexValid)))
+  // Same contiguous-run-from-0 semantics as unitIndexMaskValidOH: indices are
+  // placed contiguously from unit 0, so "most valid index" must be the LAST set
+  // bit of the run starting at 0, not the raw MSB (which over-reports on a
+  // gapped indexValid like {0,2} and wrongly keeps s1WillFlow alive / skews
+  // entryTable placement). First 0 up from bit 0 (extra high 0 catches the
+  // all-ones case), one-hot it, then Cat(1, OH) >> 1 keeps the run prefix.
+  val firstZeroOHIndex = PriorityEncoderOH(~Cat(0.U(1.W), indexValid))
+  val indexMostValidOH = (Cat(1.U, firstZeroOHIndex) >> 1).take(size)
   // Either one suffices: a uop entering GatherRing always carries both table and index groups
   // allFull: when all table slots are occupied, existing tables must still circulate
   val s1WillFlow = (tableValid.orR || indexValid.orR) &&
-    (tableValid.head(1).asBool || !(tableLeastFreeOH.rotateRight(1) & indexMostValidOH).orR)
+    (in.counter.last > 0.U || !(tableLeastFreeOH.rotateRight(1) & indexMostValidOH).orR)
 
   val unitTableFirstValid = PriorityEncoderOH(~(unitTableValid).rotateRight(1))
-  val unitIndexMaskValidOH = Reverse(PriorityEncoderOH(Reverse(unitIndexValid)))
+  // unitIndexMaskValidOH: one-hot at the LAST set bit of the contiguous run of
+  // placed indices starting at unit 0 (the filled-region boundary). Find the
+  // first 0 scanning up from bit 0 over size+1 bits (the extra high 0 catches
+  // the all-ones case), one-hot it, then Cat(1, OH) >> 1 keeps only the run
+  // prefix below it: e.g. indexValid=0b0101 ({0,2}) -> first 0 at bit 1 ->
+  // OH=0b0010 -> 0b0001 (the run from unit 0 ends at bit 0), so flow must not
+  // be kept alive by bit 2. indexValid=0b1111 -> first 0 at bit 4 -> OH=0b10000
+  // -> 0b1000. Indices used to always place contiguously from 0, so MSB == run
+  // boundary; keep the run-based form now that a gap can occur, or unitWillFlow
+  // fires spuriously and never lets flow stop.
+  val firstZeroOH = PriorityEncoderOH(~Cat(0.U(1.W), unitIndexValid))
+  val unitIndexMaskValidOH = (Cat(1.U, firstZeroOH) >> 1).take(size)
   val unitWillFlow = unitTableValid.orR &&
     (in.counter.last > 0.U || !(unitTableFirstValid & unitIndexMaskValidOH).orR)
 
