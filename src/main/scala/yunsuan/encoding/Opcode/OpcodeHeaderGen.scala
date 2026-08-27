@@ -17,13 +17,7 @@ object OpcodeHeaderGen {
     val outPath = if (args.nonEmpty) args(0) else "build/opcodes.h"
     // Make sure every opcode object is initialized so that `all` is complete.
     Opcodes.initOpcodes
-    val objects = Seq(
-      Opcodes.FMacOpcode, Opcodes.VFMacOpcode, Opcodes.FMiscOpcode, Opcodes.FAluOpcode,
-      Opcodes.VFMiscOpcode, Opcodes.VFRedOpcode, Opcodes.VFDivOpcode, Opcodes.FCvtOpcode,
-      Opcodes.VFCvtOpcode, Opcodes.VIAluOpcode, Opcodes.VMAluOpcode, Opcodes.VIMacOpcode,
-      Opcodes.VIDivOpcode, Opcodes.VIRedOpcode, Opcodes.VIPermOpcode, Opcodes.VMoveOpcode,
-      Opcodes.VSha256msOpcode, Opcodes.VSha256cOpcode,
-    )
+    val objects = Opcodes.opcodeObjects
 
     val pw = new PrintWriter(new java.io.File(outPath))
     try {

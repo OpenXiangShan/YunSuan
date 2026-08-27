@@ -364,22 +364,7 @@ abstract class Opcodes {
 
 object Opcodes {
   def main(args: Array[String]): Unit = {
-    val opcodes = Seq(
-      VIAluOpcode,
-      VMAluOpcode,
-      VIMacOpcode,
-      VIDivOpcode,
-      VIRedOpcode,
-      VIPermOpcode,
-      FCvtOpcode,
-      FMiscOpcode,
-      FMacOpcode,
-      VFMacOpcode,
-      VFCvtOpcode,
-      VFMiscOpcode,
-    )
-
-    for (opcodeCls <- opcodes) {
+    for (opcodeCls <- opcodeObjects) {
       for (opcode <- opcodeCls.all.sortBy(_.encode.value)) {
         println(s"${opcode}")
       }
@@ -388,28 +373,33 @@ object Opcodes {
 
   def apply(): UInt = UInt(width.W)
 
+  // All concrete opcode families. Add new opcode objects here only.
+  private[encoding] lazy val opcodeObjects: Seq[Opcodes] = Seq(
+    FMacOpcode,
+    VFMacOpcode,
+    FMiscOpcode,
+    FAluOpcode,
+    VFMiscOpcode,
+    VFRedOpcode,
+    VFDivOpcode,
+    FCvtOpcode,
+    VFCvtOpcode,
+    VIAluOpcode,
+    VMAluOpcode,
+    VIMacOpcode,
+    VIDivOpcode,
+    VIRedOpcode,
+    VIPermOpcode,
+    VMoveOpcode,
+    VSha256msOpcode,
+    VSha256cOpcode,
+  )
+
   // Force initialization of all opcode objects so that the global width/max
   // latency are populated before `Opcode()`/`Latency()` are used during module
   // elaboration, regardless of initialization order.
   private[encoding] lazy val initOpcodes: Unit = {
-    FMacOpcode
-    VFMacOpcode
-    FMiscOpcode
-    FAluOpcode
-    VFMiscOpcode
-    VFRedOpcode
-    VFDivOpcode
-    FCvtOpcode
-    VFCvtOpcode
-    VIAluOpcode
-    VMAluOpcode
-    VIMacOpcode
-    VIDivOpcode
-    VIRedOpcode
-    VIPermOpcode
-    VMoveOpcode
-    VSha256msOpcode
-    VSha256cOpcode
+    opcodeObjects
     ()
   }
 
