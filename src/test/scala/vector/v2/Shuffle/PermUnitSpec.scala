@@ -2750,6 +2750,81 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
             }
           }
         }
+        // vrgatherei16.vv e8/m4/tu/mu, vl=32 (robIdx=0x105, pc 0x80004720). The emu
+        // (emu_logs/20260826-173423) still deadlocked on this later loop iteration:
+        // ABORT at pc 0x8000420e, v4/v5 mismatch. Dispatch (from FST): rvs3 uopIdx
+        // 5,4,6 at cy0 (pipes 0,2,3), rvs3 uopIdx 7 at cy1 (pipe1), gather uopIdx
+        // 0,2 at cy2 (pipes 1,3), gather uopIdx 1 at cy3 (pipe2), gather uopIdx 3
+        // at cy4 (pipe1). placeIdx = is2PlaceIdx (nth same-robIdx uop of the cycle,
+        // counting rvs3 too). Regression for the indexPos=uopIdx%blockSize fix.
+        it("E10: emu replay e8 m4 vl=32 vrgatherei16 deadlock") {
+          simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+            initDut(dut)
+            for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+            // Source register data captured at the 0x105 entries (per-pipe input).
+            val oldVd5 = Seq(0xf3,0x64,0x19,0x99,0xc9,0x38,0x9f,0xc5,0x06,0x2c,0x01,0xca,0xda,0xbb,0x9e,0x0b)
+            val oldVd4 = Seq(0xff,0xff,0x00,0x01,0x03,0xf8,0xf8,0x7f,0x7f,0x7f,0xff,0xff,0x00,0x01,0x03,0xf8)
+            val oldVd6 = Seq(0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00,0x07,0x01,0x00,0xff,0x00,0x02)
+            val oldVd7 = Seq(0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00,0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00)
+            val gIdx0 = oldVd7
+            val gIdxHi0 = oldVd7
+            val gTab0 = oldVd7
+            val gIdx2 = Seq(0x00,0x02,0x0f,0x00,0x08,0x00,0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00)
+            val gIdxHi2 = oldVd6
+            val gTab2 = Seq(0x0f,0x00,0x08,0x00,0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00,0x07,0x01)
+            val gIdx1 = Seq(0x03,0xf8,0xf8,0x7f,0x7f,0x7f,0xff,0xff,0x00,0x01,0x03,0xf8,0xf8,0x7f,0x7f,0x7f)
+            val gIdxHi1 = oldVd4
+            val gTab1 = Seq(0x07,0x01,0x00,0xff,0x00,0x02,0x0f,0x00,0x08,0x00,0x07,0x01,0x00,0xff,0x00,0x02)
+            val gIdx3 = oldVd7
+            val gIdxHi3 = oldVd7
+            val gTab3 = oldVd7
+            // cy0: rvs3 uopIdx 5,4,6 (pipes 0,2,3; placeIdx = log is2PlaceIdx 0,1,2)
+            pRvs3(dut, 0, oldVd5, lmulFrac = 32, uopIdx = 5, blockBase = 0, placeIdx = 0, vl = 32, robIdx = 0x105, pdest = 0x64)
+            pRvs3(dut, 2, oldVd4, lmulFrac = 32, uopIdx = 4, blockBase = 0, placeIdx = 1, vl = 32, robIdx = 0x105, pdest = 0x63)
+            pRvs3(dut, 3, oldVd6, lmulFrac = 32, uopIdx = 6, blockBase = 0, placeIdx = 2, vl = 32, robIdx = 0x105, pdest = 0x65)
+            dut.clock.step()
+            for (p <- 0 until NumPipes) pPipeOff(dut, p)
+            // cy1: rvs3 uopIdx 7 (pipe1)
+            pRvs3(dut, 1, oldVd7, lmulFrac = 32, uopIdx = 7, blockBase = 0, placeIdx = 0, vl = 32, robIdx = 0x105, pdest = 0x66)
+            dut.clock.step()
+            for (p <- 0 until NumPipes) pPipeOff(dut, p)
+            // cy2: gather uopIdx 0,2 (pipes 1,3)
+            pGatherEi16(dut, 1, gIdx0, gIdxHi0, gTab0, lmulFrac = 32, uopIdx = 0, blockBase = 0, placeIdx = 0, vl = 32, robIdx = 0x105)
+            pGatherEi16(dut, 3, gIdx2, gIdxHi2, gTab2, lmulFrac = 32, uopIdx = 2, blockBase = 0, placeIdx = 1, vl = 32, robIdx = 0x105)
+            dut.clock.step()
+            for (p <- 0 until NumPipes) pPipeOff(dut, p)
+            // cy3: gather uopIdx 1 (pipe2)
+            pGatherEi16(dut, 2, gIdx1, gIdxHi1, gTab1, lmulFrac = 32, uopIdx = 1, blockBase = 0, placeIdx = 0, vl = 32, robIdx = 0x105)
+            dut.clock.step()
+            for (p <- 0 until NumPipes) pPipeOff(dut, p)
+            // cy4: gather uopIdx 3 (pipe1)
+            pGatherEi16(dut, 1, gIdx3, gIdxHi3, gTab3, lmulFrac = 32, uopIdx = 3, blockBase = 0, placeIdx = 0, vl = 32, robIdx = 0x105)
+            dut.clock.step()
+            for (p <- 0 until NumPipes) pPipeOff(dut, p)
+            // collect writeback + drain (wait for the block to become active first)
+            val wbData = Array.fill(NumPipes)(Option.empty[BigInt])
+            var sawActive = false
+            var drained = false
+            for (cy <- 0 until 40; if !drained) {
+              for (p <- 0 until NumPipes) {
+                if (dut.out.pipes(p).valid.peekBoolean() && wbData(p).isEmpty) {
+                  wbData(p) = Some(dut.out.pipes(p).bits.data.peekValue().asBigInt)
+                }
+              }
+              val anyActive = (0 until NumUnits).exists(u => dut.out.unitStatus(u).hasIndex.peekBoolean())
+              if (anyActive) sawActive = true
+              drained = sawActive && (0 until NumUnits).forall(u => !dut.out.unitStatus(u).hasIndex.peekBoolean())
+              dut.clock.step()
+            }
+            for (u <- 0 until NumUnits) {
+              dut.out.unitStatus(u).hasIndex.expect(false.B, s"unit $u hasIndex drained")
+              dut.out.unitStatus(u).hasTable.expect(false.B, s"unit $u hasTable drained")
+            }
+            (0 until NumPipes).foreach { p =>
+              wbData(p).getOrElse(fail(s"pipe $p never wrote back (deadlock)"))
+            }
+          }
+        }
       }
 
       describe("MASK") {

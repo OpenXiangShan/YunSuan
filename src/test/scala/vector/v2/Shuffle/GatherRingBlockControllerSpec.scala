@@ -157,10 +157,13 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
       }
     }
 
-    it("index above table head -> no flow") {
-      // T={0,1}, I={1}: highest index at pos1, table head free slot rotated to pos1.
+    it("gapped index above table head -> flow stays alive") {
+      // T={0,1}, I={1}: index is gapped (bit0 empty), so the contiguous-run
+      // mask is empty (unitIndexMaskValidOH=0) and the first table (bit1) is
+      // not covered -> flow stays alive (wf = T|I = 0x3). Under the old
+      // highest-set-bit mask the index covered the table head (no flow).
       simulateBlock(4, 0, 0x3, 0x2, boolSeq(4)) { (_, _, wf, _) =>
-        assert(wf == 0)
+        assert(wf == 0x3, s"mask=${Integer.toBinaryString(wf)}")
       }
     }
 
@@ -177,10 +180,13 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
       }
     }
 
-    it("mask follows co-located T&I units") {
-      // T={0,2}, I={0,2}: units 0,2 hold both -> mask = 0x5.
+    it("gapped co-located T&I units -> no flow") {
+      // T={0,2}, I={0,2}: the contiguous run from unit 0 ends at bit0 (gap at
+      // bit1), which covers the first table (bit0) -> no circulation needed
+      // (wf=0). Under the old highest-set-bit mask the index tail (bit2) was
+      // not covered -> flow kept alive (mask = 0x5).
       simulateBlock(4, 0, 0x5, 0x5, boolSeq(4)) { (_, _, wf, _) =>
-        assert(wf == 0x5, s"mask=${Integer.toBinaryString(wf)}")
+        assert(wf == 0, s"mask=${Integer.toBinaryString(wf)}")
       }
     }
 
