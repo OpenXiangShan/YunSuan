@@ -82,6 +82,79 @@ class GatherIndexGenSpec extends SpecBase with GatherSpecUtils {
     dut.out.gatherei16.valid.expect(true.B)
   }
 
+  // Golden for vrgatherei16 (EI=16, SEW>16): vs1 is sliced by uopIdx (e32: 1/2,
+  // e64: 1/4); each sliced e16 index i produces sewb consecutive 8b indices
+  // i*sewb .. i*sewb+sewb-1; OOR if the e16 index >= vlmax (in SEW elements).
+  def goldenGatherEI16(vs1: BigInt, sew: Int, lmulFrac: Int, uopIdx: Int): Seq[(Int, Boolean, Boolean, Boolean)] = {
+    val sewbVal = sewb(sew)                        // 4 (e32) / 8 (e64)
+    val sliceBits = dlen / (sew / 16)              // 64 (e32) / 32 (e64)
+    // slice is reused every dlen/sliceBits uops (e32: 2, e64: 4)
+    val sliceOff = (uopIdx % (dlen / sliceBits)) * sliceBits
+    val slice = (vs1 >> sliceOff) & ((BigInt(1) << sliceBits) - 1)
+    val vlmaxSew = lmulFrac * vlen / 64 / sewbVal  // vlmax in SEW elements
+    (0 until numElem).map { k =>
+      val i = k / sewbVal
+      val j = k % sewbVal
+      val rawIdx = ((slice >> (i * 16)) & 0xffff).toInt
+      val eightBIdx = rawIdx * sewbVal + j
+      val geVlmax = rawIdx >= vlmaxSew
+      (eightBIdx, !geVlmax, geVlmax, false)
+    }
+  }
+
+  // vrgatherei16 drives out.gather.bits (the merged flags that become elemFlags in
+  // the wrapper IndexGen), but out.gather.valid is false (gatherei16.valid pulses).
+  def eGatherEI16Bits(dut: GatherIndexGen, golden: Seq[(Int, Boolean, Boolean, Boolean)]): Unit = {
+    dut.out.gatherei16.valid.expect(true.B)
+    for (i <- 0 until numElem) {
+      val (idx, valid, fillZ, fillS) = golden(i)
+      if (!fillZ) {
+        dut.out.gather.bits.index(i).expect(idx.U)
+      }
+      dut.out.gather.bits.indexValid(i).expect(valid.B)
+      dut.out.gather.bits.fillZeros(i).expect(fillZ.B)
+      dut.out.gather.bits.fillScala(i).expect(fillS.B)
+    }
+  }
+
+  // Boundary-coverage helper: pack each batch of e16 indices into that uop's vs1
+  // slice and check every slot's indexValid/fillZeros against the golden (OOR iff
+  // the e16 index >= vlmax in SEW elements).
+  def checkEi16Boundaries(sew: Int, lmulFrac: Int, batches: Seq[(Int, Seq[Int])]): Unit = {
+    simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
+      batches.foreach { case (uopIdx, indices) =>
+        val sliceBits = dlen / (sew / 16)
+        val sliceOff = (uopIdx % (dlen / sliceBits)) * sliceBits
+        var vs1 = BigInt(0)
+        indices.zipWithIndex.foreach { case (idx, k) =>
+          vs1 |= BigInt(idx & 0xffff) << (sliceOff + k * 16)
+        }
+        val golden = goldenGatherEI16(vs1, sew, lmulFrac, uopIdx)
+        pGatherEI16(dut, vs1, sew, lmulFrac, uopIdx)
+        dut.clock.step()
+        eGatherEI16Bits(dut, golden)
+      }
+    }
+  }
+
+  // Boundary-coverage helper for vrgather.vv (EI=SEW): each batch packs up to
+  // dlen/sew SEW-level indices into vs1 and checks every slot's flags against the
+  // golden (OOR iff the index >= vlmax in SEW elements).
+  def checkGatherBoundaries(sew: Int, lmulFrac: Int, batches: Seq[Seq[Int]]): Unit = {
+    simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
+      batches.foreach { indices =>
+        var vs1 = BigInt(0)
+        indices.zipWithIndex.foreach { case (idx, k) =>
+          vs1 |= (BigInt(idx) & ((BigInt(1) << sew) - 1)) << (k * sew)
+        }
+        val golden = goldenGather(vs1, sew, sew, lmulFrac, uopIdx = 0)
+        pGather(dut, vs1, sew, sew, lmulFrac, uopIdx = 0)
+        dut.clock.step()
+        eGather(dut, golden)
+      }
+    }
+  }
+
   // vs1 with one non-zero index at element 0
   def vs1OneIdx(idx: Int, ei: Int): BigInt = BigInt(idx) & ((BigInt(1) << ei) - 1)
 
@@ -172,17 +245,128 @@ class GatherIndexGenSpec extends SpecBase with GatherSpecUtils {
         }
       }
     }
+    // EI=SEW boundary coverage around vlmax (in SEW elements =
+    // lmulFrac*vlen/64/sewb): 0, 1, vlmax/2, vlmax-1, vlmax, vlmax+1, vlmax*1.5,
+    // vlmax*2-1, vlmax*2, vlmax*2+1, vlmax*4.
+    describe("boundary indices around vlmax") {
+      it("e8ei8 m1 vlmax=16") {
+        checkGatherBoundaries(8, 8, Seq(
+          Seq(0, 1, 8, 15, 16, 17, 24, 31, 32, 33, 64, 0, 0, 0, 0, 0),
+        ))
+      }
+      it("e16ei16 m1 vlmax=8") {
+        checkGatherBoundaries(16, 8, Seq(
+          Seq(0, 1, 4, 7, 8, 9, 12, 15),
+          Seq(16, 17, 32, 0, 0, 0, 0, 0),
+        ))
+      }
+      it("e32ei32 m1 vlmax=4") {
+        checkGatherBoundaries(32, 8, Seq(
+          Seq(0, 1, 2, 3),
+          Seq(4, 5, 6, 7),
+          Seq(8, 9, 16, 0),
+        ))
+      }
+      it("e64ei64 m1 vlmax=2") {
+        checkGatherBoundaries(64, 8, Seq(
+          Seq(0, 1),
+          Seq(2, 3),
+          Seq(4, 5),
+          Seq(8, 0),
+        ))
+      }
+    }
   }
 
-  describe("vrgatherei16") {
-    it("e64ei16, valid") {
+  describe("vrgatherei16 (SEW>16)") {
+    it("e64ei16 uop0 in-range identity") {
       simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-        val sew = 64
-        val vs1 = BigInt(0)
-        pGatherEI16(dut, vs1, sew, lmulFrac = 8, uopIdx = 0)
+        val sew = 64; val lmulFrac = 64
+        val vs1 = fromSewElems(Seq(0, 0, 0, 0, 0, 0, 0, 0), 16) // all indices 0
+        val golden = goldenGatherEI16(vs1, sew, lmulFrac, uopIdx = 0)
+        pGatherEI16(dut, vs1, sew, lmulFrac, uopIdx = 0)
         dut.clock.step()
-        eGatherEI16(dut)
+        eGatherEI16Bits(dut, golden)
       }
+    }
+    it("e32ei16 uop0 in-range indices -> LOOKUP with byte idx*4+j") {
+      simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
+        val sew = 32; val lmulFrac = 64
+        // uop0 slice = low 64b = e16 [0,0,1,0] -> bytes 0-3, 0-3, 4-7, 0-3
+        val vs1 = fromSewElems(Seq(0, 0, 1, 0, 3, 0, 0xfff8, 0xffff), 16)
+        val golden = goldenGatherEI16(vs1, sew, lmulFrac, uopIdx = 0)
+        pGatherEI16(dut, vs1, sew, lmulFrac, uopIdx = 0)
+        dut.clock.step()
+        eGatherEI16Bits(dut, golden)
+      }
+    }
+    it("e32ei16 uop1 out-of-range 0xfff8/0xffff -> fillZeros (emu v9_high bug)") {
+      simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
+        val sew = 32; val lmulFrac = 64
+        // uop1 slice = high 64b = e16 [3,0,0xfff8,0xffff]; 0xfff8/0xffff >= vlmax(32)
+        val vs1 = fromSewElems(Seq(0, 0, 1, 0, 3, 0, 0xfff8, 0xffff), 16)
+        val golden = goldenGatherEI16(vs1, sew, lmulFrac, uopIdx = 1)
+        pGatherEI16(dut, vs1, sew, lmulFrac, uopIdx = 1)
+        dut.clock.step()
+        eGatherEI16Bits(dut, golden)
+      }
+    }
+    it("e32ei16 wrap index 0x20 (32) -> fillZeros (m8: byte-level skipped)") {
+      simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
+        val sew = 32; val lmulFrac = 64
+        // 32 >= vlmax_e32(32); truncates to 5b -> byte 0-3, would LOOKUP on old RTL
+        val vs1 = fromSewElems(Seq(0x20, 0, 0, 0, 0, 0, 0, 0), 16)
+        val golden = goldenGatherEI16(vs1, sew, lmulFrac, uopIdx = 0)
+        pGatherEI16(dut, vs1, sew, lmulFrac, uopIdx = 0)
+        dut.clock.step()
+        eGatherEI16Bits(dut, golden)
+      }
+    }
+    it("e64ei16 uop1 wrap index 0x10 (16) -> fillZeros (m8: byte-level skipped)") {
+      simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
+        val sew = 64; val lmulFrac = 64
+        // uop1 slice = bits[32:63] = e16 [0x10, 0]; 16 >= vlmax_e64(16)
+        val vs1 = fromSewElems(Seq(0, 0, 0x10, 0, 0, 0, 0, 0), 16)
+        val golden = goldenGatherEI16(vs1, sew, lmulFrac, uopIdx = 1)
+        pGatherEI16(dut, vs1, sew, lmulFrac, uopIdx = 1)
+        dut.clock.step()
+        eGatherEI16Bits(dut, golden)
+      }
+    }
+    it("e32ei16 m2 index >= vlmax(8) -> fillZeros (small lmul)") {
+      simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
+        val sew = 32; val lmulFrac = 16 // m2: vlmax_e32 = 8
+        // uop1 slice = [0x10(16), 0, 0, 0]; 16 >= 8 -> fillZeros on slots 0-3
+        val vs1 = fromSewElems(Seq(0, 0, 0, 0, 0x10, 0, 0, 0), 16)
+        val golden = goldenGatherEI16(vs1, sew, lmulFrac, uopIdx = 1)
+        pGatherEI16(dut, vs1, sew, lmulFrac, uopIdx = 1)
+        dut.clock.step()
+        eGatherEI16Bits(dut, golden)
+      }
+    }
+    it("e32ei16 m8 boundary indices around vlmax=32") {
+      checkEi16Boundaries(32, 64, Seq(
+        (0, Seq(0, 1, 16, 31)),   // 0, 1, vlmax/2, vlmax-1: valid
+        (1, Seq(32, 33, 48, 63)), // vlmax, vlmax+1, vlmax*1.5, vlmax*2-1: OOR
+        (2, Seq(64, 65, 128, 0)), // vlmax*2, vlmax*2+1, vlmax*4: OOR
+      ))
+    }
+    it("e32ei16 m2 boundary indices around vlmax=8") {
+      checkEi16Boundaries(32, 16, Seq(
+        (0, Seq(0, 1, 4, 7)),   // valid
+        (1, Seq(8, 9, 12, 15)), // vlmax, +1, *1.5, *2-1: OOR
+        (2, Seq(16, 17, 32, 0)), // vlmax*2, +1, *4: OOR
+      ))
+    }
+    it("e64ei16 m8 boundary indices around vlmax=16") {
+      checkEi16Boundaries(64, 64, Seq(
+        (0, Seq(0, 1)),     // valid
+        (1, Seq(8, 15)),    // vlmax/2, vlmax-1: valid
+        (2, Seq(16, 17)),   // vlmax, vlmax+1: OOR
+        (3, Seq(24, 31)),   // vlmax*1.5, vlmax*2-1: OOR
+        (0, Seq(32, 33)),   // vlmax*2, vlmax*2+1: OOR
+        (1, Seq(64, 0)),    // vlmax*4: OOR
+      ))
     }
   }
 

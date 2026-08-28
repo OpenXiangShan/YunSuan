@@ -2913,6 +2913,101 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
             }
           }
         }
+        // vrgatherei16.vv v8, v24, v16, e32/m8/tu/mu, vl=15 (robIdx=0x116, pc
+        // 0x80000404). The emu (emu_logs/20260828-174224 run-vrgatherei16_vv-1.log)
+        // difftest-fails on this instruction: "v9_high different ... right =
+        // 0x0000000000000000, wrong = 0x00000000fffffff8". uop1's element 6 uses
+        // e16 index 0xfff8 (must be out-of-range -> 0), but the e32ei16 OOR flag
+        // is misaligned so 0xfff8 escapes and reads table[24] = 0xfffffff8.
+        // Dispatch (from FST build/2026-08-28-18-04-28.fst), 8 gather uops (no
+        // rvs3), blockSize 8 (m8): cy0 uop0(p1,plc0) uop1(p2,plc1); cy1
+        // uop2(p3,plc1) uop3(p1,plc0); cy2 uop4(p2,plc1) uop5(p0,plc0); gap;
+        // cy6 uop7(p1,plc0); cy7 uop6(p3,plc0). vs1 = index slice (v16+uopIdx/2),
+        // vs2 = table chunk (v24+uopIdx), vs3 = old vd. Golden = nemu REF regs:
+        // v8=[0,0,2,0], v9/v10=0, v11=[0,0,0,0xf50471f1], v12-v15 = old vd (tail).
+        it("E12: emu replay e32 m8 vl=15 vrgatherei16 OOR (v9_high=0xfffffff8)") {
+          simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+            initDut(dut)
+            for (p <- 0 until NumPipes) dut.in.wbReady(p).poke(true)
+            // Index register slices (v16..v19), each 8 e16 indices = 16 bytes.
+            val vs1_01 = Seq(0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x03,0x00,0x00,0x00,0xf8,0xff,0xff,0xff) // v16
+            val vs1_23 = Seq(0x80,0xff,0xff,0xff,0xff,0x7f,0x00,0x00,0xff,0x7f,0x00,0x00,0xff,0x7f,0x00,0x00) // v17
+            val vs1_45 = Seq(0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00) // v18
+            val vs1_67 = Seq(0x03,0x00,0x00,0x00,0xf8,0xff,0xff,0xff,0x80,0xff,0xff,0xff,0xff,0x7f,0x00,0x00) // v19
+            // Table chunks v24..v31 (4 e32 each).
+            val tab0 = Seq(0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x0f,0x00,0x00,0x00,0x00,0x00,0x00,0x00) // v24
+            val tab1 = Seq(0xf8,0xff,0xff,0xff,0x00,0x00,0x00,0x00,0xff,0x07,0x00,0x00,0x01,0x00,0x00,0x00) // v25
+            val tab2 = Seq(0x00,0x00,0x00,0x00,0xff,0xff,0xff,0xff,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00) // v26
+            val tab3 = Seq(0x0f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xf8,0xff,0xff,0xff,0x00,0x00,0x00,0x00) // v27
+            val tab4 = Seq(0xff,0x07,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xff,0xff,0xff,0xff) // v28
+            val tab5 = Seq(0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0x0f,0x00,0x00,0x00,0x00,0x00,0x00,0x00) // v29
+            val tab6 = Seq(0xf8,0xff,0xff,0xff,0x00,0x00,0x00,0x00,0xff,0x07,0x00,0x00,0x01,0x00,0x00,0x00) // v30
+            val tab7 = Seq(0x00,0x00,0x00,0x00,0xff,0xff,0xff,0xff,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00) // v31
+            // Old vd (vs3) captured at the 0x116 entries.
+            val oldV8  = Seq(0xbc,0xbe,0xb8,0xdd,0xcb,0x4c,0xd6,0x3a,0x31,0x62,0xff,0xdd,0xfa,0xcb,0xdc,0xf3)
+            val oldV9  = Seq(0x1d,0xdc,0xb8,0x4c,0x12,0xfa,0x40,0xa3,0xc6,0xc5,0x8f,0x22,0x1e,0xa5,0x33,0x81)
+            val oldV10 = Seq(0x3d,0xa9,0x66,0xb8,0x50,0x51,0x11,0x7d,0x17,0x3b,0xcd,0x47,0x09,0xd4,0xc0,0xe3)
+            val oldV11 = Seq(0x24,0x31,0x7d,0x28,0xaf,0xd9,0xce,0xca,0xd0,0x5e,0xe9,0xef,0xf1,0x71,0x04,0xf5)
+            val oldV12 = Seq(0xf3,0x55,0x40,0xcc,0xe5,0x35,0x6c,0x76,0x2d,0x41,0xac,0x4d,0xfa,0xe5,0x6d,0xdc)
+            val oldV13 = Seq(0x34,0xf5,0xce,0x9c,0x30,0x55,0x87,0xea,0x20,0x24,0xf6,0xd8,0x95,0x9e,0xfb,0xb7)
+            val oldV14 = Seq(0x72,0x02,0xea,0x4a,0x00,0xd1,0xfb,0xb0,0x92,0x03,0x40,0xe4,0x57,0x5c,0x60,0xd9)
+            val oldV15 = Seq(0x7c,0x08,0x8e,0x7f,0x2c,0xc1,0xda,0xe7,0x9c,0x61,0x32,0x03,0xc2,0x24,0xb4,0x2c)
+            // Golden per pdest (nemu REF). v12-v15 are all-tail (tu) -> old vd.
+            val golden = Map(
+              0x1b -> foldBytes(Seq(0,0,0,0, 0,0,0,0, 2,0,0,0, 0,0,0,0)),           // v8  [0,0,2,0]
+              0x1c -> BigInt(0),                                                     // v9
+              0x1d -> BigInt(0),                                                     // v10
+              0x1e -> foldBytes(Seq(0,0,0,0, 0,0,0,0, 0,0,0,0, 0xf1,0x71,0x04,0xf5)), // v11 tail elem3
+              0x1f -> foldBytes(oldV12),                                             // v12 tail
+              0x2f -> foldBytes(oldV13),                                             // v13 tail
+              0x37 -> foldBytes(oldV14),                                             // v14 tail
+              0x38 -> foldBytes(oldV15)                                              // v15 tail
+            )
+            // cy0: uop0 (pipe1), uop1 (pipe2)
+            pGatherEi16Sew(dut, 1, vs1_01, tab0, oldV8,  sew = 32, lmulFrac = 64, uopIdx = 0, blockBase = 0, placeIdx = 0, vl = 15, robIdx = 0x116, pdest = 0x1b)
+            pGatherEi16Sew(dut, 2, vs1_01, tab1, oldV9,  sew = 32, lmulFrac = 64, uopIdx = 1, blockBase = 0, placeIdx = 1, vl = 15, robIdx = 0x116, pdest = 0x1c)
+            dut.clock.step()
+            for (p <- 0 until NumPipes) pPipeOff(dut, p)
+            // cy1: uop2 (pipe3), uop3 (pipe1)
+            pGatherEi16Sew(dut, 3, vs1_23, tab2, oldV10, sew = 32, lmulFrac = 64, uopIdx = 2, blockBase = 0, placeIdx = 1, vl = 15, robIdx = 0x116, pdest = 0x1d)
+            pGatherEi16Sew(dut, 1, vs1_23, tab3, oldV11, sew = 32, lmulFrac = 64, uopIdx = 3, blockBase = 0, placeIdx = 0, vl = 15, robIdx = 0x116, pdest = 0x1e)
+            dut.clock.step()
+            for (p <- 0 until NumPipes) pPipeOff(dut, p)
+            // cy2: uop4 (pipe2), uop5 (pipe0)
+            pGatherEi16Sew(dut, 2, vs1_45, tab4, oldV12, sew = 32, lmulFrac = 64, uopIdx = 4, blockBase = 0, placeIdx = 1, vl = 15, robIdx = 0x116, pdest = 0x1f)
+            pGatherEi16Sew(dut, 0, vs1_45, tab5, oldV13, sew = 32, lmulFrac = 64, uopIdx = 5, blockBase = 0, placeIdx = 0, vl = 15, robIdx = 0x116, pdest = 0x2f)
+            dut.clock.step()
+            for (p <- 0 until NumPipes) pPipeOff(dut, p)
+            // gap (emu: next uops 4 cycles later)
+            for (_ <- 0 until 3) { dut.clock.step(); for (p <- 0 until NumPipes) pPipeOff(dut, p) }
+            // cy6: uop7 (pipe1)
+            pGatherEi16Sew(dut, 1, vs1_67, tab7, oldV15, sew = 32, lmulFrac = 64, uopIdx = 7, blockBase = 0, placeIdx = 0, vl = 15, robIdx = 0x116, pdest = 0x38)
+            dut.clock.step()
+            for (p <- 0 until NumPipes) pPipeOff(dut, p)
+            // cy7: uop6 (pipe3)
+            pGatherEi16Sew(dut, 3, vs1_67, tab6, oldV14, sew = 32, lmulFrac = 64, uopIdx = 6, blockBase = 0, placeIdx = 0, vl = 15, robIdx = 0x116, pdest = 0x37)
+            dut.clock.step()
+            for (p <- 0 until NumPipes) pPipeOff(dut, p)
+            // collect writebacks keyed by pdest (uops share pipes across cycles)
+            val wb = scala.collection.mutable.Map.empty[Int, BigInt]
+            for (_ <- 0 until 40; if wb.size < golden.size) {
+              for (p <- 0 until NumPipes) {
+                if (dut.out.pipes(p).valid.peekBoolean()) {
+                  val pd = dut.out.pipes(p).bits.meta.pdest.peekValue().asBigInt.toInt
+                  if (!wb.contains(pd)) wb(pd) = dut.out.pipes(p).bits.data.peekValue().asBigInt
+                }
+              }
+              dut.clock.step()
+            }
+            golden.foreach { case (pd, g) =>
+              val got = wb.get(pd)
+              println(f"[E12-diag] pdest 0x$pd%02x wb = 0x${got.getOrElse(BigInt(-1))}%032x  golden = 0x$g%032x  ${if (got.contains(g)) "OK" else "MISMATCH"}")
+            }
+            golden.foreach { case (pd, g) =>
+              wb.get(pd).getOrElse(fail(f"pdest 0x$pd%02x never wrote back")) mustBe g
+            }
+          }
+        }
       }
 
       describe("MASK") {

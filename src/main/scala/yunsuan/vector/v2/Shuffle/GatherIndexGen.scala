@@ -37,6 +37,16 @@ class GatherIndexGen(implicit val param: GatherParam) extends GatherModule {
   val ei = in.bits.ei
 
   val lmul = in.bits.lmul
+  // LMUL in units of m1 (=8): mf8=1, mf4=2, mf2=4, m1=8, m2=16, m4=32, m8=64
+  private val lmulFrac = Mux1H(Seq(
+    lmul.mf8 -> 1.U(7.W),
+    lmul.mf4 -> 2.U(7.W),
+    lmul.mf2 -> 4.U(7.W),
+    lmul.m1  -> 8.U(7.W),
+    lmul.m2  -> 16.U(7.W),
+    lmul.m4  -> 32.U(7.W),
+    lmul.m8  -> 64.U(7.W),
+  ))
 
   val e64Vs1 = in.bits.vs1.to64bitVec
 
@@ -184,9 +194,32 @@ class GatherIndexGen(implicit val param: GatherParam) extends GatherModule {
   val e32ei32ElemOor = expandElemOor(e32Vs1, 32, E32ValidBits)
   val e16ei16ElemOor = expandElemOor(e16Vs1, 16, E16ValidBits)
   val e8ei8ElemOor   = expandElemOor(e8Vs1,   8,  E8ValidBits)
-  // EI=16 cases: element value is 16-bit, same upper-bits check via E16ValidBits
-  val e64ei16ElemOor = expandElemOor(e16Vs1, 16, E16ValidBits)
-  val e32ei16ElemOor = expandElemOor(e16Vs1, 16, E16ValidBits)
+  // EI=16, SEW>16 (e32ei16/e64ei16): the byte-index path slices vs1 by uopIdx
+  // and spreads each e16 index over SEW/8 byte slots, truncating the e16 to
+  // (E16ValidBits - log2(sew/16)) bits. An out-of-range e16 (>= vlmax in SEW
+  // elements) can thus wrap back into the truncated byte-index space and slip past
+  // the byte-level geVlmax check (which is skipped for m8). So the element-level
+  // OOR must use the SAME sliced source and slot layout as the byte-index path and
+  // flag e16 >= vlmax, turning every out-of-range index into fillZeros.
+  val e32ei16ElemOor = Wire(Vec(NumElem, Bool()))
+  val e64ei16ElemOor = Wire(Vec(NumElem, Bool()))
+  // vlmax (in SEW elements) = LMUL*VLEN/SEW = lmulFrac*VLEN/(8*SEW). For SEW>16
+  // the VLEN/(8*SEW) factor is < 1, i.e. a right-shift of lmulFrac by
+  // log2(8*SEW/VLEN); clamp to >= 1 (fractional VLMAX counts as 1 element).
+  val e32ei16Vlmax = (lmulFrac >> log2Ceil(8 * 32 / VLEN)).max(1.U)
+  val e64ei16Vlmax = (lmulFrac >> log2Ceil(8 * 64 / VLEN)).max(1.U)
+  for (i <- 0 until e32ei16MinSewIdx.length) {
+    val oor = e32ei16Elems(i) >= e32ei16Vlmax
+    for (j <- 0 until e32ei16MinSewIdx.head.length) {
+      e32ei16ElemOor(i * 4 + j) := oor
+    }
+  }
+  for (i <- 0 until e64ei16MinSewIdx.length) {
+    val oor = e64ei16Elems(i) >= e64ei16Vlmax
+    for (j <- 0 until e64ei16MinSewIdx.head.length) {
+      e64ei16ElemOor(i * 8 + j) := oor
+    }
+  }
   // SEW=8: index = raw e16 value (IndexWidth bits); element OOR = e16 bits above index width
   val e8ei16ElemOor = Wire(Vec(NumElem, Bool()))
   for (i <- 0 until DLEN / 16) {
