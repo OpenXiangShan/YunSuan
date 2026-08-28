@@ -48,24 +48,44 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   val indexMostValidOH = (Cat(1.U, firstZeroOHIndex) >> 1).take(size)
   // Either one suffices: a uop entering GatherRing always carries both table and index groups
   // allFull: when all table slots are occupied, existing tables must still circulate
-  val s1WillFlow = (tableValid.orR || indexValid.orR) &&
-    (in.counter.last > 0.U || !(tableLeastFreeOH.rotateRight(1) & indexMostValidOH).orR)
+  // indexHasAllValid: latched "all indices of this block are placed". Unlike the
+  // level unitIndexValid.andR (which collapses as soon as an early unit clears
+  // its index), it stays set so flow keeps circulating until every unit's table
+  // traversal completes, even when SEW=8 ei16 indices are filled by uopIdx
+  // (out-of-order). Set once every unit holds an index; cleared once every
+  // index is gone (block done). Replaces the old counter.last>0 flow gate,
+  // which assumed indices are placed in arrival order (counter.last is the
+  // slowest only then).
+  val indexHasAllValid = RegInit(false.B)
+  when(indexValid.andR) {
+    indexHasAllValid := true.B
+  }.elsewhen(unitIndexValid === 0.U) {
+    indexHasAllValid := false.B
+  }
+
+  val s1TableFirstValid = PriorityEncoderOH(~(tableValid).rotateRight(1))
+
+  val s1WillFlow = (tableValid.orR || indexValid.orR) && (
+    indexHasAllValid ||
+    !(s1TableFirstValid & indexMostValidOH).orR && (s1TableFirstValid & indexValid).orR
+  )
 
   val unitTableFirstValid = PriorityEncoderOH(~(unitTableValid).rotateRight(1))
   // unitIndexMaskValidOH: one-hot at the LAST set bit of the contiguous run of
-  // placed indices starting at unit 0 (the filled-region boundary). Find the
-  // first 0 scanning up from bit 0 over size+1 bits (the extra high 0 catches
-  // the all-ones case), one-hot it, then Cat(1, OH) >> 1 keeps only the run
-  // prefix below it: e.g. indexValid=0b0101 ({0,2}) -> first 0 at bit 1 ->
-  // OH=0b0010 -> 0b0001 (the run from unit 0 ends at bit 0), so flow must not
-  // be kept alive by bit 2. indexValid=0b1111 -> first 0 at bit 4 -> OH=0b10000
-  // -> 0b1000. Indices used to always place contiguously from 0, so MSB == run
-  // boundary; keep the run-based form now that a gap can occur, or unitWillFlow
-  // fires spuriously and never lets flow stop.
+  // placed indices starting at unit 0 (the filled-region boundary).
   val firstZeroOH = PriorityEncoderOH(~Cat(0.U(1.W), unitIndexValid))
   val unitIndexMaskValidOH = (Cat(1.U, firstZeroOH) >> 1).take(size)
-  val unitWillFlow = unitTableValid.orR &&
-    (in.counter.last > 0.U || !(unitTableFirstValid & unitIndexMaskValidOH).orR)
+  // unitWillFlow: keep flowing while (a) not all indices are placed yet, or
+  // (b) the first table does NOT sit on a unit that both lies at the index
+  // region boundary AND holds a valid index. Flow stops only when both hold:
+  // the first table reached the boundary unit AND that unit's index is valid
+  // (its traversal can complete). Checking the first table's own unit index
+  // directly (instead of only the contiguous-run boundary) is robust to
+  // out-of-order / gapped index placement (SEW=8 ei16 fills indices by uopIdx).
+  val unitWillFlow = unitTableValid.orR && (
+    indexHasAllValid ||
+    !(unitTableFirstValid & unitIndexMaskValidOH).orR && (unitTableFirstValid & unitIndexValid).orR
+  )
 
   // Predict table occupancy next cycle (if flowing, tables rotate right by 1):
   // placement must not target a slot that the flow will occupy in the same cycle
@@ -147,6 +167,7 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   dontTouch(entryIndex)
   dontTouch(entryTable)
   dontTouch(out.clearTable)
+  dontTouch(indexMostValidOH)
 }
 
 object GatherRingBlockController {
