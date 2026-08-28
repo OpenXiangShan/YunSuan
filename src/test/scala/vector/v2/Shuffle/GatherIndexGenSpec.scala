@@ -78,10 +78,6 @@ class GatherIndexGenSpec extends SpecBase with GatherSpecUtils {
     }
   }
 
-  def eGatherEI16(dut: GatherIndexGen): Unit = {
-    dut.out.gatherei16.valid.expect(true.B)
-  }
-
   // Golden for vrgatherei16 (EI=16, SEW>16): vs1 is sliced by uopIdx (e32: 1/2,
   // e64: 1/4); each sliced e16 index i produces sewb consecutive 8b indices
   // i*sewb .. i*sewb+sewb-1; OOR if the e16 index >= vlmax (in SEW elements).
@@ -117,189 +113,11 @@ class GatherIndexGenSpec extends SpecBase with GatherSpecUtils {
     }
   }
 
-  // Boundary-coverage helper: pack each batch of e16 indices into that uop's vs1
-  // slice and check every slot's indexValid/fillZeros against the golden (OOR iff
-  // the e16 index >= vlmax in SEW elements).
-  def checkEi16Boundaries(sew: Int, lmulFrac: Int, batches: Seq[(Int, Seq[Int])]): Unit = {
-    simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-      batches.foreach { case (uopIdx, indices) =>
-        val sliceBits = dlen / (sew / 16)
-        val sliceOff = (uopIdx % (dlen / sliceBits)) * sliceBits
-        var vs1 = BigInt(0)
-        indices.zipWithIndex.foreach { case (idx, k) =>
-          vs1 |= BigInt(idx & 0xffff) << (sliceOff + k * 16)
-        }
-        val golden = goldenGatherEI16(vs1, sew, lmulFrac, uopIdx)
-        pGatherEI16(dut, vs1, sew, lmulFrac, uopIdx)
-        dut.clock.step()
-        eGatherEI16Bits(dut, golden)
-      }
-    }
-  }
-
-  // Boundary-coverage helper for vrgather.vv (EI=SEW): each batch packs up to
-  // dlen/sew SEW-level indices into vs1 and checks every slot's flags against the
-  // golden (OOR iff the index >= vlmax in SEW elements).
-  def checkGatherBoundaries(sew: Int, lmulFrac: Int, batches: Seq[Seq[Int]]): Unit = {
-    simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-      batches.foreach { indices =>
-        var vs1 = BigInt(0)
-        indices.zipWithIndex.foreach { case (idx, k) =>
-          vs1 |= (BigInt(idx) & ((BigInt(1) << sew) - 1)) << (k * sew)
-        }
-        val golden = goldenGather(vs1, sew, sew, lmulFrac, uopIdx = 0)
-        pGather(dut, vs1, sew, sew, lmulFrac, uopIdx = 0)
-        dut.clock.step()
-        eGather(dut, golden)
-      }
-    }
-  }
-
-  // vs1 with one non-zero index at element 0
-  def vs1OneIdx(idx: Int, ei: Int): BigInt = BigInt(idx) & ((BigInt(1) << ei) - 1)
-
-  describe("vrgather.vv") {
-    describe("e64ei64") {
-      it("identity index") {
-        simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-          val sew = 64; val ei = 64; val lmulFrac = 8
-          // vs1[0]=0 → bytes 0..7, vs1[1]=1 → bytes 8..15
-          val vs1 = BigInt(1) << 64 | BigInt(0)  // element 0→0, element 1→1
-          val golden = goldenGather(vs1, sew, ei, lmulFrac, uopIdx = 0)
-          pGather(dut, vs1, sew, ei, lmulFrac, uopIdx = 0)
-          dut.clock.step()
-          eGather(dut, golden)
-        }
-      }
-      it("nonzero index, LMUL=m1") {
-        simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-          val sew = 64; val ei = 64; val lmulFrac = 8
-          val vs1 = BigInt(5)  // vs1[0]=5 → bytes 40..47, vs1[1]=0
-          val golden = goldenGather(vs1, sew, ei, lmulFrac, uopIdx = 0)
-          pGather(dut, vs1, sew, ei, lmulFrac, uopIdx = 0)
-          dut.clock.step()
-          eGather(dut, golden)
-        }
-      }
-      it("out of range index, LMUL=mf2") {
-        simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-          val sew = 64; val ei = 64; val lmulFrac = 4
-          // mf2: vlmax = 4*128/64/8 = 1? No...
-          // mf2: vlmax in 8b = lmulFrac*vlen/64 = 4*128/64 = 8 bytes = 1 E64 element
-          // index 1 → bytes 8..15 → >= 8 → fillZeros
-          val vs1 = BigInt(1)
-          val golden = goldenGather(vs1, sew, ei, lmulFrac, uopIdx = 0)
-          pGather(dut, vs1, sew, ei, lmulFrac, uopIdx = 0)
-          dut.clock.step()
-          eGather(dut, golden)
-        }
-      }
-      it("element value with upper bits set is out-of-range") {
-        simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-          val sew = 64; val ei = 64; val lmulFrac = 8  // LMUL=m1, VLMAX=2 elem
-          // vs1[0] = 16 (0x10) → lower 4 bits = 0, but full value 16 >= VLMAX=2
-          // RTL truncates to 4 bits → gets idx 0, incorrectly treating as valid
-          // Spec: element offset 16 >= 2 → should return 0 (fillZeros)
-          val vs1 = BigInt(16)
-          val golden = goldenGather(vs1, sew, ei, lmulFrac, uopIdx = 0)
-          pGather(dut, vs1, sew, ei, lmulFrac, uopIdx = 0)
-          dut.clock.step()
-          eGather(dut, golden)
-        }
-      }
-    }
-    describe("e32ei32") {
-      it("nonzero index") {
-        simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-          val sew = 32; val ei = 32; val lmulFrac = 8
-          // vs1[0]=3 → bytes 12..15
-          val vs1 = BigInt(3)
-          val golden = goldenGather(vs1, sew, ei, lmulFrac, uopIdx = 0)
-          pGather(dut, vs1, sew, ei, lmulFrac, uopIdx = 0)
-          dut.clock.step()
-          eGather(dut, golden)
-        }
-      }
-    }
-    describe("e16ei16") {
-      it("nonzero index") {
-        simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-          val sew = 16; val ei = 16; val lmulFrac = 8
-          val vs1 = BigInt(7)
-          val golden = goldenGather(vs1, sew, ei, lmulFrac, uopIdx = 0)
-          pGather(dut, vs1, sew, ei, lmulFrac, uopIdx = 0)
-          dut.clock.step()
-          eGather(dut, golden)
-        }
-      }
-    }
-    describe("e8ei8") {
-      it("passthrough index") {
-        simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-          val sew = 8; val ei = 8; val lmulFrac = 8
-          val vs1 = BigInt("0102030405060708090a0b0c0d0e0f10", 16)
-          val golden = goldenGather(vs1, sew, ei, lmulFrac, uopIdx = 0)
-          pGather(dut, vs1, sew, ei, lmulFrac, uopIdx = 0)
-          dut.clock.step()
-          eGather(dut, golden)
-        }
-      }
-    }
-    // EI=SEW boundary coverage around vlmax (in SEW elements =
-    // lmulFrac*vlen/64/sewb): 0, 1, vlmax/2, vlmax-1, vlmax, vlmax+1, vlmax*1.5,
-    // vlmax*2-1, vlmax*2, vlmax*2+1, vlmax*4.
-    describe("boundary indices around vlmax") {
-      it("e8ei8 m1 vlmax=16") {
-        checkGatherBoundaries(8, 8, Seq(
-          Seq(0, 1, 8, 15, 16, 17, 24, 31, 32, 33, 64, 0, 0, 0, 0, 0),
-        ))
-      }
-      it("e16ei16 m1 vlmax=8") {
-        checkGatherBoundaries(16, 8, Seq(
-          Seq(0, 1, 4, 7, 8, 9, 12, 15),
-          Seq(16, 17, 32, 0, 0, 0, 0, 0),
-        ))
-      }
-      it("e32ei32 m1 vlmax=4") {
-        checkGatherBoundaries(32, 8, Seq(
-          Seq(0, 1, 2, 3),
-          Seq(4, 5, 6, 7),
-          Seq(8, 9, 16, 0),
-        ))
-      }
-      it("e64ei64 m1 vlmax=2") {
-        checkGatherBoundaries(64, 8, Seq(
-          Seq(0, 1),
-          Seq(2, 3),
-          Seq(4, 5),
-          Seq(8, 0),
-        ))
-      }
-    }
-  }
-
+  // Named canary for the emu vrgatherei16_vv-1 difftest failure (v9_high =
+  // 0xfffffff8): an out-of-range e16 index (0xfff8/0xffff, >= vlmax) must become
+  // fillZeros, not a table lookup. The all-configs test below covers the general
+  // case; this keeps an explicit reproduction of the fixed bug.
   describe("vrgatherei16 (SEW>16)") {
-    it("e64ei16 uop0 in-range identity") {
-      simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-        val sew = 64; val lmulFrac = 64
-        val vs1 = fromSewElems(Seq(0, 0, 0, 0, 0, 0, 0, 0), 16) // all indices 0
-        val golden = goldenGatherEI16(vs1, sew, lmulFrac, uopIdx = 0)
-        pGatherEI16(dut, vs1, sew, lmulFrac, uopIdx = 0)
-        dut.clock.step()
-        eGatherEI16Bits(dut, golden)
-      }
-    }
-    it("e32ei16 uop0 in-range indices -> LOOKUP with byte idx*4+j") {
-      simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-        val sew = 32; val lmulFrac = 64
-        // uop0 slice = low 64b = e16 [0,0,1,0] -> bytes 0-3, 0-3, 4-7, 0-3
-        val vs1 = fromSewElems(Seq(0, 0, 1, 0, 3, 0, 0xfff8, 0xffff), 16)
-        val golden = goldenGatherEI16(vs1, sew, lmulFrac, uopIdx = 0)
-        pGatherEI16(dut, vs1, sew, lmulFrac, uopIdx = 0)
-        dut.clock.step()
-        eGatherEI16Bits(dut, golden)
-      }
-    }
     it("e32ei16 uop1 out-of-range 0xfff8/0xffff -> fillZeros (emu v9_high bug)") {
       simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
         val sew = 32; val lmulFrac = 64
@@ -310,63 +128,6 @@ class GatherIndexGenSpec extends SpecBase with GatherSpecUtils {
         dut.clock.step()
         eGatherEI16Bits(dut, golden)
       }
-    }
-    it("e32ei16 wrap index 0x20 (32) -> fillZeros (m8: byte-level skipped)") {
-      simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-        val sew = 32; val lmulFrac = 64
-        // 32 >= vlmax_e32(32); truncates to 5b -> byte 0-3, would LOOKUP on old RTL
-        val vs1 = fromSewElems(Seq(0x20, 0, 0, 0, 0, 0, 0, 0), 16)
-        val golden = goldenGatherEI16(vs1, sew, lmulFrac, uopIdx = 0)
-        pGatherEI16(dut, vs1, sew, lmulFrac, uopIdx = 0)
-        dut.clock.step()
-        eGatherEI16Bits(dut, golden)
-      }
-    }
-    it("e64ei16 uop1 wrap index 0x10 (16) -> fillZeros (m8: byte-level skipped)") {
-      simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-        val sew = 64; val lmulFrac = 64
-        // uop1 slice = bits[32:63] = e16 [0x10, 0]; 16 >= vlmax_e64(16)
-        val vs1 = fromSewElems(Seq(0, 0, 0x10, 0, 0, 0, 0, 0), 16)
-        val golden = goldenGatherEI16(vs1, sew, lmulFrac, uopIdx = 1)
-        pGatherEI16(dut, vs1, sew, lmulFrac, uopIdx = 1)
-        dut.clock.step()
-        eGatherEI16Bits(dut, golden)
-      }
-    }
-    it("e32ei16 m2 index >= vlmax(8) -> fillZeros (small lmul)") {
-      simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
-        val sew = 32; val lmulFrac = 16 // m2: vlmax_e32 = 8
-        // uop1 slice = [0x10(16), 0, 0, 0]; 16 >= 8 -> fillZeros on slots 0-3
-        val vs1 = fromSewElems(Seq(0, 0, 0, 0, 0x10, 0, 0, 0), 16)
-        val golden = goldenGatherEI16(vs1, sew, lmulFrac, uopIdx = 1)
-        pGatherEI16(dut, vs1, sew, lmulFrac, uopIdx = 1)
-        dut.clock.step()
-        eGatherEI16Bits(dut, golden)
-      }
-    }
-    it("e32ei16 m8 boundary indices around vlmax=32") {
-      checkEi16Boundaries(32, 64, Seq(
-        (0, Seq(0, 1, 16, 31)),   // 0, 1, vlmax/2, vlmax-1: valid
-        (1, Seq(32, 33, 48, 63)), // vlmax, vlmax+1, vlmax*1.5, vlmax*2-1: OOR
-        (2, Seq(64, 65, 128, 0)), // vlmax*2, vlmax*2+1, vlmax*4: OOR
-      ))
-    }
-    it("e32ei16 m2 boundary indices around vlmax=8") {
-      checkEi16Boundaries(32, 16, Seq(
-        (0, Seq(0, 1, 4, 7)),   // valid
-        (1, Seq(8, 9, 12, 15)), // vlmax, +1, *1.5, *2-1: OOR
-        (2, Seq(16, 17, 32, 0)), // vlmax*2, +1, *4: OOR
-      ))
-    }
-    it("e64ei16 m8 boundary indices around vlmax=16") {
-      checkEi16Boundaries(64, 64, Seq(
-        (0, Seq(0, 1)),     // valid
-        (1, Seq(8, 15)),    // vlmax/2, vlmax-1: valid
-        (2, Seq(16, 17)),   // vlmax, vlmax+1: OOR
-        (3, Seq(24, 31)),   // vlmax*1.5, vlmax*2-1: OOR
-        (0, Seq(32, 33)),   // vlmax*2, vlmax*2+1: OOR
-        (1, Seq(64, 0)),    // vlmax*4: OOR
-      ))
     }
   }
 
@@ -383,9 +144,11 @@ class GatherIndexGenSpec extends SpecBase with GatherSpecUtils {
       def genIndices(sew: Int, lmulFrac: Int): Seq[Int] = {
         val vlmaxSew = (lmulFrac * vlen / 64 / (sew / 8)).max(1)
         val rnd = new scala.util.Random(sew * 131 + lmulFrac * 17)
+        // boundary around vlmax, the byte-index truncation wrap (element-level OOR,
+        // e.g. e64 index 16 -> byte 0-7), a huge stress index, + deterministic random
         Seq(0, 1, vlmaxSew / 2, (vlmaxSew - 1).max(0), vlmaxSew, vlmaxSew + 1,
           (vlmaxSew * 3) / 2, (vlmaxSew * 2 - 1).max(0), vlmaxSew * 2, vlmaxSew * 2 + 1,
-          vlmaxSew * 4) ++ Seq.fill(8)(rnd.nextInt(vlmaxSew * 3 + 2))
+          vlmaxSew * 4, dlen * 8 / sew, 0xfff8) ++ Seq.fill(8)(rnd.nextInt(vlmaxSew * 3 + 2))
       }
       // vrgather.vv (ei = sew): each uop reads the full DLEN vs1
       for (sew <- sewList; lmulFrac <- lmulList if (lmulFrac * vlen / 64) % (sew / 8) == 0) {
