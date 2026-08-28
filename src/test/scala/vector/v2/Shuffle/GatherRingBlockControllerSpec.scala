@@ -102,17 +102,18 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
     }
 
     describe("occupied block") {
-      // tableValid=0x1 (unit0 holds a table), no index.
-      // The table circulates (unitWillFlow=1): next cycle it is predicted at
-      // unit1 (unitTableValidNextCycle = rotateLeft(0x1) = 0x2). Placement must
-      // avoid that predicted slot: entryTable resolves to 0, so
-      // tablePos(p) = 0 + s1WillFlow - p = 1 - p (mod 4) -> [1,0,3,2].
-      // indexPos(p) = entryIndex + p = p.
-      it("table at unit0, no index (willFlow=1)") {
+      // tableValid=0x1 (unit0 holds a table), no index. Under the new
+      // unitWillFlow semantics ((!A)&&B, B = first-table-unit index valid) a
+      // table with NO index does not flow: the first table's unit has no valid
+      // index, so flow stays off (unitWillFlow=0). Placement therefore does
+      // NOT rotate: unitTableValidNextCycle = unitTableValid = 0x1, and
+      // s1WillFlow is also 0 (no index), so tablePos(p) = entryTable - p with
+      // entryTable = 3 (tableMap[3] = 1, the first free slot) -> [3,2,1,0].
+      it("table at unit0, no index (willFlow=0)") {
         simulateBlock(4, 0, 0x1, 0, pipeSeq(4)) { (t, i, wf, _) =>
-          assert(t.map(_._2) == Seq(1, 0, 3, 2), s"tablePos=${t.map(_._2)}")
+          assert(t.map(_._2) == Seq(3, 2, 1, 0), s"tablePos=${t.map(_._2)}")
           assert(i.map(_._2) == Seq(0, 1, 2, 3), s"indexPos=${i.map(_._2)}")
-          assert(wf == 0x1, s"table-only unit0 must flow (got ${Integer.toBinaryString(wf)})")
+          assert(wf == 0, s"table-only unit0 must NOT flow (got ${Integer.toBinaryString(wf)})")
         }
       }
       it("placeIdx wraps within the block") {
@@ -137,16 +138,19 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
       }
     }
 
-    it("table-only -> the table unit flows") {
+    it("table-only -> no flow (no index)") {
+      // T={0}, I={}: the first table's unit has no valid index, so under the
+      // new (!A)&&B semantics B=0 -> unitWillFlow=0 -> no flow.
       simulateBlock(4, 0, 0x1, 0, boolSeq(4)) { (_, _, wf, _) =>
-        assert(wf == 0x1, s"table-only unit0 must flow (got ${Integer.toBinaryString(wf)})")
+        assert(wf == 0, s"table-only unit0 must NOT flow (got ${Integer.toBinaryString(wf)})")
       }
     }
 
-    it("table at head, index at tail -> both units flow") {
-      // T={0}, I={3}: block willFlow=1; mask covers both the table and index units.
+    it("table at head, index at tail -> no flow (not co-located)") {
+      // T={0}, I={3}: the first table (unit0) is NOT on a unit with a valid
+      // index (index is at unit3), so under (!A)&&B semantics B=0 -> no flow.
       simulateBlock(4, 0, 0x1, 0x8, boolSeq(4)) { (_, _, wf, _) =>
-        assert(wf == 0x9, s"mask=${Integer.toBinaryString(wf)}")
+        assert(wf == 0, s"mask=${Integer.toBinaryString(wf)}")
       }
     }
 
@@ -173,10 +177,12 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
       }
     }
 
-    it("mask gated by tableValid | indexValid") {
-      // T={0,1}, I={0}: mask covers the union of table and index units.
+    it("mask gated by tableValid | indexValid -> no flow") {
+      // T={0,1}, I={0}: the first table (unit0) lies at the index-region
+      // boundary (bit0) AND unit0 holds a valid index, so both A and B hold
+      // -> !(A&&B) under the (!A)&&B form means flow stops (wf=0).
       simulateBlock(4, 0, 0x3, 0x1, boolSeq(4)) { (_, _, wf, _) =>
-        assert(wf == 0x3, s"mask=${Integer.toBinaryString(wf)}")
+        assert(wf == 0, s"mask=${Integer.toBinaryString(wf)}")
       }
     }
 
@@ -190,10 +196,11 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
       }
     }
 
-    it("table-only and index-only units both flow") {
-      // T={1}, I={0}: mask = T|I = {0,1}.
+    it("table-only and index-only units -> no flow (not co-located)") {
+      // T={1}, I={0}: the first table (unit1) is NOT on the unit holding the
+      // valid index (unit0), so B=0 -> no flow (wf=0).
       simulateBlock(4, 0, 0x2, 0x1, boolSeq(4)) { (_, _, wf, _) =>
-        assert(wf == 0x3, s"mask=${Integer.toBinaryString(wf)}")
+        assert(wf == 0, s"mask=${Integer.toBinaryString(wf)}")
       }
     }
 
