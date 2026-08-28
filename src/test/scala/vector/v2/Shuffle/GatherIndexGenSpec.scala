@@ -370,6 +370,54 @@ class GatherIndexGenSpec extends SpecBase with GatherSpecUtils {
     }
   }
 
+  // Stateless (combinational) DUT: cover every (sew, lmul) config of both
+  // vrgather.vv (ei=sew) and vrgatherei16 (ei=16) in ONE `it` by re-poking. For
+  // each config feed boundary indices around vlmax plus deterministic random
+  // indices, split into per-uop chunks, and check every slot against the golden.
+  // Configs with fractional VLMAX (< 1 SEW element, e.g. e64/mf8) are excluded:
+  // the byte-granular OOR is undefined there.
+  it("all sew/lmul configs (ei=sew and ei=16)") {
+    simulate(new GatherIndexGen()(GatherParam.default)) { dut =>
+      val sewList = Seq(8, 16, 32, 64)
+      val lmulList = Seq(1, 2, 4, 8, 16, 32, 64) // lmulFrac: mf8..m8
+      def genIndices(sew: Int, lmulFrac: Int): Seq[Int] = {
+        val vlmaxSew = (lmulFrac * vlen / 64 / (sew / 8)).max(1)
+        val rnd = new scala.util.Random(sew * 131 + lmulFrac * 17)
+        Seq(0, 1, vlmaxSew / 2, (vlmaxSew - 1).max(0), vlmaxSew, vlmaxSew + 1,
+          (vlmaxSew * 3) / 2, (vlmaxSew * 2 - 1).max(0), vlmaxSew * 2, vlmaxSew * 2 + 1,
+          vlmaxSew * 4) ++ Seq.fill(8)(rnd.nextInt(vlmaxSew * 3 + 2))
+      }
+      // vrgather.vv (ei = sew): each uop reads the full DLEN vs1
+      for (sew <- sewList; lmulFrac <- lmulList if (lmulFrac * vlen / 64) % (sew / 8) == 0) {
+        genIndices(sew, lmulFrac).grouped(dlen / sew).foreach { chunk =>
+          var vs1 = BigInt(0)
+          chunk.zipWithIndex.foreach { case (idx, k) =>
+            vs1 |= (BigInt(idx) & ((BigInt(1) << sew) - 1)) << (k * sew)
+          }
+          val golden = goldenGather(vs1, sew, sew, lmulFrac, 0)
+          pGather(dut, vs1, sew, sew, lmulFrac, 0)
+          dut.clock.step()
+          eGather(dut, golden)
+        }
+      }
+      // vrgatherei16 (ei = 16, sew >= 16): vs1 is sliced by uopIdx
+      for (sew <- Seq(16, 32, 64); lmulFrac <- lmulList if (lmulFrac * vlen / 64) % (sew / 8) == 0) {
+        val sliceBits = dlen / (sew / 16)
+        genIndices(sew, lmulFrac).grouped(dlen / sew).zipWithIndex.foreach { case (chunk, u) =>
+          val sliceOff = (u % (dlen / sliceBits)) * sliceBits
+          var vs1 = BigInt(0)
+          chunk.zipWithIndex.foreach { case (idx, k) =>
+            vs1 |= BigInt(idx & 0xffff) << (sliceOff + k * 16)
+          }
+          val golden = goldenGatherEI16(vs1, sew, lmulFrac, u)
+          pGatherEI16(dut, vs1, sew, lmulFrac, u)
+          dut.clock.step()
+          eGatherEI16Bits(dut, golden)
+        }
+      }
+    }
+  }
+
   // ── ISA cross-validation ───────────────────────────────────────────
 
   /** Convert DLEN-bit BigInt to Seq of SEW-width elements (little-endian within DLEN) */
