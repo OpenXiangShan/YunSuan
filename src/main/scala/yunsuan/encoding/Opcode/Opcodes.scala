@@ -929,6 +929,7 @@ object Opcodes {
 
     private val S2F = bb"00"
     private val U2F = bb"01"
+    private val FLI = bb"10"
     private val FMVI2F = bb"11"
 
     /**
@@ -1008,6 +1009,9 @@ object Opcodes {
     val fmv_fp16_i    : Opcode = FpITypeI2fOtherInst(FP16, I64, FMVI2F, I2F, F)
     val fmv_fp32_i    : Opcode = FpITypeI2fOtherInst(FP32, I64, FMVI2F, I2F, F)
     val fmv_fp64_i    : Opcode = FpITypeI2fOtherInst(FP64, I64, FMVI2F, I2F, F)
+    val fli_fp16      : Opcode = FpITypeImmInst(FP16, FP16, FLI, I2F, F)
+    val fli_fp32      : Opcode = FpITypeImmInst(FP32, FP32, FLI, I2F, F)
+    val fli_fp64      : Opcode = FpITypeImmInst(FP64, FP64, FLI, I2F, F)
 
     val vfcvt_fp16_si8 : Opcode = DvSvlS2v(FP16, I8,  S2F, I2F, V)
     val vfcvt_fp16_ui8 : Opcode = DvSvlS2v(FP16, I8,  U2F, I2F, V)
@@ -1053,6 +1057,7 @@ object Opcodes {
     def isFround(implicit op: UInt): Bool    = isF2F && op(4, 3) === rnd
     def isFroundNx(implicit op: UInt): Bool  = isF2F && op(4, 3) === rndnx
     def isFcvtMod(implicit op: UInt): Bool   = isF2I && op(4, 3) === F2SMOD
+    def isFli(implicit op: UInt): Bool       = isI2F && op(4, 3) === FLI
     def isEstimate7(implicit op: UInt): Bool = isOther && op(6, 3).isOneOf(FREC7, FRSQRT7)
     def isRec(implicit op: UInt): Bool       = isOther && op(6, 3) === FREC7
 
