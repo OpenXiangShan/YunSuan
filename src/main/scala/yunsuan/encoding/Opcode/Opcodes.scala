@@ -133,8 +133,8 @@ object Opcode {
 object Latency {
   def apply(): UInt = UInt(log2Up(width + 2).W)
 
-  // use all 1s to specify uncertain latency like div
-  def uncertain(): UInt = Fill(width, 1.U)
+  // use -1 to specify uncertain latency like div and vrgather when LMUL>1
+  def uncertainLitVal(): Int = -1
 
   lazy val width: Int = {
     Opcodes.initOpcodes
