@@ -260,9 +260,10 @@ class PermUnitSpecPlus extends SpecBase with GatherSpecUtils {
     val wakeTicks = Array.fill(uopCount)(-1)
     var seenWbCount = 0
     var seenWakeCount = 0
-    val details = s"perm=${schedule.permutation.mkString("[", ",", "]")} composition=${schedule.composition.mkString("[", ",", "]")} gaps=${schedule.gaps.mkString("[", ",", "]")}"
+    lazy val details = s"perm=${schedule.permutation.mkString("[", ",", "]")} composition=${schedule.composition.mkString("[", ",", "]")} gaps=${schedule.gaps.mkString("[", ",", "]")}"
     var sawActive = false
     var ticksSinceLastDispatch: Option[Int] = None
+    var wakeAckPending = false
     if (progress) print(s"testing $details ... ")
 
     def observe(): Unit = {
@@ -287,14 +288,22 @@ class PermUnitSpecPlus extends SpecBase with GatherSpecUtils {
           }
           ticksSinceLastDispatch.foreach(tick => if (wakeTicks(pdest) < 0) wakeTicks(pdest) = tick)
           dut.in.wakeAck(pipe).poke(true)
+          wakeAckPending = true
         }
+      }
+    }
+
+    def clearWakeAck(): Unit = {
+      if (wakeAckPending) {
+        dut.in.wakeAck.foreach(_.poke(false))
+        wakeAckPending = false
       }
     }
 
     def step(): Unit = {
       observe()
       stepClock(dut)
-      dut.in.wakeAck.foreach(_.poke(false))
+      clearWakeAck()
     }
 
     schedule.batches.zipWithIndex.foreach { case (batch, batchIndex) =>
@@ -326,7 +335,8 @@ class PermUnitSpecPlus extends SpecBase with GatherSpecUtils {
     while (postDispatchTick <= maxDrainTicks && !drained) {
       ticksSinceLastDispatch = Some(postDispatchTick)
       observe()
-      val allStateClear = seenWbCount == uopCount && seenWakeCount == uopCount &&
+      val allResponsesSeen = seenWbCount == uopCount && seenWakeCount == uopCount
+      val allStateClear = allResponsesSeen &&
         (0 until numUnits).forall { unit =>
           !dut.out.unitStatus(unit).hasTable.peekBoolean() &&
             !dut.out.unitStatus(unit).hasIndexNext.peekBoolean()
@@ -334,23 +344,21 @@ class PermUnitSpecPlus extends SpecBase with GatherSpecUtils {
       drained = sawActive && seenWbCount == uopCount && seenWakeCount == uopCount && allStateClear
       if (!drained && postDispatchTick < maxDrainTicks) {
         stepClock(dut)
-        dut.in.wakeAck.foreach(_.poke(false))
+        clearWakeAck()
         postDispatchTick += 1
       } else if (!drained) {
         postDispatchTick += 1
       }
     }
 
-    val wbKeys = seenWb.indices.filter(seenWb).toSet
-    val wakeKeys = seenWake.indices.filter(seenWake).toSet
-    val wbTiming = wbTicks.indices.filter(wbTicks(_) >= 0).map(index => index -> wbTicks(index)).toSeq
-    val wakeTiming = wakeTicks.indices.filter(wakeTicks(_) >= 0).map(index => index -> wakeTicks(index)).toSeq
-    withClue(s"schedule did not drain within $maxDrainTicks ticks after the last uop dispatch: $details; wb=$wbKeys; wbTicks=$wbTiming; wake=$wakeKeys; wakeTicks=$wakeTiming") {
-      sawActive mustBe true
-      wbKeys mustBe (0 until uopCount).toSet
-      wakeKeys mustBe (0 until uopCount).toSet
-      drained mustBe true
+    if (!drained) {
+      val wbKeys = seenWb.indices.filter(seenWb).toSet
+      val wakeKeys = seenWake.indices.filter(seenWake).toSet
+      val wbTiming = wbTicks.indices.filter(wbTicks(_) >= 0).map(index => index -> wbTicks(index)).toSeq
+      val wakeTiming = wakeTicks.indices.filter(wakeTicks(_) >= 0).map(index => index -> wakeTicks(index)).toSeq
+      fail(s"schedule did not drain within $maxDrainTicks ticks after the last uop dispatch: $details; wb=$wbKeys; wbTicks=$wbTiming; wake=$wakeKeys; wakeTicks=$wakeTiming")
     }
+    sawActive mustBe true
     flushDut(dut)
     if (progress) println("done")
   }
