@@ -131,6 +131,7 @@ class PermUnitSpecPlus extends SpecBase with GatherSpecUtils {
   addOption(CliOption.simple("permunit.plus.m8.run", "enable the default m8 rank selection", identity))
   addOption(CliOption.int("permunit.plus.schedule.start", "skip this many schedules for each selected rank"))
   addOption(CliOption.int("permunit.plus.schedule.count", "run at most this many schedules for each selected rank"))
+  addOption(CliOption.int("permunit.plus.progressEvery", "print progress after this many schedules; zero disables progress output"))
 
   override def withFixture(test: NoArgTest): Outcome = {
     activeConfigMap.set(test.configMap)
@@ -215,71 +216,79 @@ class PermUnitSpecPlus extends SpecBase with GatherSpecUtils {
     pipe: Int,
     uopIdx: Int,
     placeIdx: Int,
-    uopCount: Int,
     vs1: BigInt,
-    fullTable: Seq[Int],
-    fullPrefill: Seq[Int]
+    tableValue: BigInt,
+    prefillValue: BigInt
   ): Unit = {
-    val lmulFrac = uopCount * 8
     val input = dut.in.pipes(pipe)
     input.valid.poke(true)
-    input.bits.op.isGather.poke(true)
     input.bits.placeIdx.poke(placeIdx)
-    input.bits.blockBase.poke(0)
     input.bits.uopIdx.poke(uopIdx)
-    pSew(input.bits.sew, 8)
-    pSew(input.bits.ei, 8)
-    pLmul(input.bits.lmul, lmulFrac)
-    input.bits.vl.poke(uopCount * numElem)
-    input.bits.vta.poke(false)
-    input.bits.vma.poke(false)
     input.bits.vs1.poke(vs1)
-    input.bits.vs2.poke(foldBytes(fullTable.slice(uopIdx * numElem, (uopIdx + 1) * numElem)))
-    input.bits.vs3.poke(foldBytes(fullPrefill.slice(uopIdx * numElem, (uopIdx + 1) * numElem)))
-    input.bits.mask.poke((BigInt(1) << numElem) - 1)
+    input.bits.vs2.poke(tableValue)
+    input.bits.vs3.poke(prefillValue)
     pMeta(dut, pipe, uopIdx)
   }
 
-  private def runSchedule(dut: PermUnit[FakePermMeta], schedule: DispatchSchedule): Unit = {
+  private def configureGatherInputs(dut: PermUnit[FakePermMeta], uopCount: Int): Unit = {
+    for (pipe <- 0 until numPipes) {
+      val input = dut.in.pipes(pipe)
+      input.bits.op.isGather.poke(true)
+      input.bits.blockBase.poke(0)
+      pSew(input.bits.sew, 8)
+      pSew(input.bits.ei, 8)
+      pLmul(input.bits.lmul, uopCount * 8)
+      input.bits.vl.poke(uopCount * numElem)
+      input.bits.vta.poke(false)
+      input.bits.vma.poke(false)
+      input.bits.mask.poke((BigInt(1) << numElem) - 1)
+    }
+  }
+
+  private def runSchedule(
+    dut: PermUnit[FakePermMeta],
+    schedule: DispatchSchedule,
+    indexValues: Seq[BigInt],
+    tableValues: Seq[BigInt],
+    prefillValues: Seq[BigInt],
+    progress: Boolean
+  ): Unit = {
     val uopCount = schedule.permutation.size
-    val fullTable = table(uopCount)
-    val fullPrefill = prefill(uopCount)
-    val indexByUop = (0 until uopCount).map { uop =>
-      uop -> foldBytes((0 until numElem).map(byte => uop * numElem + numElem - 1 - byte))
-    }.toMap
-    val expected = (0 until uopCount).map { uop =>
-      uop -> foldBytes((0 until numElem).map(byte => uop * numElem + numElem - 1 - byte))
-    }.toMap
-    val seenWb = mutable.Map.empty[Int, BigInt]
-    val seenWake = mutable.Set.empty[Int]
-    val wbTicks = mutable.Map.empty[Int, Int]
-    val wakeTicks = mutable.Map.empty[Int, Int]
+    val seenWb = Array.fill(uopCount)(false)
+    val seenWake = Array.fill(uopCount)(false)
+    val wbTicks = Array.fill(uopCount)(-1)
+    val wakeTicks = Array.fill(uopCount)(-1)
+    var seenWbCount = 0
+    var seenWakeCount = 0
     val details = s"perm=${schedule.permutation.mkString("[", ",", "]")} composition=${schedule.composition.mkString("[", ",", "]")} gaps=${schedule.gaps.mkString("[", ",", "]")}"
     var sawActive = false
     var ticksSinceLastDispatch: Option[Int] = None
-
-    print(s"testing $details ... ")
+    if (progress) print(s"testing $details ... ")
 
     def observe(): Unit = {
       for (pipe <- 0 until numPipes) {
-        dut.in.wakeAck(pipe).poke(false)
         if (dut.out.pipes(pipe).valid.peekBoolean()) {
           val pdest = dut.out.pipes(pipe).bits.meta.pdest.peekValue().asBigInt.toInt
           val data = dut.out.pipes(pipe).bits.data.peekValue().asBigInt
-          expected.getOrElse(pdest, fail(s"unknown writeback pdest=$pdest $details"))
-          data mustBe expected(pdest)
-          seenWb.getOrElseUpdate(pdest, data)
-          ticksSinceLastDispatch.foreach(tick => wbTicks.getOrElseUpdate(pdest, tick))
+          if (pdest < 0 || pdest >= uopCount) fail(s"unknown writeback pdest=$pdest $details")
+          data mustBe indexValues(pdest)
+          if (!seenWb(pdest)) {
+            seenWb(pdest) = true
+            seenWbCount += 1
+          }
+          ticksSinceLastDispatch.foreach(tick => if (wbTicks(pdest) < 0) wbTicks(pdest) = tick)
         }
         if (dut.out.wake(pipe).valid.peekBoolean()) {
           val pdest = dut.out.wake(pipe).bits.meta.pdest.peekValue().asBigInt.toInt
-          if (!expected.contains(pdest)) fail(s"unknown wake pdest=$pdest $details")
-          seenWake += pdest
-          ticksSinceLastDispatch.foreach(tick => wakeTicks.getOrElseUpdate(pdest, tick))
+          if (pdest < 0 || pdest >= uopCount) fail(s"unknown wake pdest=$pdest $details")
+          if (!seenWake(pdest)) {
+            seenWake(pdest) = true
+            seenWakeCount += 1
+          }
+          ticksSinceLastDispatch.foreach(tick => if (wakeTicks(pdest) < 0) wakeTicks(pdest) = tick)
           dut.in.wakeAck(pipe).poke(true)
         }
       }
-      if (!sawActive && (0 until numUnits).exists(unit => dut.out.unitStatus(unit).hasIndex.peekBoolean())) sawActive = true
     }
 
     def step(): Unit = {
@@ -290,9 +299,10 @@ class PermUnitSpecPlus extends SpecBase with GatherSpecUtils {
 
     schedule.batches.zipWithIndex.foreach { case (batch, batchIndex) =>
       batch.uopIdx.zipWithIndex.foreach { case (uopIdx, placeIdx) =>
-        pGather(dut, placeIdx, uopIdx, placeIdx, uopCount, indexByUop(uopIdx), fullTable, fullPrefill)
+        pGather(dut, placeIdx, uopIdx, placeIdx, indexValues(uopIdx), tableValues(uopIdx), prefillValues(uopIdx))
       }
       step()
+      sawActive = true
       if (batchIndex == schedule.batches.size - 1) ticksSinceLastDispatch = Some(0)
       clearPipes(dut)
       if (batchIndex < schedule.gaps.size) {
@@ -316,12 +326,12 @@ class PermUnitSpecPlus extends SpecBase with GatherSpecUtils {
     while (postDispatchTick <= maxDrainTicks && !drained) {
       ticksSinceLastDispatch = Some(postDispatchTick)
       observe()
-      val allStateClear = seenWb.size == uopCount && seenWake.size == uopCount &&
+      val allStateClear = seenWbCount == uopCount && seenWakeCount == uopCount &&
         (0 until numUnits).forall { unit =>
           !dut.out.unitStatus(unit).hasTable.peekBoolean() &&
             !dut.out.unitStatus(unit).hasIndexNext.peekBoolean()
         }
-      drained = sawActive && seenWb.size == uopCount && seenWake.size == uopCount && allStateClear
+      drained = sawActive && seenWbCount == uopCount && seenWakeCount == uopCount && allStateClear
       if (!drained && postDispatchTick < maxDrainTicks) {
         stepClock(dut)
         dut.in.wakeAck.foreach(_.poke(false))
@@ -331,14 +341,18 @@ class PermUnitSpecPlus extends SpecBase with GatherSpecUtils {
       }
     }
 
-    withClue(s"schedule did not drain within $maxDrainTicks ticks after the last uop dispatch: $details; wb=${seenWb.keySet}; wbTicks=${wbTicks.toSeq.sortBy(_._1)}; wake=${seenWake.toSeq.sorted}; wakeTicks=${wakeTicks.toSeq.sortBy(_._1)}") {
+    val wbKeys = seenWb.indices.filter(seenWb).toSet
+    val wakeKeys = seenWake.indices.filter(seenWake).toSet
+    val wbTiming = wbTicks.indices.filter(wbTicks(_) >= 0).map(index => index -> wbTicks(index)).toSeq
+    val wakeTiming = wakeTicks.indices.filter(wakeTicks(_) >= 0).map(index => index -> wakeTicks(index)).toSeq
+    withClue(s"schedule did not drain within $maxDrainTicks ticks after the last uop dispatch: $details; wb=$wbKeys; wbTicks=$wbTiming; wake=$wakeKeys; wakeTicks=$wakeTiming") {
       sawActive mustBe true
-      seenWb.keySet mustBe expected.keySet
-      seenWake mustBe expected.keySet
+      wbKeys mustBe (0 until uopCount).toSet
+      wakeKeys mustBe (0 until uopCount).toSet
       drained mustBe true
     }
     flushDut(dut)
-    println("done")
+    if (progress) println("done")
   }
 
   private def runRanks(dut: PermUnit[FakePermMeta], uopCount: Int, ranks: Seq[Int]): Unit = {
@@ -346,14 +360,32 @@ class PermUnitSpecPlus extends SpecBase with GatherSpecUtils {
     val scheduleCount = taskOption("permunit.plus.schedule.count").map(_.toInt).getOrElse(Int.MaxValue)
     require(scheduleStart >= 0, "permunit.plus.schedule.start must be non-negative")
     require(scheduleCount >= 0, "permunit.plus.schedule.count must be non-negative")
+    val progressEvery = taskOption("permunit.plus.progressEvery").map(_.toInt).getOrElse(0)
+    require(progressEvery >= 0, "permunit.plus.progressEvery must be non-negative")
+    configureGatherInputs(dut, uopCount)
+    val indexValues = (0 until uopCount).map { uop =>
+      foldBytes((0 until numElem).map(byte => uop * numElem + numElem - 1 - byte))
+    }
+    val fullTable = table(uopCount)
+    val tableValues = (0 until uopCount).map { uop =>
+      foldBytes(fullTable.slice(uop * numElem, (uop + 1) * numElem))
+    }
+    val fullPrefill = prefill(uopCount)
+    val prefillValues = (0 until uopCount).map { uop =>
+      foldBytes(fullPrefill.slice(uop * numElem, (uop + 1) * numElem))
+    }
+    var scheduleIndex = 0
     ranks.foreach { rank =>
       val permutation = permutationAt(rank, uopCount)
       schedulesFor(permutation, numPipes)
         .drop(scheduleStart)
         .take(scheduleCount)
-        .foreach(schedule => runSchedule(dut, schedule))
+        .foreach { schedule =>
+          scheduleIndex += 1
+          runSchedule(dut, schedule, indexValues, tableValues, prefillValues, progressEvery > 0 && scheduleIndex % progressEvery == 0)
+        }
     }
-      println(s"simulated cycles=$simulatedCycles")
+    println(s"simulated cycles=$simulatedCycles")
   }
 
   describe("vrgather.vv scheduling") {
