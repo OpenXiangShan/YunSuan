@@ -4,6 +4,7 @@ TOP ?= SimTop
 BUILD_DIR = ./build
 TOP_V = $(BUILD_DIR)/$(TOP).v
 OPCODES_H = $(BUILD_DIR)/opcodes.h
+OPCODE_LATENCIES_H = $(BUILD_DIR)/opcode_latencies.h
 
 SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
@@ -15,6 +16,10 @@ $(TOP_V): $(SCALA_FILE) $(TEST_FILE)
 $(OPCODES_H): $(SCALA_FILE)
 	mkdir -p $(@D)
 	mill -i YunSuan.runMain yunsuan.encoding.Opcode.OpcodeHeaderGen $(abspath $(OPCODES_H))
+
+$(OPCODE_LATENCIES_H): $(SCALA_FILE)
+	mkdir -p $(@D)
+	mill -i YunSuan.runMain yunsuan.encoding.Opcode.OpcodeLatencyHeaderGen $(abspath $(OPCODE_LATENCIES_H))
 
 .DEFUALT_GOAL = emu
 
@@ -60,7 +65,7 @@ VERILATOR_FLAGS = --top-module $(TOP) \
 EMU_MK := $(BUILD_DIR)/emu-compile/V$(TOP).mk
 EMU = $(BUILD_DIR)/emu
 
-$(EMU_MK): $(TOP_V) $(OPCODES_H) | $(EMU_DEPS)
+$(EMU_MK): $(TOP_V) $(OPCODES_H) $(OPCODE_LATENCIES_H) | $(EMU_DEPS)
 	@mkdir -p $(@D)
 	verilator --cc --exe $(VERILATOR_FLAGS)  \
 		-o $(abspath $(EMU)) -Mdir $(@D) $(TOP_V) $(EMU_DEPS)

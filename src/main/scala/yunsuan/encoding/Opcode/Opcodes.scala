@@ -896,7 +896,12 @@ object Opcodes {
     def isFSqrt(implicit op: UInt): Bool = getOp === FSQRT
   }
 
-  object VFDivOpcode extends VFDivOpcode
+  object VFDivOpcode extends VFDivOpcode {
+    override def getLat(opcode: Opcode): Int = {
+      require(this.all.contains(opcode))
+      Latency.uncertainLitVal()
+    }
+  }
 
   trait FCvtOpcode extends Opcodes with DataType {
     private val F2F = bb"00"
