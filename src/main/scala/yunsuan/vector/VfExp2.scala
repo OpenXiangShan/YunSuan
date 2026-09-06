@@ -924,7 +924,11 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     // zero and its index is irrelevant. roundedNegativeWrap also implies a
     // zero posSegIdx. Therefore the A address is simply sign-controlled bit
     // inversion; the exact segIdx above is retained for later B/C lookups.
-    val coeffASegIdx = posSegIdx ^ Fill(fmt.segmentBits, sign)
+    // Keep the sign-controlled inversion as an explicit narrow node before
+    // Vec indexing. Older Verilator versions widen an XOR that is inlined into
+    // a packed-array index; dontTouch preserves this width boundary.
+    val coeffASegIdx = Mux(sign.asBool, (~posSegIdx).asUInt, posSegIdx)
+    dontTouch(coeffASegIdx)
 
     val specialKind = WireDefault(spNone)
     when(isSNaN) {
