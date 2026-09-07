@@ -665,10 +665,15 @@ object Opcodes {
     object LitUtil {
       def getOp(implicit op: BitPat): BitPat = op.head(4)
 
-      def isLat1(implicit op: BitPat): Boolean = getOp.isOneOf(FADD, FSUB, FMIN, FMAX, FSGNJ, FSGNJN, FSGNJX, FMINM, FMAXM)
+      def getOpNum(implicit op: BitPat): BitPat = op(5)
+
+      def isLat1(implicit op: BitPat): Boolean = getOpNum == OP2 && !(getOp.isOneOf(FMUL))
+
+      def isLat2(implicit op: BitPat): Boolean = getOpNum == OP2 && getOp.isOneOf(FMUL)
 
       def getLat(implicit op: BitPat): Int = {
         if (isLat1) 1
+        else if (isLat2) 2
         else 3
       }
     }
@@ -680,6 +685,14 @@ object Opcodes {
       LitUtil.getLat(opcode.encode)
     }
   }
+
+  object FAluOpcode extends FMacOpcode {
+    override def getLat(opcode: Opcode): Int = {
+      require(this.all.contains(opcode))
+      1
+    }
+  }
+
   object VFMacOpcode extends FMacOpcode {
     override def getLat(opcode: Opcode): Int = {
       require(this.all.contains(opcode))
@@ -762,8 +775,13 @@ object Opcodes {
     def isFltq(implicit op: UInt): Bool = getOpcodes === FLTQ && getDestType === DM
   }
 
-  object FMiscOpcode extends FMiscOpcode
-  object FAluOpcode extends FMacOpcode
+  object FMiscOpcode extends FMiscOpcode {
+    override def getLat(opcode: Opcode): Int = {
+        require(this.all.contains(opcode))
+        3
+      }
+  }
+
 
   trait VFMiscOpcode extends Opcodes with DataType {
     private val VF_MISC = bb"11"
@@ -1092,7 +1110,9 @@ object Opcodes {
 
   }
 
-  object FCvtOpcode extends FCvtOpcode
+  object FCvtOpcode extends FCvtOpcode {
+    override def getLat(opcode: Opcode): Int = 3
+  }
   object VFCvtOpcode extends FCvtOpcode {
     override def getLat(opcode: Opcode): Int = {
       require(this.all.contains(opcode))
