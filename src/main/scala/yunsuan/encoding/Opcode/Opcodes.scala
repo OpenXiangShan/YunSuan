@@ -598,8 +598,6 @@ object Opcodes {
     def isVfsgnj(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FSGNJ
     def isVfsgnjn(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FSGNJN
     def isVfsgnjx(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FSGNJX
-    def isVfminm(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FMINM
-    def isVfmaxm(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FMAXM
 
     def isVfwFadd(implicit op: UInt): Bool = getSubOpcode === FADD && getDestMode === DW
     def isVfwFsub(implicit op: UInt): Bool = getSubOpcode === FSUB && getDestMode === DW
@@ -696,7 +694,11 @@ object Opcodes {
   object VFMacOpcode extends FMacOpcode {
     override def getLat(opcode: Opcode): Int = {
       require(this.all.contains(opcode))
-      3
+      // The vfmul and vfalu pipelines are merged into one FU, so this space carries both latencies:
+      // OP3 fused multiply-add -> 3, OP2 multiply -> 2, the remaining OP2 ops (add/sub/min/max/sgnj)
+      // -> 1.  This is exactly `LitUtil`'s rule; keep it a pure function of the encoding, since every
+      // `Opcodes` object extending [[FMacOpcode]] owns a separate copy of these patterns.
+      LitUtil.getLat(opcode.encode)
     }
   }
 
@@ -723,39 +725,18 @@ object Opcodes {
     val fleq_fp16   : Opcode = FpRTypeIntDestInst(FLEQ, DM, FP16, F)
     val fltq_fp16   : Opcode = FpRTypeIntDestInst(FLTQ, DM, FP16, F)
     val fclass_fp16 : Opcode = FpITypeF2iInst(FCLASS  , DV, FP16, F)
-    val vmfeq_fp16  : Opcode = DmSvlS2vS1(FEQ , DM, FP16, V)
-    val vmfle_fp16  : Opcode = DmSvlS2vS1(FLE , DM, FP16, V)
-    val vmflt_fp16  : Opcode = DmSvlS2vS1(FLT , DM, FP16, V)
-    val vmfne_fp16  : Opcode = DmSvlS2vS1(FNE , DM, FP16, V)
-    val vmfgt_fp16  : Opcode = DmSvlS2vS1(FGT , DM, FP16, V)
-    val vmfge_fp16  : Opcode = DmSvlS2vS1(FGE , DM, FP16, V)
-    val vfclass_fp16: Opcode = DvSvlS2v(FCLASS, DV, FP16, V)
     val feq_fp32    : Opcode = FpRTypeIntDestInst(FEQ , DM, FP32, F)
     val fle_fp32    : Opcode = FpRTypeIntDestInst(FLE , DM, FP32, F)
     val flt_fp32    : Opcode = FpRTypeIntDestInst(FLT , DM, FP32, F)
     val fleq_fp32   : Opcode = FpRTypeIntDestInst(FLEQ, DM, FP32, F)
     val fltq_fp32   : Opcode = FpRTypeIntDestInst(FLTQ, DM, FP32, F)
     val fclass_fp32 : Opcode = FpITypeF2iInst(FCLASS  , DV, FP32, F)
-    val vmfeq_fp32  : Opcode = DmSvlS2vS1(FEQ , DM, FP32, V)
-    val vmfle_fp32  : Opcode = DmSvlS2vS1(FLE , DM, FP32, V)
-    val vmflt_fp32  : Opcode = DmSvlS2vS1(FLT , DM, FP32, V)
-    val vmfne_fp32  : Opcode = DmSvlS2vS1(FNE , DM, FP32, V)
-    val vmfgt_fp32  : Opcode = DmSvlS2vS1(FGT , DM, FP32, V)
-    val vmfge_fp32  : Opcode = DmSvlS2vS1(FGE , DM, FP32, V)
-    val vfclass_fp32: Opcode = DvSvlS2v(FCLASS, DV, FP32, V)
     val feq_fp64    : Opcode = FpRTypeIntDestInst(FEQ , DM, FP64, F)
     val fle_fp64    : Opcode = FpRTypeIntDestInst(FLE , DM, FP64, F)
     val flt_fp64    : Opcode = FpRTypeIntDestInst(FLT , DM, FP64, F)
     val fleq_fp64   : Opcode = FpRTypeIntDestInst(FLEQ, DM, FP64, F)
     val fltq_fp64   : Opcode = FpRTypeIntDestInst(FLTQ, DM, FP64, F)
     val fclass_fp64 : Opcode = FpITypeF2iInst(FCLASS  , DV, FP64, F)
-    val vmfeq_fp64  : Opcode = DmSvlS2vS1(FEQ , DM, FP64, V)
-    val vmfle_fp64  : Opcode = DmSvlS2vS1(FLE , DM, FP64, V)
-    val vmflt_fp64  : Opcode = DmSvlS2vS1(FLT , DM, FP64, V)
-    val vmfne_fp64  : Opcode = DmSvlS2vS1(FNE , DM, FP64, V)
-    val vmfgt_fp64  : Opcode = DmSvlS2vS1(FGT , DM, FP64, V)
-    val vmfge_fp64  : Opcode = DmSvlS2vS1(FGE , DM, FP64, V)
-    val vfclass_fp64: Opcode = DvSvlS2v(FCLASS, DV, FP64, V)
 
     def getOpcodes(implicit op: UInt): UInt  = op(7, 4)
     def getDestType(implicit op: UInt): UInt = op(3)
@@ -837,12 +818,12 @@ object Opcodes {
     def isFgt(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FGT && getDestType === DM
     def isFge(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FGE && getDestType === DM
     def isFclass(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FCLASS && getDestType === DV
-    def isVfCompare(implicit op: UInt): Bool = isVectorMisc && getDestType === DM
+    def isVfCompare(implicit op: UInt): Bool = isFeq || isFne || isFlt || isFle || isFgt || isFge
     def isDstMask(implicit op: UInt): Bool = isVfCompare
 
     override def getLat(opcode: Opcode): Int = {
       require(this.all.contains(opcode))
-      0
+      1
     }
   }
 
@@ -895,7 +876,14 @@ object Opcodes {
     def vfwredosum(implicit op: UInt): Bool = isVfwredosum
   }
 
-  object VFRedOpcode extends VFRedOpcode
+  object VFRedOpcode extends VFRedOpcode {
+    // A reduction walks the whole vector, so its latency grows with vl (and LMUL) instead of being a
+    // fixed pipeline depth.
+    override def getLat(opcode: Opcode): Int = {
+      require(this.all.contains(opcode))
+      Latency.uncertainLitVal()
+    }
+  }
 
   trait VFDivOpcode extends Opcodes with DataType {
     private val FDIV  = bb"0"
@@ -914,7 +902,13 @@ object Opcodes {
     def isFSqrt(implicit op: UInt): Bool = getOp === FSQRT
   }
 
-  object VFDivOpcode extends VFDivOpcode
+  object VFDivOpcode extends VFDivOpcode {
+    // Divider and sqrt are iterative, so their latency depends on the operands (and on LMUL).
+    override def getLat(opcode: Opcode): Int = {
+      require(this.all.contains(opcode))
+      Latency.uncertainLitVal()
+    }
+  }
 
   trait FCvtOpcode extends Opcodes with DataType {
     private val F2F = bb"00"
@@ -1635,24 +1629,59 @@ object Opcodes {
     private val MSOF  = bb"110"
     private val IOTA  = bb"111"
 
-    val vcpop_m = Value(CPOP_M, DX, EX) + GpWen
-    val vfirst  = Value(FIRST , DX, EX) + GpWen
-    val vmsbf   = Value(MSBF  , DM, EX)
-    val vmsif   = Value(MSIF  , DM, EX)
-    val vmsof   = Value(MSOF  , DM, EX)
+    val vcpop_m = Value(CPOP_M, DX, EX) + GpWen + VlRen + Src1Vp + Src2Vp
+    val vfirst  = Value(FIRST , DX, EX) + GpWen + VlRen + Src1Vp + Src2Vp
+    val vmsbf   = Value(MSBF  , DM, EX) + VmWen + VlRen + Src1Vp + Src2Vp
+    val vmsif   = Value(MSIF  , DM, EX) + VmWen + VlRen + Src1Vp + Src2Vp
+    val vmsof   = Value(MSOF  , DM, EX) + VmWen + VlRen + Src1Vp + Src2Vp
 
-    val vcpop_v_e8  = Value(CPOP_V, DV, E8 )
-    val vcpop_v_e16 = Value(CPOP_V, DV, E16)
-    val vcpop_v_e32 = Value(CPOP_V, DV, E32)
-    val vcpop_v_e64 = Value(CPOP_V, DV, E64)
-    val viota_e8    = Value(IOTA  , DV, E8 )
-    val viota_e16   = Value(IOTA  , DV, E16)
-    val viota_e32   = Value(IOTA  , DV, E32)
-    val viota_e64   = Value(IOTA  , DV, E64)
-    val vid_e8      = Value(ID    , DV, E8 )
-    val vid_e16     = Value(ID    , DV, E16)
-    val vid_e32     = Value(ID    , DV, E32)
-    val vid_e64     = Value(ID    , DV, E64)
+    val vcpop_v_e8  = Value(CPOP_V, DV, E8 ) + VpWen + VlRen + Src2Vp
+    val vcpop_v_e16 = Value(CPOP_V, DV, E16) + VpWen + VlRen + Src2Vp
+    val vcpop_v_e32 = Value(CPOP_V, DV, E32) + VpWen + VlRen + Src2Vp
+    val vcpop_v_e64 = Value(CPOP_V, DV, E64) + VpWen + VlRen + Src2Vp
+    val viota_e8    = DvSvlS2vS1v(IOTA  , DV, E8 )
+    val viota_e16   = DvSvlS2vS1v(IOTA  , DV, E16)
+    val viota_e32   = DvSvlS2vS1v(IOTA  , DV, E32)
+    val viota_e64   = DvSvlS2vS1v(IOTA  , DV, E64)
+    val vid_e8      = Value(ID    , DV, E8 ) + VpWen + VlRen
+    val vid_e16     = Value(ID    , DV, E16) + VpWen + VlRen
+    val vid_e32     = Value(ID    , DV, E32) + VpWen + VlRen
+    val vid_e64     = Value(ID    , DV, E64) + VpWen + VlRen
+
+    def getOp(implicit op: UInt): UInt = op(6, 4)
+    def getDestMode(implicit op: UInt): UInt = op(3, 2)
+    def getSew(implicit op: UInt): UInt = op(1, 0)
+
+    def isVcpopV(implicit op: UInt): Bool = getOp === CPOP_V
+    def isVmsbf(implicit op: UInt): Bool = getOp === MSBF
+    def isVmsif(implicit op: UInt): Bool = getOp === MSIF
+    def isVmsof(implicit op: UInt): Bool = getOp === MSOF
+    def isViota(implicit op: UInt): Bool = getOp === IOTA
+    def isDestM(implicit op: UInt): Bool = isVmsbf || isVmsif || isVmsof
+    def isSourceE8(implicit op: UInt): Bool = getSew === E8
+    def isSourceE16(implicit op: UInt): Bool = getSew === E16
+    def isSourceE32(implicit op: UInt): Bool = getSew === E32
+    def isSourceE64(implicit op: UInt): Bool = getSew === E64
+
+    object LitUtil {
+      def getOp(implicit op: BitPat): BitPat = op(6, 4)
+      def isVfirst(implicit op: BitPat): Boolean = getOp.isOneOf(FIRST)
+      def isVmsbf(implicit op: BitPat): Boolean = getOp.isOneOf(MSBF)
+      def isVmsif(implicit op: BitPat): Boolean = getOp.isOneOf(MSIF)
+      def isVmsof(implicit op: BitPat): Boolean = getOp.isOneOf(MSOF)
+      def isVid(implicit op: BitPat): Boolean = getOp.isOneOf(ID)
+
+      def getLat(implicit op: BitPat): Int = {
+        if (isVid) 0
+        else if (isVfirst || isVmsbf || isVmsif || isVmsof) 1
+        else 2
+      }
+    }
+
+    override def getLat(opcode: Opcode): Int = {
+      require(this.all.contains(opcode))
+      LitUtil.getLat(opcode.encode)
+    }
   }
 
   object VMAluOpcode extends VMAluOpcode
@@ -1934,6 +1963,10 @@ object Opcodes {
     private val MV_X2VS = bb"101"
     // uop of vmv.x.s, vfmv.f.s
     private val MV_VS2X = bb"110"
+    // uop of MRF to VRF
+    private val MV_M2V  = bb"011"
+    // uop of VRF to MRF
+    private val MV_V2M  = bb"100"
 
     private val TAIL = bb"111"
 
@@ -1964,6 +1997,8 @@ object Opcodes {
     val vmv_vs2x_e32  = DaS2s(MV_VS2X , E32)
     val vmv_vs2x_e64  = DaS2s(MV_VS2X , E64)
     val vtail         = Value(TAIL    , EX ) + VpWen
+    val VMV_M2V       = Value(MV_M2V  , EX)
+    val VMV_V2M       = Value(MV_V2M  , EX)
 
     protected def getSubOp(implicit op: UInt): UInt = op(4, 2)
     protected def getSubOp(op: BitPat): BitPat = op(4, 2)
@@ -1971,7 +2006,7 @@ object Opcodes {
     def getElemWidth(implicit op: UInt): UInt = op(1, 0)
 
     def isVS2X(implicit op: UInt): Bool = getSubOp.isOneOf(MV_VS2X)
-    def isX2VS(implicit op: UInt): Bool = getSubOp.isOneOf(MV_X2VS)
+    def isX2VS(implicit op: UInt): Bool = getSubOp.isOneOf(MV_X2VS) || getSubOp.isOneOf(MV_M2V) || getSubOp.isOneOf(MV_V2M)
     def isNR(implicit op: UInt): Bool = getSubOp.isOneOf(MV_NR)
     def isVmerge(implicit op: UInt): Bool = getSubOp.isOneOf(MERGE_VV, MERGE_VX)
     def isVmergeVX(implicit op: UInt): Bool = getSubOp.isOneOf(MERGE_VX)
