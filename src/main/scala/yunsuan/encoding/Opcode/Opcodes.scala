@@ -922,7 +922,7 @@ object Opcodes {
     // fixed pipeline depth.
     override def getLat(opcode: Opcode): Int = {
       require(this.all.contains(opcode))
-      Latency.uncertainLitVal()
+      yunsuan.encoding.Opcode.Latency.uncertainLitVal()
     }
   }
 
@@ -947,7 +947,7 @@ object Opcodes {
     // Divider and sqrt are iterative, so their latency depends on the operands (and on LMUL).
     override def getLat(opcode: Opcode): Int = {
       require(this.all.contains(opcode))
-      Latency.uncertainLitVal()
+      yunsuan.encoding.Opcode.Latency.uncertainLitVal()
     }
   }
 
