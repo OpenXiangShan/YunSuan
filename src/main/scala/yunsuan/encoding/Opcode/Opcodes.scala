@@ -876,7 +876,14 @@ object Opcodes {
     def vfwredosum(implicit op: UInt): Bool = isVfwredosum
   }
 
-  object VFRedOpcode extends VFRedOpcode
+  object VFRedOpcode extends VFRedOpcode {
+    // A reduction walks the whole vector, so its latency grows with vl (and LMUL) instead of being a
+    // fixed pipeline depth.
+    override def getLat(opcode: Opcode): Int = {
+      require(this.all.contains(opcode))
+      Latency.uncertainLitVal()
+    }
+  }
 
   trait VFDivOpcode extends Opcodes with DataType {
     private val FDIV  = bb"0"
@@ -895,7 +902,13 @@ object Opcodes {
     def isFSqrt(implicit op: UInt): Bool = getOp === FSQRT
   }
 
-  object VFDivOpcode extends VFDivOpcode
+  object VFDivOpcode extends VFDivOpcode {
+    // Divider and sqrt are iterative, so their latency depends on the operands (and on LMUL).
+    override def getLat(opcode: Opcode): Int = {
+      require(this.all.contains(opcode))
+      Latency.uncertainLitVal()
+    }
+  }
 
   trait FCvtOpcode extends Opcodes with DataType {
     private val F2F = bb"00"
