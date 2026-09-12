@@ -4,7 +4,8 @@ import chisel3._
 import chisel3.stage.ChiselGeneratorAnnotation
 import circt.stage._
 import chisel3.util._
-import yunsuan.encoding.Opcode.Opcodes.FMiscOpcode
+import yunsuan.encoding.Opcode.{Latency, Opcode, Opcodes}
+import yunsuan.encoding.Opcode.Opcodes.{FMacOpcode, FMiscOpcode, VFDivOpcode, VFMacOpcode}
 import yunsuan.fpu.falu.FloatAdderV2
 import yunsuan.fpu.fmul.FloatMUL
 import yunsuan.fpu.{FloatCompare, FloatFMAV2}
@@ -16,16 +17,6 @@ import yunsuan.vector.Common._
 trait VSPParameter {
   val VLEN       : Int = 128
   val XLEN       : Int = 64
-  val VIA_latency: Int = 0 // TODO: change to 1
-  val VFF_latency: Int = 3 // TODO: check only mul and mul+add, different or not
-  val VFD_latency: Int = 99
-  val VFA_latency: Int = 1
-  val VPERM_latency: Int = 1
-  val IMUL_latency: Int = 2
-  val FCMP_latency: Int = 0
-  val FALU_latency: Int = 1
-  val FMUL_latency: Int = 2
-  val FMA_latency: Int = 3
 }
 
 object VPUTestFuType { // only use in test, difftest with xs
@@ -40,8 +31,100 @@ object VPUTestFuType { // only use in test, difftest with xs
   def fmul = "b0000_1110".U(8.W)
   def fma = "b0000_1111".U(8.W)
 
-  def unknown(typ: UInt) = {
-    (typ > 15.U)
+  private def all = Seq(vfa, vff, vfd, via, vperm, imul, fcmp, falu, fmul, fma)
+
+  def unknown(typ: UInt): Bool = !typ.isOneOf(all)
+}
+
+
+// placeholder to let the complie pass
+private object VPermTestOpcode extends Opcodes {
+  val vslideup    = Value(BitPat("b000000000")).setLatency(1)
+  val vslidedown  = Value(BitPat("b000000001")).setLatency(1)
+  val vslide1up   = Value(BitPat("b000000010")).setLatency(1)
+  val vslide1down = Value(BitPat("b000000011")).setLatency(1)
+  val vrgather    = Value(BitPat("b000000100")).setLatency(1)
+  val vrgatherrs1 = Value(BitPat("b000000101")).setLatency(1)
+  val vcompress   = Value(BitPat("b000000110")).setLatency(1)
+}
+
+// placeholder to let the complie pass
+private object VIAluTestOpcode extends Opcodes {
+  val maxMin     = Value(BitPat("b00?01100?")).setLatency(1)
+  val saturating = Value(BitPat("b00?0?0010")).setLatency(1)
+  val vnclipu    = Value(BitPat("b110101011")).setLatency(1)
+  val vnclip     = Value(BitPat("b111101101")).setLatency(1)
+  val other      = Value(BitPat("b?????????")).setLatency(0)
+}
+
+// placeholder to let the complie pass
+private object IMulTestOpcode extends Opcodes {
+  val mul    = Value(BitPat("b000000000")).setLatency(2)
+  val mulh   = Value(BitPat("b000000001")).setLatency(2)
+  val mulhsu = Value(BitPat("b000000010")).setLatency(2)
+  val mulhu  = Value(BitPat("b000000011")).setLatency(2)
+  val mulw   = Value(BitPat("b000000100")).setLatency(2)
+  val mulw7  = Value(BitPat("b000001100")).setLatency(2)
+}
+
+// placeholder to let the complie pass
+private object FMulTestOpcode extends Opcodes {
+  val fmul = Value(BitPat("b000000000")).setLatency(2)
+}
+
+object VPUTestLatency {
+  private val latencyWidth = 64
+
+  private case class Result(latency: UInt, uncertain: Bool, valid: Bool)
+
+  private def decode(opcode: UInt, opcodes: Opcodes): Result = {
+    val table = opcodes.all.toSeq.sortBy(op => (-op.encode.mask.bitCount, op.encode.value))
+    require(table.nonEmpty, s"${opcodes.getClass.getSimpleName} must define at least one opcode")
+
+    val rows = table.map { op =>
+      val latency = op.getLat
+      require(latency >= Latency.uncertainLitVal(), s"Invalid latency $latency for ${op.getName()}")
+      (op.encode === opcode, latency)
+    }
+    val fixedRows = rows.collect {
+      case (hit, latency) if latency != Latency.uncertainLitVal() => hit -> latency.U(latencyWidth.W)
+    }
+
+    Result(
+      MuxCase(0.U(latencyWidth.W), fixedRows),
+      rows.collect { case (hit, latency) if latency == Latency.uncertainLitVal() => hit }.foldLeft(false.B)(_ || _),
+      rows.map(_._1).reduce(_ || _)
+    )
+  }
+
+  def apply(fuType: UInt, opcode: UInt): (UInt, Bool, Bool) = {
+    val fmac  = decode(opcode, FMacOpcode)
+    val vfmac = decode(opcode, VFMacOpcode)
+    val vfdiv = decode(opcode, VFDivOpcode)
+    val vialu = decode(opcode, VIAluTestOpcode)
+    val vperm = decode(opcode, VPermTestOpcode)
+    val imul  = decode(opcode, IMulTestOpcode)
+    val fmisc = decode(opcode, FMiscOpcode)
+    val fmul  = decode(opcode, FMulTestOpcode)
+
+    val table = Seq(
+      VPUTestFuType.vfa   -> fmac,
+      VPUTestFuType.vff   -> vfmac,
+      VPUTestFuType.vfd   -> vfdiv,
+      VPUTestFuType.via   -> vialu,
+      VPUTestFuType.vperm -> vperm,
+      VPUTestFuType.imul  -> imul,
+      VPUTestFuType.fcmp  -> fmisc,
+      VPUTestFuType.falu  -> fmac,
+      VPUTestFuType.fmul  -> fmul,
+      VPUTestFuType.fma   -> vfmac
+    )
+
+    val select = table.map { case (typ, result) => (fuType === typ, result) }
+    val latency = MuxCase(0.U(latencyWidth.W), select.map { case (hit, result) => hit -> result.latency })
+    val uncertain = MuxCase(false.B, select.map { case (hit, result) => hit -> result.uncertain })
+    val valid = MuxCase(false.B, select.map { case (hit, result) => hit -> result.valid })
+    (latency, uncertain, valid)
   }
 }
 
@@ -61,7 +144,7 @@ class VecInfoBundle extends VPUTestBundle {
 class VSTInputIO extends VPUTestBundle {
   val src = Vec(4, Vec(VLEN/XLEN, UInt(XLEN.W)))
   val fuType = UInt(5.W)
-  val fuOpType = UInt(9.W)
+  val fuOpType = Opcode()
   val sew = UInt(2.W)
   val uop_idx = UInt(6.W)
 
@@ -94,6 +177,7 @@ class SimTop() extends VPUTestModule {
   val has_issued = RegInit(false.B)
   val counter = RegInit(0.U(64.W))
   val latency = RegInit(0.U(64.W))
+  val uncertainLatency = RegInit(false.B)
 
   val in = Reg(new VSTInputIO)
   val out = Reg(new VSTOutputIO)
@@ -101,24 +185,18 @@ class SimTop() extends VPUTestModule {
   io.in.ready := !busy
   io.out.bits := out
 
+  val (inputLatency, inputUncertainLatency, inputOpcodeValid) =
+    VPUTestLatency(io.in.bits.fuType, io.in.bits.fuOpType)
+
   has_issued := busy
   when (io.in.fire) {
     counter := 0.U
     busy := true.B
     in := io.in.bits
-    latency := LookupTreeDefault(io.in.bits.fuType, 999.U, List(
-      VPUTestFuType.vfa -> VFA_latency.U,
-      VPUTestFuType.vff -> VFF_latency.U,
-      VPUTestFuType.vfd -> VFD_latency.U,
-      VPUTestFuType.via -> VIA_latency.U,
-      VPUTestFuType.vperm -> VPERM_latency.U,
-      VPUTestFuType.imul -> IMUL_latency.U,
-      VPUTestFuType.fcmp -> FCMP_latency.U,
-      VPUTestFuType.falu -> FALU_latency.U,
-      VPUTestFuType.fmul -> FMUL_latency.U,
-      VPUTestFuType.fma -> FMA_latency.U
-    )) // fuType --> latency, spec case for div
+    latency := inputLatency
+    uncertainLatency := inputUncertainLatency
     assert(!VPUTestFuType.unknown(io.in.bits.fuType))
+    assert(inputOpcodeValid)
   }
   when(io.out.fire) {
     busy := false.B
@@ -126,7 +204,6 @@ class SimTop() extends VPUTestModule {
   when (busy) { counter := counter + 1.U }
   val finish_fixLatency = busy && (counter >= latency)
   val finish_uncertain = Wire(Bool())
-  val is_uncertain = (in.fuType === VPUTestFuType.vfd)
 
   val (sew, uop_idx, rm, rm_s, fuType, opcode, src_widen, widen, is_frs1, is_frs2) = (
     in.sew, in.uop_idx, in.rm, in.rm_s, in.fuType, in.fuOpType,
@@ -355,7 +432,7 @@ class SimTop() extends VPUTestModule {
   vperm_result.vxsat := 0.U
 
   // arbiter
-  io.out.valid := Mux(is_uncertain, finish_uncertain, finish_fixLatency)
+  io.out.valid := Mux(uncertainLatency, finish_uncertain, finish_fixLatency)
   io.out.bits := LookupTreeDefault(in.fuType, 0.U.asTypeOf(new VSTOutputIO), List(
     VPUTestFuType.vfa -> vfa_result,
     VPUTestFuType.vff -> vff_result,
