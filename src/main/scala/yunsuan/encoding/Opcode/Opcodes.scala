@@ -694,7 +694,11 @@ object Opcodes {
   object VFMacOpcode extends FMacOpcode {
     override def getLat(opcode: Opcode): Int = {
       require(this.all.contains(opcode))
-      3
+      // The vfmul and vfalu pipelines are merged into one FU, so this space carries both latencies:
+      // OP3 fused multiply-add -> 3, OP2 multiply -> 2, the remaining OP2 ops (add/sub/min/max/sgnj)
+      // -> 1.  This is exactly `LitUtil`'s rule; keep it a pure function of the encoding, since every
+      // `Opcodes` object extending [[FMacOpcode]] owns a separate copy of these patterns.
+      LitUtil.getLat(opcode.encode)
     }
   }
 
