@@ -95,6 +95,9 @@ class SGMFloatFMA : public VGMFloatBase {
   virtual ElementOutput calculation_e32(ElementInput input);
   virtual ElementOutput calculation_e64(ElementInput input);
 };
+// TODO: the vector FMA unit was retired with the VFALU/VFMul merge, so nothing
+// drives this reference model right now; it is kept for the future test of the
+// merged vfmac FU (see ALL_FUTYPES in vpu_constant.h).
 class VGMFloatFMA : public VGMFloatBase {
   virtual ElementOutput calculation_e16(ElementInput input);
   virtual ElementOutput calculation_e32(ElementInput input);

@@ -60,12 +60,6 @@ uint16_t TestDriver::gen_random_optype() {
       uint16_t l[VFA_NUM] = VFA_ALL_OPTYPES_FP64; return l[rand() % VFA_NUM];
       break;
     }
-    case VFloatFMA: {
-      if (input.sew == 1) { uint16_t l[VFF_NUM] = VFF_ALL_OPTYPES_FP16; return l[rand() % VFF_NUM]; }
-      if (input.sew == 2) { uint16_t l[VFF_NUM] = VFF_ALL_OPTYPES_FP32; return l[rand() % VFF_NUM]; }
-      uint16_t l[VFF_NUM] = VFF_ALL_OPTYPES_FP64; return l[rand() % VFF_NUM];
-      break;
-    }
     case VFloatDivider: {
       if (input.sew == 1) { uint16_t l[VFD_NUM] = VFD_ALL_OPTYPES_FP16; return l[rand() % VFD_NUM]; }
       if (input.sew == 2) { uint16_t l[VFD_NUM] = VFD_ALL_OPTYPES_FP32; return l[rand() % VFD_NUM]; }
@@ -234,12 +228,6 @@ bool TestDriver::gen_random_widen() {
         uint16_t a[2] = VFA_WIDEN_OPTYPES_FP64; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==1; return false;
         break;
       }
-      case VFloatFMA: {
-        if (input.sew == 1) { uint16_t a[5] = VFF_WIDEN_OPTYPES_FP16; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==1; return false; }
-        if (input.sew == 2) { uint16_t a[5] = VFF_WIDEN_OPTYPES_FP32; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==1; return false; }
-        uint16_t a[5] = VFF_WIDEN_OPTYPES_FP64; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==1; return false;
-        break;
-      }
       default: return false; break;
     }
   }
@@ -263,11 +251,6 @@ bool TestDriver::gen_random_is_frs1() {
       if (input.sew == 1) { uint16_t a[VFA_NUM] = VFA_NEED_FRS1_OPTYPES_FP16; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==0; return false; }
       if (input.sew == 2) { uint16_t a[VFA_NUM] = VFA_NEED_FRS1_OPTYPES_FP32; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==0; return false; }
       uint16_t a[VFA_NUM] = VFA_NEED_FRS1_OPTYPES_FP64; if (std::find(std::begin(a), std::end(a), input.fuOpType) != std::end(a)) return rand()%2==0; return false;
-      break;
-    }
-    case VFloatFMA: {
-      // all vff ops need frs1
-      return rand() % 2 == 0;
       break;
     }
     case VFloatDivider: {
@@ -638,9 +621,6 @@ void TestDriver::get_expected_output() {
     case VFloatAdder:
       if (verbose) { printf("FuType:%d, choose VFloatAdder %d\n", input.fuType, VFloatAdder); }
       expect_output = vfa.get_expected_output(input); return;
-    case VFloatFMA:
-      if (verbose) { printf("FuType:%d, choose VFloatFMA %d\n", input.fuType, VFloatFMA); }
-      expect_output = vff.get_expected_output(input); return;
     case VFloatDivider:
       if (verbose) { printf("FuType:%d, choose VFloatDivider %d\n", input.fuType, VFloatDivider); }
       expect_output = vfd.get_expected_output(input); return;
