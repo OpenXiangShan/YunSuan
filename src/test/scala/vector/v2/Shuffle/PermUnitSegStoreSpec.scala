@@ -131,6 +131,9 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
           pZip(dut, 1, c0(1), blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 1)
           pZip(dut, 2, c1(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 2)
           pZip(dut, 3, c1(1), blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 3)
+          // chunk k works on the block at blockBase = k * blockSize - without this the four
+          // tables of two chunks would all target block 0, which the ring rightly rejects.
+          dut.in.pipes(2).bits.blockBase.poke(2); dut.in.pipes(3).bits.blockBase.poke(2)
           dut.clock.step(); for (p <- 0 until NumPipes) pPipeOff(dut, p)
           val got = collectWbByPdest(dut, 60, Seq(0, 1, 2, 3))
           got(0) mustBe zipSlice(c0, 0)
@@ -154,6 +157,40 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
           val got = collectWbByPdest(dut, 60, Seq(0, 1))
           got(0) mustBe zipSlice(c1, 0)
           got(1) mustBe zipSlice(c1, 1)
+        }
+      }
+
+      // Same-cycle placement of two different blocks, each with placeIdx 0 (legal: each block owns
+      // its own slots). Neither block can complete here - only one of its two tables arrives - so
+      // this case only checks that the ring's table-writer assert stays quiet.
+      it("EMUL=2: one field of each block in the same cycle") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          pZip(dut, 0, fieldLo(0x00), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 0)
+          pZip(dut, 2, fieldHi(0x00), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 2)
+          dut.in.pipes(2).bits.blockBase.poke(2)
+          dut.clock.step(); for (p <- 0 until NumPipes) pPipeOff(dut, p)
+          for (_ <- 0 until 20) dut.clock.step()
+        }
+      }
+
+      it("EMUL=2: two blocks one cycle apart") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val c0 = Seq(fieldLo(0x00), fieldLo(0x10))
+          val c1 = Seq(fieldHi(0x00), fieldHi(0x10))
+          pZip(dut, 0, c0(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 0)
+          pZip(dut, 1, c0(1), blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 1)
+          dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+          pZip(dut, 2, c1(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 2)
+          pZip(dut, 3, c1(1), blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 3)
+          dut.in.pipes(2).bits.blockBase.poke(2); dut.in.pipes(3).bits.blockBase.poke(2)
+          dut.clock.step(); for (p <- 0 until NumPipes) pPipeOff(dut, p)
+          val got = collectWbByPdest(dut, 60, Seq(0, 1, 2, 3))
+          got(0) mustBe zipSlice(c0, 0)
+          got(1) mustBe zipSlice(c0, 1)
+          got(2) mustBe zipSlice(c1, 0)
+          got(3) mustBe zipSlice(c1, 1)
         }
       }
     }
