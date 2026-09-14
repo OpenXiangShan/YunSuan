@@ -45,19 +45,34 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
   def pDefaults(dut: PermUnit[FakePermMeta], pipe: Int): Unit = {
     val p = dut.in.pipes(pipe)
     p.valid.poke(false)
-    p.bits.placeIdx.poke(0); p.bits.blockBase.poke(0)
+    p.bits.placeIdx.poke(0)
+    p.bits.blockBase.poke(0)
     val o = p.bits.op
-    o.isGather.poke(false); o.isGatherEI16.poke(false); o.isGatherEI16Rvs3.poke(false)
-    o.isSlideUp.poke(false); o.isSlide1Up.poke(false)
-    o.isSlideDown.poke(false); o.isSlide1Down.poke(false)
-    o.isZip.poke(false); o.isUnzip.poke(false); o.isCompress.poke(false)
+    o.isGather.poke(false)
+    o.isGatherEI16.poke(false)
+    o.isGatherEI16Rvs3.poke(false)
+    o.isSlideUp.poke(false)
+    o.isSlide1Up.poke(false)
+    o.isSlideDown.poke(false)
+    o.isSlide1Down.poke(false)
+    o.isZip.poke(false)
+    o.isUnzip.poke(false)
+    o.isCompress.poke(false)
     p.bits.uopIdx.poke(0)
-    pSew(p.bits.sew, 8); pSew(p.bits.ei, 8); pLmul(p.bits.lmul, 8)
+    pSew(p.bits.sew, 8)
+    pSew(p.bits.ei, 8)
+    pLmul(p.bits.lmul, 8)
     p.bits.vl.poke(0)
-    p.bits.vta.poke(false); p.bits.vma.poke(false)
-    p.bits.vs1.poke(0); p.bits.vs2.poke(0); p.bits.vs3.poke(0); p.bits.rs1.poke(0)
-    p.bits.mask.poke((BigInt(1) << numElem) - 1); p.bits.zipNum.poke(0)
-    p.bits.meta.robIdx.poke(0); p.bits.meta.pdest.poke(0)
+    p.bits.vta.poke(false)
+    p.bits.vma.poke(false)
+    p.bits.vs1.poke(0)
+    p.bits.vs2.poke(0)
+    p.bits.vs3.poke(0)
+    p.bits.rs1.poke(0)
+    p.bits.mask.poke((BigInt(1) << numElem) - 1)
+    p.bits.zipNum.poke(0)
+    p.bits.meta.robIdx.poke(0)
+    p.bits.meta.pdest.poke(0)
   }
 
   /** One segment store uop: `seg` of them share a `blockBase` and differ in `uopIdx`/`placeIdx`. */
@@ -68,20 +83,34 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
     val p = dut.in.pipes(pipe)
     p.valid.poke(true)
     p.bits.op.isZip.poke(true)
-    p.bits.placeIdx.poke(placeIdx); p.bits.blockBase.poke(0)
+    p.bits.placeIdx.poke(placeIdx)
+    p.bits.blockBase.poke(0)
     p.bits.uopIdx.poke(uopIdx)
-    pSew(p.bits.sew, 8); pLmul(p.bits.lmul, blockUnits * 8)
+    pSew(p.bits.sew, 8)
+    pLmul(p.bits.lmul, blockUnits * 8)
     p.bits.vl.poke(blockUnits * numElem)
     p.bits.vs2.poke(foldBytes(field))
     p.bits.zipNum.poke(zipNum)
-    p.bits.meta.robIdx.poke(0); p.bits.meta.pdest.poke(pdest)
+    p.bits.meta.robIdx.poke(0)
+    p.bits.meta.pdest.poke(pdest)
   }
 
   def pPipeOff(dut: PermUnit[FakePermMeta], pipe: Int): Unit =
     dut.in.pipes(pipe).valid.poke(false)
 
+  def pBlock(dut: PermUnit[FakePermMeta], pipes: Seq[Int], blockBase: Int): Unit =
+    pipes.foreach(p => dut.in.pipes(p).bits.blockBase.poke(blockBase))
+
+  /** Clock one cycle with the given pipes held, then release them. */
+  def stepOff(dut: PermUnit[FakePermMeta], pipes: Int*): Unit = {
+    dut.clock.step()
+    pipes.foreach(pPipeOff(dut, _))
+  }
+
   def initDut(dut: PermUnit[FakePermMeta]): Unit = {
-    for (p <- 0 until NumPipes) pDefaults(dut, p)
+    for (p <- 0 until NumPipes) {
+      pDefaults(dut, p)
+    }
     dut.in.wbReady.foreach(_.poke(false))
     dut.in.flush.foreach(_.poke(false))
     dut.in.wakeAck.foreach(_.poke(false))
@@ -111,11 +140,12 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
       it("EMUL=1: one 2-unit block emits both slices") {
         simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
           initDut(dut)
-          val f0 = fieldLo(0x00); val f1 = fieldLo(0x10)
+          val f0 = fieldLo(0x00)
+          val f1 = fieldLo(0x10)
           val fields = Seq(f0, f1)
           pZip(dut, 0, f0, blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 0)
           pZip(dut, 1, f1, blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 1)
-          dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+          stepOff(dut, 0, 1)
           val got = collectWbByPdest(dut, 40, Seq(0, 1))
           got(0) mustBe zipSlice(fields, 0)
           got(1) mustBe zipSlice(fields, 1)
@@ -133,8 +163,8 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
           pZip(dut, 3, c1(1), blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 3)
           // chunk k works on the block at blockBase = k * blockSize - without this the four
           // tables of two chunks would all target block 0, which the ring rightly rejects.
-          dut.in.pipes(2).bits.blockBase.poke(2); dut.in.pipes(3).bits.blockBase.poke(2)
-          dut.clock.step(); for (p <- 0 until NumPipes) pPipeOff(dut, p)
+          pBlock(dut, Seq(2, 3), 2)
+          stepOff(dut, 0, 1, 2, 3)
           val got = collectWbByPdest(dut, 60, Seq(0, 1, 2, 3))
           got(0) mustBe zipSlice(c0, 0)
           got(1) mustBe zipSlice(c0, 1)
@@ -149,11 +179,10 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
         simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
           initDut(dut)
           val c1 = Seq(fieldHi(0x00), fieldHi(0x10))
-          val p0 = dut.in.pipes(0); val p1 = dut.in.pipes(1)
           pZip(dut, 0, c1(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 0)
           pZip(dut, 1, c1(1), blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 1)
-          p0.bits.blockBase.poke(2); p1.bits.blockBase.poke(2)
-          dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+          pBlock(dut, Seq(0, 1), 2)
+          stepOff(dut, 0, 1)
           val got = collectWbByPdest(dut, 60, Seq(0, 1))
           got(0) mustBe zipSlice(c1, 0)
           got(1) mustBe zipSlice(c1, 1)
@@ -168,9 +197,40 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
           initDut(dut)
           pZip(dut, 0, fieldLo(0x00), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 0)
           pZip(dut, 2, fieldHi(0x00), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 2)
-          dut.in.pipes(2).bits.blockBase.poke(2)
-          dut.clock.step(); for (p <- 0 until NumPipes) pPipeOff(dut, p)
-          for (_ <- 0 until 20) dut.clock.step()
+          pBlock(dut, Seq(2), 2)
+          stepOff(dut, 0, 1, 2, 3)
+          for (_ <- 0 until 20) {
+            dut.clock.step()
+          }
+        }
+      }
+
+      // The pattern the emu actually drives for vsseg2e8 with LMUL=2 (robIdx 0x88, cycles
+      // 17409..17411, read off in_pipes_*):
+      //   t+0: block0.field0 (pipe0)
+      //   t+1: block0.field1 (pipe1) and block1.field0 (pipe0)
+      //   t+2: block1.field1 (pipe1)
+      // i.e. the two fields of a block arrive one cycle apart on different pipes, and the two
+      // blocks are interleaved by one cycle - the fields of a block are NOT co-issued.
+      it("EMUL=2: emu arrival pattern (staircase)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val c0 = Seq(fieldLo(0x00), fieldLo(0x10))
+          val c1 = Seq(fieldHi(0x00), fieldHi(0x10))
+          pZip(dut, 0, c0(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 0)
+          stepOff(dut, 0)
+          pZip(dut, 1, c0(1), blockUnits = 2, uopIdx = 1, placeIdx = 0, zipNum = 1, pdest = 1)
+          pZip(dut, 0, c1(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 2)
+          pBlock(dut, Seq(0), 2)
+          stepOff(dut, 1)
+          pZip(dut, 0, c1(1), blockUnits = 2, uopIdx = 1, placeIdx = 0, zipNum = 1, pdest = 3)
+          pBlock(dut, Seq(0), 2)
+          stepOff(dut, 0, 1, 2, 3)
+          val got = collectWbByPdest(dut, 80, Seq(0, 1, 2, 3))
+          got(0) mustBe zipSlice(c0, 0)
+          got(1) mustBe zipSlice(c0, 1)
+          got(2) mustBe zipSlice(c1, 0)
+          got(3) mustBe zipSlice(c1, 1)
         }
       }
 
@@ -181,11 +241,11 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
           val c1 = Seq(fieldHi(0x00), fieldHi(0x10))
           pZip(dut, 0, c0(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 0)
           pZip(dut, 1, c0(1), blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 1)
-          dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+          stepOff(dut, 0, 1)
           pZip(dut, 2, c1(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 2)
           pZip(dut, 3, c1(1), blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 3)
-          dut.in.pipes(2).bits.blockBase.poke(2); dut.in.pipes(3).bits.blockBase.poke(2)
-          dut.clock.step(); for (p <- 0 until NumPipes) pPipeOff(dut, p)
+          pBlock(dut, Seq(2, 3), 2)
+          stepOff(dut, 0, 1, 2, 3)
           val got = collectWbByPdest(dut, 60, Seq(0, 1, 2, 3))
           got(0) mustBe zipSlice(c0, 0)
           got(1) mustBe zipSlice(c0, 1)
@@ -202,11 +262,14 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
         simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
           initDut(dut)
           val fields = Seq(fieldLo(0x00), fieldLo(0x10), fieldLo(0x20), fieldLo(0x30))
-          for (u <- 0 until NumPipes)
+          for (u <- 0 until NumPipes) {
             pZip(dut, u, fields(u), blockUnits = 4, uopIdx = u, placeIdx = u, zipNum = 3, pdest = u)
-          dut.clock.step(); for (p <- 0 until NumPipes) pPipeOff(dut, p)
+          }
+          stepOff(dut, 0, 1, 2, 3)
           val got = collectWbByPdest(dut, 80, Seq(0, 1, 2, 3))
-          for (u <- 0 until 4) got(u) mustBe zipSlice(fields, u)
+          for (u <- 0 until 4) {
+            got(u) mustBe zipSlice(fields, u)
+          }
         }
       }
     }
