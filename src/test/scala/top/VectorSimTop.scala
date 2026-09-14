@@ -157,7 +157,9 @@ class SimTop() extends VPUTestModule {
   for (i <- 0 until (VLEN / XLEN)) {
     val (src1, src2, src3) = (in.src(0)(i), in.src(1)(i), in.src(2)(i))
     val vfa = Module(new VectorFloatAdder) // result at next cycle
-    val vff = Module(new VectorFloatFMA)
+    // TODO: VectorFloatFMA was retired with the VFALU/VFMul merge, so the vector
+    //       FMA model is gone. Re-add it here (and restore the wiring / result
+    //       assignment below) when its test comes back.
     val vfd = Module(new VectorFloatDivider)
     val via = Module(new VectorIntAdder)
     val imul = Module(new Mul(XLEN))
@@ -250,28 +252,12 @@ class SimTop() extends VPUTestModule {
     via_result.fflags(i) := 0.U // DontCare
     via_result.vxsat := 0.U // DontCare
 
-    vff.io.fire := busy
-    vff.io.fp_a := src1
-    vff.io.fp_b := src2
-    vff.io.fp_c := src3
-    //io.widen_a Cat(vs2(95,64),vs2(31,0)) or Cat(vs2(127,96),vs2(63,32))
-    //io.widen_b Cat(vs1(95,64),vs1(31,0)) or Cat(vs1(127,96),vs1(63,32))
-    vff.io.widen_a := Cat(in.src(0)(1)(31+i*32,0+i*32),in.src(0)(0)(31+i*32,0+i*32))
-    vff.io.widen_b := Cat(in.src(1)(1)(31+i*32,0+i*32),in.src(1)(0)(31+i*32,0+i*32))
-    vff.io.uop_idx := uop_idx(0)
-    vff.io.frs1  := in.src(1)(0) // VS1(63,0)
-    vff.io.round_mode := rm
-    vff.io.fp_format := sew
-    vff.io.op_code := opcode
-    vff.io.is_frs1  := is_frs1
-    vff.io.is_vec := true.B // TODO: check it
-    vff.io.fp_aIsFpCanonicalNAN := false.B
-    vff.io.fp_bIsFpCanonicalNAN := false.B
-    vff.io.fp_cIsFpCanonicalNAN := false.B
-    vff.io.res_widening := widen
-    vff_result.result(i) := vff.io.fp_result
-    vff_result.fflags(i) := vff.io.fflags
-    vff_result.vxsat := 0.U // DontCare
+    // TODO: placeholder - the vector FMA model (VectorFloatFMA) was retired with
+    //       the VFALU/VFMul merge. Drive the real result once its test is
+    //       supported again; until then a vff request returns zeros.
+    vff_result.result(i) := 0.U
+    vff_result.fflags(i) := 0.U
+    vff_result.vxsat := 0.U
 
     // mul
     imul.io.in.valid := busy
