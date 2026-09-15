@@ -2,7 +2,7 @@ package yunsuan.vector.vfalu
 
 import chisel3._
 import chisel3.util._
-import yunsuan.encoding.Opcode.Opcodes.FMacOpcode
+import yunsuan.encoding.Opcode.Opcodes.VFMacOpcode
 import yunsuan.vector.vfmul.utils.{VFAlgoUtils, VFBundle, VFModule}
 import yunsuan.util.{SignExt, ZeroExt}
 
@@ -12,7 +12,7 @@ class VectorFloatMiscInput extends VFBundle {
   val isfp16   = Bool()
   val isfp32   = Bool()
   val isfp64   = Bool()
-  val op       = FMacOpcode()
+  val op       = VFMacOpcode()
 }
 
 class VectorFloatMiscOutput extends VFBundle {
@@ -27,7 +27,7 @@ class VectorFloatMiscIO extends Bundle {
 
 class VectorFloatMisc extends VFModule {
   val io = IO(new VectorFloatMiscIO())
-  
+
   private val src0   = io.in.src0
   private val src1   = io.in.src1
   private val isFp16 = io.in.isfp16
@@ -35,12 +35,12 @@ class VectorFloatMisc extends VFModule {
   private val isFp64 = io.in.isfp64
   private implicit val op: UInt = io.in.op
 
-  private val isFmax   = FMacOpcode.isFmax
-  private val isFmin   = FMacOpcode.isFmin
-  private val isFsgnj  = FMacOpcode.isFsgnj
-  private val isFsgnjn = FMacOpcode.isFsgnjn
-  private val isFsgnjx = FMacOpcode.isFsgnjx
-  private val isFclass = FMacOpcode.isVfclass
+  private val isFmax   = VFMacOpcode.isFmax
+  private val isFmin   = VFMacOpcode.isFmin
+  private val isFsgnj  = VFMacOpcode.isFsgnj
+  private val isFsgnjn = VFMacOpcode.isFsgnjn
+  private val isFsgnjx = VFMacOpcode.isFsgnjx
+  private val isFclass = VFMacOpcode.isVfclass
 
   private val isFsgn = isFsgnj || isFsgnjn || isFsgnjx
 
@@ -115,7 +115,7 @@ class VectorFloatMisc extends VFModule {
   )) }
   private val src0AbsLtSeq = src0AbsVec.zip(src1AbsVec).map { case (src0, src1) => src0 < src1 }
   private val src0AbsEqSeq = src0AbsVec.zip(src1AbsVec).map { case (src0, src1) => src0 === src1 }
-  
+
   // fmax/fmin/fmaxm/fminm
   private val selSrc0ForMinSeq = Seq.tabulate(4)(i => Mux1H(
     Seq(
