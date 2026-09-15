@@ -5,7 +5,7 @@ import chisel3._
 import chisel3.util._
 import yunsuan.fpu.falu.utils.{FALUAddS0, FALUAddS0ToS1Bundle}
 import yunsuan.vector.Common.VSew
-import yunsuan.encoding.Opcode.Opcodes.FMacOpcode
+import yunsuan.encoding.Opcode.Opcodes.VFMacOpcode
 //import yunsuan.fpu.fmul.utils
 import yunsuan.vector.vfmul.utils.{VFBundle, VFModule, VFAlgoUtils}
 
@@ -32,7 +32,7 @@ class VectorFALUS0 extends VFModule {
   val inCtrl        = io.in.inCtrlFromVFMul
   val isFMA         = inCtrl.isFMA
 
-  val fpFmt = FMacOpcode.getDataType
+  val fpFmt = VFMacOpcode.getDataType
   val isfp64 = fpFmt === VSew.e64
   val isfp32 = fpFmt === VSew.e32
   val isfp16 = fpFmt === VSew.e16
@@ -50,9 +50,9 @@ class VectorFALUS0 extends VFModule {
   val fp16AAppends = io.in.fpAAppends16
 
   // op -> ctrl signal: fadd/fsub go to the adder, max/min/sgnj/class all go to the misc unit below
-  val isFclass = FMacOpcode.isVfclass
-  val isSub    = (isFMA && isSubFromFMUL) || (!isFMA && FMacOpcode.isFsub)
-  val isArith  = !isFclass && (isFMA || FMacOpcode.isFadd || FMacOpcode.isFsub)
+  val isFclass = VFMacOpcode.isVfclass
+  val isSub    = (isFMA && isSubFromFMUL) || (!isFMA && VFMacOpcode.isFsub)
+  val isArith  = !isFclass && (isFMA || VFMacOpcode.isFadd || VFMacOpcode.isFsub)
   val isMisc   = !isArith
 
   val faddersS0Fp16 = Seq.fill(elemNum("fp16"))(Module(new FALUAddS0(16)))

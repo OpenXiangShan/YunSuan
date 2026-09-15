@@ -6,12 +6,12 @@ import chisel3._
 import chisel3.util._
 import yunsuan.fpu.falu
 //import yunsuan.fpu.fmul.utils.FMULToFADDCtrlBundle
-import yunsuan.encoding.Opcode.Opcodes.FMacOpcode
+import yunsuan.encoding.Opcode.Opcodes.VFMacOpcode
 import yunsuan.vector.vfmul.utils._
 import yunsuan.vector.vfmul.VFMul2VFALUCtrlBundle
 
 class VectorFALUInput extends VFBundle {
-  val opcode          = FMacOpcode()
+  val opcode          = VFMacOpcode()
   val fpA             = UInt(fpMaxWidth.W)
   val fpB             = UInt(fpMaxWidth.W)
   val fpAAppend       = UInt(fpAAppendMaxWidth.W)
