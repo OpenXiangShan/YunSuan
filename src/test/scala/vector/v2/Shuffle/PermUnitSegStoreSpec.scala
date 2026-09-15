@@ -25,6 +25,11 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
   def foldBytes(bytes: Seq[Int]): BigInt =
     bytes.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
 
+  def interleaveChunk(fields: Seq[Seq[Int]], chunk: Int): BigInt = {
+    val elemsPerChunk = numElem / fields.length
+    foldBytes((chunk * elemsPerChunk until (chunk + 1) * elemsPerChunk).flatMap(i => fields.map(_(i))))
+  }
+
   // ---- Poke helpers (mirrors PermUnitSpec) ---------------------------------
 
   def pDefaults(dut: PermUnit[FakePermMeta], pipe: Int): Unit = {
@@ -92,7 +97,7 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
   /** One segment-store uop with the control values the emu drives for `vsseg2e8_v-0` LMUL=2. */
   def pEmuUop(dut: PermUnit[FakePermMeta], pipe: Int, vs2: Seq[Int], blockBase: Int,
               placeIdx: Int, uopIdx: Int, robIdx: Int): Unit = {
-    pZip(dut, pipe, vs2, blockUnits = 2, uopIdx = uopIdx, placeIdx = placeIdx, zipNum = 1, pdest = 0)
+    pZip(dut, pipe, vs2, blockUnits = 2, uopIdx = uopIdx, placeIdx = placeIdx, zipNum = 1, pdest = uopIdx)
     val b = dut.in.pipes(pipe).bits
     b.vl.poke(255)
     b.blockBase.poke(blockBase)
@@ -119,9 +124,9 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
       //
       //   emu cycle  valid(p0,p1)  offers
       //   17409      1 0            p0 blockBase=0 uopIdx=0 placeIdx=0 vs2=a0
-      //   17410      1 1            p0 blockBase=2 uopIdx=2 placeIdx=0 vs2=a2
+      //   17410      1 1            p0 blockBase=2 uopIdx=0 placeIdx=0 vs2=a2
       //                             p1 blockBase=0 uopIdx=1 placeIdx=0 vs2=b1
-      //   17411      0 1            p1 blockBase=2 uopIdx=3 placeIdx=0 vs2=b3
+      //   17411      0 1            p1 blockBase=2 uopIdx=1 placeIdx=0 vs2=b3
       //   17412      0 0
       //
       // One 4-uop instruction = two independent 2-unit blocks (block 0 and block 2); pipe1 only
@@ -149,14 +154,28 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
           val b3 = Seq(0x00, 0xff, 0xf8, 0x7f, 0x0f, 0x02, 0x01, 0x00, 0xff, 0xf8, 0x7f, 0x0f, 0x02, 0x01, 0x00, 0xff)
           pEmuUop(dut, 0, a0, blockBase = 0, placeIdx = 0, uopIdx = 0, robIdx = 0x88)
           stepOff(dut, 0)
-          pEmuUop(dut, 0, a2, blockBase = 2, placeIdx = 0, uopIdx = 2, robIdx = 0x88)
+          pEmuUop(dut, 0, a2, blockBase = 2, placeIdx = 0, uopIdx = 0, robIdx = 0x88)
+          dut.in.pipes(0).bits.meta.pdest.poke(2)
           pEmuUop(dut, 1, b1, blockBase = 0, placeIdx = 0, uopIdx = 1, robIdx = 0x88)
           stepOff(dut, 0, 1)
-          pEmuUop(dut, 1, b3, blockBase = 2, placeIdx = 0, uopIdx = 3, robIdx = 0x88)
+          pEmuUop(dut, 1, b3, blockBase = 2, placeIdx = 0, uopIdx = 1, robIdx = 0x88)
+          dut.in.pipes(1).bits.meta.pdest.poke(3)
           stepOff(dut, 1)
+          val expected = Seq(interleaveChunk(Seq(a0, b1), 0), interleaveChunk(Seq(a0, b1), 1), interleaveChunk(Seq(a2, b3), 0), interleaveChunk(Seq(a2, b3), 1))
+          val actual = Array.fill[Option[BigInt]](expected.length)(None)
+          dut.in.wbReady.foreach(_.poke(true))
           for (_ <- 0 until 80) {
+            for (p <- 0 until dut.out.pipes.length) {
+              if (dut.out.pipes(p).valid.peekBoolean()) {
+                val uopIdx = dut.out.pipes(p).bits.meta.pdest.peekValue().asBigInt.toInt
+                if (uopIdx < actual.length && actual(uopIdx).isEmpty) {
+                  actual(uopIdx) = Some(dut.out.pipes(p).bits.data.peekValue().asBigInt)
+                }
+              }
+            }
             dut.clock.step()
           }
+          actual.toSeq mustBe expected.map(Some(_))
           val busy = (0 until dut.out.unitStatus.length).filter { u =>
             dut.out.unitStatus(u).hasTable.peek().litValue != 0
           }
