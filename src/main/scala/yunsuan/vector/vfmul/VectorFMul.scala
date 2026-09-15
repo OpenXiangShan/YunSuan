@@ -13,6 +13,7 @@ import yunsuan.vector.vfmul.utils.{VFBundle, VFModule}
 class VectorFMulInput extends VFBundle  {
   val isFMUL      = Bool()
   val isNeg       = Bool()
+  val isWiden     = Bool()
   val fp_fmt      = UInt(2.W)
   val fp_a        = UInt(fpMaxWidth.W)
   val fp_b        = UInt(fpMaxWidth.W)

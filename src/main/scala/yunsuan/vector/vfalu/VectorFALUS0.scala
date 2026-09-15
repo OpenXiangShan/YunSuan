@@ -31,11 +31,12 @@ class VectorFALUS0 extends VFModule {
   val isSubFromFMUL = io.in.isSubFromVFMul
   val inCtrl        = io.in.inCtrlFromVFMul
   val isFMA         = inCtrl.isFMA
+  val isWiden       = VFMacOpcode.isResWiden
 
   val fpFmt = VFMacOpcode.getDataType
-  val isfp64 = fpFmt === VSew.e64
-  val isfp32 = fpFmt === VSew.e32
-  val isfp16 = fpFmt === VSew.e16
+  val isfp64 = Mux(isWiden, fpFmt === VSew.e32, fpFmt === VSew.e64)
+  val isfp32 = Mux(isWiden, fpFmt === VSew.e16, fpFmt === VSew.e32)
+  val isfp16 = !isWiden && fpFmt === VSew.e16
 
   val fp64A = io.in.fpA
   val fp64B = io.in.fpB

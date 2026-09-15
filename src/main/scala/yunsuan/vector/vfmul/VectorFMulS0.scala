@@ -26,10 +26,11 @@ class VectorFMULS0 extends VFModule {
   val isFMUL = io.in.isFMUL
   val isFMA  = !isFMUL
   val isNeg  = io.in.isNeg
+  val isWiden = io.in.isWiden
 
-  val isfp64   = io.in.fp_fmt === VSew.e64
-  val isfp32   = io.in.fp_fmt === VSew.e32
-  val isfp16   = io.in.fp_fmt === VSew.e16
+  val isfp64 = Mux(isWiden, io.in.fp_fmt === VSew.e32, io.in.fp_fmt === VSew.e64)
+  val isfp32 = Mux(isWiden, io.in.fp_fmt === VSew.e16, io.in.fp_fmt === VSew.e32)
+  val isfp16 = !isWiden && io.in.fp_fmt === VSew.e16
 
   val fp64A   = io.in.fp_a
   val fp64AIn = Mux(isNeg, VFAlgoUtils.fpNeg(fp64A), fp64A)

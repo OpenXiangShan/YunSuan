@@ -709,6 +709,7 @@ object Opcodes {
       ))
     }
     def isOpbWiden(implicit op: UInt): Bool = isVfWiden && getVs2Format === S2W
+    def isOnlyResWiden(implicit op: UInt): Bool = isVfWiden && getVs2Format === S2V
     def isResWiden(implicit op: UInt): Bool = isVfWiden
   }
 
