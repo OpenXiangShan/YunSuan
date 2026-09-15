@@ -22,7 +22,7 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
 
   private val ring2UnitMask = Cat(in.blockSize.map(x => (x & 2.U).orR).reverse)
   private val ring2S1TableValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 2.U).orR), s1PipesTableValid)
-  private val ring2S1IndexValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 2.U).orR), s1PipesIndexValid)
+  private val ring2S1IndexValid = Mux1H(in.s1pipes.map(x => x.bits.indexValid && (x.bits.blockSize & 2.U).orR), s1PipesIndexValid)
 
   for ((bc, i) <- ring2Controllers.zipWithIndex) {
     val base = 2 * i
@@ -46,7 +46,7 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
 
   private val ring4UnitMask = Cat(in.blockSize.map(x => (x & 4.U).orR).reverse)
   private val s1Ring4TableValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 4.U).orR), s1PipesTableValid)
-  private val s1Ring4IndexValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 4.U).orR), s1PipesIndexValid)
+  private val s1Ring4IndexValid = Mux1H(in.s1pipes.map(x => x.bits.indexValid && (x.bits.blockSize & 4.U).orR), s1PipesIndexValid)
 
   for ((bc, i) <- ring4Controllers.zipWithIndex) {
     val base = 4 * i
@@ -71,7 +71,7 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
 
   private val ring8UnitMask = Cat(in.blockSize.map(x => (x & 8.U).orR).reverse)
   private val s1Ring8TableValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 8.U).orR), s1PipesTableValid)
-  private val s1Ring8IndexValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 8.U).orR), s1PipesIndexValid)
+  private val s1Ring8IndexValid = Mux1H(in.s1pipes.map(x => x.bits.indexValid && (x.bits.blockSize & 8.U).orR), s1PipesIndexValid)
 
   for ((bc, i) <- ring8Controllers.zipWithIndex) {
     val base = 8 * i
@@ -219,6 +219,7 @@ object GatherRingController {
   }
 
   class InPipe1(implicit val param: GatherParam) extends GatherBundle {
+    val indexValid = Bool()
     val tablePos = UnitIdx()
     val indexPos = UnitIdx()
     val blockSize = BlockSize()

@@ -35,6 +35,22 @@ class GatherRing[T <: Data](
   val s1HasTable = Mux1H(in.s1pipes.map(_.valid), pipeTablePos.map(pos => UIntToOH(pos, NumUnits))).ensuring(_.getWidth == NumUnits)
   val s1HasIndex = Mux1H(in.s1pipes.map(_.valid), pipeIndexPos.map(pos => UIntToOH(pos, NumUnits))).ensuring(_.getWidth == NumUnits)
 
+  private val s1PlacesGather = VecInit.tabulate(NumUnits) { u =>
+    in.s1pipes.zip(pipeIndexPos).map { case (s1, pos) =>
+      s1.valid && pos === u.U && !s1.bits.isRvs3
+    }.foldLeft(false.B)(_ || _)
+  }
+  private val s1PlacesRvs3 = VecInit.tabulate(NumUnits) { u =>
+    in.s1pipes.zip(pipeIndexPos).map { case (s1, pos) =>
+      s1.valid && pos === u.U && s1.bits.isRvs3
+    }.foldLeft(false.B)(_ || _)
+  }
+  private val ei16PairComplete = VecInit.tabulate(NumUnits) { u =>
+    (units(u).out.status.gatherPlaced || s1PlacesGather(u)) &&
+    (units(u).out.status.rvs3Placed || s1PlacesRvs3(u))
+  }
+  private val s1IsEi16Pair = VecInit(in.s1pipes.map(s1 => s1.bits.isRvs3 || s1.bits.waitRvs3))
+
   controller.in.s0pipes  := in.s0pipes
   controller.in.s1pipes.zipWithIndex.foreach { case (s1, i) =>
     // An rvs3 (SEW=8 ei16) places no table (and its index is routed
@@ -42,6 +58,8 @@ class GatherRing[T <: Data](
     // s1 occupancy: otherwise the (stale) pipeTablePos would claim a phantom
     // table slot and corrupt the block's table occupancy (s1TableValid / entryTable).
     s1.valid := in.s1pipes(i).valid && !in.s1pipes(i).bits.isRvs3
+    s1.bits.indexValid := in.s1pipes(i).valid &&
+      (!s1IsEi16Pair(i) || ei16PairComplete(pipeIndexPos(i)))
     s1.bits.tablePos := pipeTablePos(i)
     s1.bits.indexPos := pipeIndexPos(i)
     s1.bits.blockSize := pipeBlockSize(i)
@@ -149,6 +167,10 @@ class GatherRing[T <: Data](
       // (gather's isRvs3=0 clears the AND), and a lone gather is not an rvs3.
       uIdx.isRvs3    := (0 until NumPipeIn).map(p =>
         Mux(idxWriters(p), in.s1pipes(p).bits.isRvs3, true.B)).reduce(_ && _)
+      uIdx.placesGather := (0 until NumPipeIn).map(p =>
+        idxWriters(p) && !in.s1pipes(p).bits.isRvs3).reduce(_ || _)
+      uIdx.placesRvs3 := (0 until NumPipeIn).map(p =>
+        idxWriters(p) && in.s1pipes(p).bits.isRvs3).reduce(_ || _)
       // Wait for a paired rvs3 only if every writer is a waitRvs3 gather: the
       // rvs3 writer (waitRvs3=0) clears the wait via AND.
       uIdx.waitRvs3  := (0 until NumPipeIn).map(p => Mux(idxWriters(p), in.s1pipes(p).bits.waitRvs3, true.B)).reduce(_ && _)

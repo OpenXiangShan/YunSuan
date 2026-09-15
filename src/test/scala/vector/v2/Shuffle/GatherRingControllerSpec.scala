@@ -255,6 +255,7 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
         for (i <- 0 until param.numPipeIn) {
           val s1 = i == 0
           dut.in.s1pipes(i).valid.poke(s1)
+          dut.in.s1pipes(i).bits.indexValid.poke(s1)
           dut.in.s1pipes(i).bits.tablePos.poke(if (s1) 0 else 0)
           dut.in.s1pipes(i).bits.indexPos.poke(if (s1) 0 else 0)
           dut.in.s1pipes(i).bits.blockSize.poke(if (s1) 2 else 0)

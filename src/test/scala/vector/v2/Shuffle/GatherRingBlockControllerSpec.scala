@@ -204,15 +204,13 @@ class GatherRingBlockControllerSpec extends AnyFunSpec with ChiselSim with Match
       }
     }
 
-    it("s1 index not yet placed -> no flow") {
+    it("qualified s1 index completes the block -> flow") {
       // Units 0-2 hold both a table and an index (0x7). Unit 3's table+index are
-      // in s1 (0x8), NOT yet registered. The first table is at unit 2 (0x4); if
-      // the block flows now, that table would circulate past unit 3 before its
-      // index is filled (unconsumed), breaking the flow. So willFlow must be 0.
-      // (unit-only view: free table at 3 sits just above the highest registered
-      // index at 2 -> no circulation needed yet.)
+      // completing in s1 (0x8). s1IndexValid is already qualified by the
+      // top-level (including the EI16E8 gather/rvs3 pair state), so the existing
+      // tables may flow while the final index is registered on the same edge.
       simulateBlock(4, 0, 0x7, 0x7, boolSeq(4), s1TableValid = 0x8, s1IndexValid = 0x8) { (_, _, wf, _) =>
-        assert(wf == 0, s"willFlow must be 0 (got ${Integer.toBinaryString(wf)})")
+        assert(wf == 0x7, s"willFlow must be 111 (got ${Integer.toBinaryString(wf)})")
       }
     }
   }

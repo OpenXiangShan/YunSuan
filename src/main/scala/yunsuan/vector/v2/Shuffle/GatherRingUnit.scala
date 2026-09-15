@@ -108,8 +108,8 @@ class GatherRingUnit[T <: Data](
     gatherPlaced := false.B
     rvs3Placed   := false.B
   }.elsewhen (doPlaceIndex) {
-    gatherPlaced := !in.placeIndex.bits.isRvs3
-    rvs3Placed   := in.placeIndex.bits.isRvs3
+    gatherPlaced := gatherPlaced || in.placeIndex.bits.placesGather
+    rvs3Placed   := rvs3Placed || in.placeIndex.bits.placesRvs3
   }.elsewhen (hasIndex && counter === 0.U && (hasWb || in.wbReady)) {
     gatherPlaced := false.B
     rvs3Placed   := false.B
@@ -144,6 +144,8 @@ class GatherRingUnit[T <: Data](
     // loopback into the entry unit already forces passedEntry=1, so the entry
     // unit needs no special-casing here.
     passedEntry := in.flow.passedEntry
+  }.elsewhen((in.clearTable && passedEntry) || doFlow) {
+    passedEntry := false.B
   }.otherwise {
     // hold
   }
@@ -335,6 +337,8 @@ class GatherRingUnit[T <: Data](
   out.status.blockSize    := blockSize
   out.status.isFirstTable := isFirstTable
   out.status.passedEntry  := passedEntry
+  out.status.gatherPlaced := gatherPlaced
+  out.status.rvs3Placed   := rvs3Placed
   out.status.done         := done
 
   out.debug.foreach {
@@ -422,6 +426,10 @@ object GatherRingUnit {
 
     // SEW=8 vrgatherei16: 1 = this placement is the rvs3 (old-data) uop of a gather
     val isRvs3   = Bool()
+    // The placement may merge a same-cycle gather+rvs3 pair, so retain which
+    // halves are present independently of the merged request's isRvs3 value.
+    val placesGather = Bool()
+    val placesRvs3   = Bool()
     // 1 = this gather (isRvs3=0) has paired rvs3 uops whose old-data must be merged
     // before writeback (PREFILL slots are left pending until the rvs3 arrives)
     val waitRvs3 = Bool()
@@ -437,6 +445,8 @@ object GatherRingUnit {
       req.elemFlags  := s1.elemFlags
       req.elemData   := s1.elemData
       req.isRvs3     := s1.isRvs3
+      req.placesGather := !s1.isRvs3
+      req.placesRvs3   := s1.isRvs3
       req.waitRvs3   := s1.waitRvs3
       req.meta       := s1.meta
       req
@@ -459,6 +469,8 @@ object GatherRingUnit {
     val blockSize = BlockSize()
     val isFirstTable = Bool()
     val passedEntry = Bool()
+    val gatherPlaced = Bool()
+    val rvs3Placed = Bool()
     val done = Bool()
   }
 

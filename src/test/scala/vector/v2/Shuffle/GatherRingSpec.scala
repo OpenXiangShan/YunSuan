@@ -28,6 +28,7 @@ class GatherRingSpec
       dut.in.s0pipes(p).valid.poke(false)
       dut.in.s1pipes(p).valid.poke(false)
       dut.in.wbReady(p).poke(false)
+      dut.in.wakeAck(p).poke(false)
     }
     dut.in.flush.foreach(_.poke(false))
     dut.clock.step()
@@ -35,12 +36,24 @@ class GatherRingSpec
   }
 
   // s0: placement routing
-  def pS0(dut: GatherRing[FakeRobPtr], pipe: Int, blockBase: Int, blockSize: Int, placeIdx: Int = 0): Unit = {
+  def pS0(
+    dut:      GatherRing[FakeRobPtr],
+    pipe:     Int,
+    blockBase: Int,
+    blockSize: Int,
+    placeIdx: Int = 0,
+    isEi16E8: Boolean = false,
+    isRvs3:   Boolean = false,
+    uopIdx:   Int = 0
+  ): Unit = {
     val s0 = dut.in.s0pipes(pipe)
     s0.valid.poke(true)
     s0.bits.placeIdx.poke(placeIdx)
     s0.bits.blockBase.poke(blockBase)
     s0.bits.blockSize.poke(blockSize)
+    s0.bits.isEi16E8.poke(isEi16E8)
+    s0.bits.isRvs3.poke(isRvs3)
+    s0.bits.uopIdx.poke(uopIdx)
   }
 
   def pS0Off(dut: GatherRing[FakeRobPtr], pipe: Int): Unit = {
@@ -62,7 +75,12 @@ class GatherRingSpec
     placeIdx:   Int = 0,
     blockBase:  Int = 0,
     blockSize:  Int = 1,
-    tableIdx:   Int = 0
+    tableIdx:   Int = 0,
+    isRvs3:     Boolean = false,
+    waitRvs3:   Boolean = false,
+    robIdx:     Int = 0,
+    rawFlags:   Seq[Int] = Seq.empty,
+    rawData:    Seq[Int] = Seq.empty
   ): Unit = {
     val s1 = dut.in.s1pipes(pipe)
     s1.valid.poke(true)
@@ -70,13 +88,17 @@ class GatherRingSpec
     s1.bits.blockBase.poke(blockBase)
     s1.bits.blockSize.poke(blockSize)
     s1.bits.tableIdx.poke(tableIdx)
+    s1.bits.isRvs3.poke(isRvs3)
+    s1.bits.waitRvs3.poke(waitRvs3)
+    s1.bits.meta.flag.poke(false)
+    s1.bits.meta.value.poke(robIdx)
     // Encode to merged flags+data; scalar byte computed here (IndexGen equivalent)
     for (i <- 0 until 16) {
       val flags = if (fillZeros(i)) ElemFlags.ZERO else if (indexValid(i)) ElemFlags.LOOKUP else ElemFlags.PREFILL
       val sByte = sew match { case 8 => scalaBytes(0); case 16 => scalaBytes(i % 2); case 32 => scalaBytes(i % 4); case _ => scalaBytes(i % 8) }
       val data  = if (fillZeros(i)) 0 else if (fillScala(i)) sByte else if (indexValid(i)) index(i) else prefill(i)
-      s1.bits.elemFlags(i).poke(flags)
-      s1.bits.elemData(i).poke(data.U)
+      s1.bits.elemFlags(i).poke(if (rawFlags.nonEmpty) rawFlags(i).U else flags)
+      s1.bits.elemData(i).poke((if (rawData.nonEmpty) rawData(i) else data).U)
     }
     // table data
     table.zipWithIndex.foreach { case (v, i) => s1.bits.table(i).poke(v) }
@@ -977,6 +999,105 @@ class GatherRingSpec
   }
 
   describe("Robustness") {
+    describe("SEW=8 vrgatherei16") {
+      it("early rvs3 uop 7") {
+        simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+          initDut(dut)
+          val tables = Seq(
+            Seq(0x00, 0x02, 0x0f, 0x00, 0x08, 0x00, 0x07, 0x01, 0x00, 0xff, 0x00, 0x02, 0x0f, 0x00, 0x08, 0x00),
+            Seq(0x07, 0x01, 0x00, 0xff, 0x00, 0x02, 0x0f, 0x00, 0x08, 0x00, 0x07, 0x01, 0x00, 0xff, 0x00, 0x02),
+            Seq(0x0f, 0x00, 0x08, 0x00, 0x07, 0x01, 0x00, 0xff, 0x00, 0x02, 0x0f, 0x00, 0x08, 0x00, 0x07, 0x01),
+            Seq(0x00, 0xff, 0x00, 0x02, 0x0f, 0x00, 0x08, 0x00, 0x07, 0x01, 0x00, 0xff, 0x00, 0x02, 0x0f, 0x00)
+          )
+          val flags = Seq(
+            Seq.fill(16)(0),
+            Seq.fill(16)(0),
+            Seq(0, 2, 2, 0, 0, 0, 2, 2, 0, 0, 0, 2, 2, 0, 0, 0),
+            Seq(2, 2, 0, 0, 0, 2, 2, 0, 0, 0, 2, 2, 0, 0, 0, 2)
+          )
+          val data = Seq(
+            Seq.fill(16)(0),
+            Seq.fill(16)(0),
+            Seq(0, 0x0f, 0x08, 0, 0, 0, 0x0f, 0x08, 0, 0, 0, 0x0f, 0x08, 0, 0, 0),
+            Seq(0x0f, 0x08, 0, 0, 0, 0x0f, 0x08, 0, 0, 0, 0x0f, 0x08, 0, 0, 0, 0x0f)
+          )
+
+          def pEi16S0(pipe: Int, uopIdx: Int, placeIdx: Int = 0): Unit =
+            pS0(dut, pipe, blockBase = 0, blockSize = 4, placeIdx = placeIdx, isEi16E8 = true, isRvs3 = uopIdx >= 4, uopIdx = uopIdx)
+
+          def pEi16S1(pipe: Int, uopIdx: Int): Unit = {
+            val isRvs3 = uopIdx >= 4
+            val groupIdx = uopIdx & 3
+            val table = if (isRvs3) Seq.fill(16)(0) else tables(groupIdx)
+            val elemFlags = if (isRvs3) Seq.fill(16)(0) else flags(groupIdx)
+            val elemData = if (isRvs3) Seq.fill(16)(0) else data(groupIdx)
+            pS1(dut, pipe, table, Seq.fill(16)(0), Seq.fill(16)(false), Seq.fill(16)(0), blockSize = 4, tableIdx = uopIdx, isRvs3 = isRvs3, waitRvs3 = !isRvs3, robIdx = 13, rawFlags = elemFlags, rawData = elemData)
+          }
+
+          // FST cycles 41293..41307: rvs3 uop7 arrives four cycles before the
+          // gather group, then rvs3 uops4..6 arrive four cycles after it.
+          pEi16S0(pipe = 1, uopIdx = 7)
+          dut.clock.step()
+          pS0Off(dut, pipe = 1)
+          pEi16S1(pipe = 1, uopIdx = 7)
+          dut.clock.step()
+          pS1Off(dut, pipe = 1)
+          dut.clock.step(3)
+
+          pEi16S0(pipe = 1, uopIdx = 0)
+          pEi16S0(pipe = 2, uopIdx = 1, placeIdx = 1)
+          dut.clock.step()
+          pS0Off(dut, pipe = 1)
+          pS0Off(dut, pipe = 2)
+          pEi16S1(pipe = 1, uopIdx = 0)
+          pEi16S1(pipe = 2, uopIdx = 1)
+          pEi16S0(pipe = 3, uopIdx = 2)
+          dut.clock.step()
+          pS1Off(dut, pipe = 1)
+          pS1Off(dut, pipe = 2)
+          pS0Off(dut, pipe = 3)
+          pEi16S1(pipe = 3, uopIdx = 2)
+          pEi16S0(pipe = 0, uopIdx = 3)
+          dut.clock.step()
+          pS1Off(dut, pipe = 3)
+          pS0Off(dut, pipe = 0)
+          pEi16S1(pipe = 0, uopIdx = 3)
+          dut.clock.step()
+          pS1Off(dut, pipe = 0)
+          dut.clock.step(3)
+
+          pEi16S0(pipe = 1, uopIdx = 4)
+          pEi16S0(pipe = 2, uopIdx = 5)
+          dut.clock.step()
+          pS0Off(dut, pipe = 1)
+          pS0Off(dut, pipe = 2)
+          pEi16S1(pipe = 1, uopIdx = 4)
+          pEi16S1(pipe = 2, uopIdx = 5)
+          pEi16S0(pipe = 3, uopIdx = 6)
+          dut.clock.step()
+          pS1Off(dut, pipe = 1)
+          pS1Off(dut, pipe = 2)
+          pS0Off(dut, pipe = 3)
+          pEi16S1(pipe = 3, uopIdx = 6)
+          dut.clock.step()
+          pS1Off(dut, pipe = 3)
+
+          dut.in.wbReady.foreach(_.poke(true))
+          dut.clock.step(20)
+          val stuckCounters = (0 until 8).flatMap { u =>
+            val status = dut.out.unitStatus(u)
+            val counter = status.counter.peek().litValue
+            Option.when(counter != 0)(s"unit=$u counter=$counter hasTable=${status.hasTable.peek().litValue} hasIndex=${status.hasIndex.peek().litValue} passedEntry=${status.passedEntry.peek().litValue}")
+          }
+          assert(stuckCounters.isEmpty, s"stuck GatherRing entries: ${stuckCounters.mkString(", ")}")
+          for (u <- 0 until 8) {
+            dut.out.unitStatus(u).hasTable.expect(false.B, s"unit $u hasTable")
+            dut.out.unitStatus(u).hasIndex.expect(false.B, s"unit $u hasIndex")
+            dut.out.unitStatus(u).passedEntry.expect(false.B, s"unit $u passedEntry")
+          }
+        }
+      }
+    }
     it("back-to-back") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
