@@ -447,6 +447,10 @@ object Opcodes {
     private val FMAXM  = bb"1001"
     // TODO
     private val FWADD4 = bb"1010"
+    // vfclass is executed by the vfmac FU, so its encoding lives in this space; it is the
+    // VF_MISC(2b)|FCLASS(4b) pattern, which no other subopcode here uses.
+    private val VF_MISC = bb"11"
+    private val FCLASS  = bb"0100"
 
     val fmadd_fp16   : Opcode = FpR4TypeInst(FMADD , OP3, S2V, DV, FP16, F)
     val fmadd_fp32   : Opcode = FpR4TypeInst(FMADD , OP3, S2V, DV, FP32, F)
@@ -548,6 +552,9 @@ object Opcodes {
     val vfsgnjx_fp16 : Opcode = DvSvlS2vS1(FSGNJX, OP2, S2V, DV, FP16, V)
     val vfsgnjx_fp32 : Opcode = DvSvlS2vS1(FSGNJX, OP2, S2V, DV, FP32, V)
     val vfsgnjx_fp64 : Opcode = DvSvlS2vS1(FSGNJX, OP2, S2V, DV, FP64, V)
+    val vfclass_fp16 : Opcode = DvSvlS2v(VF_MISC, FCLASS, DV, FP16, V)
+    val vfclass_fp32 : Opcode = DvSvlS2v(VF_MISC, FCLASS, DV, FP32, V)
+    val vfclass_fp64 : Opcode = DvSvlS2v(VF_MISC, FCLASS, DV, FP64, V)
     val vfwadd_fp16  : Opcode = DvSvlS2vS1(FADD, OP2, S2V, DW, FP16, V)
     val vfwadd_fp32  : Opcode = DvSvlS2vS1(FADD, OP2, S2V, DW, FP32, V)
     val vfwsub_fp16  : Opcode = DvSvlS2vS1(FSUB, OP2, S2V, DW, FP16, V)
@@ -598,6 +605,8 @@ object Opcodes {
     def isVfsgnj(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FSGNJ
     def isVfsgnjn(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FSGNJN
     def isVfsgnjx(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FSGNJX
+    // vfclass uses the VF_MISC/FCLASS fields of the encoding instead of a subopcode of its own
+    def isVfclass(implicit op: UInt): Bool = op(9, 8) === VF_MISC && op(7, 4) === FCLASS && op(3) === DV
 
     def isVfwFadd(implicit op: UInt): Bool = getSubOpcode === FADD && getDestMode === DW
     def isVfwFsub(implicit op: UInt): Bool = getSubOpcode === FSUB && getDestMode === DW
@@ -764,6 +773,9 @@ object Opcodes {
   }
 
 
+  // Only the mask-writing vector FP compares are left here; they are not executed by any unit in
+  // this tree.  vfclass used to live here too and moved to the FMacOpcode space, which the vfmac
+  // FU decodes.
   trait VFMiscOpcode extends Opcodes with DataType {
     private val VF_MISC = bb"11"
     private val VF = bb"1"
@@ -774,7 +786,6 @@ object Opcodes {
     private val FNE    = bb"1000"
     private val FGT    = bb"1010"
     private val FGE    = bb"1110"
-    private val FCLASS = bb"0100"
 
     private val DM = bb"1"
     private val DV = bb"0"
@@ -797,9 +808,6 @@ object Opcodes {
     val vmfge_fp16  : Opcode = DmSvlS2vS1(VF_MISC, FGE   , DM, FP16, V)
     val vmfge_fp32  : Opcode = DmSvlS2vS1(VF_MISC, FGE   , DM, FP32, V)
     val vmfge_fp64  : Opcode = DmSvlS2vS1(VF_MISC, FGE   , DM, FP64, V)
-    val vfclass_fp16: Opcode = DvSvlS2v(VF_MISC, FCLASS, DV, FP16, V)
-    val vfclass_fp32: Opcode = DvSvlS2v(VF_MISC, FCLASS, DV, FP32, V)
-    val vfclass_fp64: Opcode = DvSvlS2v(VF_MISC, FCLASS, DV, FP64, V)
 
     Opcodes.updateMaxFixLat(this.getMaxLat)
 
@@ -817,7 +825,9 @@ object Opcodes {
     def isFne(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FNE && getDestType === DM
     def isFgt(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FGT && getDestType === DM
     def isFge(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FGE && getDestType === DM
-    def isFclass(implicit op: UInt): Bool = isVectorMisc && getOpcodes === FCLASS && getDestType === DV
+    // vfclass itself now lives in the FMacOpcode space, where the vfmac FU decodes it; this
+    // forwarding predicate is kept for the retired VFALU models that still reference it.
+    def isFclass(implicit op: UInt): Bool = FMacOpcode.isVfclass(op)
     def isVfCompare(implicit op: UInt): Bool = isFeq || isFne || isFlt || isFle || isFgt || isFge
     def isDstMask(implicit op: UInt): Bool = isVfCompare
 
