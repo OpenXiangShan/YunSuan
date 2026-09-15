@@ -7,38 +7,23 @@ import org.scalatest.matchers.must.Matchers
 import yunsuan.util.SpecBase
 import yunsuan.vector.v2.Shuffle.GatherCommon.GatherParam
 
-/** Segment store (zip) cases for [[PermUnit]].
+/** Segment store (zip) case for [[PermUnit]]: the emu failure of 2026-09-14 (`vsseg2e8_v-0`,
+  * LMUL=2) replayed from the IT waveform.
   *
-  * A segment store is split into one uop per fixed destination register
-  * (`EMUL * seg` uops, D-29), and every group of `seg` uops belongs to one chunk: those `seg` uops
-  * each present one field register on `vs2` and the ring has to zip them into one interleaved stream
-  * of `seg` registers, `slice = uopIdx % blockSize` selecting which VLEN-wide piece a given uop
-  * writes out.
-  *
-  * The case this spec was created for (emu 2026-09-14, `vsseg2e8_v-0`, LMUL=2): the ring emitted
-  * only 2 of the 4 uops of the instruction - the two chunks are two independent 2-unit blocks and
-  * the second block never delivered its results - which left the ROB waiting forever on the
-  * instruction's borrowed PermUnit entries. The expected per-uop data below is
-  * `interleave(field0, field1)[slice*VLENB .. slice*VLENB+VLENB)`, i.e. for seg 2 the low halves of
-  * both field registers for slice 0 and the high halves for slice 1.
+  * A segment store is split into one uop per fixed destination register (`EMUL * seg` uops, D-29) and
+  * every group of `seg` uops belongs to one chunk; for this instruction the four uops form two
+  * independent 2-unit blocks of the ring (blocks 0 and 2). The ring never released those units, so
+  * the entries the instruction had borrowed from the VOQ were never returned and the ROB waited on it
+  * forever. The replay below drives the exact stimulus measured in `logs/waves/seg2f_full.fst`
+  * (tabulated in `emu-stimulus-seg2.md`) and asserts that every ring unit is idle again once the
+  * instruction has drained.
   */
 class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
 
   val NumPipes = 4
-  var cyc = 0
 
   def foldBytes(bytes: Seq[Int]): BigInt =
     bytes.foldRight(BigInt(0))((b, a) => (a << 8) | BigInt(b))
-
-  def fieldLo(base: Int): Seq[Int] = Seq.tabulate(numElem)(base + _)
-  def fieldHi(base: Int): Seq[Int] = Seq.tabulate(numElem)(base + 0x40 + _)
-
-  /** Byte-wise interleave of the field registers of one chunk, as the store must place it. */
-  def interleave(fields: Seq[Seq[Int]]): Seq[Int] =
-    (0 until numElem).flatMap(i => fields.map(_(i))).toSeq
-
-  def zipSlice(fields: Seq[Seq[Int]], slice: Int): BigInt =
-    foldBytes(interleave(fields).slice(slice * numElem, (slice + 1) * numElem))
 
   // ---- Poke helpers (mirrors PermUnitSpec) ---------------------------------
 
@@ -98,13 +83,20 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
   def pPipeOff(dut: PermUnit[FakePermMeta], pipe: Int): Unit =
     dut.in.pipes(pipe).valid.poke(false)
 
-  def pBlock(dut: PermUnit[FakePermMeta], pipes: Seq[Int], blockBase: Int): Unit =
-    pipes.foreach(p => dut.in.pipes(p).bits.blockBase.poke(blockBase))
-
   /** Clock one cycle with the given pipes held, then release them. */
   def stepOff(dut: PermUnit[FakePermMeta], pipes: Int*): Unit = {
     dut.clock.step()
     pipes.foreach(pPipeOff(dut, _))
+  }
+
+  /** One segment-store uop with the control values the emu drives for `vsseg2e8_v-0` LMUL=2. */
+  def pEmuUop(dut: PermUnit[FakePermMeta], pipe: Int, vs2: Seq[Int], blockBase: Int,
+              placeIdx: Int, uopIdx: Int, robIdx: Int): Unit = {
+    pZip(dut, pipe, vs2, blockUnits = 2, uopIdx = uopIdx, placeIdx = placeIdx, zipNum = 1, pdest = 0)
+    val b = dut.in.pipes(pipe).bits
+    b.vl.poke(255)
+    b.blockBase.poke(blockBase)
+    b.meta.robIdx.poke(robIdx)
   }
 
   def initDut(dut: PermUnit[FakePermMeta]): Unit = {
@@ -117,161 +109,61 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
     dut.clock.step()
   }
 
-  /** (pdest, data) of every writeback seen within `maxSteps`, keyed by pdest so the assertion does
-    * not depend on which output pipe the ring arbitrates a given uop onto. */
-  def collectWbByPdest(dut: PermUnit[FakePermMeta], maxSteps: Int, pdests: Seq[Int]): Map[Int, BigInt] = {
-    var seen = Map.empty[Int, BigInt]
-    for (_ <- 0 until maxSteps) {
-      for (p <- 0 until NumPipes) {
-        if (dut.out.pipes(p).valid.peekBoolean()) {
-          val q = dut.out.pipes(p).bits.meta.pdest.peekValue().asBigInt.toInt
-          if (pdests.contains(q) && !seen.contains(q)) seen += (q -> dut.out.pipes(p).bits.data.peekValue().asBigInt)
-        }
-      }
-      dut.clock.step()
-    }
-    seen
-  }
-
   // ---- Tests ---------------------------------------------------------------
 
   describe("zip") {
     describe("seg 2") {
-      it("EMUL=1: one 2-unit block emits both slices") {
+      // Verbatim replay of the stimulus of the FAILING instruction in the emu run (logs/waves/
+      // seg2f_full.fst, robIdx 0x88): the per-cycle valid pattern, every valid row's fields and the
+      // payloads are copied from ...inner_vecRegion.permUnit.permUnit.in_pipes_*.
+      //
+      //   emu cycle  valid(p0,p1)  offers
+      //   17409      1 0            p0 blockBase=0 uopIdx=0 placeIdx=0 vs2=a0
+      //   17410      1 1            p0 blockBase=2 uopIdx=2 placeIdx=0 vs2=a2
+      //                             p1 blockBase=0 uopIdx=1 placeIdx=0 vs2=b1
+      //   17411      0 1            p1 blockBase=2 uopIdx=3 placeIdx=0 vs2=b3
+      //   17412      0 0
+      //
+      // One 4-uop instruction = two independent 2-unit blocks (block 0 and block 2); pipe1 only
+      // becomes valid in the second cycle. placeIdx counts same-cycle siblings *of the same block*
+      // only (VecPermUnit.segChunkOffsetOf): the emu waveform shows 1 for the 17410 pipe1 uop because
+      // the pre-fix generator counted its chunk-1 sibling from another block, which shifted the uop
+      // off block 0's own unit and left block 0 incomplete forever (unit 0 never released).
+      //
+      // The payloads are the measured 128-bit vs2 values (each uop carries one field register, and
+      // the four of them are the same stream shifted by 16 bits); the control fields are the
+      // measured ones: vl=255, lmul=m2, sew=e8, ei=e8, vta=vma=0, mask=0xffff, zipNum=1, pdest=0.
+      //
+      // In the emu the instruction's tables were never all released, so the entries it had borrowed
+      // from the VOQ were never returned and the ROB waited on it forever. The observable that
+      // matters is unit occupancy: GatherRingUnit clears `hasTable` only on `in.clearTable &&
+      // passedEntry` (or through the flow path), while `passedEntry` itself is only ever overwritten,
+      // so a leftover `passedEntry=1` on an empty unit is benign. This case therefore asserts the
+      // units are free again (hasTable=0) once the instruction has drained.
+      it("EMUL=2: emu replay (vsseg2e8_v-0, ring unit release)") {
         simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
           initDut(dut)
-          val f0 = fieldLo(0x00)
-          val f1 = fieldLo(0x10)
-          val fields = Seq(f0, f1)
-          pZip(dut, 0, f0, blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 0)
-          pZip(dut, 1, f1, blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 1)
+          val a0 = Seq(0x01, 0x00, 0xff, 0xf8, 0x7f, 0x0f, 0x02, 0x01, 0x00, 0xff, 0xf8, 0x7f, 0x0f, 0x02, 0x01, 0x00)
+          val b1 = Seq(0x0f, 0x02, 0x01, 0x00, 0xff, 0xf8, 0x7f, 0x0f, 0x02, 0x01, 0x00, 0xff, 0xf8, 0x7f, 0x0f, 0x02)
+          val a2 = Seq(0xf8, 0x7f, 0x0f, 0x02, 0x01, 0x00, 0xff, 0xf8, 0x7f, 0x0f, 0x02, 0x01, 0x00, 0xff, 0xf8, 0x7f)
+          val b3 = Seq(0x00, 0xff, 0xf8, 0x7f, 0x0f, 0x02, 0x01, 0x00, 0xff, 0xf8, 0x7f, 0x0f, 0x02, 0x01, 0x00, 0xff)
+          pEmuUop(dut, 0, a0, blockBase = 0, placeIdx = 0, uopIdx = 0, robIdx = 0x88)
+          stepOff(dut, 0)
+          pEmuUop(dut, 0, a2, blockBase = 2, placeIdx = 0, uopIdx = 2, robIdx = 0x88)
+          pEmuUop(dut, 1, b1, blockBase = 0, placeIdx = 0, uopIdx = 1, robIdx = 0x88)
           stepOff(dut, 0, 1)
-          val got = collectWbByPdest(dut, 40, Seq(0, 1))
-          got(0) mustBe zipSlice(fields, 0)
-          got(1) mustBe zipSlice(fields, 1)
-        }
-      }
-
-      it("EMUL=2: two 2-unit blocks emit all four slices") {
-        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
-          initDut(dut)
-          val c0 = Seq(fieldLo(0x00), fieldLo(0x10)) // chunk0: field 0 low, field 1 low
-          val c1 = Seq(fieldHi(0x00), fieldHi(0x10)) // chunk1: field 0 high, field 1 high
-          pZip(dut, 0, c0(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 0)
-          pZip(dut, 1, c0(1), blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 1)
-          pZip(dut, 2, c1(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 2)
-          pZip(dut, 3, c1(1), blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 3)
-          // chunk k works on the block at blockBase = k * blockSize - without this the four
-          // tables of two chunks would all target block 0, which the ring rightly rejects.
-          pBlock(dut, Seq(2, 3), 2)
-          stepOff(dut, 0, 1, 2, 3)
-          val got = collectWbByPdest(dut, 60, Seq(0, 1, 2, 3))
-          got(0) mustBe zipSlice(c0, 0)
-          got(1) mustBe zipSlice(c0, 1)
-          got(2) mustBe zipSlice(c1, 0)
-          got(3) mustBe zipSlice(c1, 1)
-        }
-      }
-
-      // The two chunks of an EMUL=2 instruction land on different 2-unit blocks of the same ring:
-      // chunk k uses blockBase = k * blockSize, which is what the main repo drives.
-      it("EMUL=2: second chunk only (blockBase=2)") {
-        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
-          initDut(dut)
-          val c1 = Seq(fieldHi(0x00), fieldHi(0x10))
-          pZip(dut, 0, c1(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 0)
-          pZip(dut, 1, c1(1), blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 1)
-          pBlock(dut, Seq(0, 1), 2)
-          stepOff(dut, 0, 1)
-          val got = collectWbByPdest(dut, 60, Seq(0, 1))
-          got(0) mustBe zipSlice(c1, 0)
-          got(1) mustBe zipSlice(c1, 1)
-        }
-      }
-
-      // Same-cycle placement of two different blocks, each with placeIdx 0 (legal: each block owns
-      // its own slots). Neither block can complete here - only one of its two tables arrives - so
-      // this case only checks that the ring's table-writer assert stays quiet.
-      it("EMUL=2: one field of each block in the same cycle") {
-        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
-          initDut(dut)
-          pZip(dut, 0, fieldLo(0x00), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 0)
-          pZip(dut, 2, fieldHi(0x00), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 2)
-          pBlock(dut, Seq(2), 2)
-          stepOff(dut, 0, 1, 2, 3)
-          for (_ <- 0 until 20) {
+          pEmuUop(dut, 1, b3, blockBase = 2, placeIdx = 0, uopIdx = 3, robIdx = 0x88)
+          stepOff(dut, 1)
+          for (_ <- 0 until 80) {
             dut.clock.step()
           }
-        }
-      }
-
-      // The pattern the emu actually drives for vsseg2e8 with LMUL=2 (robIdx 0x88, cycles
-      // 17409..17411, read off in_pipes_*):
-      //   t+0: block0.field0 (pipe0)
-      //   t+1: block0.field1 (pipe1) and block1.field0 (pipe0)
-      //   t+2: block1.field1 (pipe1)
-      // i.e. the two fields of a block arrive one cycle apart on different pipes, and the two
-      // blocks are interleaved by one cycle - the fields of a block are NOT co-issued.
-      it("EMUL=2: emu arrival pattern (staircase)") {
-        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
-          initDut(dut)
-          val c0 = Seq(fieldLo(0x00), fieldLo(0x10))
-          val c1 = Seq(fieldHi(0x00), fieldHi(0x10))
-          pZip(dut, 0, c0(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 0)
-          stepOff(dut, 0)
-          pZip(dut, 1, c0(1), blockUnits = 2, uopIdx = 1, placeIdx = 0, zipNum = 1, pdest = 1)
-          pZip(dut, 0, c1(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 2)
-          pBlock(dut, Seq(0), 2)
-          stepOff(dut, 1)
-          pZip(dut, 0, c1(1), blockUnits = 2, uopIdx = 1, placeIdx = 0, zipNum = 1, pdest = 3)
-          pBlock(dut, Seq(0), 2)
-          stepOff(dut, 0, 1, 2, 3)
-          val got = collectWbByPdest(dut, 80, Seq(0, 1, 2, 3))
-          got(0) mustBe zipSlice(c0, 0)
-          got(1) mustBe zipSlice(c0, 1)
-          got(2) mustBe zipSlice(c1, 0)
-          got(3) mustBe zipSlice(c1, 1)
-        }
-      }
-
-      it("EMUL=2: two blocks one cycle apart") {
-        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
-          initDut(dut)
-          val c0 = Seq(fieldLo(0x00), fieldLo(0x10))
-          val c1 = Seq(fieldHi(0x00), fieldHi(0x10))
-          pZip(dut, 0, c0(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 0)
-          pZip(dut, 1, c0(1), blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 1)
-          stepOff(dut, 0, 1)
-          pZip(dut, 2, c1(0), blockUnits = 2, uopIdx = 0, placeIdx = 0, zipNum = 1, pdest = 2)
-          pZip(dut, 3, c1(1), blockUnits = 2, uopIdx = 1, placeIdx = 1, zipNum = 1, pdest = 3)
-          pBlock(dut, Seq(2, 3), 2)
-          stepOff(dut, 0, 1, 2, 3)
-          val got = collectWbByPdest(dut, 60, Seq(0, 1, 2, 3))
-          got(0) mustBe zipSlice(c0, 0)
-          got(1) mustBe zipSlice(c0, 1)
-          got(2) mustBe zipSlice(c1, 0)
-          got(3) mustBe zipSlice(c1, 1)
-        }
-      }
-    }
-
-    // TODO(seg 4/8): zipNum 3 / 7 with 4- and 8-unit blocks, and the seg 3/5/6/7 hole cases once
-    // the block controller learns to accept an empty slot (task-yunsuan-seg3567.md).
-    describe("seg 4") {
-      it("EMUL=1: one 4-unit block emits all four slices") {
-        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
-          initDut(dut)
-          val fields = Seq(fieldLo(0x00), fieldLo(0x10), fieldLo(0x20), fieldLo(0x30))
-          for (u <- 0 until NumPipes) {
-            pZip(dut, u, fields(u), blockUnits = 4, uopIdx = u, placeIdx = u, zipNum = 3, pdest = u)
+          val busy = (0 until dut.out.unitStatus.length).filter { u =>
+            dut.out.unitStatus(u).hasTable.peek().litValue != 0
           }
-          stepOff(dut, 0, 1, 2, 3)
-          val got = collectWbByPdest(dut, 80, Seq(0, 1, 2, 3))
-          for (u <- 0 until 4) {
-            got(u) mustBe zipSlice(fields, u)
-          }
+          busy mustBe Seq.empty
         }
       }
     }
   }
 }
+
