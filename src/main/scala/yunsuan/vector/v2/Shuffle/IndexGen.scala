@@ -323,7 +323,11 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
 
     // PREFILL data: tail elements follow vta, mask-inactive follow vma;
     // compress has no mask, all PREFILL are tail -> vta
-    isTail(i) := Cat(effUopIdx, i.U(dlenBits.W)) >= e8vl
+    // Unzip writes one destination field register per uop. Its uopIdx selects the field, not a
+    // later VLEN chunk of one concatenated destination group, so tail position is local to every
+    // field register. For example, vlseg2e8 with vl=7 keeps bytes 0..6 in both field outputs;
+    // counting field 1 as bytes 16..31 would incorrectly make the whole second field tail.
+    isTail(i) := Mux(outIsUnzip, i.U >= e8vl, Cat(effUopIdx, i.U(dlenBits.W)) >= e8vl)
     // vslideup stay (i < offset) elements are "unchanged" (old vd = vs3),
     // independent of vma/vta: ma must not clobber them with 0xFF (Q26).
     val slideStay = opReg.isSlideUp && !iv && !maskInactive && !isTail(i)

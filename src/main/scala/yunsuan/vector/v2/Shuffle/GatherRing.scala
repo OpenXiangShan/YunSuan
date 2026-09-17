@@ -82,7 +82,19 @@ class GatherRing[T <: Data](
 
   for (i <- 0 until NumUnits) {
 
-    val prevFlowSource: Option[ValidIO[GatherRingUnit.RingFlow]] = Option.when(i > 0)(units(i - 1).out.flow)
+    val prevFlowSource: Option[ValidIO[GatherRingUnit.RingFlow]] = Option.when(i > 0) {
+      val prev = units(i - 1)
+      // A tail table returns through its size-specific loopback below. Letting the same tail also
+      // use the physical next-unit connection crosses into the neighboring block; if that block is
+      // flowing too, Mux1H sees both sources and ORs their payloads. This occurred with adjacent
+      // seg2 blocks when unit 3 forwarded into unit 4 while unit 5 looped back into unit 4.
+      val crossesBlockBoundary =
+        (prev.out.status.blockSize & 1.U).orR ||
+          ((prev.out.status.blockSize & 2.U).orR && (i % 2 == 0).B) ||
+          ((prev.out.status.blockSize & 4.U).orR && (i % 4 == 0).B) ||
+          ((prev.out.status.blockSize & 8.U).orR && (i % 8 == 0).B)
+      makeValidIO(prev.out.flow.valid && !crossesBlockBoundary, prev.out.flow.bits)
+    }
 
     // A table returning to the block's entry unit via a ring loopback has already
     // passed the entry, so tag the loopback flow with passedEntry=1. The tail
@@ -117,6 +129,10 @@ class GatherRing[T <: Data](
     ).flatten
 
     units(i).in.flow := Mux1HValidIO(flowSources)
+    when (controller.out.willFlow(i)) {
+      assert(PopCount(flowSources.map(_.valid)) <= 1.U,
+        s"multiple ring flow sources target GatherRing unit $i")
+    }
   }
 
   for (i <- 0 until NumUnits) {

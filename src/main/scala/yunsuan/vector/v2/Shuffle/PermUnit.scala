@@ -47,7 +47,16 @@ class PermUnit[T <: Data](
 
     ig.in.valid       := pi.valid
     ig.in.bits.op     := pi.bits.op
-    ig.in.bits.uopIdx := pi.bits.uopIdx
+    // A segment zip numbers its uops chunk-major (`uopIdx = chunk * seg + field`), but the zip
+    // IndexGen tables only hold the slices of ONE chunk, indexed by the field number
+    // `uopIdx % seg` (seg = zipNum + 1). Passing the chunk-inclusive uopIdx through selects an
+    // unfilled slice for chunk > 0: every index comes out invalid and the ring emits PREFILL
+    // zeros (emu vsseg2e8_v-0, 2026-09-16: chunk-1 store data all zero, FST seg2e8_uopidx.fst).
+    // The ring itself keeps the chunk-inclusive uopIdx for block placement; only the IndexGen
+    // slice and table tag are reduced to the field number.
+    val segmentSliceIdx = PermUnit.segmentFieldIdx(pi.bits.uopIdx, pi.bits.zipNum)
+    val isSegPerm = (pi.bits.op.isZip || pi.bits.op.isUnzip) && pi.bits.zipNum =/= 0.U
+    ig.in.bits.uopIdx := Mux(isSegPerm, segmentSliceIdx, pi.bits.uopIdx)
     ig.in.bits.sew    := pi.bits.sew
     ig.in.bits.ei     := pi.bits.ei
     ig.in.bits.lmul   := pi.bits.lmul
@@ -162,6 +171,26 @@ class PermUnit[T <: Data](
 
 object PermUnit {
 
+  /** Convert a chunk-major segment uop index to its field number.
+    *
+    * `zipNum` encodes `seg - 1` for seg 2 through 8. List every legal `(zipNum, uopIdx)` key so
+    * the generated hardware is a one-hot constant lookup and contains no remainder operator.
+    */
+  def segmentFieldIdx(uopIdx: UInt, zipNum: UInt): UInt = {
+    val uopIdxWidth = uopIdx.getWidth
+    val zipNumWidth = zipNum.getWidth
+    val key = Cat(zipNum, uopIdx)
+    def matchKey(zipNumValue: Int, uopIdxValue: Int): Bool =
+      key === Cat(zipNumValue.U(zipNumWidth.W), uopIdxValue.U(uopIdxWidth.W))
+
+    val mapping = for {
+      seg         <- 2 to 8
+      field       <- 0 until seg
+      rawUopIdx   <- field until (1 << uopIdxWidth) by seg
+    } yield matchKey(seg - 1, rawUopIdx) -> field.U(uopIdxWidth.W)
+    Mux1H(mapping)
+  }
+
   /** PermUnit top-level input bundle. */
   class In[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
     val flush   = Vec(NumUnits, Bool())
@@ -214,7 +243,16 @@ object PermUnit {
 
     def blockSize: UInt = Cat(lmul.m8, lmul.m4, lmul.m2, lmul.mf8 || lmul.mf4 || lmul.mf2 || lmul.m1)
 
-    def tableIdx = uopIdx
+    // For a segment zip the table tag must be block-local: GatherBase matches an index to a
+    // table by `index.drop(LookUpIndexWidth) === tableIdx`, and the zip IndexGen emits
+    // chunk-relative indices (table tags 0..seg-1 within one chunk's block). A chunk-inclusive
+    // uopIdx would tag chunk c's tables c*seg+..., which no index ever matches, so the unit's
+    // indexDone never resolves (GatherRingUnit wb assertion, chunk-inclusive replay 2026-09-16).
+    def tableIdx = Mux(
+      (op.isZip || op.isUnzip) && zipNum =/= 0.U,
+      segmentFieldIdx(uopIdx, zipNum),
+      uopIdx,
+    )
   }
 
   def main(args: Array[String]): Unit = {
