@@ -68,6 +68,7 @@ class GatherRing[T <: Data](
   controller.in.hasIndex := units.map(_.out.status.hasIndex)
   controller.in.hasIndexNext := units.map(_.out.status.hasIndexNext)
   controller.in.blockSize := units.map(_.out.status.blockSize)
+  controller.in.blockFieldNum := units.map(_.out.status.blockFieldNum)
   controller.in.counter := units.map(_.out.status.counter)
   controller.in.wbValid := Cat(units.map(_.out.wb.valid).reverse)
   controller.in.wakeValid := Cat(units.map(_.out.wake.valid).reverse)
@@ -178,6 +179,7 @@ class GatherRing[T <: Data](
       val uIdx = Wire(new PlaceIndexRequest(chiselTypeOf(units(u).in.placeIndex.bits.meta)))
       uIdx.blockBase := (0 until NumPipeIn).map(p => Mux(idxWriters(p), in.s1pipes(p).bits.blockBase, 0.U)).reduce(_ | _)
       uIdx.blockSize := (0 until NumPipeIn).map(p => Mux(idxWriters(p), in.s1pipes(p).bits.blockSize, 0.U)).reduce(_ | _)
+      uIdx.blockFieldNum := (0 until NumPipeIn).map(p => Mux(idxWriters(p), in.s1pipes(p).bits.blockFieldNum, 0.U)).reduce(_ | _)
       // isRvs3: true only when EVERY writer is an rvs3 (a lone cross-cycle rvs3
       // continuing its gather). A merged gather+rvs3 pair is a complete placement
       // (gather's isRvs3=0 clears the AND), and a lone gather is not an rvs3.
@@ -317,6 +319,10 @@ object GatherRing {
      */
     val blockSize   = BlockSize()
 
+    /** Real field count of the block (== block size for full blocks, 2..size-1
+      * for segment 3/5/6/7 hole blocks). */
+    val blockFieldNum = BlockFieldNum()
+
     // SEW=8 vrgatherei16: index routing is deterministic (blockBase | placeIdx,
     // placeIdx = uopIdx % blockSize), bypassing the entryIndex free-slot search.
     // Index slots of a freshly allocated block are always clean, so skipping the
@@ -338,6 +344,7 @@ object GatherRing {
     val placeIdx  = PipeInIdx()
     val blockBase = UnitIdx()
     val blockSize = BlockSize()
+    val blockFieldNum = BlockFieldNum()
 
     // Per-element merged: 2b flags + 8b data (index or prefill)
     val elemFlags = Vec(NumElem, ElemFlags())

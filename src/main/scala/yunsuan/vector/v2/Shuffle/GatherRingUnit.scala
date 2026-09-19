@@ -27,6 +27,10 @@ class GatherRingUnit[T <: Data](
     in.placeIndex.valid -> in.placeIndex.blockSize,
     in.placeTable.valid -> in.placeTable.blockSize,
   ))
+  private val inBlockFieldNum = Mux1H(Seq(
+    in.placeIndex.valid -> in.placeIndex.bits.blockFieldNum,
+    in.placeTable.valid -> in.placeTable.bits.blockFieldNum,
+  ))
 
   // ── Table Input MUX ──────────────────────────────────
   private val doPlaceTable = in.placeTable.valid
@@ -38,6 +42,7 @@ class GatherRingUnit[T <: Data](
   private val tableData    = Reg(Vec(NumElem, UInt(MinDataWidth.W)))
   private val tableIdx     = Reg(UInt(TableIdxWidth.W))
   private val blockSize    = Reg(BlockSize())
+  private val blockFieldNum = RegInit(0.U((TableIdxWidth + 1).W))
   private val isFirstTable = RegInit(false.B)
   private val isLastUnit   = RegInit(false.B)
   private val passedEntry  = RegInit(false.B)
@@ -117,6 +122,12 @@ class GatherRingUnit[T <: Data](
 
   when (doPlaceTable || doPlaceIndex) {
     blockSize := inBlockSize
+    blockFieldNum := inBlockFieldNum
+  }.elsewhen (doFlowTable) {
+    // D7: a hole unit (never placed) learns the block's size from the first table
+    // flowing through, becoming visible to the ring masks (crossesBlockBoundary).
+    // Real units only ever receive their own block's tables (same value rewrite).
+    blockSize := in.flow.blockSize
   }
 
   private val isFirstTableNext = Mux1H(Seq(
@@ -135,6 +146,11 @@ class GatherRingUnit[T <: Data](
     isLastUnit := isLastUnitNext
   }.elsewhen(in.placeTable.valid) {
     isLastUnit := false.B
+  }.elsewhen(doFlowTable) {
+    // D8: a hole unit (never placed) derives tail-ness from the flowing table's
+    // block; aligned blocks => tail iff (unitIdx + 1) % blockSize == 0. Real
+    // units recompute the same value (flow carries their own block's size).
+    isLastUnit := GatherRingUnit.pow2remIsZero(unitIdx + 1, in.flow.blockSize)
   }
 
   when(doPlaceTable) {
@@ -176,11 +192,13 @@ class GatherRingUnit[T <: Data](
     // (old-data) placement is a continuation of the same block and must not.
     // The first table of the block (isFirstTable, at the entry unit) is already
     // in place, so one fewer table needs to arrive; a non-first table placement
-    // (or index-only) still needs the full blockSize tables to flow in.
+    // (or index-only) still needs the full blockFieldNum tables to flow in.
+    // D2: count real tables (blockFieldNum), not the ring width (blockSize) — a
+    // hole block (segment 3/5/6/7) has fewer tables than units.
     when ((hasTable && isFirstTable) || (doPlaceTable && in.placeTable.bits.isFirstTable)) {
-      counter := inBlockSize - 1.U
+      counter := inBlockFieldNum - 1.U
     }.otherwise {
-      counter := inBlockSize
+      counter := inBlockFieldNum
     }
   }.elsewhen(doFlowTable && counter > 0.U && in.flow.passedEntry) {
     // Only count tables that carry passedEntry: a table that has not passed the
@@ -318,7 +336,12 @@ class GatherRingUnit[T <: Data](
     wakeBlocked := true.B
   }
 
-  out.wake.valid := in.allTableValid && hasIndex && counter <= param.issue2exu.U && !wakedUp
+  // D3: hole blocks (segment 3/5/6/7, blockFieldNum != block size) never wake —
+  // the gapped table train breaks the delay = issue2exu - counter dense-train
+  // assumption, so consumers rely on the wb broadcast instead.
+  private val hasHole = blockFieldNum =/= blockSizeCount(blockSize)
+
+  out.wake.valid := in.allTableValid && hasIndex && counter <= param.issue2exu.U && !wakedUp && !hasHole
   out.wake.bits.delay := (param.issue2exu.U - counter)(WakeDelayWidth - 1, 0) - wakeBlocked
   out.wake.bits.meta := meta
 
@@ -328,6 +351,7 @@ class GatherRingUnit[T <: Data](
   out.flow.tableIdx := tableIdx
   out.flow.isFirstTable := isFirstTable
   out.flow.passedEntry := passedEntry
+  out.flow.blockSize := blockSize
 
   // ── Status Output (for top-level vacancy detection) ───
   out.status.hasTable     := hasTable
@@ -335,6 +359,7 @@ class GatherRingUnit[T <: Data](
   out.status.hasIndexNext := hasIndexNext
   out.status.counter      := counter
   out.status.blockSize    := blockSize
+  out.status.blockFieldNum := blockFieldNum
   out.status.isFirstTable := isFirstTable
   out.status.passedEntry  := passedEntry
   out.status.gatherPlaced := gatherPlaced
@@ -399,6 +424,9 @@ object GatherRingUnit {
      * The size of the block in [[GatherRing]], should be equal to [[PlaceIndexRequest]].blockSize if valid
      */
     val blockSize   = BlockSize()
+
+    /** Real field count of the block (== block size for full blocks, 2..size-1 for hole blocks) */
+    val blockFieldNum = BlockFieldNum()
   }
 
   object PlaceTableRequest {
@@ -408,6 +436,7 @@ object GatherRingUnit {
       req.table    := s1.table
       req.isFirstTable := GatherRingUnit.pow2remIsZero(unitIdx, s1.blockSize)
       req.blockSize    := s1.blockSize
+      req.blockFieldNum := s1.blockFieldNum
       req
     }
   }
@@ -419,6 +448,9 @@ object GatherRingUnit {
   class PlaceIndexRequest[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
     val blockBase = UnitIdx()
     val blockSize = BlockSize()
+
+    /** Real field count of the block (== block size for full blocks, 2..size-1 for hole blocks) */
+    val blockFieldNum = BlockFieldNum()
 
     // Per-element merged: 2b flags + 8b data (index or prefill)
     val elemFlags = Vec(NumElem, ElemFlags())
@@ -442,6 +474,7 @@ object GatherRingUnit {
       val req = Wire(new PlaceIndexRequest(chiselTypeOf(s1.meta)))
       req.blockBase  := s1.blockBase
       req.blockSize  := s1.blockSize
+      req.blockFieldNum := s1.blockFieldNum
       req.elemFlags  := s1.elemFlags
       req.elemData   := s1.elemData
       req.isRvs3     := s1.isRvs3
@@ -459,6 +492,9 @@ object GatherRingUnit {
     val tableIdx    = UnitIdx()
     val isFirstTable = Bool()
     val passedEntry = Bool()
+    // D7: the forwarding unit's block size, so a hole unit can latch it and
+    // become visible to the ring masks while the block is alive.
+    val blockSize   = BlockSize()
   }
 
   class Status(implicit val param: GatherParam) extends GatherBundle {
@@ -467,6 +503,7 @@ object GatherRingUnit {
     val hasIndexNext = Bool()
     val counter = UInt(log2Ceil(NumUnits + 1).W)
     val blockSize = BlockSize()
+    val blockFieldNum = BlockFieldNum()
     val isFirstTable = Bool()
     val passedEntry = Bool()
     val gatherPlaced = Bool()

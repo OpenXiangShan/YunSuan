@@ -77,6 +77,18 @@ object GatherCommon {
 
     def BlockSize(): UInt = UInt((TableIdxWidth + 1).W)
 
+    /** Real field (table/index) count of a block: == block size for full blocks,
+      * 2..size-1 for hole blocks (segment 3/5/6/7), 0 = empty. */
+    def BlockFieldNum(): UInt = UInt((TableIdxWidth + 1).W)
+
+    /** One-hot blockSize (bit0..3 = 1/2/4/8) -> block element count (1/2/4/8). */
+    def blockSizeCount(blockSize: UInt): UInt = Mux1H(Seq(
+      blockSize(0) -> 1.U,
+      blockSize(1) -> 2.U,
+      blockSize(2) -> 4.U,
+      blockSize(3) -> 8.U,
+    ))
+
     def TableIdxWidth: Int = log2Ceil(NumUnits)
 
     def VlWidth: Int = IndexWidth + 1

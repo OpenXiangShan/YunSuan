@@ -32,6 +32,8 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
     bc.in.s1IndexValid := ring2S1IndexValid(base + 1, base)
     bc.in.indexValidNext := in.hasIndexNext.asUInt(base + 1, base)
     bc.in.counter := VecInit(in.counter.slice(base, base + 2))
+    // ring2 never hosts hole blocks (segment 3/5/6/7 round up to size 4/8)
+    bc.in.blockFieldNum := 2.U
     for (j <- 0 until NumPipeIn) {
       // blockSize(1)=m2 gates ring2: only active for LMUL=2, not 4 or 8
       bc.in.pipePlaceIdx(j).valid :=
@@ -44,7 +46,25 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
     }
   }
 
-  private val ring4UnitMask = Cat(in.blockSize.map(x => (x & 4.U).orR).reverse)
+  // ── ring4 hole state (segment 3 in a size-4 block) ─────────────────────
+  // Per-block resident fieldNum, gated by aliveness: a drained/empty block
+  // reports 0, which also retires the forcing (D5 lifecycle). Qualified with
+  // the resident block actually being size-4 (one-hot bit2) so a ring4 bc
+  // never forces for blocks of other sizes sharing its units' history.
+  private val ring4FieldNum = Seq.tabulate(NumUnits / 4) { i =>
+    val base = 4 * i
+    val alive = (base until base + 4).map(u =>
+      in.hasTable(u) || in.hasIndex(u) || in.counter(u) =/= 0.U
+    ).reduce(_ || _)
+    Mux(alive && in.blockSize(base)(2), in.blockFieldNum(base), 0.U)
+  }
+  // Index holes = HIGH units f..size-1 (passive: table storage/forward only)
+  private val ring4IndexHoleBits = Cat(Seq.tabulate(NumUnits / 4) { i =>
+    val f = ring4FieldNum(i)
+    Mux(f >= 2.U && f < 4.U, (Fill(4, 1.B) << f)(3, 0), 0.U(4.W))
+  }.reverse)
+
+  private val ring4UnitMask = Cat(in.blockSize.map(x => (x & 4.U).orR).reverse) | ring4IndexHoleBits
   private val s1Ring4TableValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 4.U).orR), s1PipesTableValid)
   private val s1Ring4IndexValid = Mux1H(in.s1pipes.map(x => x.bits.indexValid && (x.bits.blockSize & 4.U).orR), s1PipesIndexValid)
 
@@ -52,11 +72,14 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
     val base = 4 * i
 
     bc.in.unitTableValid := (in.hasTable.asUInt & ring4UnitMask)(base + 3, base)
-    bc.in.unitIndexValid := (in.hasIndex.asUInt & ring4UnitMask)(base + 3, base)
+    // D4: index holes are forced index-valid so the block's index-completion,
+    // clearTable and willFlow criteria treat them as done/flowing.
+    bc.in.unitIndexValid := ((in.hasIndex.asUInt | ring4IndexHoleBits) & ring4UnitMask)(base + 3, base)
     bc.in.s1TableValid := s1Ring4TableValid(base + 3, base)
     bc.in.s1IndexValid := s1Ring4IndexValid(base + 3, base)
     bc.in.indexValidNext := in.hasIndexNext.asUInt(base + 3, base)
     bc.in.counter := VecInit(in.counter.slice(base, base + 4))
+    bc.in.blockFieldNum := ring4FieldNum(i)(log2Up(4 + 1) - 1, 0)
     for (j <- 0 until NumPipeIn) {
       // blockSize(2) gates ring4: only active for LMUL=4
       bc.in.pipePlaceIdx(j).valid :=
@@ -69,18 +92,32 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
     }
   }
 
-  private val ring8UnitMask = Cat(in.blockSize.map(x => (x & 8.U).orR).reverse)
+  // ── ring8 hole state (segment 5/6/7 in a size-8 block) ──────────────────
+  private val ring8FieldNum = Seq.tabulate(NumUnits / 8) { i =>
+    val base = 8 * i
+    val alive = (base until base + 8).map(u =>
+      in.hasTable(u) || in.hasIndex(u) || in.counter(u) =/= 0.U
+    ).reduce(_ || _)
+    Mux(alive && in.blockSize(base)(3), in.blockFieldNum(base), 0.U)
+  }
+  private val ring8IndexHoleBits = Cat(Seq.tabulate(NumUnits / 8) { i =>
+    val f = ring8FieldNum(i)
+    Mux(f >= 2.U && f < 8.U, (Fill(8, 1.B) << f)(7, 0), 0.U(8.W))
+  }.reverse)
+
+  private val ring8UnitMask = Cat(in.blockSize.map(x => (x & 8.U).orR).reverse) | ring8IndexHoleBits
   private val s1Ring8TableValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 8.U).orR), s1PipesTableValid)
   private val s1Ring8IndexValid = Mux1H(in.s1pipes.map(x => x.bits.indexValid && (x.bits.blockSize & 8.U).orR), s1PipesIndexValid)
 
   for ((bc, i) <- ring8Controllers.zipWithIndex) {
     val base = 8 * i
     bc.in.unitTableValid := (in.hasTable.asUInt & ring8UnitMask)(base + 7, base)
-    bc.in.unitIndexValid := (in.hasIndex.asUInt & ring8UnitMask)(base + 7, base)
+    bc.in.unitIndexValid := ((in.hasIndex.asUInt | ring8IndexHoleBits) & ring8UnitMask)(base + 7, base)
     bc.in.s1TableValid := s1Ring8TableValid(base + 7, base)
     bc.in.s1IndexValid := s1Ring8IndexValid(base + 7, base)
     bc.in.indexValidNext := in.hasIndexNext.asUInt(base + 7, base)
     bc.in.counter := VecInit(in.counter.slice(base, base + 8))
+    bc.in.blockFieldNum := ring8FieldNum(i)
     for (j <- 0 until NumPipeIn) {
       // blockSize(3) gates ring8: only active for LMUL=8
       bc.in.pipePlaceIdx(j).valid :=
@@ -216,6 +253,9 @@ object GatherRingController {
     val wbValid = UInt(NumUnits.W)
     val wakeValid = UInt(NumUnits.W)
     val counter = Vec(NumUnits, UInt(log2Up(NumUnits + 1).W))
+    // Per-unit resident block field count (GatherRingUnit.status.blockFieldNum);
+    // valid while the unit's block is alive, 0 when empty.
+    val blockFieldNum = Vec(NumUnits, BlockFieldNum())
   }
 
   class InPipe1(implicit val param: GatherParam) extends GatherBundle {

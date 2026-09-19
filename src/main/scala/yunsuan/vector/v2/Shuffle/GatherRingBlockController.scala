@@ -20,6 +20,25 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   val unitTableValid = in.unitTableValid
   val unitIndexValid = in.unitIndexValid
 
+  // ── Hole blocks (segment fieldNum < size) ──────────────────────────────
+  // Tables fill in the usual reversed tableMap order (0, size-1, ..., 1), so
+  // with only f < size tables the table-less units are the LOW units
+  // 1 .. size-f (fill-order tail). Tables keep flowing through them; they just
+  // never hold one at rest. Index holes are a different set (HIGH units
+  // f .. size-1) and are handled by GatherRingController forcing, not here.
+  // fieldNum has exactly two consumers in this module: the allTableHasFilled
+  // set condition (inject the table holes) and this legality assertion.
+  val fieldNum = in.blockFieldNum
+  val tableHoleMask = Mux(
+    fieldNum >= 2.U && fieldNum < size.U,
+    (((1.U((size + 1).W) << (size.U - fieldNum)) - 1.U) << 1)(size - 1, 0),
+    0.U(size.W)
+  )
+  assert(
+    fieldNum === 0.U || (fieldNum >= 2.U && fieldNum <= size.U),
+    "blockFieldNum must be 0 (empty block) or in [2, size]"
+  )
+
   val unitTableValidNextCycle = Wire(UInt(size.W))
 
   // Merged occupancy for placement: registered (unit) + in-flight (s1).
@@ -149,7 +168,7 @@ class GatherRingBlockController(val size: Int, val blockBase: Int)(implicit val 
   // block always re-assembles from 0 (default 0).
   val allTableHasFilled = RegInit(false.B)
 
-  when(unitTableValid.andR) {
+  when((unitTableValid | tableHoleMask).andR) {
     allTableHasFilled := true.B
   }
   // All counters zero = every unit's flow has completed (block done). Clearing
@@ -191,6 +210,9 @@ object GatherRingBlockController {
     val s1IndexValid: UInt = UInt(size.W)
     val indexValidNext: UInt = UInt(size.W)
     val counter: Vec[UInt] = Vec(size, UInt(log2Up(NumUnits + 1).W))
+    // Real field (table) count of the resident/placing block: 0 = empty,
+    // size = full block (legacy), 2..size-1 = hole block (segment 3/5/6/7).
+    val blockFieldNum: UInt = UInt(log2Up(size + 1).W)
   }
 
   class Out(size: Int)(implicit val param: GatherParam) extends GatherBundle {

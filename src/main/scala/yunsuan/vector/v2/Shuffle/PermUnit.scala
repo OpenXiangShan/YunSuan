@@ -77,6 +77,7 @@ class PermUnit[T <: Data](
   private val regPlaceIdx  = Wire(Vec(NumPipeIn, PipeInIdx()))
   private val regBlockBase = Wire(Vec(NumPipeIn, UnitIdx()))
   private val regBlockSize = Wire(Vec(NumPipeIn, BlockSize()))
+  private val regBlockFieldNum = Wire(Vec(NumPipeIn, BlockFieldNum()))
   private val regVs2       = Wire(Vec(NumPipeIn, UInt(DLEN.W)))
   private val regCompress  = Wire(Vec(NumPipeIn, Bool()))
   private val regTableIdx  = Wire(Vec(NumPipeIn, UnitIdx()))
@@ -89,6 +90,7 @@ class PermUnit[T <: Data](
     regPlaceIdx(i)  := RegEnable(pi.bits.placeIdx, pi.valid)
     regBlockBase(i) := RegEnable(pi.bits.blockBase, pi.valid)
     regBlockSize(i) := RegEnable(pi.bits.blockSize, pi.valid)
+    regBlockFieldNum(i) := RegEnable(pi.bits.blockFieldNum, pi.valid)
     regVs2(i)       := RegEnable(pi.bits.vs2, pi.valid)
     regCompress(i)  := RegEnable(pi.bits.op.isCompress, pi.valid)
     regTableIdx(i)  := RegEnable(pi.bits.tableIdx, pi.valid)
@@ -109,6 +111,7 @@ class PermUnit[T <: Data](
     gatherRing.in.s0pipes(i).bits.placeIdx  := in.pipes(i).bits.placeIdx
     gatherRing.in.s0pipes(i).bits.blockBase := in.pipes(i).bits.blockBase
     gatherRing.in.s0pipes(i).bits.blockSize := in.pipes(i).bits.blockSize
+    gatherRing.in.s0pipes(i).bits.blockFieldNum := in.pipes(i).bits.blockFieldNum
     // SEW=8 vrgatherei16: route index deterministically by uopIdx%blockSize
     // (blockBase | placeIdx) so gather i and rvs3 i share a unit regardless of
     // the ring's dynamic entryIndex / hasIndex.
@@ -130,6 +133,7 @@ class PermUnit[T <: Data](
     gatherRing.in.s1pipes(i).bits.placeIdx  := regPlaceIdx(i)
     gatherRing.in.s1pipes(i).bits.blockBase := regBlockBase(i)
     gatherRing.in.s1pipes(i).bits.blockSize := regBlockSize(i)
+    gatherRing.in.s1pipes(i).bits.blockFieldNum := regBlockFieldNum(i)
 
     // Merged flags+data passed directly to GatherRing
     gatherRing.in.s1pipes(i).bits.elemFlags := indexGens(i).out.elemFlags
@@ -217,6 +221,10 @@ object PermUnit {
     // -- Block placement --
     val placeIdx  = PipeInIdx()
     val blockBase = UnitIdx()
+    /** Real field count of this uop's ring block: segFields for segment
+      * zip/unzip (a 3/5/6/7-field block rounds up to 4/8 units with the tail
+      * units as passive index holes); == block size for full blocks. */
+    val blockFieldNum = BlockFieldNum()
 
     // -- Operation select (one-hot) --
     val op = new IndexGen.OpSel
