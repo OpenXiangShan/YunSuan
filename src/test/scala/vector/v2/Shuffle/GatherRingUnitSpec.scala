@@ -51,9 +51,13 @@ class GatherRingUnitSpec extends SpecBase {
       dut.in.flow.bits.data.foreach(_.poke(0))
       dut.in.flow.bits.isFirstTable.poke(false)
       dut.in.flow.bits.passedEntry.poke(false)
+      dut.in.flow.bits.blockSize.poke(8)
       dut.in.placeTable.valid.poke(false)
       dut.in.placeIndex.valid.poke(false)
       dut.in.wbReady.poke(false)
+      dut.in.allTableValid.poke(false)
+      dut.in.wakeAck.poke(false)
+      dut.in.blockedByEqCounter.poke(false)
       dut.in.flush.poke(true)
       dut.clock.step()
       dut.in.flush.poke(false)
@@ -99,7 +103,7 @@ class GatherRingUnitSpec extends SpecBase {
       dut.in.flow.valid.poke(false)
   }
 
-  def pPlaceTable(blockSize: Int, tblIdx: Int, tbl: Seq[Int]): GatherRingUnit[FakeRobPtr] => Unit = {
+  def pPlaceTable(blockSize: Int, tblIdx: Int, tbl: Seq[Int], fieldNum: Int = -1): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
       val isFirst = dut.unitIdx % blockSize == 0
@@ -110,6 +114,7 @@ class GatherRingUnitSpec extends SpecBase {
       }
       dut.in.placeTable.bits.isFirstTable.poke(isFirst)
       dut.in.placeTable.bits.blockSize.poke(blockSize)
+      dut.in.placeTable.bits.blockFieldNum.poke(if (fieldNum < 0) blockSize else fieldNum)
   }
 
   def pPlaceIndex(
@@ -120,11 +125,13 @@ class GatherRingUnitSpec extends SpecBase {
     fScala:  Seq[Boolean] = Seq.fill(16)(false),
     fZeros:  Seq[Boolean] = Seq.fill(16)(false),
     scalarData: Seq[Int] = Seq.fill(8)(0),
-    sew:     Int = 64
+    sew:     Int = 64,
+    fieldNum: Int = -1
   ): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
       dut.in.placeIndex.bits.blockSize.poke(blkSize)
+      dut.in.placeIndex.bits.blockFieldNum.poke(if (fieldNum < 0) blkSize else fieldNum)
       dut.in.placeIndex.valid.poke(true)
       for (i <- 0 until 16) {
         val flags = if (fZeros(i)) ElemFlags.ZERO else if (iValid(i)) ElemFlags.LOOKUP else ElemFlags.PREFILL
@@ -145,11 +152,12 @@ class GatherRingUnitSpec extends SpecBase {
     scalarValid: Seq[Boolean] = Seq.fill(16)(false),
     zeroValid  : Seq[Boolean] = Seq.fill(16)(false),
     scalarData : Seq[Int] = Seq.fill(8)(0),
-    sew        : Int = 64
+    sew        : Int = 64,
+    fieldNum   : Int = -1
   ): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
-      pPlaceTable(blkSize, tblIdx, tbl)(dut)
-      pPlaceIndex(blkSize, idx, iValid, prefill, scalarValid, zeroValid, scalarData, sew)(dut)
+      pPlaceTable(blkSize, tblIdx, tbl, fieldNum)(dut)
+      pPlaceIndex(blkSize, idx, iValid, prefill, scalarValid, zeroValid, scalarData, sew, fieldNum)(dut)
   }
 
   def pNoPlace: GatherRingUnit[FakeRobPtr] => Unit = {
@@ -167,7 +175,7 @@ class GatherRingUnitSpec extends SpecBase {
       dut.in.willFlow.poke(true)
   }
 
-  def pFlowTbl(tblIdx: Int, tbl: Seq[Int], passedEntry: Boolean = false, isFirstTable: Boolean = false): GatherRingUnit[FakeRobPtr] => Unit = {
+  def pFlowTbl(tblIdx: Int, tbl: Seq[Int], passedEntry: Boolean = false, isFirstTable: Boolean = false, blockSize: Int = -1): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
       dut.in.flow.valid.poke(true)
@@ -177,9 +185,31 @@ class GatherRingUnitSpec extends SpecBase {
       }
       dut.in.flow.bits.isFirstTable.poke(isFirstTable)
       dut.in.flow.bits.passedEntry.poke(passedEntry)
+      if (blockSize >= 0) dut.in.flow.bits.blockSize.poke(blockSize)
   }
 
   def pNoFlowTbl(): GatherRingUnit[FakeRobPtr] => Unit = _.in.flow.valid.poke(false)
+
+  def pWakeCtx(allTableValid: Boolean): GatherRingUnit[FakeRobPtr] => Unit = {
+    dut =>
+
+      dut.in.allTableValid.poke(allTableValid)
+      dut.in.wakeAck.poke(false)
+      dut.in.blockedByEqCounter.poke(false)
+  }
+
+  def eWake(valid: Boolean, delay: Int = 0)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit = {
+    dut =>
+
+      dut.out.wake.valid.expect(valid.B, "wake.valid mismatch")
+      if (valid) dut.out.wake.bits.delay.expect(delay.U, "wake.delay mismatch")
+  }
+
+  def eFlowOut(valid: Boolean)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit =
+    _.out.flow.valid.expect(valid.B, "flow.valid mismatch")
+
+  def eBlockSize(v: Int)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit =
+    _.out.status.blockSize.expect(v.U, "status.blockSize mismatch")
 
   // Controller-driven table drop: hasTable clears only when clearTable && passedEntry.
   def pClearTbl(v: Boolean = true): GatherRingUnit[FakeRobPtr] => Unit = _.in.clearTable.poke(v)
@@ -395,6 +425,104 @@ class GatherRingUnitSpec extends SpecBase {
             initUnit,
             Cycle(pPlace(8, 0, e, e, f))(eT1, eI1),
             Cycle(pNoPlace, pNoFlow, pFlush)(eT0, eI0),
+          )
+      }
+    }
+  }
+
+  describe("hole block (segment fieldNum < size)") {
+
+    it("counter initializes from blockFieldNum with first-table discount (seg3: f=3 in size 4)") {
+      simulator() {
+        dut =>
+
+          val table = Table.inc(4)
+          val index = Index.unzip4(1)
+
+          runCycles(
+            dut,
+            initUnit,
+            // entry unit (unitIdx=0): first table + index same cycle -> f-1 discount
+            Cycle(pPlace(4, 0, table, index, IndexValid.allTrue(), Prefill.default(1), fieldNum = 3))(eT1, eI1, eCounter(2)),
+          )
+      }
+    }
+
+    it("counter initializes to fieldNum without a first table (no discount)") {
+      simulator() {
+        dut =>
+
+          val index = Index.unzip4(1)
+
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pPlaceIndex(4, index, IndexValid.allTrue(), Prefill.default(1), fieldNum = 3))(eI1, eCounter(3)),
+          )
+      }
+    }
+
+    it("wake is suppressed for hole blocks (D3)") {
+      simulator() {
+        dut =>
+
+          val table = Table.inc(4)
+          val index = Index.unzip4(1)
+
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pPlace(4, 0, table, index, IndexValid.allTrue(), Prefill.default(1), fieldNum = 3))(eWake(false)),
+            // counter=2 <= issue2exu with allTableValid set: a full block would wake here
+            Cycle(pNoPlace, pNoFlow, pWakeCtx(true))(eWake(false)),
+          )
+      }
+    }
+
+    it("wake fires for a full block at the same occupancy (control)") {
+      simulator() {
+        dut =>
+
+          val table = Table.inc(4)
+          val index = Index.unzip4(1)
+
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pPlace(4, 0, table, index, IndexValid.allTrue(), Prefill.default(1)))(eWake(false), eCounter(3)),
+            Cycle(pNoPlace, pNoFlow, pWakeCtx(true))(eWake(true, delay = 0)),
+          )
+      }
+    }
+
+    it("tail hole derives isLastUnit from the flowing table's blockSize (unitIdx=3, size=4)") {
+      simulator(unitIdx = 3) {
+        dut =>
+
+          val table = Table.inc()
+
+          runCycles(
+            dut,
+            initUnit,
+            // virgin unit (never placed): latch blockSize from the flow (D7)
+            Cycle(pFlow, pFlowTbl(0, table, passedEntry = false, blockSize = 4))(eT1, eBlockSize(4), eFlowOut(true)),
+            // D8: isLastUnit derived = true -> after passedEntry the tail stops offering
+            Cycle(pFlow, pFlowTbl(0, table, passedEntry = true, blockSize = 4))(eT1, eFlowOut(false)),
+          )
+      }
+    }
+
+    it("mid-ring unit keeps forwarding after passedEntry (unitIdx=1, size=4)") {
+      simulator(unitIdx = 1) {
+        dut =>
+
+          val table = Table.inc()
+
+          runCycles(
+            dut,
+            initUnit,
+            Cycle(pFlow, pFlowTbl(0, table, passedEntry = false, blockSize = 4))(eT1, eFlowOut(true)),
+            Cycle(pFlow, pFlowTbl(0, table, passedEntry = true, blockSize = 4))(eT1, eFlowOut(true)),
           )
       }
     }

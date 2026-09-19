@@ -32,6 +32,7 @@ class PermUnitSegLoadSpec extends SpecBase with GatherSpecUtils {
     pSew(in.bits.sew, 8)
     pSew(in.bits.ei, 8)
     pLmul(in.bits.lmul, 16)
+    in.bits.blockFieldNum.poke(2.U)
     in.bits.vl.poke(0.U)
     in.bits.vta.poke(false.B)
     in.bits.vma.poke(false.B)
@@ -52,6 +53,10 @@ class PermUnitSegLoadSpec extends SpecBase with GatherSpecUtils {
     placeIdx: Int,
     packed: Seq[Int],
     oldVd: Seq[Int],
+    zipNum: Int = 1,
+    lmulFrac: Int = 16,
+    fieldNum: Int = 2,
+    vl: Int = 7,
   ): Unit = {
     val in = dut.in.pipes(pipe)
     in.valid.poke(true.B)
@@ -60,11 +65,12 @@ class PermUnitSegLoadSpec extends SpecBase with GatherSpecUtils {
     in.bits.op.isUnzip.poke(true.B)
     in.bits.uopIdx.poke(uopIdx.U)
     pSew(in.bits.sew, 8)
-    pLmul(in.bits.lmul, 16)
-    in.bits.vl.poke(7.U)
+    pLmul(in.bits.lmul, lmulFrac)
+    in.bits.blockFieldNum.poke(fieldNum.U)
+    in.bits.vl.poke(vl.U)
     in.bits.vs2.poke(foldBytes(packed).U)
     in.bits.vs3.poke(foldBytes(oldVd).U)
-    in.bits.zipNum.poke(1.U)
+    in.bits.zipNum.poke(zipNum.U)
     in.bits.meta.robIdx.poke(0x6e.U)
     in.bits.meta.pdest.poke(uopIdx.U)
   }
@@ -95,6 +101,7 @@ class PermUnitSegLoadSpec extends SpecBase with GatherSpecUtils {
     in.bits.uopIdx.poke(beat.uopIdx.U)
     pSew(in.bits.sew, sew)
     pLmul(in.bits.lmul, 32)
+    in.bits.blockFieldNum.poke(4.U)
     in.bits.vl.poke(beat.vl.U)
     in.bits.vs2.poke(beat.vs2.U)
     in.bits.vs3.poke(beat.vs3.U)
@@ -192,6 +199,53 @@ class PermUnitSegLoadSpec extends SpecBase with GatherSpecUtils {
         dut.in.wbReady.foreach(_.poke(true.B))
         dut.in.wakeAck.foreach(_.poke(true.B))
         for (_ <- 0 until 40) {
+          for (pipe <- dut.out.pipes.indices if dut.out.pipes(pipe).valid.peekBoolean()) {
+            val pdest = dut.out.pipes(pipe).bits.meta.pdest.peekValue().asBigInt.toInt
+            if (pdest < actual.length && actual(pdest).isEmpty) {
+              actual(pdest) = Some(dut.out.pipes(pipe).bits.data.peekValue().asBigInt)
+            }
+          }
+          dut.clock.step()
+        }
+
+        actual.toSeq mustBe expected.map(Some(_))
+        dut.out.unitStatus.foreach { status =>
+          status.hasTable.expect(false.B)
+          status.hasIndex.expect(false.B)
+        }
+      }
+    }
+
+    it("deinterleaves vlseg3e8 vl=5 in a size-4 hole block and preserves old-vd tails") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        for (pipe <- dut.in.pipes.indices) {
+          defaults(dut, pipe)
+        }
+        dut.in.flush.foreach(_.poke(false.B))
+        dut.in.wbReady.foreach(_.poke(false.B))
+        dut.in.wakeAck.foreach(_.poke(false.B))
+        dut.clock.step()
+
+        // vlseg3e8 vl=5: one chunk (15 interleaved bytes, all in table 0), 3 field
+        // uops in a size-4 hole block (unit3 = passive index hole)
+        val packed0 = (0 until 15).map(identity) :+ 0
+        val packedZ = Seq.fill(16)(0)
+        val olds = (0 until 3).map(f => (0 until 16).map(i => 0xa0 + f * 0x20 + i))
+        for (f <- 0 until 3) {
+          driveUnzip(dut, pipe = f, uopIdx = f, placeIdx = f, if (f == 0) packed0 else packedZ, olds(f),
+            zipNum = 2, lmulFrac = 32, fieldNum = 3, vl = 5)
+        }
+        dut.clock.step()
+        for (f <- 0 until 3) dut.in.pipes(f).valid.poke(false.B)
+
+        val expected = Seq.tabulate(3)(f =>
+          foldBytes((0 until 5).map(_ * 3 + f) ++ olds(f).drop(5))
+        )
+        val actual = Array.fill[Option[BigInt]](3)(None)
+        dut.in.wbReady.foreach(_.poke(true.B))
+        dut.in.wakeAck.foreach(_.poke(true.B))
+        for (_ <- 0 until 40) {
+          dut.out.wake.foreach(w => assert(!w.valid.peekBoolean(), "hole block must not wake (D3)"))
           for (pipe <- dut.out.pipes.indices if dut.out.pipes(pipe).valid.peekBoolean()) {
             val pdest = dut.out.pipes(pipe).bits.meta.pdest.peekValue().asBigInt.toInt
             if (pdest < actual.length && actual(pdest).isEmpty) {

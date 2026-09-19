@@ -89,6 +89,21 @@ class ZipIndexGenSpec extends SpecBase with GatherSpecUtils {
         }
       }
     }
+    // Segment 3/5/6/7 field counts (hole blocks): sweep all SEW and uop indices,
+    // including the first fully-invalid uop (i >= zipn * vlenb).
+    for (zipn <- Seq(3, 5, 6, 7)) {
+      describe(s"zipn=$zipn (hole block field count)") {
+        it("SEW/uopIdx sweep") {
+          simulate(new ZipIndexGenHandWrite()(GatherParam.default)) { dut =>
+            for (sew <- Seq(8, 16, 32, 64); uopIdx <- 0 to zipn) {
+              pZip(dut, zipn, sew, uopIdx)
+              dut.clock.step()
+              eZip(dut, goldenZip(zipn, sew, uopIdx))
+            }
+          }
+        }
+      }
+    }
   }
 
   describe("ZipIndexGenDecodeTable") {

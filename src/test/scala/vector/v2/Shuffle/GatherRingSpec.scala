@@ -44,13 +44,15 @@ class GatherRingSpec
     placeIdx: Int = 0,
     isEi16E8: Boolean = false,
     isRvs3:   Boolean = false,
-    uopIdx:   Int = 0
+    uopIdx:   Int = 0,
+    fieldNum: Int = -1
   ): Unit = {
     val s0 = dut.in.s0pipes(pipe)
     s0.valid.poke(true)
     s0.bits.placeIdx.poke(placeIdx)
     s0.bits.blockBase.poke(blockBase)
     s0.bits.blockSize.poke(blockSize)
+    s0.bits.blockFieldNum.poke(if (fieldNum < 0) blockSize else fieldNum)
     s0.bits.isEi16E8.poke(isEi16E8)
     s0.bits.isRvs3.poke(isRvs3)
     s0.bits.uopIdx.poke(uopIdx)
@@ -80,13 +82,15 @@ class GatherRingSpec
     waitRvs3:   Boolean = false,
     robIdx:     Int = 0,
     rawFlags:   Seq[Int] = Seq.empty,
-    rawData:    Seq[Int] = Seq.empty
+    rawData:    Seq[Int] = Seq.empty,
+    fieldNum:   Int = -1
   ): Unit = {
     val s1 = dut.in.s1pipes(pipe)
     s1.valid.poke(true)
     s1.bits.placeIdx.poke(placeIdx)
     s1.bits.blockBase.poke(blockBase)
     s1.bits.blockSize.poke(blockSize)
+    s1.bits.blockFieldNum.poke(if (fieldNum < 0) blockSize else fieldNum)
     s1.bits.tableIdx.poke(tableIdx)
     s1.bits.isRvs3.poke(isRvs3)
     s1.bits.waitRvs3.poke(waitRvs3)
@@ -113,6 +117,52 @@ class GatherRingSpec
     dut.out.pipes(pipe).bits.data.expect(dest, ExpectationValueFormat.Hex)
   }
 
+  // Step until n writebacks have been observed (wbReady held high), collecting
+  // robIdx -> data. Sampling happens BEFORE each clock.step(): a wb that is
+  // granted in the same cycle it asserts is invisible to post-step peeks.
+  // With expectNoWake, asserts no wake request fires at any step (D3).
+  def collectWbs(dut: GatherRing[FakeRobPtr], n: Int, expectNoWake: Boolean = false, maxSteps: Int = 40): Map[Int, BigInt] = {
+    dut.in.wbReady.foreach(_.poke(true))
+    var got = Map.empty[Int, BigInt]
+    var steps = 0
+    while (got.size < n && steps < maxSteps) {
+      if (expectNoWake) {
+        dut.out.wake.foreach(w => assert(w.valid.peekValue().asBigInt == 0, "hole block must not wake"))
+      }
+      for (p <- 0 until NumPipes) {
+        if (dut.out.pipes(p).valid.peekValue().asBigInt == 1) {
+          got += (dut.out.pipes(p).bits.meta.value.peekValue().asBigInt.toInt ->
+            dut.out.pipes(p).bits.data.peekValue().asBigInt)
+        }
+      }
+      dut.clock.step()
+      steps += 1
+    }
+    if (got.size != n) {
+      val dump = dut.out.unitStatus.zipWithIndex.map { case (s, u) =>
+        f"u$u: T=${s.hasTable.peekValue().asBigInt} I=${s.hasIndex.peekValue().asBigInt} " +
+          f"c=${s.counter.peekValue().asBigInt} bs=${s.blockSize.peekValue().asBigInt} f=${s.blockFieldNum.peekValue().asBigInt}"
+      }.mkString("  ")
+      println(s"[collectWbs] timeout after $steps steps, got ${got.keys.mkString(",")}; unitStatus: $dump")
+    }
+    assert(got.size == n, s"only ${got.size}/$n writebacks observed after $steps steps")
+    got
+  }
+
+  // Step until every unit has fully drained (no table, no index), i.e. the hole
+  // state in the controller must have retired too.
+  def stepUntilDrained(dut: GatherRing[FakeRobPtr], maxSteps: Int = 20): Unit = {
+    var steps = 0
+    var busy = true
+    while (busy && steps < maxSteps) {
+      dut.clock.step()
+      steps += 1
+      busy = dut.out.unitStatus.exists(s =>
+        s.hasTable.peekValue().asBigInt == 1 || s.hasIndex.peekValue().asBigInt == 1)
+    }
+    assert(!busy, s"ring did not drain after $maxSteps steps")
+  }
+
   // === Test Objects (reuse from GatherRingUnitSpec) ===
 
   def foldBytes(bytes: Seq[Int]): BigInt =
@@ -128,6 +178,8 @@ class GatherRingSpec
     def allInTable1(numTable: Int = 1) = Seq.tabulate(numTable * 16)(x => 16 + 15 - x % 16)
     def unzip2(numTable: Int = 1) = Seq.tabulate(numTable * 16)(x => x / 2 + (x % 2) * 16)
     def unzip4(numTable: Int = 1) = Seq.tabulate(numTable * 16)(x => x / 4 + x % 4 * 16)
+    // per-unit 16-entry slice for a segment unzip with n fields (n tables of 16B)
+    def unzipN(n: Int) = Seq.tabulate(16)(x => x / n + (x % n) * 16)
     def slideup(sew: Int, numTable: Int = 1, slide: Int = 1) = Seq.tabulate(numTable * 16)(x => x - sew / 8 * slide)
     def slidedown(sew: Int, numTable: Int = 1, slide: Int = 1) = Seq.tabulate(numTable * 16)(x => x + sew / 8 * slide)
   }
@@ -1172,6 +1224,145 @@ class GatherRingSpec
         for (u <- 0 until 8) {
           dut.out.unitStatus(u).hasTable.expect(false.B)
           dut.out.unitStatus(u).hasIndex.expect(false.B)
+        }
+      }
+    }
+  }
+
+  describe("segment hole blocks (fieldNum < size)") {
+
+    // Drive one segment-unzip block: nf uops (one per field) into the size-sized
+    // block at blockBase, dispatched NumPipes uops per beat (batch-local placeIdx).
+    def runSegBlock(
+      dut:       GatherRing[FakeRobPtr],
+      nf:        Int,
+      size:      Int,
+      blockBase: Int,
+      table:     Seq[Int],
+      robBase:   Int
+    ): Unit = {
+      val index = Index.unzipN(nf)
+      val iValid = IndexValid.allTrue(1)
+      val pf = Prefill.default(1)
+      for (beatStart <- 0 until nf by NumPipes) {
+        val batch = (beatStart until (beatStart + NumPipes).min(nf)).toSeq
+        for ((u, j) <- batch.zipWithIndex) {
+          pS0(dut, pipe = j, blockBase = blockBase, blockSize = size, placeIdx = j, uopIdx = u, fieldNum = nf)
+        }
+        dut.clock.step()
+        for (j <- batch.indices) pS0Off(dut, pipe = j)
+        for ((u, j) <- batch.zipWithIndex) {
+          pS1(dut, pipe = j, table.slice(u * 16, (u + 1) * 16), index, iValid, pf,
+            blockBase = blockBase, blockSize = size, tableIdx = u, placeIdx = j, robIdx = robBase + u, fieldNum = nf)
+        }
+        dut.clock.step()
+        for (j <- batch.indices) pS1Off(dut, pipe = j)
+      }
+    }
+
+    def expectSilentHole(dut: GatherRing[FakeRobPtr], unit: Int)(implicit sourceInfo: SourceInfo): Unit = {
+      dut.out.unitStatus(unit).hasIndex.expect(false.B, s"hole unit $unit must never hold an index")
+      dut.out.unitStatus(unit).counter.expect(0.U, s"hole unit $unit counter must stay 0")
+    }
+
+    it("seg3: size-4 block with 3 fields assembles, circulates, writes back (wake silent)") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val f = 3
+        val table = Table.inc(f)
+        val golden = Res.gather(table, Index.unzipN(f), IndexValid.allTrue(1), Prefill.default(1), 0 until f)
+
+        runSegBlock(dut, f, size = 4, blockBase = 0, table, robBase = 0)
+        val wbs = collectWbs(dut, f, expectNoWake = true)
+        for (u <- 0 until f) assert(wbs(u) == golden, s"field $u data mismatch")
+
+        expectSilentHole(dut, unit = 3)
+      }
+    }
+
+    it("seg3 x2 adjacent size-4 blocks (EMUL=2 pattern): no cross-block leak") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val f = 3
+        val tableA = Table.inc(f)
+        val tableB = Table.inc(f).map(_ + 64)
+        val index = Index.unzipN(f)
+        val iValid = IndexValid.allTrue(1)
+        val pf = Prefill.default(1)
+        val goldenA = Res.gather(tableA, index, iValid, pf, 0 until f)
+        val goldenB = Res.gather(tableB, index, iValid, pf, 0 until f)
+
+        // beat0 s0: block A uops 0-2 (pipes 0-2) + block B uop0 (pipe 3)
+        for (p <- 0 until 3) pS0(dut, p, blockBase = 0, 4, placeIdx = p, uopIdx = p, fieldNum = f)
+        pS0(dut, 3, blockBase = 4, 4, placeIdx = 0, uopIdx = 0, fieldNum = f)
+        dut.clock.step()
+        for (p <- 0 until 4) pS0Off(dut, pipe = p)
+        // beat1 s1: block A fields + block B field0
+        for (p <- 0 until 3) {
+          pS1(dut, p, tableA.slice(p * 16, (p + 1) * 16), index, iValid, pf,
+            blockBase = 0, blockSize = 4, tableIdx = p, placeIdx = p, robIdx = p, fieldNum = f)
+        }
+        pS1(dut, 3, tableB.slice(0, 16), index, iValid, pf,
+          blockBase = 4, blockSize = 4, tableIdx = 0, placeIdx = 0, robIdx = 3, fieldNum = f)
+        dut.clock.step()
+        for (p <- 0 until 4) pS1Off(dut, pipe = p)
+        // beat2/3: block B uops 1-2 (batch-local placeIdx 0,1)
+        pS0(dut, 0, blockBase = 4, 4, placeIdx = 0, uopIdx = 1, fieldNum = f)
+        pS0(dut, 1, blockBase = 4, 4, placeIdx = 1, uopIdx = 2, fieldNum = f)
+        dut.clock.step()
+        pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 1)
+        pS1(dut, 0, tableB.slice(16, 32), index, iValid, pf,
+          blockBase = 4, blockSize = 4, tableIdx = 1, placeIdx = 0, robIdx = 4, fieldNum = f)
+        pS1(dut, 1, tableB.slice(32, 48), index, iValid, pf,
+          blockBase = 4, blockSize = 4, tableIdx = 2, placeIdx = 1, robIdx = 5, fieldNum = f)
+        dut.clock.step()
+        pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 1)
+
+        val wbs = collectWbs(dut, 2 * f, expectNoWake = true)
+        for (u <- 0 until 3) assert(wbs(u) == goldenA, s"block A field $u data mismatch")
+        for (u <- 3 until 6) assert(wbs(u) == goldenB, s"block B field $u data mismatch")
+
+        expectSilentHole(dut, unit = 3)
+        expectSilentHole(dut, unit = 7)
+      }
+    }
+
+    it("seg3 block space: reuse after drain") {
+      simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+        initDut(dut)
+        val f = 3
+        val index = Index.unzipN(f)
+        val iValid = IndexValid.allTrue(1)
+        val pf = Prefill.default(1)
+        val tableA = Table.inc(f)
+        val tableB = Table.inc(f).map(_ + 64)
+        val goldenA = Res.gather(tableA, index, iValid, pf, 0 until f)
+        val goldenB = Res.gather(tableB, index, iValid, pf, 0 until f)
+
+        runSegBlock(dut, f, size = 4, blockBase = 0, tableA, robBase = 0)
+        val wbsA = collectWbs(dut, f, expectNoWake = true)
+        for (u <- 0 until f) assert(wbsA(u) == goldenA, s"block A field $u data mismatch")
+
+        stepUntilDrained(dut)
+
+        runSegBlock(dut, f, size = 4, blockBase = 0, tableB, robBase = 3)
+        val wbsB = collectWbs(dut, f, expectNoWake = true)
+        for (u <- 0 until f) assert(wbsB(3 + u) == goldenB, s"block B field $u data mismatch")
+      }
+    }
+
+    for ((f, holes) <- Seq(5 -> Seq(5, 6, 7), 6 -> Seq(6, 7), 7 -> Seq(7))) {
+      it(s"seg$f: size-8 block with $f fields (two-beat dispatch)") {
+        simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
+          initDut(dut)
+          val table = Table.inc(f)
+          val golden = Res.gather(table, Index.unzipN(f), IndexValid.allTrue(1), Prefill.default(1), 0 until f)
+
+          runSegBlock(dut, f, size = 8, blockBase = 0, table, robBase = 0)
+          val wbs = collectWbs(dut, f, expectNoWake = true)
+          for (u <- 0 until f) assert(wbs(u) == golden, s"field $u data mismatch")
+
+          holes.foreach(expectSilentHole(dut, _))
         }
       }
     }
