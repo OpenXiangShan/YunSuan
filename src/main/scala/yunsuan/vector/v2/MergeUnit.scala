@@ -2,7 +2,6 @@ package yunsuan.vector.v2
 
 import chisel3._
 import chisel3.util._
-import chisel3.util.circt.IsX
 
 object MergeUnit {
   def apply(vlen: Int): MergeUnit = {
@@ -48,7 +47,7 @@ class MergeUnit(vlen: Int = 128) extends Module {
   private val vd     = in.data.vd
   private val oldVd  = in.data.oldVd
 
-  when (!IsX(in.valid) && in.valid) {
+  when (in.valid) {
     assert(begin <= vlenb.U, "begin should less than or equal to vlenb")
     assert(end   <= vlenb.U, "end should less than or equal to vlenb")
   }
