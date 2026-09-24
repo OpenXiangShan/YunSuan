@@ -111,7 +111,7 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
       pDefaults(dut, p)
     }
     dut.in.wbReady.foreach(_.poke(false))
-    dut.in.flush.foreach(_.poke(false))
+    dut.in.unitFlush.foreach(_.poke(false))
     dut.in.wakeAck.foreach(_.poke(false))
     dut.clock.step()
   }

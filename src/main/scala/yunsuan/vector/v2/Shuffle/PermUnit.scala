@@ -46,6 +46,7 @@ class PermUnit[T <: Data](
     val pi = in.pipes(i)
 
     ig.in.valid       := pi.valid
+    ig.flush          := in.flush.s1(i)
     ig.in.bits.op     := pi.bits.op
     // A segment zip numbers its uops chunk-major (`uopIdx = chunk * seg + field`), but the zip
     // IndexGen tables only hold the slices of ONE chunk, indexed by the field number
@@ -81,10 +82,9 @@ class PermUnit[T <: Data](
   private val regVs2       = Wire(Vec(NumPipeIn, UInt(DLEN.W)))
   private val regCompress  = Wire(Vec(NumPipeIn, Bool()))
   private val regTableIdx  = Wire(Vec(NumPipeIn, UnitIdx()))
-  private val regMeta      = Wire(Vec(NumPipeIn, metaGen.cloneType))
+  private val regMeta      = RegInit(VecInit.fill(NumPipeIn)(0.U.asTypeOf(Valid(metaGen))))
 
   for (i <- 0 until NumPipeIn) {
-    val ig = indexGens(i)
     val pi = in.pipes(i)
 
     regPlaceIdx(i)  := RegEnable(pi.bits.placeIdx, pi.valid)
@@ -94,7 +94,13 @@ class PermUnit[T <: Data](
     regVs2(i)       := RegEnable(pi.bits.vs2, pi.valid)
     regCompress(i)  := RegEnable(pi.bits.op.isCompress, pi.valid)
     regTableIdx(i)  := RegEnable(pi.bits.tableIdx, pi.valid)
-    regMeta(i)      := RegEnable(pi.bits.meta, pi.valid)
+
+    when (pi.valid || regMeta(i).valid) {
+      regMeta(i).valid := pi.valid
+    }
+    when (pi.valid) {
+      regMeta(i).bits := pi.bits.meta
+    }
 
     when(pi.valid) {
       assert(pi.bits.placeIdx < pi.bits.blockSize,
@@ -155,19 +161,20 @@ class PermUnit[T <: Data](
     // zero it so the same-unit merge's meta OR yields the rvs3's (whose pdest is
     // the writeback target). The rvs3 uop carries the real meta.
     gatherRing.in.s1pipes(i).bits.meta := Mux(indexGens(i).out.waitRvs3,
-      0.U.asTypeOf(chiselTypeOf(regMeta(i))), regMeta(i))
+      0.U.asTypeOf(chiselTypeOf(regMeta(i).bits)), regMeta(i).bits)
   }
 
   /*********************** GatherRing Control Connections ********************/
 
-  gatherRing.in.flush   := in.flush
+  gatherRing.in.flush   := in.unitFlush
   gatherRing.in.wbReady := in.wbReady
   gatherRing.in.wakeAck := in.wakeAck
 
   /************************** Output Connections *****************************/
 
   out.pipes      := gatherRing.out.pipes
-  out.metas      := gatherRing.out.metas
+  out.metas.unit := gatherRing.out.metas
+  out.metas.s1   := regMeta
   out.unitStatus := gatherRing.out.unitStatus
   out.wake       := gatherRing.out.wake
   out.debug.foreach { dbg => dbg := gatherRing.out.debug.get }
@@ -197,16 +204,18 @@ object PermUnit {
 
   /** PermUnit top-level input bundle. */
   class In[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
-    val flush   = Vec(NumUnits, Bool())
+    val flush = new FlushIn
     val pipes   = Vec(NumPipeIn, ValidIO(new PipeIn(metaGen)))
     val wbReady = Vec(NumPipeOut, Bool())
     val wakeAck = Vec(NumPipeOut, Bool())
+
+    def unitFlush: Vec[Bool] = this.flush.unit
   }
 
   /** PermUnit top-level output bundle. */
   class Out[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
     val pipes      = Vec(NumPipeOut, ValidIO(new GatherRing.PipeOut(metaGen)))
-    val metas      = Vec(NumUnits, metaGen)
+    val metas      = new MetaOut(metaGen)
     val unitStatus = Vec(NumUnits, new Status)
     val wake       = Vec(NumPipeOut, ValidIO(new GatherRingUnit.Wake(metaGen)))
     val debug = Option.when(param.debug)(Vec(NumUnits, new GatherRingUnit.Debug))
@@ -261,6 +270,16 @@ object PermUnit {
       segmentFieldIdx(uopIdx, zipNum),
       uopIdx,
     )
+  }
+
+  class FlushIn(implicit val param: GatherParam) extends GatherBundle {
+    val s1 = Vec(NumPipeIn, Bool())
+    val unit = Vec(NumUnits, Bool())
+  }
+
+  class MetaOut[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
+    val s1 = Vec(NumPipeIn, ValidIO(metaGen))
+    val unit = Vec(NumUnits, ValidIO(metaGen))
   }
 
   def main(args: Array[String]): Unit = {

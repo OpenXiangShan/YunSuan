@@ -18,8 +18,9 @@ import yunsuan.vector.v2.Shuffle.GatherCommon._
 class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends GatherModule {
   override def desiredName: String = super.desiredName + s"_${DLEN}b"
 
-  val in  = IO(Input(ValidIO(new IndexGen.In)))
-  val out = IO(Output(new IndexGen.Out))
+  val in    = IO(Input(ValidIO(new IndexGen.In)))
+  val flush = IO(Input(Bool()))
+  val out   = IO(Output(new IndexGen.Out))
 
   /*********************** Module Instantiations *****************************/
 
@@ -42,7 +43,10 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
   private val isCompress  = op.isCompress
 
   private val opReg    = RegEnable(op, in.valid)
-  private val validReg = RegNext(in.valid, false.B)
+  private val validReg = RegInit(false.B)
+  when (in.valid || validReg) {
+    validReg := in.valid
+  }
 
   when(in.valid) {
     assert(PopCount(op.asUInt) === 1.U, "IndexGen operation must be one-hot")
@@ -383,7 +387,7 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
 
   /**************************** Valid Signal *********************************/
 
-  out.valid := validReg
+  out.valid := validReg && !flush
 
   // SEW=8 vrgatherei16 placement kind for the GatherRing unit merge
   out.isRvs3   := validReg && opReg.isGatherEI16Rvs3

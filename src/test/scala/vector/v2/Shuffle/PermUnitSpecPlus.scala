@@ -192,7 +192,7 @@ class PermUnitSpecPlus extends SpecBase with GatherSpecUtils {
 
   private def initDut(dut: PermUnit[FakePermMeta]): Unit = {
     for (pipe <- 0 until numPipes) pDefaults(dut, pipe)
-    dut.in.flush.foreach(_.poke(false))
+    dut.in.unitFlush.foreach(_.poke(false))
     dut.in.wbReady.foreach(_.poke(true))
     dut.in.wakeAck.foreach(_.poke(false))
     stepClock(dut)
@@ -206,9 +206,9 @@ class PermUnitSpecPlus extends SpecBase with GatherSpecUtils {
   private def flushDut(dut: PermUnit[FakePermMeta]): Unit = {
     clearPipes(dut)
     dut.in.wakeAck.foreach(_.poke(false))
-    dut.in.flush.foreach(_.poke(true))
+    dut.in.unitFlush.foreach(_.poke(true))
     stepClock(dut)
-    dut.in.flush.foreach(_.poke(false))
+    dut.in.unitFlush.foreach(_.poke(false))
     stepClock(dut)
   }
 

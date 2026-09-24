@@ -129,7 +129,7 @@ class PermUnitSegLoadSpec extends SpecBase with GatherSpecUtils {
       for (pipe <- dut.in.pipes.indices) {
         defaults(dut, pipe)
       }
-      dut.in.flush.foreach(_.poke(false.B))
+      dut.in.unitFlush.foreach(_.poke(false.B))
       dut.in.wbReady.foreach(_.poke(false.B))
       dut.in.wakeAck.foreach(_.poke(false.B))
       dut.clock.step()
@@ -176,7 +176,7 @@ class PermUnitSegLoadSpec extends SpecBase with GatherSpecUtils {
         for (pipe <- dut.in.pipes.indices) {
           defaults(dut, pipe)
         }
-        dut.in.flush.foreach(_.poke(false.B))
+        dut.in.unitFlush.foreach(_.poke(false.B))
         dut.in.wbReady.foreach(_.poke(false.B))
         dut.in.wakeAck.foreach(_.poke(false.B))
         dut.clock.step()
@@ -221,7 +221,7 @@ class PermUnitSegLoadSpec extends SpecBase with GatherSpecUtils {
         for (pipe <- dut.in.pipes.indices) {
           defaults(dut, pipe)
         }
-        dut.in.flush.foreach(_.poke(false.B))
+        dut.in.unitFlush.foreach(_.poke(false.B))
         dut.in.wbReady.foreach(_.poke(false.B))
         dut.in.wakeAck.foreach(_.poke(false.B))
         dut.clock.step()

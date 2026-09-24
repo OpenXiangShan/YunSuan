@@ -384,7 +384,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
   def initDut(dut: PermUnit[FakePermMeta]): Unit = {
     for (p <- 0 until NumPipes) pDefaults(dut, p)
     dut.in.wbReady.foreach(_.poke(false))
-    dut.in.flush.foreach(_.poke(false))
+    dut.in.unitFlush.foreach(_.poke(false))
     dut.in.wakeAck.foreach(_.poke(false))
     dut.clock.step()
   }
@@ -2146,9 +2146,9 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         }
         acked mustBe true
         // flush clears wakedUp (and the finished block's state)
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(true)
         dut.clock.step()
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(false)
         // second block on the same units must be able to wake again
         dispatch(0x22)
         var cy2 = 0
@@ -2251,9 +2251,9 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           } else { dut.clock.step(); cy += 1 }
         }
         acked mustBe true
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(true)
         dut.clock.step()
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(false)
         // Reuse the same block with a PARTIAL m8 (uop0-3 only, block incomplete).
         // With allTableHasFilled correctly reset to 0, no unit may wake until the
         // block is assembled again.
@@ -2275,9 +2275,9 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
     it("H1: flush before dispatch does not break a following gather") {
       simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
         initDut(dut)
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(true)
         dut.clock.step()
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(false)
         val table = Table.inc(1)
         val golden = gatherGolden(0, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
         pGather(dut, 0, 8, 8, 0, table, Prefill.default(1))
@@ -2296,9 +2296,9 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         // clears the ring units, but the in-flight uop is not cancelled
         // (IndexGen is not flushed) and still places/completes. Pins this
         // behavior; if a pipeline-level flush is later added, this changes.
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(true)
         dut.clock.step()
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(false)
         pPipeOff(dut, 0)
         val wb = collectWb(dut, 8)
         wb(0).getOrElse(fail("pipe 0 never wrote back")) mustBe golden
@@ -2316,9 +2316,9 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           lmulFrac = 16, uopIdx = 1, placeIdx = 1, vl = 32)
         dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
         dut.clock.step() // let tables place
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(true)
         dut.clock.step()
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(false)
         var cy = 0
         var wbSeen = false
         while (cy < 8) {
@@ -2343,9 +2343,9 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         var cy = 0
         while (cy < 10 && !dut.out.pipes(0).valid.peekBoolean()) { dut.clock.step(); cy += 1 }
         dut.out.pipes(0).valid.expect(true.B, "wb.valid holds (wbReady=0)")
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(true)
         dut.clock.step()
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(false)
         dut.out.pipes(0).valid.expect(false.B, "wb cleared by flush")
         for (i <- 0 until NumUnits) {
           dut.out.unitStatus(i).hasIndex.expect(false.B)
@@ -2362,9 +2362,9 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         pGather(dut, 0, 8, 8, 0, table, Prefill.default(1))
         dut.clock.step(); pPipeOff(dut, 0)
         eWbAfter(dut, 0, golden, 2)
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(true)
         dut.clock.step()
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(false)
         pGather(dut, 0, 8, 8, 0, table, Prefill.default(1))
         dut.clock.step(); pPipeOff(dut, 0)
         val wb = collectWb(dut, 8)
@@ -2382,9 +2382,9 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         pGather(dut, 1, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32),
           lmulFrac = 16, uopIdx = 1, placeIdx = 1, vl = 32)
         dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(true)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(true)
         dut.clock.step()
-        for (i <- 0 until NumUnits) dut.in.flush(i).poke(false)
+        for (i <- 0 until NumUnits) dut.in.unitFlush(i).poke(false)
         for (u <- 0 until NumUnits) {
           val s = dut.out.unitStatus(u)
           s.hasTable.expect(false.B, s"unit $u hasTable cleared")
@@ -2406,8 +2406,9 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         dut.clock.step(); pPipeOff(dut, 0)
         var cy = 0
         while (cy < 6 && !dut.out.unitStatus(0).hasTable.peekBoolean()) { dut.clock.step(); cy += 1 }
-        dut.out.metas(0).pdest.expect(0x5a.U, "metas(0).pdest")
-        dut.out.metas(0).robIdx.expect(3.U, "metas(0).robIdx")
+        dut.out.metas.unit(0).valid.expect(true.B, "metas(0).valid")
+        dut.out.metas.unit(0).bits.pdest.expect(0x5a.U, "metas(0).pdest")
+        dut.out.metas.unit(0).bits.robIdx.expect(3.U, "metas(0).robIdx")
       }
     }
 

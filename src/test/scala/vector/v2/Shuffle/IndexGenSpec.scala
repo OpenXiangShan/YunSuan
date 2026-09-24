@@ -16,6 +16,7 @@ class IndexGenSpec extends SpecBase with GatherSpecUtils {
 
   def pDefaults(dut: IndexGen): Unit = {
     dut.in.valid.poke(false)
+    dut.flush.poke(false)
     val o = dut.in.bits.op
     o.isGather.poke(false); o.isGatherEI16.poke(false)
     o.isSlideUp.poke(false); o.isSlide1Up.poke(false)

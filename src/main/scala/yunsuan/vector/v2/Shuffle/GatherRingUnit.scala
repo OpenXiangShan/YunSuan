@@ -365,6 +365,8 @@ class GatherRingUnit[T <: Data](
   out.status.gatherPlaced := gatherPlaced
   out.status.rvs3Placed   := rvs3Placed
   out.status.done         := done
+  out.meta.valid          := hasIndex
+  out.meta.bits           := meta
 
   out.debug.foreach {
     debug =>
@@ -398,6 +400,7 @@ object GatherRingUnit {
     val flow = ValidIO(new RingFlow)
     val wb = ValidIO(new Res(metaGen))
     val wake = ValidIO(new Wake(metaGen))
+    val meta = ValidIO(metaGen)
     val debug = Option.when(param.debug)(new Debug)
   }
 

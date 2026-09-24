@@ -205,9 +205,9 @@ class GatherRing[T <: Data](
     }
   }
 
-  // out.metas: collect meta from each unit's wb
+  // out.metas: live unit occupant (hasIndex), used to generate per-unit flush
   for (i <- 0 until NumUnits) {
-    out.metas(i) := units(i).out.wb.bits.meta
+    out.metas(i) := units(i).out.meta
   }
 
   for (i <- 0 until NumUnits) {
@@ -296,7 +296,7 @@ object GatherRing {
   class Out[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
     // writeback
     val pipes = Vec(NumPipeOut, ValidIO(new PipeOut(metaGen)))
-    val metas = Vec(NumUnits, metaGen)
+    val metas = Vec(NumUnits, ValidIO(metaGen))
     val unitStatus = Vec(NumUnits, new Status)
     // arbitrated vperm wakeup requests (mirror of pipes)
     val wake = Vec(NumPipeOut, ValidIO(new GatherRingUnit.Wake(metaGen)))
