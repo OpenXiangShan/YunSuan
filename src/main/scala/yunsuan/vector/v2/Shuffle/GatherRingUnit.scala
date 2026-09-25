@@ -41,7 +41,11 @@ class GatherRingUnit[T <: Data](
   // ── Registers ────────────────────────────────────────
   private val tableData    = Reg(Vec(NumElem, UInt(MinDataWidth.W)))
   private val tableIdx     = Reg(UInt(TableIdxWidth.W))
-  private val blockSize    = Reg(BlockSize())
+  // blockSize must start at 0: the ring flow masks (crossesBlockBoundary and the
+  // ring2/4/8 loopback enables) read it before a never-placed hole unit has learned
+  // its block's size from a flowing table, so an uninitialized (random) value can
+  // spuriously enable a loopback and inject a stale table into a hole unit.
+  private val blockSize    = RegInit(0.U(BlockSize().getWidth.W))
   private val blockFieldNum = RegInit(0.U((TableIdxWidth + 1).W))
   private val isFirstTable = RegInit(false.B)
   private val isLastUnit   = RegInit(false.B)
