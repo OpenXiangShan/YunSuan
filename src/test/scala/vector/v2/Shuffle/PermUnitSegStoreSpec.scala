@@ -353,5 +353,114 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
         }
       }
     }
+
+    describe("seg 5") {
+      // Emu replay of the failing store in segstore-nf5-128e-M1-1TIMES (build/
+      // 2026-09-24-23-12-03_6390.fst, robIdx 0x42): one 8-unit hole block (blockBase=0,
+      // blockFieldNum=5, zipNum=4, lmul=m8, e8, vl=255, mask=0xffff, vma=vta=1):
+      //   cycle +0  p0 uop0 placeIdx=0, p1 uop1 placeIdx=1
+      //   cycle +1  p0 uop2 placeIdx=0, p1 uop3 placeIdx=1
+      //   cycle +2  p1 uop4 placeIdx=0
+      // DUT committed 0xaf at buf+3 where the golden interleave has fields(3)(0)=0xa7.
+      it("emu replay (segstore-nf5-128e, zip data)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val fields = Seq(
+            Seq(0xbf, 0x64, 0xa4, 0xe4, 0xe3, 0x9f, 0xdd, 0x7e, 0x9b, 0x68, 0xde, 0x90, 0xe7, 0xe7, 0xf3, 0xf3),
+            Seq(0x28, 0x9c, 0x29, 0xd4, 0x5e, 0xae, 0xd7, 0x39, 0xc0, 0x8a, 0x0a, 0xe8, 0x4f, 0xac, 0xd2, 0x01),
+            Seq(0x71, 0xbf, 0x25, 0x08, 0x2f, 0x76, 0x46, 0x9a, 0x8e, 0x56, 0x2b, 0x4d, 0x88, 0xcc, 0x7d, 0x6a),
+            Seq(0xa7, 0x6b, 0x38, 0x66, 0xd8, 0xce, 0x03, 0xf2, 0x77, 0xd8, 0x81, 0x88, 0xfc, 0x85, 0xc7, 0x32),
+            Seq(0x57, 0x39, 0x1b, 0x2c, 0xc8, 0x01, 0x7c, 0x76, 0xc9, 0xf4, 0x72, 0xaf, 0xdb, 0x7a, 0xe0, 0xcd),
+          )
+          def drive(pipe: Int, uopIdx: Int, placeIdx: Int): Unit = {
+            pZip(dut, pipe, fields(uopIdx), blockUnits = 5, uopIdx = uopIdx, placeIdx = placeIdx, zipNum = 4, pdest = uopIdx)
+            val b = dut.in.pipes(pipe).bits
+            pLmul(b.lmul, 64)
+            b.vl.poke(255)
+            b.vta.poke(true)
+            b.vma.poke(true)
+            b.meta.robIdx.poke(0x42)
+          }
+          drive(0, 0, 0)
+          drive(1, 1, 1)
+          stepOff(dut, 0, 1)
+          drive(0, 2, 0)
+          drive(1, 3, 1)
+          stepOff(dut, 0, 1)
+          drive(1, 4, 0)
+          stepOff(dut, 1)
+          val interleaved = (0 until 16).flatMap(i => fields.map(_(i)))
+          val expected = interleaved.grouped(16).map(g => foldBytes(g.toSeq)).toSeq
+          val actual = Array.fill[Option[BigInt]](expected.length)(None)
+          dut.in.wbReady.foreach(_.poke(true))
+          for (_ <- 0 until 80) {
+            for (p <- 0 until dut.out.pipes.length) {
+              if (dut.out.pipes(p).valid.peekBoolean()) {
+                val pdest = dut.out.pipes(p).bits.meta.pdest.peekValue().asBigInt.toInt
+                if (pdest < actual.length && actual(pdest).isEmpty) {
+                  actual(pdest) = Some(dut.out.pipes(p).bits.data.peekValue().asBigInt)
+                }
+              }
+            }
+            dut.clock.step()
+          }
+          actual.toSeq mustBe expected.map(Some(_))
+          val busy = (0 until dut.out.unitStatus.length).filter { u =>
+            dut.out.unitStatus(u).hasTable.peek().litValue != 0
+          }
+          busy mustBe Seq.empty
+        }
+      }
+
+      it("wbReady held from start") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          val fields = Seq(
+            Seq(0xbf, 0x64, 0xa4, 0xe4, 0xe3, 0x9f, 0xdd, 0x7e, 0x9b, 0x68, 0xde, 0x90, 0xe7, 0xe7, 0xf3, 0xf3),
+            Seq(0x28, 0x9c, 0x29, 0xd4, 0x5e, 0xae, 0xd7, 0x39, 0xc0, 0x8a, 0x0a, 0xe8, 0x4f, 0xac, 0xd2, 0x01),
+            Seq(0x71, 0xbf, 0x25, 0x08, 0x2f, 0x76, 0x46, 0x9a, 0x8e, 0x56, 0x2b, 0x4d, 0x88, 0xcc, 0x7d, 0x6a),
+            Seq(0xa7, 0x6b, 0x38, 0x66, 0xd8, 0xce, 0x03, 0xf2, 0x77, 0xd8, 0x81, 0x88, 0xfc, 0x85, 0xc7, 0x32),
+            Seq(0x57, 0x39, 0x1b, 0x2c, 0xc8, 0x01, 0x7c, 0x76, 0xc9, 0xf4, 0x72, 0xaf, 0xdb, 0x7a, 0xe0, 0xcd),
+          )
+          def drive(pipe: Int, uopIdx: Int, placeIdx: Int): Unit = {
+            pZip(dut, pipe, fields(uopIdx), blockUnits = 5, uopIdx = uopIdx, placeIdx = placeIdx, zipNum = 4, pdest = uopIdx)
+            val b = dut.in.pipes(pipe).bits
+            pLmul(b.lmul, 64)
+            b.vl.poke(255)
+            b.vta.poke(true)
+            b.vma.poke(true)
+            b.meta.robIdx.poke(0x42)
+          }
+          dut.in.wbReady.foreach(_.poke(true))
+          drive(0, 0, 0)
+          drive(1, 1, 1)
+          stepOff(dut, 0, 1)
+          drive(0, 2, 0)
+          drive(1, 3, 1)
+          stepOff(dut, 0, 1)
+          drive(1, 4, 0)
+          stepOff(dut, 1)
+          val interleaved = (0 until 16).flatMap(i => fields.map(_(i)))
+          val expected = interleaved.grouped(16).map(g => foldBytes(g.toSeq)).toSeq
+          val actual = Array.fill[Option[BigInt]](expected.length)(None)
+          for (_ <- 0 until 80) {
+            for (p <- 0 until dut.out.pipes.length) {
+              if (dut.out.pipes(p).valid.peekBoolean()) {
+                val pdest = dut.out.pipes(p).bits.meta.pdest.peekValue().asBigInt.toInt
+                if (pdest < actual.length && actual(pdest).isEmpty) {
+                  actual(pdest) = Some(dut.out.pipes(p).bits.data.peekValue().asBigInt)
+                }
+              }
+            }
+            dut.clock.step()
+          }
+          actual.toSeq mustBe expected.map(Some(_))
+          val busy = (0 until dut.out.unitStatus.length).filter { u =>
+            dut.out.unitStatus(u).hasTable.peek().litValue != 0
+          }
+          busy mustBe Seq.empty
+        }
+      }
+    }
   }
 }
