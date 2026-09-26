@@ -462,5 +462,120 @@ class PermUnitSegStoreSpec extends SpecBase with GatherSpecUtils {
         }
       }
     }
+
+    describe("seg 7") {
+      // Emu replay of the hang in segstore-nf7-28657e-M1 (build/2026-09-26-20-32-12_32747.fst,
+      // robIdx 0xd0; launch window 36128-36391; one 8-unit hole block: blockBase=0,
+      // blockFieldNum=7, zipNum=6, lmul=m8, e8, vl=255, mask=0xffff, vma=vta=1):
+      //   +0        p0 uop0 placeIdx=0, p1 uop1 placeIdx=1
+      //   +1        p0 uop2 placeIdx=0, p1 uop3 placeIdx=1
+      //   +2        p1 uop4 placeIdx=1   <- uop5 was killed at this cycle by the VStd store-queue
+      //                                   window cancel, after it had already been counted into
+      //                                   uop4's placeIdx at the is1 stage
+      //   +3..+261  idle (uop5/uop6 re-issue loop, every attempt killed)
+      //   +262      p0 uop5 placeIdx=0
+      //   +263      p1 uop6 placeIdx=0
+      // In the emu the block never completes: uop4's index/table are shifted one unit up
+      // (placeIdx counted the killed uop5), the units keep their indexes forever (units 0-6
+      // hold hasIndex=1 at the end of the wave) and every younger segment store stalls behind
+      // the leaked block. The ring trusts placeIdx, so this stimulus wedges it by
+      // construction; the upstream fix (IssuePipe is0PermOutOfWindow) keeps a uop that will be
+      // cancelled off the entry pipeline so the count stays honest. This case pins the failure
+      // mode (like "wrong placeIdx leaves a ring unit occupied"): the block must NOT drain.
+      val nf7Fields = Seq(
+        BigInt("6f86c1f6a8cee85bd09695f43c35fc5d", 16),
+        BigInt("6ccbf017ba0b60ccdc3b65bde4b07dc4", 16),
+        BigInt("39eeae53333272ec44fca1da77d8acac", 16),
+        BigInt("f54b49221b1a36dd3b6f99c589ebea93", 16),
+        BigInt("e8f4eb7ac714d7a1a35033ac87946521", 16),
+        BigInt("7780c1e9964aa09f1689e59706dab570", 16),
+        BigInt("c19d446185b779ff0f6bdf50ffb875de", 16),
+      )
+
+      def driveNf7(dut: PermUnit[FakePermMeta], pipe: Int, uopIdx: Int, placeIdx: Int): Unit = {
+        pZip(dut, pipe, Seq.fill(numElem)(0), blockUnits = 8, uopIdx = uopIdx, placeIdx = placeIdx, zipNum = 6, pdest = uopIdx)
+        val b = dut.in.pipes(pipe).bits
+        b.vs2.poke(nf7Fields(uopIdx))
+        b.blockFieldNum.poke(7)
+        b.vl.poke(255)
+        b.vta.poke(true)
+        b.vma.poke(true)
+        b.meta.robIdx.poke(0xd0)
+      }
+
+      def drainCollect(dut: PermUnit[FakePermMeta], cycles: Int): Map[Int, BigInt] = {
+        val actual = scala.collection.mutable.Map.empty[Int, BigInt]
+        for (_ <- 0 until cycles) {
+          for (p <- 0 until dut.out.pipes.length) {
+            if (dut.out.pipes(p).valid.peekBoolean()) {
+              val pdest = dut.out.pipes(p).bits.meta.pdest.peekValue().asBigInt.toInt
+              if (pdest < nf7Fields.length) {
+                actual.getOrElseUpdate(pdest, dut.out.pipes(p).bits.data.peekValue().asBigInt)
+              }
+            }
+          }
+          dut.clock.step()
+        }
+        actual.toMap
+      }
+
+      def busyUnits(dut: PermUnit[FakePermMeta]): Seq[Int] =
+        (0 until dut.out.unitStatus.length).filter { u =>
+          dut.out.unitStatus(u).hasTable.peekBoolean() || dut.out.unitStatus(u).hasIndex.peekBoolean()
+        }
+
+      it("emu replay (segstore-nf7-28657e-M1, killed sibling shifts placeIdx)") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          dut.in.wbReady.foreach(_.poke(true))
+          driveNf7(dut, 0, 0, 0)
+          driveNf7(dut, 1, 1, 1)
+          stepOff(dut, 0, 1)
+          driveNf7(dut, 0, 2, 0)
+          driveNf7(dut, 1, 3, 1)
+          stepOff(dut, 0, 1)
+          driveNf7(dut, 1, 4, 1)
+          stepOff(dut, 1)
+          for (_ <- 0 until 259) { dut.clock.step() }
+          driveNf7(dut, 0, 5, 0)
+          stepOff(dut, 0)
+          driveNf7(dut, 1, 6, 0)
+          stepOff(dut, 1)
+          drainCollect(dut, 80)
+          busyUnits(dut) must not be Seq.empty
+        }
+      }
+
+      // Same arrival pattern with the placeIdx values the fixed upstream produces (the killed
+      // uop never reaches the is1 count, so uop4 arrives with placeIdx=0): the block must
+      // complete even when the last two fields land 262 cycles after the others.
+      it("late fields complete the block when placeIdx is honest") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          dut.in.wbReady.foreach(_.poke(true))
+          driveNf7(dut, 0, 0, 0)
+          driveNf7(dut, 1, 1, 1)
+          stepOff(dut, 0, 1)
+          driveNf7(dut, 0, 2, 0)
+          driveNf7(dut, 1, 3, 1)
+          stepOff(dut, 0, 1)
+          driveNf7(dut, 1, 4, 0)
+          stepOff(dut, 1)
+          for (_ <- 0 until 259) { dut.clock.step() }
+          driveNf7(dut, 0, 5, 0)
+          stepOff(dut, 0)
+          driveNf7(dut, 1, 6, 0)
+          stepOff(dut, 1)
+          val fields = nf7Fields.map { v =>
+            (0 until numElem).map(i => ((v >> (8 * i)) & 0xff).toInt)
+          }
+          val interleaved = (0 until numElem).flatMap(i => fields.map(_(i)))
+          val expected = interleaved.grouped(numElem).map(g => foldBytes(g.toSeq)).toSeq
+          val actual = drainCollect(dut, 80)
+          (0 until nf7Fields.length).foreach(i => actual.get(i) mustBe Some(expected(i)))
+          busyUnits(dut) mustBe Seq.empty
+        }
+      }
+    }
   }
 }
