@@ -131,7 +131,7 @@ object Opcode {
 }
 
 object Latency {
-  def apply(): UInt = UInt(log2Up(width + 2).W)
+  def apply(): UInt = UInt(width.W)
 
   // use -1 to specify uncertain latency like div and vrgather when LMUL>1
   def uncertainLitVal(): Int = -1
@@ -414,6 +414,7 @@ object Opcodes {
     VIMacOpcode,
     VIDivOpcode,
     VIRedOpcode,
+    VRedOpcodes,
     VIPermOpcode,
     VMoveOpcode,
     VSha256msOpcode,
@@ -925,32 +926,48 @@ object Opcodes {
     val vfwredosum_fp16: Opcode = DwsSvlS2vS1ws(FRED_OSUM, opbN, resW, FP16)
     val vfwredosum_fp32: Opcode = DwsSvlS2vS1ws(FRED_OSUM, opbN, resW, FP32)
 
-    // to do
-    def isVfredusum(implicit op: UInt): Bool = false.B
-    def isVfredmin(implicit op: UInt): Bool = false.B
-    def isVfredmax(implicit op: UInt): Bool = false.B
-    def isVfredosum(implicit op: UInt): Bool = false.B
-    def isVfwredosum(implicit op: UInt): Bool = false.B
+    // The factory fields are LSB-aligned after padding to Opcode.getWidth.
+    def getSubOp(implicit op: UInt): UInt = op(4, 0)
+    def getResWiden(implicit op: UInt): Bool = op(5)
+    def getDtype(implicit op: UInt): UInt = op(8, 7)
+
+    def isVfredusum(implicit op: UInt): Bool = getSubOp === FRED_USUM
+    def isVfredmin(implicit op: UInt): Bool = getSubOp === FRED_MIN
+    def isVfredmax(implicit op: UInt): Bool = getSubOp === FRED_MAX
+    def isVfredosum(implicit op: UInt): Bool = getSubOp === FRED_OSUM
+    def isVfwredosum(implicit op: UInt): Bool = isVfredosum && getResWiden
+    def isVfwredusum(implicit op: UInt): Bool = isVfredusum && getResWiden
     def isVfRedUnordered(implicit op: UInt): Bool = isVfredusum || isVfredmin || isVfredmax
     def isVfRedUnComp(implicit op: UInt): Bool = isVfredmin || isVfredmax
-    def isVfRedOrdered(implicit op: UInt): Bool = isVfredosum || isVfwredosum
+    def isVfRedOrdered(implicit op: UInt): Bool = isVfredosum
     def isVfWRedOrdered(implicit op: UInt): Bool = isVfwredosum
-    def isVfredosumNoWiden(implicit op: UInt): Bool = isVfredosum
+    def isVfredosumNoWiden(implicit op: UInt): Bool = isVfredosum && !getResWiden
     def isVfReduction(implicit op: UInt): Bool = isVfRedUnordered || isVfRedOrdered
+    def isVfRedWiden(implicit op: UInt): Bool = getResWiden
 
-    def vfredusum(implicit op: UInt): Bool = isVfredusum
-    def vfredmin(implicit op: UInt): Bool = isVfredmin
-    def vfredmax(implicit op: UInt): Bool = isVfredmax
-    def vfredosum(implicit op: UInt): Bool = isVfredosum
-    def vfwredosum(implicit op: UInt): Bool = isVfwredosum
+    object LitUtil {
+      def getSubOp(implicit op: BitPat): BitPat = op(4, 0)
+      def getDtype(implicit op: BitPat): BitPat = op(8, 7)
+      def isCompare(implicit op: BitPat): Boolean = getSubOp.isOneOf(FRED_MIN, FRED_MAX)
+      def isVfredusum(implicit op: BitPat): Boolean = getSubOp.isOneOf(FRED_USUM)
+
+      def getLat(implicit op: BitPat): Int = {
+        if (isCompare) 1
+        else if (isVfredusum) {
+          if (getDtype.isOneOf(FP64)) 5
+          else if (getDtype.isOneOf(FP32)) 7
+          else 9
+        } else if (getDtype.isOneOf(FP64)) 5
+        else if (getDtype.isOneOf(FP32)) 9
+        else 17
+      }
+    }
   }
 
   object VFRedOpcode extends VFRedOpcode {
-    // A reduction walks the whole vector, so its latency grows with vl (and LMUL) instead of being a
-    // fixed pipeline depth.
     override def getLat(opcode: Opcode): Int = {
       require(this.all.contains(opcode))
-      yunsuan.encoding.Opcode.Latency.uncertainLitVal()
+      LitUtil.getLat(opcode.encode)
     }
   }
 
@@ -1967,6 +1984,82 @@ object Opcodes {
   }
 
   object VIRedOpcode extends VIRedOpcode
+
+  trait VRedOpcodes extends Opcodes with DataType {
+    val vredsum = 33.U(6.W)
+    val vredmax = 34.U(6.W)
+    val vredmin = 35.U(6.W)
+    val vredand = 36.U(6.W)
+    val vredor  = 37.U(6.W)
+    val vredxor = 38.U(6.W)
+    val vfRedComp = "b0001".U(4.W)
+    val vfRedUSum = "b0010".U(4.W)
+    val vfRedOSum = "b0100".U(4.W)
+
+    def isReduction(implicit op: UInt): Bool =
+      Seq(vredsum, vredmax, vredmin, vredand, vredor, vredxor).map(op === _).reduce(_ || _)
+    def isVredsum(implicit op: UInt): Bool = op === vredsum
+    def isVredmax(implicit op: UInt): Bool = op === vredmax
+    def isVredmin(implicit op: UInt): Bool = op === vredmin
+    def isVredand(implicit op: UInt): Bool = op === vredand
+    def isVredor(implicit op: UInt): Bool = op === vredor
+    def isVredxor(implicit op: UInt): Bool = op === vredxor
+
+    private val DV = bb"0"
+    private val DW = bb"1"
+    private val SUM  = bb"0000"
+    private val AND  = bb"0001"
+    private val OR   = bb"0010"
+    private val XOR  = bb"0011"
+    private val MINU = bb"0100"
+    private val MIN  = bb"0101"
+    private val MAXU = bb"0110"
+    private val MAX  = bb"0111"
+    private val SUMU = bb"1000"
+
+    val vredsum_e8   = DvSvlS2vS1v(SUM , DV, E8 )
+    val vredsum_e16  = DvSvlS2vS1v(SUM , DV, E16)
+    val vredsum_e32  = DvSvlS2vS1v(SUM , DV, E32)
+    val vredsum_e64  = DvSvlS2vS1v(SUM , DV, E64)
+    val vredand_e8   = DvSvlS2vS1v(AND , DV, E8 )
+    val vredand_e16  = DvSvlS2vS1v(AND , DV, E16)
+    val vredand_e32  = DvSvlS2vS1v(AND , DV, E32)
+    val vredand_e64  = DvSvlS2vS1v(AND , DV, E64)
+    val vredor_e8    = DvSvlS2vS1v(OR  , DV, E8 )
+    val vredor_e16   = DvSvlS2vS1v(OR  , DV, E16)
+    val vredor_e32   = DvSvlS2vS1v(OR  , DV, E32)
+    val vredor_e64   = DvSvlS2vS1v(OR  , DV, E64)
+    val vredxor_e8   = DvSvlS2vS1v(XOR , DV, E8 )
+    val vredxor_e16  = DvSvlS2vS1v(XOR , DV, E16)
+    val vredxor_e32  = DvSvlS2vS1v(XOR , DV, E32)
+    val vredxor_e64  = DvSvlS2vS1v(XOR , DV, E64)
+    val vredminu_e8  = DvSvlS2vS1v(MINU, DV, E8 )
+    val vredminu_e16 = DvSvlS2vS1v(MINU, DV, E16)
+    val vredminu_e32 = DvSvlS2vS1v(MINU, DV, E32)
+    val vredminu_e64 = DvSvlS2vS1v(MINU, DV, E64)
+    val vredmin_e8   = DvSvlS2vS1v(MIN , DV, E8 )
+    val vredmin_e16  = DvSvlS2vS1v(MIN , DV, E16)
+    val vredmin_e32  = DvSvlS2vS1v(MIN , DV, E32)
+    val vredmin_e64  = DvSvlS2vS1v(MIN , DV, E64)
+    val vredmaxu_e8  = DvSvlS2vS1v(MAXU, DV, E8 )
+    val vredmaxu_e16 = DvSvlS2vS1v(MAXU, DV, E16)
+    val vredmaxu_e32 = DvSvlS2vS1v(MAXU, DV, E32)
+    val vredmaxu_e64 = DvSvlS2vS1v(MAXU, DV, E64)
+    val vredmax_e8   = DvSvlS2vS1v(MAX , DV, E8 )
+    val vredmax_e16  = DvSvlS2vS1v(MAX , DV, E16)
+    val vredmax_e32  = DvSvlS2vS1v(MAX , DV, E32)
+    val vredmax_e64  = DvSvlS2vS1v(MAX , DV, E64)
+    val vwredsum_e8   = DvSvlS2vS1v(SUM, DW, E8 )
+    val vwredsum_e16  = DvSvlS2vS1v(SUM, DW, E16)
+    val vwredsum_e32  = DvSvlS2vS1v(SUM, DW, E32)
+    val vwredsumu_e8  = DvSvlS2vS1v(SUMU, DW, E8 )
+    val vwredsumu_e16 = DvSvlS2vS1v(SUMU, DW, E16)
+    val vwredsumu_e32 = DvSvlS2vS1v(SUMU, DW, E32)
+
+    override def getLat(opcode: Opcode): Int = 2
+  }
+
+  object VRedOpcodes extends VRedOpcodes
 
   trait VIPermOpcode extends Opcodes with DataType with LmulType {
 
