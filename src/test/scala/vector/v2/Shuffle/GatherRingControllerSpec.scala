@@ -23,7 +23,7 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
     check: (Seq[(Boolean, Int)], Seq[(Boolean, Int)], Seq[Boolean], Seq[BigInt]) => Unit
   ): Unit = {
     val param = GatherCommon.GatherParam.default
-    val NumUnits = 8
+    val NumUnits = param.numUnits
 
     simulate(new GatherRingController()(param)) { dut =>
       for (i <- 0 until NumUnits) {
@@ -69,7 +69,7 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
     check: Int => Unit  // receives dbgPipeCtrlValid(0) bitmap
   ): Unit = {
     val param = GatherCommon.GatherParam.default
-    val NumUnits = 8
+    val NumUnits = param.numUnits
 
     simulate(new GatherRingController()(param)) { dut =>
       for (i <- 0 until NumUnits) {
@@ -237,14 +237,14 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
   describe("unitAllTableValid") {
     it("m4 unit not driven by ring2 s1 of another block size") {
       val param = GatherCommon.GatherParam.default
-      val NumUnits = 8
+      val NumUnits = param.numUnits
       simulate(new GatherRingController()(param)) { dut =>
         // U0/U2/U3: m4 block, only U0's table placed (block incomplete).
         // U1: m2 block with a registered table. An m2 s1 pipe targets U0:
         // ring2's allTableValid (U0-1) is raised via the in-flight s1 table,
         // but U0 is m4 and its block is not complete -> U0 must stay 0 (the
         // ring2 contribution is masked out by U0's blockSize).
-        val blockSize = Seq(4, 2, 4, 4, 0, 0, 0, 0)
+        val blockSize = Seq(4, 2, 4, 4) ++ Seq.fill(NumUnits - 4)(0)
         for (i <- 0 until NumUnits) {
           dut.in.hasTable(i).poke(i < 2) // U0, U1 registered tables
           dut.in.hasIndex(i).poke(false)
@@ -265,7 +265,7 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
         val v = (0 until NumUnits).map(i => dut.out.unitAllTableValid(i).peekBoolean())
         assert(!v(0), s"U0 (m4, block incomplete) must not be allTableValid (got $v)")
         assert(!v(2) && !v(3), s"U2/U3 (m4, no table) must not be allTableValid (got $v)")
-        assert(!v(4) && !v(5) && !v(6) && !v(7), s"unused units must not be allTableValid (got $v)")
+        assert((4 until NumUnits).forall(i => !v(i)), s"unused units must not be allTableValid (got $v)")
       }
     }
   }}

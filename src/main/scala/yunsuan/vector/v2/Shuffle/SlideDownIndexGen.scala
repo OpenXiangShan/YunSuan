@@ -47,7 +47,12 @@ class SlideDownIndexGen(implicit val param: GatherParam) extends GatherModule {
   // 0     <= i + offset < vlmax --> src[i] = vs2[i + offset]
   // vlmax <= i + offset         --> src[i] = 0
   for (i <- out.slideDown.bits.index.indices) {
-    val iPlusOffset = ((tableIdx ## i.U(IndexWidthInDLEN.W)) +& e8Off).suggestName("iPlusOffsetSlideDown")
+    // Keep the arithmetic width independent of UnitIdx/TableIdxWidth. NumUnits
+    // may be larger than the number of table chunks addressable by IndexWidth;
+    // widening tableIdx must not move the LMUL overflow bit seen by the fixed
+    // head() checks below.
+    val iPlusOffset = (((tableIdx ## i.U(IndexWidthInDLEN.W)) +& e8Off)
+      .take(IndexWidth + 1)).suggestName("iPlusOffsetSlideDown")
     out.slideDown.bits.index(i) := iPlusOffset.tail(1) // drop carry bit
     // offset >= VLMAX (whole group): every element is out of range -> all
     // fillZeros (the 7-bit offset field would otherwise truncate a huge offset

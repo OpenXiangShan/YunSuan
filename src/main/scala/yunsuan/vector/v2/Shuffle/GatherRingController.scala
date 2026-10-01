@@ -119,9 +119,18 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
     bc.in.counter := VecInit(in.counter.slice(base, base + 8))
     bc.in.blockFieldNum := ring8FieldNum(i)
     for (j <- 0 until NumPipeIn) {
-      // blockSize(3) gates ring8: only active for LMUL=8
+      // blockSize(3) gates ring8: only active for LMUL=8. With multiple
+      // ring8 blocks (NumUnits > 8), also select the block containing the
+      // uop's blockBase; otherwise every ring8 controller claims the same
+      // pipe and placement is duplicated into the last unit of the block.
+      val ring8BlockSelected = if (NumUnits == 8) {
+        true.B
+      } else {
+        in.s0pipes(j).bits.blockBase.drop(3) === bc.blockBase.U(UnitIdx().getWidth.W).drop(3)
+      }
       bc.in.pipePlaceIdx(j).valid :=
-        in.s0pipes(j).valid && in.s0pipes(j).bits.blockSize(3)
+        in.s0pipes(j).valid && in.s0pipes(j).bits.blockSize(3) &&
+        ring8BlockSelected
       bc.in.pipePlaceIdx(j).bits := in.s0pipes(j).bits.placeIdx
       bc.in.pipeIsEi16E8(j) := bc.in.pipePlaceIdx(j).valid && in.s0pipes(j).bits.isEi16E8
       bc.in.pipeIsRvs3(j) := bc.in.pipePlaceIdx(j).valid && in.s0pipes(j).bits.isRvs3

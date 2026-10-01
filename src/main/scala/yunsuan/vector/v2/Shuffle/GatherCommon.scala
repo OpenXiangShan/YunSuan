@@ -15,7 +15,6 @@ object GatherCommon {
    * @param dlen
    * @param xlen
    * @param numUnits The number of all [[GatherRingUnit]] in [[GatherRing]]
-   * @param unitIdx The index of this [[GatherRingUnit]] in [[GatherRing]]
    */
   class GatherParam(
     val numPipeIn : Int,
@@ -24,6 +23,7 @@ object GatherCommon {
     val dlen      : Int = 128,
     val xlen      : Int = 64,
     val debug     : Boolean = false,
+    val numUnits  : Int = 16,
     // Number of register stages from issue to entering the exu; the vperm wakeup
     // delay is computed as issue2exu - counter (delay=0 corresponds to wbM3)
     val issue2exu : Int = 3,
@@ -33,6 +33,7 @@ object GatherCommon {
     require(isPow2(dlen) && dlen >= 64)
     require(isPow2(vlen) && vlen >= 128)
     require(vlen >= dlen)
+    require(isPow2(numUnits) && numUnits >= 8)
     require(issue2exu > 0)
   }
 
@@ -71,7 +72,7 @@ object GatherCommon {
 
     def IndexWidth: Int = log2Ceil(VLEN * MaxLMUL / MinDataWidth)
 
-    def NumUnits: Int = VLEN / DLEN * MaxLMUL
+    def NumUnits: Int = param.numUnits
 
     def UnitIdx(): UInt = UInt(TableIdxWidth.W)
 

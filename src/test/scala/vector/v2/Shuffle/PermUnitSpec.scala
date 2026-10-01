@@ -21,7 +21,7 @@ object FakePermMeta {
 class PermUnitSpec extends SpecBase with GatherSpecUtils {
 
   val NumPipes = 4
-  val NumUnits = 8
+  val NumUnits = GatherParam.default.numUnits
   val issue2exu = GatherParam.default.issue2exu
 
   // ---- Golden objects --------------------------------------------------
@@ -554,6 +554,72 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           }
           dut.clock.step(); for (p <- 0 until 4) pPipeOff(dut, p)
           eWbAfter(dut, 0, golden0, 11)
+        }
+      }
+
+      describe("upper ring blockBase=8 smoke") {
+        it("m1 uses unit 8") {
+          simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+            initDut(dut)
+            val table = Table.inc(1)
+            val golden = gatherGolden(0, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
+            pGather(dut, 0, 8, 8, 0, table, Prefill.default(1), blockBase = 8)
+            dut.clock.step(); pPipeOff(dut, 0)
+            eWbAfter(dut, 0, golden, 2)
+          }
+        }
+
+        it("m2 uses units 8-9") {
+          simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+            initDut(dut)
+            val table = Table.inc(2)
+            val vs1 = foldBytes(Index.allInTable0(1))
+            val golden = gatherGolden(vs1, 8, 8, 16, 0, table, 0 until 2, Prefill.default(2), 32)
+            pGather(dut, 0, 8, 8, vs1, table.slice(0, 16), Prefill.default(2).slice(0, 16),
+              lmulFrac = 16, uopIdx = 0, blockBase = 8, placeIdx = 0)
+            pGather(dut, 1, 8, 8, vs1, table.slice(16, 32), Prefill.default(2).slice(16, 32),
+              lmulFrac = 16, uopIdx = 1, blockBase = 8, placeIdx = 1)
+            dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
+            eWbAfter(dut, 0, golden, 4)
+          }
+        }
+
+        it("m4 uses units 8-11") {
+          simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+            initDut(dut)
+            val table = Table.inc(4)
+            val vs1 = foldBytes(Index.unzip4(1))
+            val golden = gatherGolden(vs1, 8, 8, 32, 0, table, 0 until 4, Prefill.default(4), 64)
+            for (p <- 0 until 4) {
+              pGather(dut, p, 8, 8, vs1, table.slice(p * 16, (p + 1) * 16),
+                Prefill.default(4).slice(p * 16, (p + 1) * 16),
+                lmulFrac = 32, uopIdx = p, blockBase = 8, placeIdx = p)
+            }
+            dut.clock.step(); for (p <- 0 until 4) pPipeOff(dut, p)
+            eWbAfter(dut, 0, golden, 12)
+          }
+        }
+
+        it("m8 uses units 8-15") {
+          simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+            initDut(dut)
+            val table = Table.inc(8)
+            val vs1 = foldBytes(Index.allInTable0(1))
+            val golden = gatherGolden(vs1, 8, 8, 64, 0, table, 0 until 8, Prefill.default(8), 128)
+            for (p <- 0 until 4) {
+              pGather(dut, p, 8, 8, vs1, table.slice(p * 16, (p + 1) * 16),
+                Prefill.default(8).slice(p * 16, (p + 1) * 16),
+                lmulFrac = 64, uopIdx = p, blockBase = 8, placeIdx = p)
+            }
+            dut.clock.step(); for (p <- 0 until 4) pPipeOff(dut, p)
+            for (p <- 0 until 4) {
+              pGather(dut, p, 8, 8, vs1, table.slice((p + 4) * 16, (p + 5) * 16),
+                Prefill.default(8).slice((p + 4) * 16, (p + 5) * 16),
+                lmulFrac = 64, uopIdx = p + 4, blockBase = 8, placeIdx = p + 4)
+            }
+            dut.clock.step(); for (p <- 0 until 4) pPipeOff(dut, p)
+            eWbAfter(dut, 0, golden, 11)
+          }
         }
       }
     }
