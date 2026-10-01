@@ -38,6 +38,9 @@ class GatherRingUnit[T <: Data](
   private val doFlow       = in.willFlow
   private val doFlowTable  = in.willFlow && in.flow.valid
 
+  assert(!(doPlaceTable && doFlowTable),
+    s"GatherRingUnit $unitIdx: placeTable and flowTable are both valid")
+
   // ── Registers ────────────────────────────────────────
   private val tableData    = Reg(Vec(NumElem, UInt(MinDataWidth.W)))
   private val tableIdx     = Reg(UInt(TableIdxWidth.W))
@@ -82,7 +85,7 @@ class GatherRingUnit[T <: Data](
 
   when(doPlaceTable) {
     hasTableNext := true.B
-  }.elsewhen(in.clearTable && passedEntry) {
+  }.elsewhen(in.clearTable && passedEntry || hasIndex && counter === 0.U && (hasWb || in.wbReady)) {
     hasTableNext := false.B
   }.elsewhen(doFlow) {
     hasTableNext := in.flow.valid
@@ -350,7 +353,7 @@ class GatherRingUnit[T <: Data](
   out.wake.bits.meta := meta
 
   // ── Table Output (to next Unit) ──────────────────────
-  out.flow.valid := hasTable && Mux(passedEntry, !isLastUnit, true.B)
+  out.flow.valid := hasTable && !flush && Mux(passedEntry, !isLastUnit, true.B)
   out.flow.data  := tableData
   out.flow.tableIdx := tableIdx
   out.flow.isFirstTable := isFirstTable

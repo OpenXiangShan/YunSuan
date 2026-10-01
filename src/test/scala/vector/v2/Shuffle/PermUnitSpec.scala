@@ -1786,6 +1786,75 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           eWbAfter(dut, 0, golden, 5) // placeIdx=0 -> output pipe 0
         }
       }
+
+      it("C8: replay e16 m8 interleaved blocks from rvv-bench wave 212526-212529") {
+        simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+          initDut(dut)
+          dut.in.wbReady.foreach(_.poke(true))
+          dut.in.flush.s1.foreach(_.poke(false))
+
+          val allOnes = (BigInt(1) << 128) - 1
+          val vs2 = Seq.fill(16)(0xff)
+          val vs3 = Seq.fill(16)(0)
+
+          // The earlier e8/m8 transaction leaves a table in unit 15 at 212525.
+          // Each row is one cycle, in pipe order; None means the pipe is idle.
+          val prelude = Seq(
+            Seq(Some((0, 0, 0, 55)), Some((3, 0, 1, 55)), Some((1, 0, 2, 55)), Some((2, 0, 3, 55))),
+            Seq(Some((4, 0, 0, 55)), Some((2, 8, 0, 56)), Some((5, 0, 1, 55)), Some((6, 0, 2, 55))),
+            Seq(Some((7, 0, 0, 55)), Some((6, 8, 0, 56)), Some((0, 8, 1, 56)), Some((1, 8, 2, 56))),
+            Seq(Some((3, 8, 0, 56)), None, Some((4, 8, 1, 56)), Some((5, 8, 2, 56))),
+            Seq(Some((7, 8, 0, 56)), None, None, None),
+          )
+          // (uopIdx, blockBase, placeIdx, robIdx), in pipe order for each cycle.
+          val wave = Seq(
+            Seq((3, 0, 0, 57), (0, 0, 1, 57), (1, 0, 2, 57), (2, 0, 3, 57)),
+            Seq((2, 8, 0, 58), (4, 0, 0, 57), (5, 0, 1, 57), (6, 0, 2, 57)),
+            Seq((6, 8, 0, 58), (7, 0, 0, 57), (0, 8, 1, 58), (1, 8, 2, 58)),
+            Seq((7, 8, 0, 58), (3, 8, 1, 58), (4, 8, 2, 58), (5, 8, 3, 58)),
+          )
+
+          def drive(cycle: Seq[Option[(Int, Int, Int, Int)]], sew: Int): Unit = {
+            cycle.zipWithIndex.foreach { case (input, pipe) =>
+              pDefaults(dut, pipe)
+              input.foreach { case (uopIdx, blockBase, placeIdx, robIdx) =>
+                pCompress(dut, pipe, allOnes, vs2, vs3,
+                  lmulFrac = 64, uopIdx = uopIdx, blockBase = blockBase,
+                  placeIdx = placeIdx, vl = 64, vta = true, robIdx = robIdx,
+                  pdest = blockBase + uopIdx + (if (sew == 8) 32 else 0), sew = sew)
+              }
+            }
+            dut.clock.step()
+          }
+
+          prelude.foreach(drive(_, sew = 8))
+          (0 until NumPipes).foreach(pPipeOff(dut, _))
+          // At 212474 the redirect flushes s1 pipe 0 and units 0..14,
+          // leaving the table in unit 15 without a matching index.
+          dut.in.flush.s1(0).poke(true)
+          (0 until 15).foreach(dut.in.unitFlush(_).poke(true))
+          dut.clock.step()
+          dut.out.unitStatus(15).hasTable.expect(false.B,
+            "flush of unit 14 must not forward its table into unflushed unit 15")
+          dut.in.flush.s1(0).poke(false)
+          (0 until 15).foreach(dut.in.unitFlush(_).poke(false))
+          for (_ <- 0 until 51) dut.clock.step()
+
+          wave.foreach(cycle => drive(cycle.map(Some(_)), sew = 16))
+          (0 until NumPipes).foreach(pPipeOff(dut, _))
+
+          val completed = Array.fill(NumUnits)(false)
+          for (_ <- 0 until 30) {
+            for (pipe <- 0 until NumPipes if dut.out.pipes(pipe).valid.peekBoolean()) {
+              val uop = dut.out.pipes(pipe).bits.meta.pdest.peekValue().asBigInt.toInt
+              completed(uop) = true
+              dut.out.pipes(pipe).bits.data.expect(allOnes)
+            }
+            dut.clock.step()
+          }
+          assert(completed.forall(identity), s"missing output uops: ${completed.indices.filterNot(completed(_)).mkString(",")}")
+        }
+      }
     }
   }
 
@@ -1999,7 +2068,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         s.hasIndex.expect(false.B, "hasIndex cleared after drain")
         s.counter.expect(0.U, "counter back to 0")
         s.done.expect(false.B, "done false after drain")
-        s.hasTable.expect(true.B, "m1 table stays until flush/reuse")
+        s.hasTable.expect(false.B, "m1 table stays until flush/reuse")
       }
     }
   }
