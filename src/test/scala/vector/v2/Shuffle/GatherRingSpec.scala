@@ -27,8 +27,8 @@ class GatherRingSpec
     for (p <- 0 until NumPipes) {
       dut.in.s0pipes(p).valid.poke(false)
       dut.in.s1pipes(p).valid.poke(false)
-      dut.in.wbReady(p).poke(false)
-      dut.in.wakeAck(p).poke(false)
+      dut.in.wbReady(p).poke(true)
+      dut.in.wakeAck(p).poke(true)
     }
     dut.in.flush.foreach(_.poke(false))
     dut.clock.step()
@@ -113,6 +113,11 @@ class GatherRingSpec
   }
 
   def eWb(dut: GatherRing[FakeRobPtr], pipe: Int, dest: BigInt)(implicit sourceInfo: SourceInfo): Unit = {
+    var waited = 0
+    while (!dut.out.pipes(pipe).valid.peekBoolean() && waited < 24) {
+      dut.clock.step()
+      waited += 1
+    }
     dut.out.pipes(pipe).valid.expect(true.B, s"pipe $pipe wb.valid")
     dut.out.pipes(pipe).bits.data.expect(dest, ExpectationValueFormat.Hex)
   }
@@ -120,15 +125,13 @@ class GatherRingSpec
   // Step until n writebacks have been observed (wbReady held high), collecting
   // robIdx -> data. Sampling happens BEFORE each clock.step(): a wb that is
   // granted in the same cycle it asserts is invisible to post-step peeks.
-  // With expectNoWake, asserts no wake request fires at any step (D3).
-  def collectWbs(dut: GatherRing[FakeRobPtr], n: Int, expectNoWake: Boolean = false, maxSteps: Int = 40): Map[Int, BigInt] = {
+  def collectWbs(dut: GatherRing[FakeRobPtr], n: Int, maxSteps: Int = 40): Map[Int, BigInt] = {
     dut.in.wbReady.foreach(_.poke(true))
     var got = Map.empty[Int, BigInt]
+    var wakes = 0
     var steps = 0
     while (got.size < n && steps < maxSteps) {
-      if (expectNoWake) {
-        dut.out.wake.foreach(w => assert(w.valid.peekValue().asBigInt == 0, "hole block must not wake"))
-      }
+      wakes += dut.out.wake.count(_.valid.peekValue().asBigInt == 1)
       for (p <- 0 until NumPipes) {
         if (dut.out.pipes(p).valid.peekValue().asBigInt == 1) {
           got += (dut.out.pipes(p).bits.meta.value.peekValue().asBigInt.toInt ->
@@ -146,6 +149,7 @@ class GatherRingSpec
       println(s"[collectWbs] timeout after $steps steps, got ${got.keys.mkString(",")}; unitStatus: $dump")
     }
     assert(got.size == n, s"only ${got.size}/$n writebacks observed after $steps steps")
+    assert(wakes == n, s"observed $wakes/$n accepted wake requests")
     got
   }
 
@@ -468,8 +472,6 @@ class GatherRingSpec
           dut.clock.step()
 
           for (p <- 0 until 4) pS1Off(dut, pipe = p)
-          for (_ <- 0 until 8) dut.clock.step()
-
           eWb(dut, pipe = 0, golden)
         }
       }
@@ -996,9 +998,10 @@ class GatherRingSpec
         eWb(dut, pipe = 0, golden4)
       }
     }
-    it("valid holds") {
+    it("wake ack reserves writeback and valid holds until wbReady") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
+        dut.in.wbReady(0).poke(false)
         val table = Table.inc(1); val index = Index.allInTable0(1)
         val iValid = IndexValid.allTrue(1); val pf = Prefill.default(1)
         pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
@@ -1007,19 +1010,19 @@ class GatherRingSpec
         pS1(dut, pipe = 0, table, index, iValid, pf)
         dut.clock.step(); pS1Off(dut, pipe = 0)
 
+        for (_ <- 0 until 12 if !dut.out.wake(0).valid.peekBoolean()) dut.clock.step()
+        dut.out.wake(0).valid.expect(true.B)
+        dut.in.wakeAck(0).poke(true)
         dut.clock.step()
-
-        dut.out.pipes(0).valid.expect(true.B)
-        dut.clock.step()
-
-        dut.out.pipes(0).valid.expect(true.B)
-        dut.clock.step()
-
+        dut.in.wakeAck(0).poke(false)
+        dut.out.wake(0).valid.expect(false.B)
+        for (_ <- 0 until GatherCommon.GatherParam.default.issue2exu - 1) {
+          dut.out.pipes(0).valid.expect(false.B)
+          dut.clock.step()
+        }
         dut.out.pipes(0).valid.expect(true.B)
         dut.in.wbReady(0).poke(true)
         dut.clock.step()
-
-        dut.in.wbReady(0).poke(false)
         dut.out.pipes(0).valid.expect(false.B)
       }
     }
@@ -1179,26 +1182,23 @@ class GatherRingSpec
 
         for (p <- 0 until 4) pS1Off(dut, pipe = p)
         for (p <- 0 until 4) pS0Off(dut, pipe = p)
-        eWb(dut, pipe = 0, golden(0)); eWb(dut, pipe = 2, golden(1))
         for (p <- 0 until 4) pS1(dut, pipe = p, table, idx(p), iValid, pf, blockBase = p * 2 + 1)
-        dut.in.wbReady(0).poke(true); dut.in.wbReady(2).poke(true)
         dut.clock.step()
 
-        // cycle 3: r1 wb accepted, r2 s1 delivered
-
-        dut.in.wbReady(0).poke(false); dut.in.wbReady(2).poke(false)
+        // Each pipe accepts at most one wake per cycle, then writes each result
+        // three cycles later. Keep ready asserted throughout the reservation.
         for (p <- 0 until 4) pS1Off(dut, pipe = p)
-        eWb(dut, pipe = 0, golden(2)); eWb(dut, pipe = 2, golden(3))
-        eWb(dut, pipe = 1, golden(0)); eWb(dut, pipe = 3, golden(1))
-        dut.in.wbReady(0).poke(true); dut.in.wbReady(2).poke(true)
-        dut.in.wbReady(1).poke(true); dut.in.wbReady(3).poke(true)
-        dut.clock.step()
-
-        // cycle 4: r1 done, r2 wb accepted
-
-        dut.in.wbReady(0).poke(false); dut.in.wbReady(2).poke(false)
-        dut.in.wbReady(1).poke(false); dut.in.wbReady(3).poke(false)
-        eWb(dut, pipe = 1, golden(2)); eWb(dut, pipe = 3, golden(3))
+        val received = Array.fill(NumPipes)(Seq.empty[BigInt])
+        for (_ <- 0 until 20) {
+          for (p <- 0 until NumPipes if dut.out.pipes(p).valid.peekBoolean()) {
+            received(p) :+= dut.out.pipes(p).bits.data.peekValue().asBigInt
+          }
+          dut.clock.step()
+        }
+        received.toSeq mustBe Seq(
+          Seq(golden(0), golden(2)), Seq(golden(0), golden(2)),
+          Seq(golden(1), golden(3)), Seq(golden(1), golden(3))
+        )
       }
     }
     it("flush") {
@@ -1265,7 +1265,7 @@ class GatherRingSpec
       dut.out.unitStatus(unit).counter.expect(0.U, s"hole unit $unit counter must stay 0")
     }
 
-    it("seg3: size-4 block with 3 fields assembles, circulates, writes back (wake silent)") {
+    it("seg3: size-4 block with 3 fields wakes real entries and writes back") {
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         val f = 3
@@ -1273,7 +1273,7 @@ class GatherRingSpec
         val golden = Res.gather(table, Index.unzipN(f), IndexValid.allTrue(1), Prefill.default(1), 0 until f)
 
         runSegBlock(dut, f, size = 4, blockBase = 0, table, robBase = 0)
-        val wbs = collectWbs(dut, f, expectNoWake = true)
+        val wbs = collectWbs(dut, f)
         for (u <- 0 until f) assert(wbs(u) == golden, s"field $u data mismatch")
 
         expectSilentHole(dut, unit = 3)
@@ -1318,7 +1318,7 @@ class GatherRingSpec
         dut.clock.step()
         pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 1)
 
-        val wbs = collectWbs(dut, 2 * f, expectNoWake = true)
+        val wbs = collectWbs(dut, 2 * f)
         for (u <- 0 until 3) assert(wbs(u) == goldenA, s"block A field $u data mismatch")
         for (u <- 3 until 6) assert(wbs(u) == goldenB, s"block B field $u data mismatch")
 
@@ -1340,13 +1340,13 @@ class GatherRingSpec
         val goldenB = Res.gather(tableB, index, iValid, pf, 0 until f)
 
         runSegBlock(dut, f, size = 4, blockBase = 0, tableA, robBase = 0)
-        val wbsA = collectWbs(dut, f, expectNoWake = true)
+        val wbsA = collectWbs(dut, f)
         for (u <- 0 until f) assert(wbsA(u) == goldenA, s"block A field $u data mismatch")
 
         stepUntilDrained(dut)
 
         runSegBlock(dut, f, size = 4, blockBase = 0, tableB, robBase = 3)
-        val wbsB = collectWbs(dut, f, expectNoWake = true)
+        val wbsB = collectWbs(dut, f)
         for (u <- 0 until f) assert(wbsB(3 + u) == goldenB, s"block B field $u data mismatch")
       }
     }
@@ -1359,7 +1359,7 @@ class GatherRingSpec
           val golden = Res.gather(table, Index.unzipN(f), IndexValid.allTrue(1), Prefill.default(1), 0 until f)
 
           runSegBlock(dut, f, size = 8, blockBase = 0, table, robBase = 0)
-          val wbs = collectWbs(dut, f, expectNoWake = true)
+          val wbs = collectWbs(dut, f)
           for (u <- 0 until f) assert(wbs(u) == golden, s"field $u data mismatch")
 
           holes.foreach(expectSilentHole(dut, _))

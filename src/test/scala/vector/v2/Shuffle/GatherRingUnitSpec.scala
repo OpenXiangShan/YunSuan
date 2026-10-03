@@ -57,7 +57,6 @@ class GatherRingUnitSpec extends SpecBase {
       dut.in.wbReady.poke(false)
       dut.in.allTableValid.poke(false)
       dut.in.wakeAck.poke(false)
-      dut.in.blockedByEqCounter.poke(false)
       dut.in.flush.poke(true)
       dut.clock.step()
       dut.in.flush.poke(false)
@@ -71,8 +70,10 @@ class GatherRingUnitSpec extends SpecBase {
   def eWb(valid: Boolean, dest: BigInt = 0)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
 
-      dut.out.wb.valid.expect(valid.B, "wb.valid mismatch")
-      if (valid) dut.out.wb.bits.data.expect(dest, ExpectationValueFormat.Hex)
+      if (valid) {
+        dut.out.status.done.expect(true.B, "result must be complete")
+        dut.out.wb.bits.data.expect(dest, ExpectationValueFormat.Hex)
+      } else dut.out.wb.valid.expect(false.B, "wb.valid mismatch")
   }
 
   def eCounter(value: BigInt)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit = {
@@ -195,7 +196,6 @@ class GatherRingUnitSpec extends SpecBase {
 
       dut.in.allTableValid.poke(allTableValid)
       dut.in.wakeAck.poke(false)
-      dut.in.blockedByEqCounter.poke(false)
   }
 
   def eWake(valid: Boolean, delay: Int = 0)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit = {
@@ -462,7 +462,7 @@ class GatherRingUnitSpec extends SpecBase {
       }
     }
 
-    it("wake is suppressed for hole blocks (D3)") {
+    it("does not wake a hole block entry before its result completes") {
       simulator() {
         dut =>
 
@@ -479,7 +479,7 @@ class GatherRingUnitSpec extends SpecBase {
       }
     }
 
-    it("wake fires for a full block at the same occupancy (control)") {
+    it("full block does not wake before its result completes") {
       simulator() {
         dut =>
 
@@ -490,8 +490,47 @@ class GatherRingUnitSpec extends SpecBase {
             dut,
             initUnit,
             Cycle(pPlace(4, 0, table, index, IndexValid.allTrue(), Prefill.default(1)))(eWake(false), eCounter(3)),
-            Cycle(pNoPlace, pNoFlow, pWakeCtx(true))(eWake(true, delay = 0)),
+            Cycle(pNoPlace, pNoFlow, pWakeCtx(true))(eWake(false), eCounter(3)),
           )
+      }
+    }
+
+    it("holds a completed result while the ring waits for wake ack") {
+      simulator() { dut =>
+        val table = Table.inc()
+        val index = Index.allInTable0(1)
+        val noLookups = Seq.fill(16)(false)
+        initUnit(dut)
+        pPlace(1, 0, table, index, noLookups)(dut)
+        pWbReady(false)(dut)
+        pWakeCtx(true)(dut)
+        dut.clock.step()
+        pNoPlace(dut)
+
+        for (_ <- 0 until 6) {
+          dut.out.status.hasIndex.expect(true.B)
+          dut.out.status.counter.expect(0.U)
+          dut.out.wake.valid.expect(true.B)
+          dut.out.wake.bits.delay.expect(0.U)
+          dut.out.wb.valid.expect(false.B, "result waits for an accepted wake")
+          dut.clock.step()
+        }
+
+        dut.in.wakeAck.poke(true)
+        dut.out.wake.valid.expect(true.B)
+        dut.out.wake.bits.delay.expect(0.U)
+        dut.out.wb.valid.expect(false.B)
+        dut.clock.step()
+        dut.in.wakeAck.poke(false)
+        dut.out.wake.valid.expect(false.B)
+        for (_ <- 0 until 2) {
+          dut.out.wb.valid.expect(false.B)
+          dut.clock.step()
+        }
+        pWbReady()(dut)
+        dut.out.wb.valid.expect(true.B)
+        dut.clock.step()
+        dut.out.status.hasIndex.expect(false.B)
       }
     }
 

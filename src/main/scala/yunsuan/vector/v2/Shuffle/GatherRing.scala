@@ -254,14 +254,20 @@ class GatherRing[T <: Data](
 
   /***************************** wb *******************************************/
 
-  // wbReady routing: pipe -> unit via wbSelOH
+  // Each unit holds its completed result for issue2exu cycles after its wake is
+  // accepted; the normal WB arbiter selects the due result.
+  private val acceptedWake = Seq.tabulate(NumPipeOut) { p =>
+    Mux(in.wakeAck(p), controller.out.wakeSelOH(p), 0.U(NumUnits.W)) & ~in.flush.asUInt
+  }
+  private val wbSelected = controller.out.wbSelOH
+
   for (j <- 0 until NumUnits) {
-    units(j).in.wbReady := Mux1H(controller.out.wbSelOH.map(_(j)), in.wbReady)
+    units(j).in.wbReady := Mux1H(wbSelected.map(_(j)), in.wbReady)
   }
 
-  for (i <- 0 until NumPipeOut) {
-    out.pipes(i).valid := controller.out.wbSelOH(i).orR
-    out.pipes(i).bits := Mux1H(controller.out.wbSelOH(i), units.map(_.out.wb.bits))
+  for (p <- 0 until NumPipeOut) {
+    out.pipes(p).valid := wbSelected(p).orR
+    out.pipes(p).bits := Mux1H(wbSelected(p), units.map(_.out.wb.bits))
   }
 
   /************************* vperm wakeup *************************************/
@@ -270,21 +276,15 @@ class GatherRing[T <: Data](
   // per-unit allTableValid gate and the per-pipe acks back to the selected units.
   for (i <- 0 until NumUnits) {
     units(i).in.allTableValid := controller.out.unitAllTableValid(i)
-    units(i).in.wakeAck := VecInit(controller.out.wakeSelOH.zip(in.wakeAck).map {
-      case (selOH, ack) => selOH(i) && ack
-    }).asUInt.orR
-    units(i).in.blockedByEqCounter := controller.out.blockedByEqCounter(i)
+    units(i).in.wakeAck := acceptedWake.map(_(i)).reduce(_ || _)
   }
 
   for (p <- 0 until NumPipeOut) {
     out.wake(p).valid := controller.out.wakeSelOH(p).orR
     out.wake(p).bits := Mux1H(controller.out.wakeSelOH(p), units.map(_.out.wake.bits))
   }
-  // Each pipe selects one physical unit. Preserve the selection as a bitmap so
-  // simultaneous accepted wakes release independent units in the same cycle.
-  out.release := controller.out.wakeSelOH.zip(in.wakeAck).map { case (sel, ack) =>
-    Mux(ack, sel, 0.U(NumUnits.W))
-  }.reduce(_ | _)
+  // Release exactly the units whose wake requests were accepted this cycle.
+  out.release := acceptedWake.reduce(_ | _)
 }
 
 object GatherRing {

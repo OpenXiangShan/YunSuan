@@ -322,15 +322,15 @@ class PermUnitSpecPlus extends SpecBase with GatherSpecUtils {
     }
 
     // Bound the remaining dispatch pressure at each batch, treating the final
-    // undefined gap as zero, then allow an LMUL-sized ring traversal and one
-    // writeback state-clear cycle.
+    // undefined gap as zero, then allow an LMUL-sized ring traversal, the
+    // reserved wake-to-WB interval, and one writeback state-clear cycle.
     var maxDrainTicks = 0
 
     for(i <- 0 until schedule.gaps.size) {
       maxDrainTicks += schedule.composition(i) - 1 - schedule.gaps(i)
       maxDrainTicks = math.max(maxDrainTicks, 0)
     }
-    maxDrainTicks += uopCount + schedule.composition.last
+    maxDrainTicks += uopCount + schedule.composition.last + GatherParam.default.issue2exu
 
     var drained = false
     var postDispatchTick = 0

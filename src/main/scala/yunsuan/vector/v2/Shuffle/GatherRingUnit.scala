@@ -73,6 +73,7 @@ class GatherRingUnit[T <: Data](
   // done waits on hasIndex, which is only set once both the index (gather) and the
   // old-data (rvs3) are in place (see the hasIndex state machine below).
   private val done      = counter === 0.U && hasIndex
+  private val wbFire = out.wb.valid && in.wbReady
 
   // ── hasTable State Machine ───────────────────────────
   private val hasTableNext = WireInit(hasTable)
@@ -85,7 +86,7 @@ class GatherRingUnit[T <: Data](
 
   when(doPlaceTable) {
     hasTableNext := true.B
-  }.elsewhen(in.clearTable && passedEntry || hasIndex && counter === 0.U && (hasWb || in.wbReady)) {
+  }.elsewhen(in.clearTable && passedEntry || hasIndex && counter === 0.U && (hasWb || wbFire)) {
     hasTableNext := false.B
   }.elsewhen(doFlow) {
     hasTableNext := in.flow.valid
@@ -110,8 +111,8 @@ class GatherRingUnit[T <: Data](
       gatherPlaced,
       !in.placeIndex.bits.waitRvs3 || rvs3Placed
     )
-  }.elsewhen(hasIndex && counter === 0.U && (hasWb || in.wbReady)) {
-    // hasWb || in.wbReady means already wb or wb now
+  }.elsewhen(hasIndex && counter === 0.U && (hasWb || wbFire)) {
+    // A blocked wake must retain the index even when the writeback pipe is ready.
     hasIndexNext := false.B
   }
 
@@ -122,7 +123,7 @@ class GatherRingUnit[T <: Data](
   }.elsewhen (doPlaceIndex) {
     gatherPlaced := gatherPlaced || in.placeIndex.bits.placesGather
     rvs3Placed   := rvs3Placed || in.placeIndex.bits.placesRvs3
-  }.elsewhen (hasIndex && counter === 0.U && (hasWb || in.wbReady)) {
+  }.elsewhen (hasIndex && counter === 0.U && (hasWb || wbFire)) {
     gatherPlaced := false.B
     rvs3Placed   := false.B
   }
@@ -217,7 +218,7 @@ class GatherRingUnit[T <: Data](
 
   when (doPlaceIndex && !in.placeIndex.bits.isRvs3) {
     hasWb := false.B
-  }.elsewhen(hasIndex && out.wb.valid && in.wbReady) {
+  }.elsewhen(hasIndex && wbFire) {
     hasWb := true.B
   }
 
@@ -313,9 +314,11 @@ class GatherRingUnit[T <: Data](
   }
 
   // ── Writeback ───────────────────────────────────────
-  // All tables have flowed through when counter==0, ready to writeback.
-  // Does not depend on out.ready
-  out.wb.valid := !hasWb && hasIndex && done
+  // The result stays in this unit until the wake's reserved writeback cycle.
+  private val wakedUp = RegInit(false.B)
+  private val wakeBlocked = RegInit(false.B)
+  private val wbWait = RegInit(0.U(WakeDelayWidth.W))
+  out.wb.valid := !flush && !hasWb && done && wakedUp && wbWait === 0.U
   out.wb.bits.data := resView.asUInt
   out.wb.bits.meta := meta
 
@@ -325,11 +328,23 @@ class GatherRingUnit[T <: Data](
   assert(!out.wb.valid || indexDone.asUInt.andR, "GatherRingUnit wb with unresolved indexDone")
 
   // ── VPerm Wakeup (early wake, req-ack) ─────────────
-  // delay = issue2exu - counter: counter == issue2exu -> delay=0 (wbM3, earliest wakeup),
-  // counter == 0 -> delay=issue2exu (writeback is happening).
-  // The request is kept asserted until it is acked (wakedUp set).
-  private val wakedUp = RegInit(false.B)
-  private val wakeBlocked = RegInit(false.B)
+  // Request a writeback slot once this unit's result is complete. `done` already
+  // includes the table traversal counter and hasIndex, so an empty hole unit
+  // cannot request a wake. An accepted wake advertises delay=0; wbWait holds
+  // the unit for issue2exu cycles.
+  private val wakeEligible = done
+
+  when(flush || doPlaceIndex) {
+    wbWait := 0.U
+  }.elsewhen(out.wake.valid && in.wakeAck) {
+    wbWait := (param.issue2exu - 1).U
+  }.elsewhen(wakedUp && wbWait =/= 0.U) {
+    wbWait := wbWait - 1.U
+  }
+
+  when(doPlaceIndex && wakedUp && !hasWb && !flush) {
+    assert(false.B, s"GatherRingUnit $unitIdx reused before its reserved writeback")
+  }
 
   when (flush || doPlaceIndex) {
     wakedUp := false.B
@@ -337,19 +352,15 @@ class GatherRingUnit[T <: Data](
     wakedUp := true.B
   }
 
-  when (flush || doPlaceIndex) {
+  when (flush || doPlaceIndex || (out.wake.valid && in.wakeAck)) {
     wakeBlocked := false.B
-  }.elsewhen (out.wake.valid && !in.wakeAck && in.blockedByEqCounter) {
+  }.elsewhen (out.wake.valid && !in.wakeAck) {
+    // Other units may retire their tables while this request waits for its pipe.
     wakeBlocked := true.B
   }
 
-  // D3: hole blocks (segment 3/5/6/7, blockFieldNum != block size) never wake —
-  // the gapped table train breaks the delay = issue2exu - counter dense-train
-  // assumption, so consumers rely on the wb broadcast instead.
-  private val hasHole = blockFieldNum =/= blockSizeCount(blockSize)
-
-  out.wake.valid := in.allTableValid && hasIndex && counter <= param.issue2exu.U && !wakedUp && !hasHole
-  out.wake.bits.delay := (param.issue2exu.U - counter)(WakeDelayWidth - 1, 0) - wakeBlocked
+  out.wake.valid := (wakeEligible || wakeBlocked) && !wakedUp
+  out.wake.bits.delay := 0.U
   out.wake.bits.meta := meta
 
   // ── Table Output (to next Unit) ──────────────────────
@@ -397,9 +408,6 @@ object GatherRingUnit {
     val allTableValid = Bool()
     // Req-ack: set wakedUp once the wakeup has been accepted
     val wakeAck = Bool()
-    // From the ring controller: another unit on the same wake pipe has an equal
-    // counter (an equal-delay wake would collide on the arbitrated pipe)
-    val blockedByEqCounter = Bool()
   }
 
   class Out[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {

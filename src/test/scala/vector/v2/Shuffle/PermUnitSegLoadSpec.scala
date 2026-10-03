@@ -286,7 +286,6 @@ class PermUnitSegLoadSpec extends SpecBase with GatherSpecUtils {
         dut.in.wbReady.foreach(_.poke(true.B))
         dut.in.wakeAck.foreach(_.poke(true.B))
         for (_ <- 0 until 40) {
-          dut.out.wake.foreach(w => assert(!w.valid.peekBoolean(), "hole block must not wake (D3)"))
           for (pipe <- dut.out.pipes.indices if dut.out.pipes(pipe).valid.peekBoolean()) {
             val pdest = dut.out.pipes(pipe).bits.meta.pdest.peekValue().asBigInt.toInt
             if (pdest < actual.length && actual(pdest).isEmpty) {
