@@ -216,6 +216,47 @@ class PermUnitSegLoadSpec extends SpecBase with GatherSpecUtils {
       }
     }
 
+    it("deinterleaves vlseg2e8 vl=2 with only two active bytes per field") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        for (pipe <- dut.in.pipes.indices) {
+          defaults(dut, pipe)
+        }
+        dut.in.unitFlush.foreach(_.poke(false.B))
+        dut.in.wbReady.foreach(_.poke(false.B))
+        dut.in.wakeAck.foreach(_.poke(false.B))
+        dut.clock.step()
+
+        val packed0 = Seq(0x21, 0x21, 0x21, 0x21) ++ Seq.fill(12)(0)
+        val packed1 = Seq.fill(16)(0)
+        val old0 = Seq.fill(16)(0xff)
+        val old1 = Seq.fill(16)(0xff)
+        driveUnzip(dut, pipe = 0, uopIdx = 0, placeIdx = 0, packed0, old0, vl = 2)
+        driveUnzip(dut, pipe = 1, uopIdx = 1, placeIdx = 1, packed1, old1, vl = 2)
+        dut.clock.step()
+        dut.in.pipes(0).valid.poke(false.B)
+        dut.in.pipes(1).valid.poke(false.B)
+
+        val expected = Seq(
+          foldBytes(Seq(0x21, 0x21) ++ Seq.fill(14)(0xff)),
+          foldBytes(Seq(0x21, 0x21) ++ Seq.fill(14)(0xff)),
+        )
+        val actual = Array.fill[Option[BigInt]](2)(None)
+        dut.in.wbReady.foreach(_.poke(true.B))
+        dut.in.wakeAck.foreach(_.poke(true.B))
+        for (_ <- 0 until 40) {
+          for (pipe <- dut.out.pipes.indices if dut.out.pipes(pipe).valid.peekBoolean()) {
+            val pdest = dut.out.pipes(pipe).bits.meta.pdest.peekValue().asBigInt.toInt
+            if (pdest < actual.length && actual(pdest).isEmpty) {
+              actual(pdest) = Some(dut.out.pipes(pipe).bits.data.peekValue().asBigInt)
+            }
+          }
+          dut.clock.step()
+        }
+
+        actual.toSeq mustBe expected.map(Some(_))
+      }
+    }
+
     it("deinterleaves vlseg3e8 vl=5 in a size-4 hole block and preserves old-vd tails") {
       simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
         for (pipe <- dut.in.pipes.indices) {
