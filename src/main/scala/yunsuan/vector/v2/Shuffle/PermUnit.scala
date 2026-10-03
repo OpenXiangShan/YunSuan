@@ -173,6 +173,7 @@ class PermUnit[T <: Data](
   /************************** Output Connections *****************************/
 
   out.pipes      := gatherRing.out.pipes
+  out.release    := gatherRing.out.release
   out.metas.unit := gatherRing.out.metas
   out.metas.s1   := regMeta
   out.unitStatus := gatherRing.out.unitStatus
@@ -217,6 +218,7 @@ object PermUnit {
     val pipes      = Vec(NumPipeOut, ValidIO(new GatherRing.PipeOut(metaGen)))
     val metas      = new MetaOut(metaGen)
     val unitStatus = Vec(NumUnits, new Status)
+    val release    = UInt(NumUnits.W)
     val wake       = Vec(NumPipeOut, ValidIO(new GatherRingUnit.Wake(metaGen)))
     val debug = Option.when(param.debug)(Vec(NumUnits, new GatherRingUnit.Debug))
   }

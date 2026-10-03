@@ -2193,13 +2193,46 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         while (cy < 12 && !seen) {
           if (dut.out.wake(0).valid.peekBoolean()) {
             seen = true
+            dut.out.release.expect(0.U, "release waits for wake ack")
             dut.in.wakeAck(0).poke(true)
+            dut.out.release.expect(1.U, "accepted wake releases only unit 0")
             dut.clock.step()
             dut.in.wakeAck(0).poke(false)
+            dut.out.release.expect(0.U, "release is a one-cycle accepted-wake event")
             dut.out.wake(0).valid.expect(false.B, "wake drops after ack")
           } else { dut.clock.step(); cy += 1 }
         }
         seen mustBe true
+      }
+    }
+
+    it("K5a: simultaneous wakes release two physical units") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        val table = Table.inc(1)
+        val old = Prefill.default(1)
+        pGather(dut, 0, 8, 8, 0, table, old, blockBase = 0)
+        pGather(dut, 2, 8, 8, 0, table, old, blockBase = 2)
+        dut.clock.step()
+        pPipeOff(dut, 0)
+        pPipeOff(dut, 2)
+
+        var cycles = 0
+        while (cycles < 12 &&
+          !(dut.out.wake(0).valid.peekBoolean() && dut.out.wake(2).valid.peekBoolean())) {
+          dut.clock.step()
+          cycles += 1
+        }
+        dut.out.wake(0).valid.expect(true.B)
+        dut.out.wake(2).valid.expect(true.B)
+        dut.out.release.expect(0.U)
+        dut.in.wakeAck(0).poke(true.B)
+        dut.in.wakeAck(2).poke(true.B)
+        dut.out.release.expect(5.U, "release units 0 and 2 in the same cycle")
+        dut.clock.step()
+        dut.in.wakeAck(0).poke(false.B)
+        dut.in.wakeAck(2).poke(false.B)
+        dut.out.release.expect(0.U)
       }
     }
 

@@ -280,6 +280,11 @@ class GatherRing[T <: Data](
     out.wake(p).valid := controller.out.wakeSelOH(p).orR
     out.wake(p).bits := Mux1H(controller.out.wakeSelOH(p), units.map(_.out.wake.bits))
   }
+  // Each pipe selects one physical unit. Preserve the selection as a bitmap so
+  // simultaneous accepted wakes release independent units in the same cycle.
+  out.release := controller.out.wakeSelOH.zip(in.wakeAck).map { case (sel, ack) =>
+    Mux(ack, sel, 0.U(NumUnits.W))
+  }.reduce(_ | _)
 }
 
 object GatherRing {
@@ -296,6 +301,7 @@ object GatherRing {
   class Out[T <: Data](metaGen: => T)(implicit val param: GatherParam) extends GatherBundle {
     // writeback
     val pipes = Vec(NumPipeOut, ValidIO(new PipeOut(metaGen)))
+    val release = UInt(NumUnits.W)
     val metas = Vec(NumUnits, ValidIO(metaGen))
     val unitStatus = Vec(NumUnits, new Status)
     // arbitrated vperm wakeup requests (mirror of pipes)
