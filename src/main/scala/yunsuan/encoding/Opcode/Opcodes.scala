@@ -954,9 +954,10 @@ object Opcodes {
       def getLat(implicit op: BitPat): Int = {
         if (isCompare) 1
         else if (isVfredusum) {
-          if (getDtype.isOneOf(FP64)) 5
-          else if (getDtype.isOneOf(FP32)) 7
-          else 9
+          // Unordered sum releases the final adder result without an OUT cycle.
+          if (getDtype.isOneOf(FP64)) 4
+          else if (getDtype.isOneOf(FP32)) 6
+          else 8
         } else if (getDtype.isOneOf(FP64)) 5
         else if (getDtype.isOneOf(FP32)) 9
         else 17

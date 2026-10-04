@@ -488,14 +488,15 @@ class VFRedUSum() extends Module {
   val Active_r = Reg(UInt(8.W))
   val AdderSrc_r = Reg(UInt(256.W))
   val ValidCnt = RegInit(0.U(4.W))
+  val finalSumCycle = state_r === FSM_SUM && ValidCnt === 1.U
 
   state_r := state_next
   when(flush) {
     state_next := FSM_IDLE
   }.elsewhen(state_r === FSM_IDLE && io.in.fire) {
     state_next := FSM_SUM
-  }.elsewhen(state_r === FSM_SUM && ValidCnt === 1.U) {
-    state_next := FSM_OUT
+  }.elsewhen(finalSumCycle) {
+    state_next := Mux(io.out.ready, FSM_IDLE, FSM_OUT)
   }.elsewhen(state_r === FSM_OUT && io.out.fire) {
     state_next := FSM_IDLE
   }.otherwise {
@@ -642,12 +643,14 @@ class VFRedUSum() extends Module {
 
   val out_fflags = Mux(active_mask_r(7, 0).orR, result_fflags, 0.U)
   val out_vd = vd_val
-  val out_fflags_r = RegEnable(out_fflags, ValidCnt === 1.U)
-  val out_vd_r = RegEnable(out_vd, ValidCnt === 1.U)
-  io.out.bits.vd := out_vd_r
-  io.out.bits.fflags := out_fflags_r
+  // Bypass the final result register on the ready-consumer path; only retain
+  // the registered output state when Decoupled backpressure needs it.
+  val out_fflags_r = RegEnable(out_fflags, finalSumCycle)
+  val out_vd_r = RegEnable(out_vd, finalSumCycle)
+  io.out.bits.vd := Mux(finalSumCycle, out_vd, out_vd_r)
+  io.out.bits.fflags := Mux(finalSumCycle, out_fflags, out_fflags_r)
   io.out.bits.vxsat := false.B
-  io.out.valid := state_r === FSM_OUT
+  io.out.valid := (finalSumCycle || state_r === FSM_OUT) && !flush
 }
 
 // NOTE: only lmul = 1
