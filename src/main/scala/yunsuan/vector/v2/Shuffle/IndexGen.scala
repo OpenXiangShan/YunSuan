@@ -266,7 +266,12 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
     lmulReg.m2 -> 2.U, lmulReg.m4 -> 4.U, lmulReg.m8 -> 8.U,
   ))
   private val e8Ei16    = (outIsGatherEI16 || outIsGatherEI16Rvs3) && sewReg.e8
-  private val effUopIdx = Mux(e8Ei16, uopIdxReg % blockSizeVal, uopIdxReg)
+  // Legal block sizes are powers of two. Keep the mask at uopIdx's width so
+  // the tail-position Cat below is unchanged. Unlike remainder, this is also
+  // safe when idle/reset LMUL registers are all zero (GSIM evaluates both Mux arms).
+  private val uopIdxMask = Wire(UInt(uopIdxReg.getWidth.W))
+  uopIdxMask := blockSizeVal - 1.U
+  private val effUopIdx = Mux(e8Ei16, uopIdxReg & uopIdxMask, uopIdxReg)
 
   // -- Final output: encode to merged flags+data --
   // e8vl = vl in 8b elements = vl << sewShift(sew)
