@@ -1314,7 +1314,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           eWbAfter(dut, 0, golden, 2)
         }
       }
-      it("SU5: mf8 vl=2 rs1=0x0101... truncated to SEW (emu vslideup_vi-0)") {
+      it("SU5: mf8 vl=2 normalized VI offset one (emu vslideup_vi-0)") {
         simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
           initDut(dut)
           val vs2 = Seq(0x00, 0x02, 0x0f, 0x00, 0xff, 0x7f, 0xff, 0x00,
@@ -1330,9 +1330,8 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           p.bits.blockFieldNum.poke(1.U)
           p.bits.vl.poke(2)
           p.bits.vta.poke(false); p.bits.vma.poke(false)
-          // rs1 carries the .vi imm replicated per byte (emu wave); offset must
-          // be the SEW-truncated low byte 0x01, not the full pattern.
-          p.bits.rs1.poke(BigInt("0101010101010101", 16))
+          // The caller converts its replicated VI source into a scalar offset.
+          p.bits.rs1.poke(1)
           p.bits.vs2.poke(foldBytes(vs2)); p.bits.vs3.poke(foldBytes(vs3))
           p.bits.mask.poke((BigInt(1) << numElem) - 1)
           pMeta(dut, 0, 0, 0)
@@ -1340,7 +1339,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           eWbAfter(dut, 0, golden, 2)
         }
       }
-      it("SU6: mf8 vl=2 offset>=vl (rs1=0x0303...) all unchanged (emu block3)") {
+      it("SU6: mf8 vl=2 normalized offset>=vl all unchanged (emu block3)") {
         simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
           initDut(dut)
           // offset=3 >= vl=2 -> ISA: every element unchanged (old vd = vs3);
@@ -1358,7 +1357,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           p.bits.blockFieldNum.poke(1.U)
           p.bits.vl.poke(2)
           p.bits.vta.poke(false); p.bits.vma.poke(false)
-          p.bits.rs1.poke(BigInt("0303030303030303", 16)) // SEW-truncated -> 0x03
+          p.bits.rs1.poke(3)
           p.bits.vs2.poke(foldBytes(vs2)); p.bits.vs3.poke(foldBytes(vs3))
           p.bits.mask.poke((BigInt(1) << numElem) - 1)
           pMeta(dut, 0, 0, 0)
@@ -1383,7 +1382,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           p.bits.blockFieldNum.poke(1.U)
           p.bits.vl.poke(2)
           p.bits.vta.poke(false); p.bits.vma.poke(true)
-          p.bits.rs1.poke(BigInt("0303030303030303", 16))
+          p.bits.rs1.poke(3)
           p.bits.vs2.poke(foldBytes(vs2)); p.bits.vs3.poke(foldBytes(vs3))
           p.bits.mask.poke((BigInt(1) << numElem) - 1)
           pMeta(dut, 0, 0, 0)
