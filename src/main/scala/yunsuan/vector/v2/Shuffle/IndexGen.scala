@@ -54,17 +54,8 @@ class IndexGen(useLZA: Boolean = false)(implicit val param: GatherParam) extends
 
   // Derived from operands (not external inputs)
   private val tableIdx       = in.bits.uopIdx
-  // Slide offsets are element counts: truncate rs1 to SEW bits. The dispatch
-  // may carry the .vi immediate replicated across the whole XLEN scalar
-  // (emu vslideup_vi-0, rs1=0x0101_0101_0101_0101), which would otherwise trip
-  // offsetOverflow and turn every element into an identity (no slide).
-  private val offsetSew = Mux1H(Seq(
-    in.bits.sew.e8  -> in.bits.rs1(7, 0),
-    in.bits.sew.e16 -> in.bits.rs1(15, 0),
-    in.bits.sew.e32 -> in.bits.rs1(31, 0),
-    in.bits.sew.e64 -> in.bits.rs1(63, 0),
-  ))
-  private val offset         = offsetSew
+  // Callers normalize VI immediates; VX offsets retain every XLEN bit for range checks.
+  private val offset         = in.bits.rs1
   private val offsetOverflow = offset >= in.bits.vl
   // vslidedown: offset >= VLMAX (whole LMUL group) makes every element fall out
   // of range -> all zeros. slideup keeps the vl-based offsetOverflow (offset
