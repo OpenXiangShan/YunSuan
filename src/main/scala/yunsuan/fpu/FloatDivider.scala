@@ -201,10 +201,11 @@ class FloatDividerR64() extends Module {
   val iter_num_q = Reg(UInt(4.W))
   val fp_format_onehot_q = Reg(UInt(3.W))
   val fp_format_q_is_fp16 = fp_format_onehot_q(0)
+  val res_is_denormal_after_pre_2 = Wire(Bool())
   io.outValidAhead3Cycle := !wakeupSuccessReg ||
     start_handshaked && (early_finish || opb_is_power_of_2_f64_0) ||
     fsm_q(FSM_ITER_BIT) && Mux(res_is_denormal_f64_0, iter_num_q === 1.U, iter_num_q === 2.U) ||
-    fsm_q(FSM_PRE_2_BIT) && fp_format_q_is_fp16
+    fsm_q(FSM_PRE_2_BIT) && fp_format_q_is_fp16 && !res_is_denormal_after_pre_2
 
   val opa_sign_f64_0 = Mux1H(
     Seq(
@@ -391,6 +392,7 @@ class FloatDividerR64() extends Module {
     op_exp_diff_f64_0,
     out_exp_diff_q_f64_0 - iter_num_q(0)
   )
+  res_is_denormal_after_pre_2 := (out_exp_diff_d_f64_0(11, 0) === 0.U) | out_exp_diff_d_f64_0(12)
   when(out_exp_diff_en) {
     out_exp_diff_q_f64_0 := out_exp_diff_d_f64_0
   }
