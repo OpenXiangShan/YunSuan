@@ -63,10 +63,18 @@ class VIAlu extends VIAlu.Module {
       Res.isBrev8      -> misc.out.res.brev8,
       Res.isRev8       -> misc.out.res.rev8,
       Res.isVid        -> misc.out.res.vid,
+      Res.isPop        -> misc.out.res.pop,
       Res.isAvg        -> adder.out.res.avg,
       Res.isAdder      -> adder.out.res.adder,
     ))
   }
+
+  private val isLat1MiscAtEx1: Bool = {
+    import VIAluOpcode._
+    implicit val op: UInt = ex1.bits.ctrl.opcode
+    isZvbbLat1
+  }
+  private val ex0VdReg: UInt = RegEnable(ex0Vd, ex0.valid)
 
   out.ex0.vd := ex0Vd
   out.ex0.narrowVd := misc.out.res.narrow
@@ -74,7 +82,7 @@ class VIAlu extends VIAlu.Module {
   out.ex0.vxsat := 0.U
   out.ex0.narrowVxsat := 0.U
 
-  out.ex1.vd := fixPoint.out.res.vd
+  out.ex1.vd := Mux(isLat1MiscAtEx1, ex0VdReg, fixPoint.out.res.vd)
   out.ex1.narrowVd := fixPoint.out.res.narrowVd
   out.ex1.mask := 0.U.asTypeOf(out.ex1.mask)
   out.ex1.vxsat := fixPoint.out.res.vxsat

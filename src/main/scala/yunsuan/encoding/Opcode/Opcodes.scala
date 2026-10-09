@@ -1311,6 +1311,11 @@ object Opcodes {
     private val IOTA   = bb"0111"
     private val REV8   = bb"0000"
 
+    private val BREV   = bb"1000"
+    private val BREV8  = bb"1001"
+    private val CLZ    = bb"1010"
+    private val CTZ    = bb"1011"
+
     /**
      * sub opcode of [[SHIFT]] and [[CSHIFT]]
      */
@@ -1556,6 +1561,26 @@ object Opcodes {
     val vid_e16 = Value(ID, BITOP, S2VDV, E16) + VpWen + VlRen
     val vid_e32 = Value(ID, BITOP, S2VDV, E32) + VpWen + VlRen
     val vid_e64 = Value(ID, BITOP, S2VDV, E64) + VpWen + VlRen
+    val vbrev_e8   = DvSvlS2v(BREV , BITOP, S2VDV, E8 )
+    val vbrev_e16  = DvSvlS2v(BREV , BITOP, S2VDV, E16)
+    val vbrev_e32  = DvSvlS2v(BREV , BITOP, S2VDV, E32)
+    val vbrev_e64  = DvSvlS2v(BREV , BITOP, S2VDV, E64)
+    val vbrev8_e8  = DvSvlS2v(BREV8, BITOP, S2VDV, E8 )
+    val vbrev8_e16 = DvSvlS2v(BREV8, BITOP, S2VDV, E16)
+    val vbrev8_e32 = DvSvlS2v(BREV8, BITOP, S2VDV, E32)
+    val vbrev8_e64 = DvSvlS2v(BREV8, BITOP, S2VDV, E64)
+    val vclz_e8    = DvSvlS2v(CLZ  , BITOP, S2VDV, E8 )
+    val vclz_e16   = DvSvlS2v(CLZ  , BITOP, S2VDV, E16)
+    val vclz_e32   = DvSvlS2v(CLZ  , BITOP, S2VDV, E32)
+    val vclz_e64   = DvSvlS2v(CLZ  , BITOP, S2VDV, E64)
+    val vctz_e8    = DvSvlS2v(CTZ  , BITOP, S2VDV, E8 )
+    val vctz_e16   = DvSvlS2v(CTZ  , BITOP, S2VDV, E16)
+    val vctz_e32   = DvSvlS2v(CTZ  , BITOP, S2VDV, E32)
+    val vctz_e64   = DvSvlS2v(CTZ  , BITOP, S2VDV, E64)
+    val vcpop_v_e8  = DvSvlS2v(CPOP_V, BITOP, S2VDV, E8 )
+    val vcpop_v_e16 = DvSvlS2v(CPOP_V, BITOP, S2VDV, E16)
+    val vcpop_v_e32 = DvSvlS2v(CPOP_V, BITOP, S2VDV, E32)
+    val vcpop_v_e64 = DvSvlS2v(CPOP_V, BITOP, S2VDV, E64)
 
     Opcodes.updateMaxFixLat(this.getMaxLat)
 
@@ -1619,7 +1644,7 @@ object Opcodes {
 
     def isSigned(implicit op: UInt): Bool = getOp.apply(2)
 
-    def isMisc(implicit op: UInt): Bool = isVid || isVcpop || isShift || isZvbbOthers || isExt2 || isExt4 || isExt8 || isBitLogic
+    def isMisc(implicit op: UInt): Bool = isVid || isShift || isZvbbOthers || isExt2 || isExt4 || isExt8 || isBitLogic
 
     def isVid(implicit op: UInt): Bool = getOpClass === BITOP && getOp === ID && getDataType === S2VDV
 
@@ -1646,13 +1671,19 @@ object Opcodes {
 
     def isScalVro(implicit op: UInt): Bool = getOpClass === CSHIFT || getOpClass === SHIFT && getOp.isOneOf(ROR, ROL)
     def isNotVro(implicit op: UInt): Bool = getOpClass === CSHIFT
-    def isZvbbOthers(implicit op: UInt): Bool = isVrev8 // not supported yet
-    def isVcpop(implicit op: UInt): Bool = false.B // not supported yet
-    def isVbrev(implicit op: UInt): Bool = false.B // not supported yet
-    def isVbrev8(implicit op: UInt): Bool = false.B // not supported yet
-    def isVrev8(implicit op: UInt): Bool = getOpClass === BITOP && getOp === REV8 // not supported yet
-    def isCountZero(implicit op: UInt): Bool = false.B // not supported yet
-    def isCtz(implicit op: UInt): Bool = false.B // not supported yet
+
+    // Zvbb
+    def isVbrev(implicit op: UInt): Bool = getOpClass === BITOP && getOp === BREV
+    def isVbrev8(implicit op: UInt): Bool = getOpClass === BITOP && getOp === BREV8
+    def isVrev8(implicit op: UInt): Bool = getOpClass === BITOP && getOp === REV8
+    def isVclz(implicit op: UInt): Bool = getOpClass === BITOP && getOp === CLZ
+    def isVctz(implicit op: UInt): Bool = getOpClass === BITOP && getOp === CTZ
+    def isVcpopv(implicit op: UInt): Bool = getOpClass === BITOP && getOp === CPOP_V
+    def isCountZero(implicit op: UInt): Bool = isVclz || isVctz
+    def isCtz(implicit op: UInt): Bool = isVctz
+    def isZvbbOthers(implicit op: UInt): Bool = isVrev8 || isVbrev || isVbrev8 || isCountZero || isVcpopv
+    def isZvbbLat1(implicit op: UInt): Bool =
+      isZvbbOthers || Res.isVroShift || Res.isVwsll
     def isPredicateAlwaysTrue(implicit op: UInt): Bool = getOpClass === ADDER && getOp.isOneOf(ADC, SBC)
 
     object Res {
@@ -1676,11 +1707,12 @@ object Opcodes {
         (getOpClass === CSHIFT && getDataType === S2WDV) -> getOp.isOneOf(CLIPU, CLIP),
       ))
 
-      def isLeadZero(implicit op: UInt): Bool = false.B  // not supported yet
-      def isBrev(implicit op: UInt): Bool = false.B  // not supported yet
-      def isBrev8(implicit op: UInt): Bool = false.B  // not supported yet
+      def isLeadZero(implicit op: UInt): Bool = getOpClass === BITOP && getOp.isOneOf(CLZ, CTZ)
+      def isBrev(implicit op: UInt): Bool = getOpClass === BITOP && getOp === BREV
+      def isBrev8(implicit op: UInt): Bool = getOpClass === BITOP && getOp === BREV8
       def isRev8(implicit op: UInt): Bool = getOpClass === BITOP && getDataType === S2VDV && getOp === REV8
       def isVid(implicit op: UInt): Bool = VIAluOpcode.this.isVid
+      def isPop(implicit op: UInt): Bool = getOpClass === BITOP && getDataType === S2VDV && getOp === CPOP_V
       def isAvg(implicit op: UInt): Bool = getOpClass === CADDER && getDataType === S2VDV && getOp.isOneOf(AADDU, AADD, ASUBU, ASUB)
       def isAdder(implicit op: UInt): Bool = Mux1H(Seq(
         (getOpClass === ADDER  && getDataType === S2VDV)             -> getOp.isOneOf(ADD, SUB, ADC, SBC),
@@ -1695,9 +1727,16 @@ object Opcodes {
       def isMaxMin(implicit op: BitPat): Boolean = getOpClass.isOneOf(ADDER) && getOp.isOneOf(MINU, MIN, MAXU, MAX)
       def isSat(implicit op: BitPat): Boolean = getOpClass.isOneOf(CADDER) && getOp.isOneOf(SADDU, SADD, SSUBU, SSUB)
       def isNClip(implicit op: BitPat): Boolean = getOpClass.isOneOf(CSHIFT) && getOp.isOneOf(CLIPU, CLIP)
+      def isVroShift(implicit op: BitPat): Boolean =
+        getOpClass.isOneOf(SHIFT) && getOp.isOneOf(ROR, ROL) && getDataType.isOneOf(S2VDV)
+      def isVwsll(implicit op: BitPat): Boolean =
+        getOpClass.isOneOf(CSHIFT) && getOp.isOneOf(SLL) && getDataType.isOneOf(S2VDW)
+      def isZvbbBitop(implicit op: BitPat): Boolean =
+        getOpClass.isOneOf(BITOP) && getOp.isOneOf(REV8, BREV, BREV8, CLZ, CTZ, CPOP_V)
 
       def getLat(implicit op: BitPat): Int = {
-        if (isSat || isMaxMin || isNClip) 1
+        if (isVroShift || isVwsll || isZvbbBitop) 1
+        else if (isSat || isMaxMin || isNClip) 1
         else 0
       }
     }
@@ -1716,7 +1755,6 @@ object Opcodes {
     private val DM = bb"11"
 
     private val CPOP_M = bb"000"
-    private val CPOP_V = bb"001"
     private val FIRST = bb"010"
     private val MSBF  = bb"100"
     private val MSIF  = bb"101"
@@ -1729,10 +1767,6 @@ object Opcodes {
     val vmsif   = Value(MSIF  , DM, EX) + VmWen + VlRen + Src1Vp + Src2Vp
     val vmsof   = Value(MSOF  , DM, EX) + VmWen + VlRen + Src1Vp + Src2Vp
 
-    val vcpop_v_e8  = Value(CPOP_V, DV, E8 ) + VpWen + VlRen + Src2Vp
-    val vcpop_v_e16 = Value(CPOP_V, DV, E16) + VpWen + VlRen + Src2Vp
-    val vcpop_v_e32 = Value(CPOP_V, DV, E32) + VpWen + VlRen + Src2Vp
-    val vcpop_v_e64 = Value(CPOP_V, DV, E64) + VpWen + VlRen + Src2Vp
     val viota_e8    = DvSvlS2vS1v(IOTA  , DV, E8 )
     val viota_e16   = DvSvlS2vS1v(IOTA  , DV, E16)
     val viota_e32   = DvSvlS2vS1v(IOTA  , DV, E32)
@@ -1742,7 +1776,6 @@ object Opcodes {
     def getDestMode(implicit op: UInt): UInt = op(3, 2)
     def getSew(implicit op: UInt): UInt = op(1, 0)
 
-    def isVcpopV(implicit op: UInt): Bool = getOp === CPOP_V
     def isVmsbf(implicit op: UInt): Bool = getOp === MSBF
     def isVmsif(implicit op: UInt): Bool = getOp === MSIF
     def isVmsof(implicit op: UInt): Bool = getOp === MSOF

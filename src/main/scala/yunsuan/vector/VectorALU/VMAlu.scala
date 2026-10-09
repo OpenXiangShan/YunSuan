@@ -20,7 +20,6 @@ class VMAlu extends Module {
     val sel16 = in.bits.ctrl.sel16
     val sel32 = in.bits.ctrl.sel32
     val sel64 = in.bits.ctrl.sel64
-    val isVcpopV = in.bits.ctrl.isVcpopV
     val isVmsbf = in.bits.ctrl.isVmsbf
     val isVmsif = in.bits.ctrl.isVmsif
     val isVmsof = in.bits.ctrl.isVmsof
@@ -43,7 +42,6 @@ class VMAlu extends Module {
     val sel32RegS1 = RegEnable(sel32, fire)
     val sel64RegS1 = RegEnable(sel64, fire)
     val uopBaseRegS1 = RegEnable(uopBase, fire)
-    val isVcpopVRegS1 = RegEnable(isVcpopV, fire)
     val isVmsbfRegS1 = RegEnable(isVmsbf, fire)
     val isVmsifRegS1 = RegEnable(isVmsif, fire)
     val isVmsofRegS1 = RegEnable(isVmsof, fire)
@@ -86,7 +84,6 @@ class VMAlu extends Module {
     val sel16RegS2 = RegEnable(sel16RegS1, fireRegS1)
     val sel32RegS2 = RegEnable(sel32RegS1, fireRegS1)
     val sel64RegS2 = RegEnable(sel64RegS1, fireRegS1)
-    val isVcpopVRegS2 = RegEnable(isVcpopVRegS1, fireRegS1)
     val isViotaRegS2 = RegEnable(isViotaRegS1, fireRegS1)
     
     val eleCntRegS2 = Mux1H(Seq(
@@ -98,7 +95,6 @@ class VMAlu extends Module {
 
     val viotaCnt = VecInit.tabulate(vlenb + 1)(cntSum)
     val vcpopMRes = (precedingCntRegS2 + uopPrefixCntRegS2(eleCntRegS2))(7, 0).pad(VLEN)
-    val vcpopVRes = uopPrefixCntRegS2(eleCntRegS2).pad(VLEN)
     val viotaVdSew8 = VecInit.tabulate(vlenb)(i => viotaCnt(i))
     val viotaVdSew16 = VecInit.tabulate(vlenb)(i => if (i % 2 == 0) viotaCnt(i / 2) else 0.U(8.W))
     val viotaVdSew32 = VecInit.tabulate(vlenb)(i => if (i % 4 == 0) viotaCnt(i / 4) else 0.U(8.W))
@@ -111,10 +107,7 @@ class VMAlu extends Module {
     ))
 
     out.ex2.iData := vcpopMRes
-    out.ex2.vData := Mux1H(Seq(
-      isVcpopVRegS2 -> vcpopVRes,
-      isViotaRegS2 -> Cat(viotaVd.reverse)
-    ))
+    out.ex2.vData := Mux(isViotaRegS2, Cat(viotaVd.reverse), 0.U(VLEN.W))
     
     def calcElementBase(idx: UInt): UInt = Mux1H(Seq(
       sel8 -> Cat(idx, 0.U(4.W)).pad(8),
@@ -171,7 +164,6 @@ object VMAlu{
     val sel32 = Bool()
     val sel64 = Bool()
 
-    val isVcpopV  = Bool()
     val isVmsbf  = Bool()
     val isVmsif  = Bool()
     val isVmsof  = Bool()
