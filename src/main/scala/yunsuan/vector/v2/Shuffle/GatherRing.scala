@@ -210,8 +210,23 @@ class GatherRing[T <: Data](
     out.metas(i) := units(i).out.meta
   }
 
+  // ROB-owned flush identifies indices, but table placement can precede the
+  // index in another unit. Cancel table-only residents of that same ring block.
+  private val blockFlushes = Seq(2, 4, 8).map { size =>
+    val flushes = Seq.tabulate(NumUnits / size) { block =>
+      (block * size until (block + 1) * size).map { u =>
+        in.flush(u) && units(u).out.status.hasIndex && units(u).out.status.blockSize === size.U
+      }.reduce(_ || _)
+    }
+    size -> flushes
+  }
   for (i <- 0 until NumUnits) {
-    units(i).in.flush := in.flush(i)
+    val status = units(i).out.status
+    val tableOnly = status.hasTable && !status.hasIndex
+    val blockFlush = blockFlushes.map { case (size, flushes) =>
+      status.blockSize === size.U && flushes(i / size)
+    }.reduce(_ || _)
+    units(i).in.flush := in.flush(i) || (tableOnly && blockFlush)
   }
 
   // unitStatus output
