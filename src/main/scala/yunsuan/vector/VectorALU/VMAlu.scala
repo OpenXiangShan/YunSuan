@@ -31,20 +31,9 @@ class VMAlu extends Module {
       vSrc(i) & (mask(i) | vm) & (i.U < vl)
     })
 
-    val uopBase = calcVidBase(uopIdx)
+    val uopBase = calcElementBase(uopIdx)
 
-    val vidVdSew8 = VecInit.tabulate(vlenb)(i => vidByte(i))
-    val vidVdSew16 = VecInit.tabulate(vlenb)(i => if (i % 2 == 0) vidByte(i / 2) else 0.U(8.W))
-    val vidVdSew32 = VecInit.tabulate(vlenb)(i => if (i % 4 == 0) vidByte(i / 4) else 0.U(8.W))
-    val vidVdSew64 = VecInit.tabulate(vlenb)(i => if (i % 8 == 0) vidByte(i / 8) else 0.U(8.W))
-    val vidVd = Mux1H(Seq(
-      sel8 -> vidVdSew8,
-      sel16 -> vidVdSew16,
-      sel32 -> vidVdSew32,
-      sel64 -> vidVdSew64
-    ))
-
-    out.ex0.vData := Cat(vidVd.reverse)
+    out.ex0.vData := 0.U
     out.ex0.iData := 0.U
 
     val activeVSrcRegS1 = RegEnable(activeVSrc, fire)
@@ -127,7 +116,7 @@ class VMAlu extends Module {
       isViotaRegS2 -> Cat(viotaVd.reverse)
     ))
     
-    def calcVidBase(idx: UInt): UInt = Mux1H(Seq(
+    def calcElementBase(idx: UInt): UInt = Mux1H(Seq(
       sel8 -> Cat(idx, 0.U(4.W)).pad(8),
       sel16 -> Cat(idx, 0.U(3.W)).pad(8),
       sel32 -> Cat(idx, 0.U(2.W)).pad(8),
@@ -137,8 +126,6 @@ class VMAlu extends Module {
     def uopPrefixCount(activeCnt: Int): Vec[UInt] = VecInit.tabulate(vlenb + 1) { i =>
       if (i == 0 || i > activeCnt) 0.U(5.W) else PopCount(uopWindow(i - 1, 0))
     }
-
-    def vidByte(idx: Int): UInt = (uopBase + idx.U(8.W))(7, 0)
 
     def cntSum(idx: Int): UInt = {
       val sum = precedingCntRegS2 + uopPrefixCntRegS2(idx)

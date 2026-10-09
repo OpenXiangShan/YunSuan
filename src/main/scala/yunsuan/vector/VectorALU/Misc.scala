@@ -41,6 +41,17 @@ class Misc extends VIAlu.Module {
   private val vs2Widen = in.data.vs2Widen
   private val vs1Widen = in.data.vs1Widen
 
+  def vid(sew: Int): UInt = Cat((0 until dWidth / sew).reverse.map { i =>
+    (in.data.vidBase + i.U).pad(sew)
+  })
+
+  res.vid := Mux1H(Seq(
+    sel8  -> vid(8),
+    sel16 -> vid(16),
+    sel32 -> vid(32),
+    sel64 -> vid(64),
+  ))
+
   private val ext = Wire(Vec(8, UInt(8.W)))
   ext(0) := vs2Widen(7, 0)
   ext(1) := Mux(isVf2 & !sel16 | isVf4 & sel64, vs2Widen(15, 8), Fill(8, isSigned & vs2Widen(7)))
@@ -535,9 +546,12 @@ object Misc {
     val vs1 = WidthData()
     val vs2Widen = WidthData()
     val vs1Widen = WidthData()
+    // Global index of the first element in this 64-bit lane.
+    val vidBase = UInt(8.W)
   }
 
   class OutRes extends VIAlu.Bundle {
+    val vid = WidthData()
     val ext = WidthData()
     val and = WidthData()
     val or = WidthData()

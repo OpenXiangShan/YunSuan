@@ -30,6 +30,7 @@ class VIAlu extends VIAlu.Module {
   misc.in.data.vs2 := ex0.bits.data.vs2
   misc.in.data.vs1Widen := ex0.bits.data.vs1Widen
   misc.in.data.vs2Widen := ex0.bits.data.vs2Widen
+  misc.in.data.vidBase := ex0.bits.data.vidBase
 
   fixPoint.in.vxrm := in.vxrm
   fixPoint.in.ctrl := ex1.bits.ctrl.fixPoint
@@ -61,6 +62,7 @@ class VIAlu extends VIAlu.Module {
       Res.isBrev       -> misc.out.res.brev,
       Res.isBrev8      -> misc.out.res.brev8,
       Res.isRev8       -> misc.out.res.rev8,
+      Res.isVid        -> misc.out.res.vid,
       Res.isAvg        -> adder.out.res.avg,
       Res.isAdder      -> adder.out.res.adder,
     ))
@@ -118,6 +120,7 @@ object VIAlu {
     val vs2Widen = UInt(dWidth.W)
     val vs1Widen = UInt(dWidth.W)
     val mask = UInt((dWidth / 8).W)
+    val vidBase = UInt(8.W)
   }
 
   class InDataEx1 extends Bundle {
