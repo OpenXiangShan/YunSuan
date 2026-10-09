@@ -220,12 +220,15 @@ class CVT64NarrowConvert(width: Int = 64) extends Module {
     val shamtWidthPlus1 = shamtWidth + 1.U
     Mux(shamtWidth.andR, 0.U, Mux(shamtWidth(10, 6).orR, 65.U, shamtWidthPlus1))
   }
-  val fpNarrowShamtMap = fpParam.fpMap.zip(expSrcNextMap).zipWithIndex.map { case ((_, exp), index) =>
-    val biasDelta = index match {
-      case 0 => (fpParam.fp16To32BiasDelta + 1).U
-      case 1 => (fpParam.fp32To64BiasDelta + 1).U
-      case 2 => Mux(outIsFp16Next, (fpParam.fp16To64BiasDelta + 1).U, (fpParam.fp32To64BiasDelta + 1).U)
-    }
+  val fpNarrowShamtMap = fpParam.fpMap.zip(expSrcNextMap).map { case (_, exp) =>
+    val biasDelta = Mux(
+      isFp64To16Next,
+      (fpParam.fp16To64BiasDelta + 1).U,
+      Mux1H(Seq(
+        outIsFp16Next -> (fpParam.fp16To32BiasDelta + 1).U,
+        outIsFp32Next -> (fpParam.fp32To64BiasDelta + 1).U
+      ))
+    )
     val shamtWidth = biasDelta + (~exp).asUInt
     val shamtWidthPlus1 = shamtWidth + 1.U
     Mux(shamtWidth.andR, 0.U, Mux(shamtWidth(10, 6).orR, 65.U, shamtWidthPlus1))
