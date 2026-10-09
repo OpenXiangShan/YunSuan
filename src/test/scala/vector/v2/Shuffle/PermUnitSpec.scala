@@ -1968,7 +1968,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
 
   // ── Writeback: wbReady / arbitration / status ────────
   describe("Writeback") {
-    it("W1: wbReady=0 prevents accepting a wake reservation") {
+    it("W1: wake ack reserves writeback independently of wbReady") {
       simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
         initDut(dut)
         dut.in.wbReady(0).poke(false)
@@ -1979,19 +1979,26 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         var cy = 0
         while (cy < 10 && !dut.out.wake(0).valid.peekBoolean()) { dut.clock.step(); cy += 1 }
         dut.out.wake(0).valid.expect(true.B)
+        dut.out.release.expect(1.U, "wake ack, not wbReady, releases this entry")
+        dut.clock.step()
+        dut.in.wakeAck(0).poke(false)
+        dut.out.wake(0).valid.expect(false.B)
+        for (_ <- 0 until issue2exu - 1) {
+          dut.out.pipes(0).valid.expect(false.B)
+          dut.out.release.expect(0.U)
+          dut.clock.step()
+        }
         for (_ <- 0 until 3) {
-          dut.out.pipes(0).valid.expect(false.B, "no writeback without an accepted wake")
+          dut.out.pipes(0).valid.expect(true.B, "reserved writeback remains valid while ready is low")
+          dut.out.pipes(0).bits.data.expect(golden)
+          dut.out.unitStatus(0).hasIndex.expect(true.B)
           dut.out.release.expect(0.U)
           dut.clock.step()
         }
         dut.in.wbReady(0).poke(true)
         dut.clock.step()
-        for (_ <- 0 until issue2exu - 1) {
-          dut.out.pipes(0).valid.expect(false.B)
-          dut.clock.step()
-        }
-        dut.out.pipes(0).valid.expect(true.B)
-        dut.out.pipes(0).bits.data.expect(golden)
+        dut.out.pipes(0).valid.expect(false.B)
+        dut.out.unitStatus(0).hasIndex.expect(false.B)
       }
     }
 
@@ -3267,6 +3274,138 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
             wb(1).getOrElse(fail("pair1 never wrote back")) mustBe g1
           }
         }
+      }
+    }
+  }
+
+  describe("FST vrgather.vi flush regression") {
+    // build/2026-10-05-22-43-05_2256389.fst: e8/m8, vl=1, vta=vma=1.
+    // Each row is one cycle in pipe order: (uopIdx, blockBase, placeIdx, pdest, robIdx).
+    val initialBatches = Seq(
+      Seq((3, 0, 0, 0x10, 0x0c), (0, 0, 1, 0x41, 0x0c),
+          (1, 0, 2, 0x1a, 0x0c), (2, 0, 3, 0x78, 0x0c)),
+      Seq((7, 0, 0, 0x03, 0x0c), (4, 0, 1, 0x75, 0x0c),
+          (5, 0, 2, 0x1e, 0x0c), (6, 0, 3, 0x4a, 0x0c)),
+      Seq((3, 8, 0, 0x79, 0x0d), (2, 8, 1, 0x05, 0x0d),
+          (0, 8, 2, 0x55, 0x0d), (1, 8, 3, 0x37, 0x0d)),
+      Seq((7, 8, 0, 0x6c, 0x0d), (6, 8, 1, 0x56, 0x0d),
+          (4, 8, 2, 0x4f, 0x0d), (5, 8, 3, 0x60, 0x0d)),
+    )
+    val retryBatches = Seq(
+      initialBatches.head,
+      Seq((2, 8, 0, 0x05, 0x0d), (4, 0, 0, 0x75, 0x0c),
+          (5, 0, 1, 0x1e, 0x0c), (6, 0, 2, 0x4a, 0x0c)),
+      Seq((6, 8, 0, 0x56, 0x0d), (7, 0, 0, 0x03, 0x0c),
+          (0, 8, 1, 0x55, 0x0d), (1, 8, 2, 0x37, 0x0d)),
+      Seq((7, 8, 0, 0x6c, 0x0d), (3, 8, 1, 0x79, 0x0d),
+          (4, 8, 2, 0x4f, 0x0d), (5, 8, 3, 0x60, 0x0d)),
+    )
+
+    def driveBatch(dut: PermUnit[FakePermMeta], batch: Seq[(Int, Int, Int, Int, Int)]): Unit = {
+      batch.zipWithIndex.foreach { case ((uopIdx, blockBase, placeIdx, pdest, robIdx), pipe) =>
+        pDefaults(dut, pipe)
+        pGather(dut, pipe, sew = 8, ei = 8, vs1 = BigInt("03" * 16, 16),
+          vs2 = Seq.fill(numElem)(0xff), vs3 = Seq.fill(numElem)(3),
+          lmulFrac = 64, uopIdx = uopIdx, blockBase = blockBase, placeIdx = placeIdx,
+          vl = 1, vta = true, vma = true, robIdx = robIdx, pdest = pdest)
+        dut.in.pipes(pipe).bits.rs1.poke(BigInt("03" * 8, 16).U)
+      }
+      dut.clock.step()
+    }
+
+    def replayThroughFlush(dut: PermUnit[FakePermMeta]): Unit = {
+      initDut(dut)
+      dut.in.flush.s1.foreach(_.poke(false))
+      // 2276574-2276577ps: two m8 groups; the final beat is still in s1.
+      initialBatches.foreach(driveBatch(dut, _))
+      dut.in.pipes.foreach(_.valid.poke(false))
+      for (unit <- 0 until NumUnits) {
+        dut.out.unitStatus(unit).hasIndex.expect((unit < 12).B,
+          s"2276578ps: index placement differs for unit $unit")
+      }
+      for (unit <- Seq(14, 15)) {
+        dut.out.unitStatus(unit).hasTable.expect(true.B,
+          s"2276578ps: unit $unit must hold a table before flush")
+        dut.out.unitStatus(unit).counter.expect(0.U)
+      }
+
+      // 2276578ps: s1=0xf, unit=0x0fff. The parent derives unit flush
+      // from index-owned meta, so table-only units 12-15 receive no flush.
+      dut.in.flush.s1.foreach(_.poke(true))
+      for (unit <- 0 until NumUnits) dut.in.unitFlush(unit).poke((unit < 12).B)
+      dut.clock.step()
+      dut.in.flush.s1.foreach(_.poke(false))
+      dut.in.unitFlush.foreach(_.poke(false))
+      dut.out.unitStatus.foreach(_.hasIndex.expect(false.B))
+    }
+
+    it("clears unit14 and unit15 tables after the 2276578ps flush") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        replayThroughFlush(dut)
+        val afterFlush = Seq(14, 15).map(dut.out.unitStatus(_).hasTable.peekBoolean())
+        // 2276579-2276606ps: no new inputs, but the FST keeps both tables.
+        dut.clock.step(28)
+        val afterIdle = Seq(14, 15).map(dut.out.unitStatus(_).hasTable.peekBoolean())
+        withClue(s"unit14/unit15 hasTable immediately after flush=$afterFlush, after 28 idle cycles=$afterIdle: ") {
+          (afterFlush, afterIdle) mustBe (Seq(false, false), Seq(false, false))
+        }
+      }
+    }
+
+    it("replays the 2276607ps retry after flush without table placement-flow conflicts") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        replayThroughFlush(dut)
+        dut.clock.step(28)
+        retryBatches.foreach(driveBatch(dut, _))
+        dut.in.pipes.foreach(_.valid.poke(false))
+        val expected = retryBatches.flatten.map(_._4).toSet
+        val seenWake = scala.collection.mutable.Set.empty[Int]
+        val seenWb = scala.collection.mutable.Set.empty[Int]
+        // This includes the 2276613ps-equivalent placeTable+flowTable failure.
+        for (_ <- 0 until 24) {
+          for (pipe <- 0 until NumPipes) {
+            val wake = dut.out.wake(pipe)
+            if (wake.valid.peekBoolean()) {
+              val pdest = wake.bits.meta.pdest.peekValue().asBigInt.toInt
+              assert(expected(pdest) && seenWake.add(pdest), s"duplicate/unexpected wake pdest=$pdest")
+              wake.bits.delay.expect(0.U)
+            }
+            val wb = dut.out.pipes(pipe)
+            if (wb.valid.peekBoolean()) {
+              val pdest = wb.bits.meta.pdest.peekValue().asBigInt.toInt
+              assert(expected(pdest) && seenWb.add(pdest), s"duplicate/unexpected writeback pdest=$pdest")
+              wb.bits.data.expect(((BigInt(1) << 128) - 1).U)
+            }
+          }
+          dut.clock.step()
+        }
+        seenWake.toSet mustBe expected
+        seenWb.toSet mustBe expected
+      }
+    }
+
+    it("does not flush table-only residents of the adjacent live m8 block") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        dut.in.flush.s1.foreach(_.poke(false))
+        driveBatch(dut, initialBatches.head)
+        driveBatch(dut, initialBatches(2))
+        dut.in.pipes.foreach(_.valid.poke(false))
+        dut.clock.step()
+        for (unit <- Seq(7, 15)) {
+          dut.out.unitStatus(unit).hasTable.expect(true.B)
+          dut.out.unitStatus(unit).hasIndex.expect(false.B)
+        }
+
+        for (unit <- 0 until 4) dut.in.unitFlush(unit).poke(true)
+        dut.clock.step()
+        dut.in.unitFlush.foreach(_.poke(false))
+        for (unit <- 0 until 8) {
+          dut.out.unitStatus(unit).hasTable.expect(false.B)
+          dut.out.unitStatus(unit).hasIndex.expect(false.B)
+        }
+        dut.out.unitStatus(15).hasTable.expect(true.B, "neighboring block must retain its table")
+        for (unit <- 8 until 12) dut.out.unitStatus(unit).hasIndex.expect(true.B)
       }
     }
   }

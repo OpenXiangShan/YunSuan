@@ -5,13 +5,14 @@ import chisel3.experimental.SourceInfo
 import chisel3.simulator.{ChiselOptionsModifications, ExpectationValueFormat, FirtoolOptionsModifications, HasSimulator}
 import chisel3.testing.HasTestingDirectory
 import yunsuan.util.SpecBase
-import yunsuan.vector.v2.Shuffle.GatherCommon.FakeRobPtr
+import yunsuan.vector.v2.Shuffle.GatherCommon.{FakeRobPtr, GatherParam}
 
 class GatherRingUnitSpec extends SpecBase {
 
   val vlen        = 128
   val dlen        = 128
   val maxTableNum = 8
+  val issue2exu = GatherParam.default.issue2exu
 
   class Cycle(val pokes: (GatherRingUnit[FakeRobPtr] => Unit)*)(val expects: (GatherRingUnit[FakeRobPtr] => Unit)*)
   object Cycle {
@@ -69,11 +70,14 @@ class GatherRingUnitSpec extends SpecBase {
 
   def eWb(valid: Boolean, dest: BigInt = 0)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit = {
     dut =>
+      dut.out.wb.valid.expect(valid.B, "wb.valid mismatch")
+      if (valid) dut.out.wb.bits.data.expect(dest, ExpectationValueFormat.Hex)
+  }
 
-      if (valid) {
-        dut.out.status.done.expect(true.B, "result must be complete")
-        dut.out.wb.bits.data.expect(dest, ExpectationValueFormat.Hex)
-      } else dut.out.wb.valid.expect(false.B, "wb.valid mismatch")
+  def eResult(dest: BigInt)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit = {
+    dut =>
+      dut.out.status.done.expect(true.B, "result must be complete")
+      dut.out.wb.bits.data.expect(dest, ExpectationValueFormat.Hex)
   }
 
   def eCounter(value: BigInt)(implicit sourceInfo: SourceInfo): GatherRingUnit[FakeRobPtr] => Unit = {
@@ -216,12 +220,50 @@ class GatherRingUnitSpec extends SpecBase {
 
   def pWbReady(v: Boolean = true): GatherRingUnit[FakeRobPtr] => Unit = _.in.wbReady.poke(v)
 
+  private def acceptWakeAndWriteback(dut: GatherRingUnit[FakeRobPtr], expected: BigInt)(implicit sourceInfo: SourceInfo): Unit = {
+    pNoPlace(dut)
+    pNoFlow(dut)
+    pNoFlowTbl().apply(dut)
+    pClearTbl().apply(dut)
+    dut.in.wakeAck.poke(false.B)
+    dut.in.wbReady.poke(true.B)
+    for (_ <- 0 until 3) {
+      dut.out.wake.valid.expect(true.B)
+      dut.out.wake.bits.delay.expect(0.U)
+      dut.out.status.hasIndex.expect(true.B, "ready alone cannot retire an unacked result")
+      eWb(false).apply(dut)
+      dut.clock.step()
+    }
+
+    dut.in.wbReady.poke(false.B)
+    dut.in.wakeAck.poke(true.B)
+    dut.clock.step()
+    dut.in.wakeAck.poke(false.B)
+    dut.out.wake.valid.expect(false.B)
+    for (_ <- 0 until issue2exu - 1) {
+      dut.out.status.hasIndex.expect(true.B)
+      eWb(false).apply(dut)
+      dut.clock.step()
+    }
+    for (_ <- 0 until 3) {
+      eWb(true, expected).apply(dut)
+      dut.out.status.hasIndex.expect(true.B, "writeback waits for ready")
+      dut.clock.step()
+    }
+    dut.in.wbReady.poke(true.B)
+    dut.clock.step()
+    eWb(false).apply(dut)
+    dut.out.status.hasIndex.expect(false.B)
+    dut.out.status.hasTable.expect(false.B)
+    dut.out.meta.valid.expect(false.B)
+  }
+
   private def eT1  (implicit sourceInfo: SourceInfo)    = eHasTable(true)
   private def eT0  (implicit sourceInfo: SourceInfo)    = eHasTable(false)
   private def eI1  (implicit sourceInfo: SourceInfo)    = eHasIndex(true)
   private def eI0  (implicit sourceInfo: SourceInfo)    = eHasIndex(false)
   private def eWb0 (implicit sourceInfo: SourceInfo)    = eWb(false)
-  private def eWb1(exp: BigInt)(implicit sourceInfo: SourceInfo) = eWb(true, exp)
+  private def eResult1(exp: BigInt)(implicit sourceInfo: SourceInfo) = eResult(exp)
 
   def Int8SeqToBigInt(v: Seq[Int]): BigInt = {
     v.foldRight(BigInt(0))(
@@ -579,7 +621,7 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, 0 until 16, Seq.fill(16)(true)))(eWb1(exp)),
+            Cycle(pPlace(1, 0, t, 0 until 16, Seq.fill(16)(true)))(eResult1(exp)),
           )
       }
     }
@@ -602,7 +644,7 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, Seq.fill(16)(true)))(eWb1(exp)),
+            Cycle(pPlace(1, 0, t, idx, Seq.fill(16)(true)))(eResult1(exp)),
           )
       }
     }
@@ -623,7 +665,7 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, perm, Seq.fill(16)(true)))(eWb1(exp)),
+            Cycle(pPlace(1, 0, t, perm, Seq.fill(16)(true)))(eResult1(exp)),
           )
       }
     }
@@ -639,7 +681,7 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid, prefill))(eWb1(res), eIndexOrRes(res)),
+            Cycle(pPlace(1, 0, table, index, indexValid, prefill))(eResult1(res), eIndexOrRes(res)),
           )
       }
     }
@@ -664,14 +706,14 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid(15), prefill = prefill, scalarValid = scalarValid(15), scalarData = scalarTable, sew = sew))(eWb1(res(15))),
-            Cycle(pPlace(1, 0, table, index, indexValid(14), prefill = prefill, scalarValid = scalarValid(14), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(14))),
-            Cycle(pPlace(1, 0, table, index, indexValid(13), prefill = prefill, scalarValid = scalarValid(13), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(13))),
-            Cycle(pPlace(1, 0, table, index, indexValid(12), prefill = prefill, scalarValid = scalarValid(12), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(12))),
-            Cycle(pPlace(1, 0, table, index, indexValid(11), prefill = prefill, scalarValid = scalarValid(11), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(11))),
-            Cycle(pPlace(1, 0, table, index, indexValid(10), prefill = prefill, scalarValid = scalarValid(10), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(10))),
-            Cycle(pPlace(1, 0, table, index, indexValid( 9), prefill = prefill, scalarValid = scalarValid( 9), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res( 9))),
-            Cycle(pPlace(1, 0, table, index, indexValid( 8), prefill = prefill, scalarValid = scalarValid( 8), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res( 8))),
+            Cycle(pPlace(1, 0, table, index, indexValid(15), prefill = prefill, scalarValid = scalarValid(15), scalarData = scalarTable, sew = sew))(eResult1(res(15))),
+            Cycle(pPlace(1, 0, table, index, indexValid(14), prefill = prefill, scalarValid = scalarValid(14), scalarData = scalarTable, sew = sew), pWbReady())(eResult1(res(14))),
+            Cycle(pPlace(1, 0, table, index, indexValid(13), prefill = prefill, scalarValid = scalarValid(13), scalarData = scalarTable, sew = sew), pWbReady())(eResult1(res(13))),
+            Cycle(pPlace(1, 0, table, index, indexValid(12), prefill = prefill, scalarValid = scalarValid(12), scalarData = scalarTable, sew = sew), pWbReady())(eResult1(res(12))),
+            Cycle(pPlace(1, 0, table, index, indexValid(11), prefill = prefill, scalarValid = scalarValid(11), scalarData = scalarTable, sew = sew), pWbReady())(eResult1(res(11))),
+            Cycle(pPlace(1, 0, table, index, indexValid(10), prefill = prefill, scalarValid = scalarValid(10), scalarData = scalarTable, sew = sew), pWbReady())(eResult1(res(10))),
+            Cycle(pPlace(1, 0, table, index, indexValid( 9), prefill = prefill, scalarValid = scalarValid( 9), scalarData = scalarTable, sew = sew), pWbReady())(eResult1(res( 9))),
+            Cycle(pPlace(1, 0, table, index, indexValid( 8), prefill = prefill, scalarValid = scalarValid( 8), scalarData = scalarTable, sew = sew), pWbReady())(eResult1(res( 8))),
             Cycle(pNoPlace, pWbReady())(eWb0)
           )
       }
@@ -684,10 +726,10 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid(7), prefill = prefill, scalarValid = scalarValid(7), scalarData = scalarTable, sew = sew))(eWb1(res(7))),
-            Cycle(pPlace(1, 0, table, index, indexValid(6), prefill = prefill, scalarValid = scalarValid(6), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(6))),
-            Cycle(pPlace(1, 0, table, index, indexValid(5), prefill = prefill, scalarValid = scalarValid(5), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(5))),
-            Cycle(pPlace(1, 0, table, index, indexValid(4), prefill = prefill, scalarValid = scalarValid(4), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(4))),
+            Cycle(pPlace(1, 0, table, index, indexValid(7), prefill = prefill, scalarValid = scalarValid(7), scalarData = scalarTable, sew = sew))(eResult1(res(7))),
+            Cycle(pPlace(1, 0, table, index, indexValid(6), prefill = prefill, scalarValid = scalarValid(6), scalarData = scalarTable, sew = sew), pWbReady())(eResult1(res(6))),
+            Cycle(pPlace(1, 0, table, index, indexValid(5), prefill = prefill, scalarValid = scalarValid(5), scalarData = scalarTable, sew = sew), pWbReady())(eResult1(res(5))),
+            Cycle(pPlace(1, 0, table, index, indexValid(4), prefill = prefill, scalarValid = scalarValid(4), scalarData = scalarTable, sew = sew), pWbReady())(eResult1(res(4))),
             Cycle(pNoPlace, pWbReady())(eWb0)
           )
       }
@@ -700,9 +742,9 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid(3), prefill = prefill, scalarValid = scalarValid(3), scalarData = scalarTable, sew = sew))(eWb1(res(3))),
-            Cycle(pPlace(1, 0, table, index, indexValid(2), prefill = prefill, scalarValid = scalarValid(2), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(2))),
-            Cycle(pPlace(1, 0, table, index, indexValid(1), prefill = prefill, scalarValid = scalarValid(1), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(1))),
+            Cycle(pPlace(1, 0, table, index, indexValid(3), prefill = prefill, scalarValid = scalarValid(3), scalarData = scalarTable, sew = sew))(eResult1(res(3))),
+            Cycle(pPlace(1, 0, table, index, indexValid(2), prefill = prefill, scalarValid = scalarValid(2), scalarData = scalarTable, sew = sew), pWbReady())(eResult1(res(2))),
+            Cycle(pPlace(1, 0, table, index, indexValid(1), prefill = prefill, scalarValid = scalarValid(1), scalarData = scalarTable, sew = sew), pWbReady())(eResult1(res(1))),
             Cycle(pNoPlace, pWbReady())(eWb0)
           )
       }
@@ -715,8 +757,8 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid(1), prefill = prefill, scalarValid = scalarValid(1), scalarData = scalarTable, sew = sew))(eWb1(res(1))),
-            Cycle(pPlace(1, 0, table, index, indexValid(0), prefill = prefill, scalarValid = scalarValid(0), scalarData = scalarTable, sew = sew), pWbReady())(eWb1(res(0))),
+            Cycle(pPlace(1, 0, table, index, indexValid(1), prefill = prefill, scalarValid = scalarValid(1), scalarData = scalarTable, sew = sew))(eResult1(res(1))),
+            Cycle(pPlace(1, 0, table, index, indexValid(0), prefill = prefill, scalarValid = scalarValid(0), scalarData = scalarTable, sew = sew), pWbReady())(eResult1(res(0))),
             Cycle(pNoPlace, pWbReady())(eWb0)
           )
       }
@@ -744,7 +786,7 @@ class GatherRingUnitSpec extends SpecBase {
           initUnit,
           Cycle(
             pPlace(1, 0, table, index, allInvalid, prefill = prefill, scalarValid = sAt14, scalarData = distinctST, sew = 8)
-          )(eWb1(golden)),
+          )(eResult1(golden)),
           Cycle(pNoPlace, pWbReady())(eWb0)
         )
       }
@@ -771,7 +813,7 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = sew))(eWb1(res)),
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = sew))(eResult1(res)),
           )
       }
     }
@@ -783,7 +825,7 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = sew))(eWb1(res)),
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = sew))(eResult1(res)),
           )
       }
     }
@@ -795,7 +837,7 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = sew))(eWb1(res)),
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = sew))(eResult1(res)),
           )
       }
     }
@@ -807,7 +849,7 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = sew))(eWb1(res)),
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = sew))(eResult1(res)),
           )
       }
     }
@@ -833,7 +875,7 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = 16))(eWb1(res)),
+            Cycle(pPlace(1, 0, table, index, indexValid, scalarValid = scalarValid, scalarData = scalarTable, sew = 16))(eResult1(res)),
           )
       }
     }
@@ -858,7 +900,7 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs, scalarData = Seq.fill(8)(0x5A), sew = 16))(eWb1(exp)),
+            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs, scalarData = Seq.fill(8)(0x5A), sew = 16))(eResult1(exp)),
           )
       }
     }
@@ -887,7 +929,7 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs, scalarData = Seq.fill(8)(0x5A), sew = 16))(eWb1(exp)),
+            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs, scalarData = Seq.fill(8)(0x5A), sew = 16))(eResult1(exp)),
           )
       }
     }
@@ -912,7 +954,7 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs, scalarData = Seq.fill(8)(0x5A), sew = 16))(eWb1(exp)),
+            Cycle(pPlace(1, 0, t, idx, iv, scalarValid = fs, scalarData = Seq.fill(8)(0x5A), sew = 16))(eResult1(exp)),
           )
       }
     }
@@ -940,7 +982,7 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, zeroValid = fz))(eWb1(exp)),
+            Cycle(pPlace(1, 0, t, idx, iv, zeroValid = fz))(eResult1(exp)),
           )
       }
     }
@@ -965,7 +1007,7 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t, idx, iv, zeroValid = fz))(eWb1(exp)),
+            Cycle(pPlace(1, 0, t, idx, iv, zeroValid = fz))(eResult1(exp)),
           )
       }
     }
@@ -996,7 +1038,7 @@ class GatherRingUnitSpec extends SpecBase {
             initUnit,
             Cycle(
               pPlace(1, 0, t, idx, iv, scalarValid = fs, zeroValid = fz, scalarData = Seq.fill(8)(0x5A), sew = 16)
-            )(eWb1(exp))
+            )(eResult1(exp))
           )
       }
     }
@@ -1015,10 +1057,11 @@ class GatherRingUnitSpec extends SpecBase {
               dut,
               initUnit,
               Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)))(eCounter(1), eWb0, eIndexOrRes(res)),
-              Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true), pWbReady())(eCounter(0), eI1, eT1, eWb1(res)),
-              Cycle(pFlow, pNoFlowTbl(), pWbReady(false), pClearTbl())(eI1, eT0, eWb1(res)),
-              Cycle(pFlow, pNoFlowTbl(), pWbReady(), pClearTbl())(eI0, eT0, eWb0),
+              Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true), pWbReady())(eCounter(0), eI1, eT1, eResult1(res)),
+              Cycle(pFlow, pNoFlowTbl(), pWbReady(false), pClearTbl())(eI1, eT0, eResult1(res)),
+              Cycle(pFlow, pNoFlowTbl(), pWbReady(), pClearTbl())(eI1, eT0, eWb0),
             )
+            acceptWakeAndWriteback(dut, res)
         }
 
         simulator(unitIdx = 1) {
@@ -1032,9 +1075,10 @@ class GatherRingUnitSpec extends SpecBase {
               initUnit,
               Cycle(pPlace(2, 1, table, index, Seq.fill(16)(true)))(eCounter(2), eWb0, eIndexOrRes(res0)),
               Cycle(pNoPlace, pFlow, pFlowTbl(0, table, passedEntry = true))(eCounter(1), eI1, eT1, eWb0),
-              Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true), pWbReady())(eCounter(0), eI1, eT1, eWb1(res1)),
-              Cycle(pFlow, pNoFlowTbl(), pWbReady(), pClearTbl())(eI0, eT0, eWb0)
+              Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true), pWbReady())(eCounter(0), eI1, eT1, eResult1(res1)),
+              Cycle(pFlow, pNoFlowTbl(), pWbReady(), pClearTbl())(eI1, eT0, eWb0)
             )
+            acceptWakeAndWriteback(dut, res1)
         }
       }
 
@@ -1049,9 +1093,10 @@ class GatherRingUnitSpec extends SpecBase {
               dut,
               initUnit,
               Cycle(pPlace(2, 1, table, index, Seq.fill(16)(true)), pWbReady())(eCounter(1), eWb0, eIndexOrRes(res0)),
-              Cycle(pNoPlace, pFlow, pFlowTbl(0, table, passedEntry = true), pWbReady(false))(eCounter(0), eI1, eT1, eWb1(res1)),
-              Cycle(pFlow, pNoFlowTbl(), pWbReady(), pClearTbl())(eI0, eT0, eWb0)
+              Cycle(pNoPlace, pFlow, pFlowTbl(0, table, passedEntry = true), pWbReady(false))(eCounter(0), eI1, eT1, eResult1(res1)),
+              Cycle(pFlow, pNoFlowTbl(), pWbReady(), pClearTbl())(eI1, eT0, eWb0)
             )
+            acceptWakeAndWriteback(dut, res1)
         }
 
         simulator(unitIdx = 1) {
@@ -1064,9 +1109,10 @@ class GatherRingUnitSpec extends SpecBase {
               initUnit,
               Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)), pWbReady(false))(eCounter(2), eWb0, eIndexOrRes(res)),
               Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true), pWbReady(false))(eCounter(1), eI1, eT1, eWb0),
-              Cycle(pNoPlace, pFlow, pFlowTbl(0, table, passedEntry = true), pWbReady())(eCounter(0), eI1, eT1, eWb1(res)),
-              Cycle(pFlow, pNoFlowTbl(), pClearTbl())(eI0, eT0, eWb0)
+              Cycle(pNoPlace, pFlow, pFlowTbl(0, table, passedEntry = true), pWbReady())(eCounter(0), eI1, eT1, eResult1(res)),
+              Cycle(pFlow, pNoFlowTbl(), pClearTbl())(eI1, eT0, eWb0)
             )
+            acceptWakeAndWriteback(dut, res)
         }
       }
 
@@ -1080,10 +1126,11 @@ class GatherRingUnitSpec extends SpecBase {
               initUnit,
               Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)))(eCounter(1), eWb0, eIndexOrRes(res)),
               Cycle(pNoPlace, pWbReady())(eWb0),
-              Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true), pWbReady())(eCounter(0), eI1, eT1, eWb1(res)),
-              Cycle(pFlow, pNoFlowTbl(), pWbReady(false), pClearTbl())(eI1, eT0, eWb1(res)),
-              Cycle(pNoFlow, pNoFlowTbl(), pWbReady(), pClearTbl())(eI0, eT0, eWb0)
+              Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true), pWbReady())(eCounter(0), eI1, eT1, eResult1(res)),
+              Cycle(pFlow, pNoFlowTbl(), pWbReady(false), pClearTbl())(eI1, eT0, eResult1(res)),
+              Cycle(pNoFlow, pNoFlowTbl(), pWbReady(), pClearTbl())(eI1, eT0, eWb0)
             )
+            acceptWakeAndWriteback(dut, res)
         }
 
         simulator(unitIdx = 1) {
@@ -1098,9 +1145,10 @@ class GatherRingUnitSpec extends SpecBase {
               Cycle()(eT0, eI0, eWb0),
               Cycle(pPlace(2, 1, table, index, Seq.fill(16)(true)))(eCounter(2), eWb0, eIndexOrRes(res0)),
               Cycle(pNoPlace, pFlow, pFlowTbl(0, table, passedEntry = true))(eCounter(1), eI1, eT1, eWb0),
-              Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true), pWbReady())(eCounter(0), eI1, eT1, eWb1(res1)),
-              Cycle(pFlow, pNoFlowTbl(), pWbReady(), pClearTbl())(eI0, eT0, eWb0)
+              Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true), pWbReady())(eCounter(0), eI1, eT1, eResult1(res1)),
+              Cycle(pFlow, pNoFlowTbl(), pWbReady(), pClearTbl())(eI1, eT0, eWb0)
             )
+            acceptWakeAndWriteback(dut, res1)
         }
       }
     }
@@ -1120,9 +1168,10 @@ class GatherRingUnitSpec extends SpecBase {
               dut,
               initUnit,
               Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)), pWbReady(false))(eCounter(1), eWb0, eIndexOrRes(res0)),
-              Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true), pWbReady())(eCounter(0), eI1, eT1, eWb1(res1)),
-              Cycle(pFlow, pNoFlowTbl(), pClearTbl())(eI0, eT0, eWb0)
+              Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true), pWbReady())(eCounter(0), eI1, eT1, eResult1(res1)),
+              Cycle(pFlow, pNoFlowTbl(), pClearTbl())(eI1, eT0, eWb0)
             )
+            acceptWakeAndWriteback(dut, res1)
         }
 
         simulator(unitIdx = 1) {
@@ -1134,9 +1183,10 @@ class GatherRingUnitSpec extends SpecBase {
               initUnit,
               Cycle(pPlace(2, 1, table, index, Seq.fill(16)(true)), pWbReady())(eCounter(2), eWb0, eIndexOrRes(res)),
               Cycle(pNoPlace, pFlow, pFlowTbl(0, table, passedEntry = true), pWbReady(false))(eCounter(1), eI1, eT1, eWb0),
-              Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true), pWbReady())(eCounter(0), eI1, eT1, eWb1(res)),
-              Cycle(pFlow, pNoFlowTbl(), pClearTbl())(eI0, eT0, eWb0)
+              Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true), pWbReady())(eCounter(0), eI1, eT1, eResult1(res)),
+              Cycle(pFlow, pNoFlowTbl(), pClearTbl())(eI1, eT0, eWb0)
             )
+            acceptWakeAndWriteback(dut, res)
         }
       }
     }
@@ -1155,7 +1205,7 @@ class GatherRingUnitSpec extends SpecBase {
             dut,
             initUnit,
             Cycle(pPlace(2, 0, table, index, Seq.fill(16)(true)))(eWb0),
-            Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true))(eWb1(res)),
+            Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true))(eResult1(res)),
             Cycle(pNoFlow, pNoFlowTbl, pWbReady())(eWb0),
           )
       }
@@ -1183,7 +1233,7 @@ class GatherRingUnitSpec extends SpecBase {
             Cycle(pPlace(4, 0, table, index, indexValid, prefill = prefill))(eWb0, eIndexOrRes(res0)),
             Cycle(pNoPlace, pFlow, pFlowTbl(1, table, passedEntry = true))(eWb0, eIndexOrRes(res1)),
             Cycle(pNoPlace, pFlow, pFlowTbl(2, table, passedEntry = true))(eWb0, eIndexOrRes(res2)),
-            Cycle(pNoPlace, pFlow, pFlowTbl(3, table, passedEntry = true))(eWb1(res3)),
+            Cycle(pNoPlace, pFlow, pFlowTbl(3, table, passedEntry = true))(eResult1(res3)),
           )
       }
     }
@@ -1295,10 +1345,10 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t1, 0 until 16, Seq.fill(16)(true)))(eWb1(e1)),
+            Cycle(pPlace(1, 0, t1, 0 until 16, Seq.fill(16)(true)))(eResult1(e1)),
             Cycle(pNoPlace, pNoFlow, pFlush)(),
             Cycle(pNoPlace, pNoFlow, _.in.flush.poke(false))(),
-            Cycle(pPlace(1, 0, t2, 0 until 16, Seq.fill(16)(true)))(eWb1(e2)),
+            Cycle(pPlace(1, 0, t2, 0 until 16, Seq.fill(16)(true)))(eResult1(e2)),
           )
       }
     }
@@ -1321,8 +1371,8 @@ class GatherRingUnitSpec extends SpecBase {
           runCycles(
             dut,
             initUnit,
-            Cycle(pPlace(1, 0, t1, 0 until 16, Seq.fill(16)(true)))(eWb1(e1)),
-            Cycle(pPlace(1, 0, t2, 0 until 16, Seq.fill(16)(true)))(eWb1(e2)),
+            Cycle(pPlace(1, 0, t1, 0 until 16, Seq.fill(16)(true)))(eResult1(e1)),
+            Cycle(pPlace(1, 0, t2, 0 until 16, Seq.fill(16)(true)))(eResult1(e2)),
           )
       }
     }
@@ -1344,13 +1394,9 @@ class GatherRingUnitSpec extends SpecBase {
             dut,
             initUnit,
             // Place table+index, blockSize=1 -> counter=0 immediately
-            Cycle(pPlace(tblSize, 0, table, index, indexValid, prefill))(eWb1(res)),
-            // wbReady still false — wb.valid should HOLD
-            Cycle(pNoPlace, pNoFlow)(eWb1(res)),
-            Cycle(pNoPlace, pNoFlow)(eWb1(res)),
-            // Now assert wbReady — wb should be accepted
-            Cycle(pNoPlace, pNoFlow, pWbReady())(eWb0),
+            Cycle(pPlace(tblSize, 0, table, index, indexValid, prefill))(eResult1(res)),
           )
+          acceptWakeAndWriteback(dut, res)
       }
     }
   }
