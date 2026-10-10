@@ -72,6 +72,7 @@ class GatherRing[T <: Data](
   controller.in.counter := units.map(_.out.status.counter)
   controller.in.wbValid := Cat(units.map(_.out.wb.valid).reverse)
   controller.in.wakeValid := Cat(units.map(_.out.wake.valid).reverse)
+  controller.in.flush := in.flush.asUInt
 
   // Flow loopback connections (ring topology)
   private val ring2Units = units.grouped(2).toSeq
@@ -274,6 +275,7 @@ class GatherRing[T <: Data](
   private val acceptedWake = Seq.tabulate(NumPipeOut) { p =>
     Mux(in.wakeAck(p), controller.out.wakeSelOH(p), 0.U(NumUnits.W)) & ~in.flush.asUInt
   }
+  controller.in.acceptedWake := acceptedWake.reduce(_ | _)
   private val wbSelected = controller.out.wbSelOH
 
   for (j <- 0 until NumUnits) {
@@ -298,8 +300,9 @@ class GatherRing[T <: Data](
     out.wake(p).valid := controller.out.wakeSelOH(p).orR
     out.wake(p).bits := Mux1H(controller.out.wakeSelOH(p), units.map(_.out.wake.bits))
   }
-  // Fixed-owned units have no ring wake, so release them on their actual WB fire.
-  out.release := acceptedWake.reduce(_ | _) | VecInit(units.map(_.out.release)).asUInt
+  // Accepted real-unit wakes release their own allocation bits. Segment blocks
+  // additionally release high index holes once all real wakes were accepted.
+  out.release := acceptedWake.reduce(_ | _) | controller.out.release
 }
 
 object GatherRing {

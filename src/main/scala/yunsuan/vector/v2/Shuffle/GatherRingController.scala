@@ -15,6 +15,23 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
   private val ring4Controllers = Seq.tabulate(NumUnits / 4)(i => Module(new GatherRingBlockController(4, 4 * i)))
   private val ring8Controllers = Seq.tabulate(NumUnits / 8)(i => Module(new GatherRingBlockController(8, 8 * i)))
 
+  // Segment blocks allocate a power-of-two physical ring but only the first
+  // blockFieldNum units carry real uops. Count accepted wakes per physical
+  // block so the high index holes can be released exactly once. The field
+  // number is latched because the low units may be reused before the old
+  // block's hole release is emitted.
+  private val ring4WakeCount = RegInit(VecInit.fill(NumUnits / 4)(0.U(log2Ceil(5).W)))
+  private val ring4WakeSeen = RegInit(VecInit.fill(NumUnits / 4)(0.U(4.W)))
+  private val ring4HoleReleased = RegInit(VecInit.fill(NumUnits / 4)(false.B))
+  private val ring4BlockActive = RegInit(VecInit.fill(NumUnits / 4)(false.B))
+  private val ring4FieldNumState = RegInit(VecInit.fill(NumUnits / 4)(0.U(BlockFieldNum().getWidth.W)))
+
+  private val ring8WakeCount = RegInit(VecInit.fill(NumUnits / 8)(0.U(log2Ceil(9).W)))
+  private val ring8WakeSeen = RegInit(VecInit.fill(NumUnits / 8)(0.U(8.W)))
+  private val ring8HoleReleased = RegInit(VecInit.fill(NumUnits / 8)(false.B))
+  private val ring8BlockActive = RegInit(VecInit.fill(NumUnits / 8)(false.B))
+  private val ring8FieldNumState = RegInit(VecInit.fill(NumUnits / 8)(0.U(BlockFieldNum().getWidth.W)))
+
   private val s1PipesTableValid = in.s1pipes.map(x => UIntToOH(x.bits.tablePos, NumUnits))
   private val s1PipesIndexValid = in.s1pipes.map(x => UIntToOH(x.bits.indexPos, NumUnits))
 
@@ -51,12 +68,24 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
   // reports 0, which also retires the forcing (D5 lifecycle). Qualified with
   // the resident block actually being size-4 (one-hot bit2) so a ring4 bc
   // never forces for blocks of other sizes sharing its units' history.
-  private val ring4FieldNum = Seq.tabulate(NumUnits / 4) { i =>
+  private val ring4Live = Seq.tabulate(NumUnits / 4) { i =>
     val base = 4 * i
-    val alive = (base until base + 4).map(u =>
-      in.hasTable(u) || in.hasIndex(u) || in.counter(u) =/= 0.U
+    (base until base + 4).map(u =>
+      in.blockSize(u) === 4.U && (in.hasTable(u) || in.hasIndex(u) || in.counter(u) =/= 0.U)
     ).reduce(_ || _)
-    Mux(alive && in.blockSize(base)(2), in.blockFieldNum(base), 0.U)
+  }
+  private val ring4ObservedFieldNum = Seq.tabulate(NumUnits / 4) { i =>
+    val base = 4 * i
+    val candidates = (base until base + 4).map { u =>
+      val valid = ring4Live(i) && in.blockSize(u) === 4.U &&
+        in.blockFieldNum(u) >= 2.U && in.blockFieldNum(u) <= 4.U
+      valid -> in.blockFieldNum(u)
+    }
+    MuxCase(0.U(BlockFieldNum().getWidth.W), candidates)
+  }
+  private val ring4FieldNum = Seq.tabulate(NumUnits / 4) { i =>
+    val fieldNum = Mux(ring4BlockActive(i), ring4FieldNumState(i), ring4ObservedFieldNum(i))
+    Mux(ring4Live(i) && fieldNum >= 2.U && fieldNum <= 4.U, fieldNum, 0.U)
   }
   // Index holes = HIGH units f..size-1 (passive: table storage/forward only)
   private val ring4IndexHoleBits = Cat(Seq.tabulate(NumUnits / 4) { i =>
@@ -65,6 +94,52 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
   }.reverse)
 
   private val ring4UnitMask = Cat(in.blockSize.map(x => (x & 4.U).orR).reverse) | ring4IndexHoleBits
+
+  private val ring4ExtraRelease = Seq.tabulate(NumUnits / 4) { i =>
+    val base = 4 * i
+    val fieldNum = ring4FieldNum(i)
+    val holeMask = Mux(
+      fieldNum >= 2.U && fieldNum < 4.U,
+      (Fill(4, 1.B) << fieldNum)(3, 0),
+      0.U(4.W),
+    )
+    val realMask = Mux(
+      fieldNum >= 2.U && fieldNum < 4.U,
+      ((1.U(5.W) << fieldNum) - 1.U)(3, 0),
+      0.U(4.W),
+    )
+    val acceptedReal = in.acceptedWake(base + 3, base) & realMask
+    val newAccepted = acceptedReal & ~ring4WakeSeen(i)
+    val nextCount = ring4WakeCount(i) + PopCount(newAccepted)
+    val isSegment = fieldNum >= 2.U && fieldNum < 4.U
+    val completed = ring4Live(i) && isSegment && nextCount >= fieldNum
+    val blockFlush = in.flush(base + 3, base).orR
+    val emit = completed && !ring4HoleReleased(i) && !blockFlush
+    val globalHoleMask = Wire(UInt(NumUnits.W))
+    globalHoleMask := (holeMask << base).pad(NumUnits)
+
+    when(blockFlush || !ring4Live(i)) {
+      ring4BlockActive(i) := false.B
+      ring4FieldNumState(i) := 0.U
+      ring4WakeCount(i) := 0.U
+      ring4WakeSeen(i) := 0.U
+      ring4HoleReleased(i) := false.B
+    }.elsewhen(!ring4BlockActive(i)) {
+      ring4BlockActive(i) := ring4ObservedFieldNum(i) =/= 0.U
+      ring4FieldNumState(i) := ring4ObservedFieldNum(i)
+      ring4WakeCount(i) := PopCount(newAccepted)
+      ring4WakeSeen(i) := acceptedReal
+      ring4HoleReleased(i) := completed
+    }.otherwise {
+      ring4WakeCount(i) := Mux(isSegment, nextCount, 0.U)
+      ring4WakeSeen(i) := ring4WakeSeen(i) | acceptedReal
+      when(completed) {
+        ring4HoleReleased(i) := true.B
+      }
+    }
+
+    Mux(emit, globalHoleMask, 0.U(NumUnits.W))
+  }.reduce(_ | _)
   private val s1Ring4TableValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 4.U).orR), s1PipesTableValid)
   private val s1Ring4IndexValid = Mux1H(in.s1pipes.map(x => x.bits.indexValid && (x.bits.blockSize & 4.U).orR), s1PipesIndexValid)
 
@@ -93,12 +168,24 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
   }
 
   // ── ring8 hole state (segment 5/6/7 in a size-8 block) ──────────────────
-  private val ring8FieldNum = Seq.tabulate(NumUnits / 8) { i =>
+  private val ring8Live = Seq.tabulate(NumUnits / 8) { i =>
     val base = 8 * i
-    val alive = (base until base + 8).map(u =>
-      in.hasTable(u) || in.hasIndex(u) || in.counter(u) =/= 0.U
+    (base until base + 8).map(u =>
+      in.blockSize(u) === 8.U && (in.hasTable(u) || in.hasIndex(u) || in.counter(u) =/= 0.U)
     ).reduce(_ || _)
-    Mux(alive && in.blockSize(base)(3), in.blockFieldNum(base), 0.U)
+  }
+  private val ring8ObservedFieldNum = Seq.tabulate(NumUnits / 8) { i =>
+    val base = 8 * i
+    val candidates = (base until base + 8).map { u =>
+      val valid = ring8Live(i) && in.blockSize(u) === 8.U &&
+        in.blockFieldNum(u) >= 2.U && in.blockFieldNum(u) <= 8.U
+      valid -> in.blockFieldNum(u)
+    }
+    MuxCase(0.U(BlockFieldNum().getWidth.W), candidates)
+  }
+  private val ring8FieldNum = Seq.tabulate(NumUnits / 8) { i =>
+    val fieldNum = Mux(ring8BlockActive(i), ring8FieldNumState(i), ring8ObservedFieldNum(i))
+    Mux(ring8Live(i) && fieldNum >= 2.U && fieldNum <= 8.U, fieldNum, 0.U)
   }
   private val ring8IndexHoleBits = Cat(Seq.tabulate(NumUnits / 8) { i =>
     val f = ring8FieldNum(i)
@@ -106,6 +193,53 @@ class GatherRingController(implicit val param: GatherParam) extends GatherModule
   }.reverse)
 
   private val ring8UnitMask = Cat(in.blockSize.map(x => (x & 8.U).orR).reverse) | ring8IndexHoleBits
+
+  private val ring8ExtraRelease = Seq.tabulate(NumUnits / 8) { i =>
+    val base = 8 * i
+    val fieldNum = ring8FieldNum(i)
+    val holeMask = Mux(
+      fieldNum >= 2.U && fieldNum < 8.U,
+      (Fill(8, 1.B) << fieldNum)(7, 0),
+      0.U(8.W),
+    )
+    val realMask = Mux(
+      fieldNum >= 2.U && fieldNum < 8.U,
+      ((1.U(9.W) << fieldNum) - 1.U)(7, 0),
+      0.U(8.W),
+    )
+    val acceptedReal = in.acceptedWake(base + 7, base) & realMask
+    val newAccepted = acceptedReal & ~ring8WakeSeen(i)
+    val nextCount = ring8WakeCount(i) + PopCount(newAccepted)
+    val isSegment = fieldNum >= 2.U && fieldNum < 8.U
+    val completed = ring8Live(i) && isSegment && nextCount >= fieldNum
+    val blockFlush = in.flush(base + 7, base).orR
+    val emit = completed && !ring8HoleReleased(i) && !blockFlush
+    val globalHoleMask = Wire(UInt(NumUnits.W))
+    globalHoleMask := (holeMask << base).pad(NumUnits)
+
+    when(blockFlush || !ring8Live(i)) {
+      ring8BlockActive(i) := false.B
+      ring8FieldNumState(i) := 0.U
+      ring8WakeCount(i) := 0.U
+      ring8WakeSeen(i) := 0.U
+      ring8HoleReleased(i) := false.B
+    }.elsewhen(!ring8BlockActive(i)) {
+      ring8BlockActive(i) := ring8ObservedFieldNum(i) =/= 0.U
+      ring8FieldNumState(i) := ring8ObservedFieldNum(i)
+      ring8WakeCount(i) := PopCount(newAccepted)
+      ring8WakeSeen(i) := acceptedReal
+      ring8HoleReleased(i) := completed
+    }.otherwise {
+      ring8WakeCount(i) := Mux(isSegment, nextCount, 0.U)
+      ring8WakeSeen(i) := ring8WakeSeen(i) | acceptedReal
+      when(completed) {
+        ring8HoleReleased(i) := true.B
+      }
+    }
+
+    Mux(emit, globalHoleMask, 0.U(NumUnits.W))
+  }.reduce(_ | _)
+  out.release := ring4ExtraRelease | ring8ExtraRelease
   private val s1Ring8TableValid = Mux1H(in.s1pipes.map(x => x.valid && (x.bits.blockSize & 8.U).orR), s1PipesTableValid)
   private val s1Ring8IndexValid = Mux1H(in.s1pipes.map(x => x.bits.indexValid && (x.bits.blockSize & 8.U).orR), s1PipesIndexValid)
 
@@ -252,6 +386,11 @@ object GatherRingController {
     val wbValid = UInt(NumUnits.W)
     val wakeValid = UInt(NumUnits.W)
     val counter = Vec(NumUnits, UInt(log2Up(NumUnits + 1).W))
+    // Accepted (wakeAck && wakeSelOH) unit wakes, used for segment hole release.
+    val acceptedWake = UInt(NumUnits.W)
+    // Per-unit flush; each physical block resets its segment state when any
+    // resident unit in that block is flushed.
+    val flush = UInt(NumUnits.W)
     // Per-unit resident block field count (GatherRingUnit.status.blockFieldNum);
     // valid while the unit's block is alive, 0 when empty.
     val blockFieldNum = Vec(NumUnits, BlockFieldNum())
@@ -272,6 +411,7 @@ object GatherRingController {
     val wbSelOH      = Vec(NumPipeOut, UInt(NumUnits.W))
     val unitAllTableValid = Vec(NumUnits, Bool())
     val wakeSelOH      = Vec(NumPipeOut, UInt(NumUnits.W))
+    val release        = UInt(NumUnits.W)
     // Debug: per-pipe controller valid bitmap [ring8, ring4, ring2]
     val dbgPipeCtrlValid = Vec(NumPipeIn, UInt(3.W))
   }

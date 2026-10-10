@@ -26,10 +26,13 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
     val NumUnits = param.numUnits
 
     simulate(new GatherRingController()(param)) { dut =>
+      dut.in.acceptedWake.poke(0)
+      dut.in.flush.poke(0)
       for (i <- 0 until NumUnits) {
         dut.in.hasTable(i).poke(((hasTable >> i) & 1) != 0)
         dut.in.hasIndex(i).poke(((hasIndex >> i) & 1) != 0)
         dut.in.blockSize(i).poke(unitBlockSize)
+        dut.in.blockFieldNum(i).poke(unitBlockSize)
         dut.in.hasIndexNext(i).poke(false)
         dut.in.counter(i).poke(0)
       }
@@ -72,10 +75,13 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
     val NumUnits = param.numUnits
 
     simulate(new GatherRingController()(param)) { dut =>
+      dut.in.acceptedWake.poke(0)
+      dut.in.flush.poke(0)
       for (i <- 0 until NumUnits) {
         dut.in.hasTable(i).poke(false)
         dut.in.hasIndex(i).poke(false)
         dut.in.blockSize(i).poke(blockSize)
+        dut.in.blockFieldNum(i).poke(blockSize)
         dut.in.hasIndexNext(i).poke(false)
         dut.in.counter(i).poke(0)
       }
@@ -239,6 +245,8 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
       val param = GatherCommon.GatherParam.default
       val NumUnits = param.numUnits
       simulate(new GatherRingController()(param)) { dut =>
+        dut.in.acceptedWake.poke(0)
+        dut.in.flush.poke(0)
         // U0/U2/U3: m4 block, only U0's table placed (block incomplete).
         // U1: m2 block with a registered table. An m2 s1 pipe targets U0:
         // ring2's allTableValid (U0-1) is raised via the in-flight s1 table,
@@ -249,6 +257,7 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
           dut.in.hasTable(i).poke(i < 2) // U0, U1 registered tables
           dut.in.hasIndex(i).poke(false)
           dut.in.blockSize(i).poke(blockSize(i))
+          dut.in.blockFieldNum(i).poke(if (blockSize(i) == 0) 0 else blockSize(i))
           dut.in.hasIndexNext(i).poke(false)
           dut.in.counter(i).poke(0)
         }
@@ -268,4 +277,95 @@ class GatherRingControllerSpec extends AnyFunSpec with ChiselSim with Matchers w
         assert((4 until NumUnits).forall(i => !v(i)), s"unused units must not be allTableValid (got $v)")
       }
     }
-  }}
+  }
+
+  describe("segment hole release") {
+    def setupHoleBlock(dut: GatherRingController, size: Int, base: Int, fieldNum: Int): Unit = {
+      val param = GatherCommon.GatherParam.default
+      for (i <- 0 until param.numUnits) {
+        val inBlock = i >= base && i < base + size
+        val realUnit = inBlock && i < base + fieldNum
+        dut.in.hasTable(i).poke(inBlock)
+        dut.in.hasIndex(i).poke(realUnit)
+        dut.in.hasIndexNext(i).poke(false)
+        dut.in.blockSize(i).poke(if (inBlock) size else 0)
+        dut.in.blockFieldNum(i).poke(if (inBlock) fieldNum else 0)
+        dut.in.counter(i).poke(0)
+      }
+      dut.in.acceptedWake.poke(0)
+      dut.in.flush.poke(0)
+      dut.in.wbValid.poke(0)
+      for (i <- 0 until param.numPipeIn) {
+        dut.in.s0pipes(i).valid.poke(false)
+        dut.in.s1pipes(i).valid.poke(false)
+      }
+      dut.clock.step()
+    }
+
+    it("releases the ring4 hole after three accepted wakes, including same-cycle wakes") {
+      val param = GatherCommon.GatherParam.default
+      simulate(new GatherRingController()(param)) { dut =>
+        setupHoleBlock(dut, size = 4, base = 0, fieldNum = 3)
+        dut.in.acceptedWake.poke(0)
+        dut.out.release.expect(0.U)
+        dut.clock.step()
+
+        dut.in.acceptedWake.poke(7)
+        dut.out.release.expect(8.U)
+        dut.clock.step()
+        dut.in.acceptedWake.poke(0)
+        dut.out.release.expect(0.U)
+      }
+    }
+
+    def checkRing8Hole(fieldNum: Int, expected: Int): Unit = {
+      val param = GatherCommon.GatherParam.default
+      simulate(new GatherRingController()(param)) { dut =>
+        setupHoleBlock(dut, size = 8, base = 0, fieldNum = fieldNum)
+        dut.in.acceptedWake.poke((1 << fieldNum) - 1)
+        dut.out.release.expect(expected.U)
+        dut.clock.step()
+        dut.in.acceptedWake.poke(0)
+        dut.out.release.expect(0.U)
+      }
+    }
+
+    it("releases the ring8 seg5 holes once") { checkRing8Hole(5, 0xe0) }
+    it("releases the ring8 seg6 holes once") { checkRing8Hole(6, 0xc0) }
+    it("releases the ring8 seg7 holes once") { checkRing8Hole(7, 0x80) }
+
+    it("does not count an unaccepted wake and resets counters on block flush") {
+      val param = GatherCommon.GatherParam.default
+      simulate(new GatherRingController()(param)) { dut =>
+        setupHoleBlock(dut, size = 4, base = 0, fieldNum = 3)
+        dut.in.acceptedWake.poke(3)
+        dut.clock.step()
+        dut.in.acceptedWake.poke(4)
+        dut.in.flush.poke(0xf)
+        dut.out.release.expect(0.U)
+        dut.clock.step()
+
+        dut.in.flush.poke(0)
+        dut.in.acceptedWake.poke(4)
+        dut.out.release.expect(0.U, "a flushed block must restart its wake count")
+      }
+    }
+
+    it("keeps counters independent for adjacent ring4 blocks") {
+      val param = GatherCommon.GatherParam.default
+      simulate(new GatherRingController()(param)) { dut =>
+        setupHoleBlock(dut, size = 4, base = 0, fieldNum = 3)
+        // Add a second seg3 block without disturbing the first block's state.
+        for (i <- 4 until 8) {
+          dut.in.hasTable(i).poke(true)
+          dut.in.hasIndex(i).poke(i < 7)
+          dut.in.blockSize(i).poke(4)
+          dut.in.blockFieldNum(i).poke(3)
+        }
+        dut.clock.step()
+        dut.in.acceptedWake.poke(0x77)
+        dut.out.release.expect(0x88.U)
+      }
+    }
+  }
+}

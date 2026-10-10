@@ -2035,7 +2035,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
       }
     }
 
-    it("W4: same-pipe arbitration U0+U4 -> lower index wins") {
+    it("W4: same-pipe arbitration U0+U4 -> lower index wins without fixed WB release") {
       simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
         initDut(dut)
         dut.in.wakeAck.foreach(_.poke(false))
@@ -2058,11 +2058,11 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         // U0 wins the first WB, then U4 writes back in the following cycle.
         dut.in.wbReady(0).poke(true)
         dut.out.pipes(0).bits.data.expect(golden)
-        dut.out.release.expect(1.U)
+        dut.out.release.expect(0.U)
         dut.clock.step()
         dut.out.pipes(0).valid.expect(true.B)
         dut.out.pipes(0).bits.data.expect(golden)
-        dut.out.release.expect(16.U)
+        dut.out.release.expect(0.U)
         dut.clock.step()
         dut.out.pipes(0).valid.expect(false.B)
         dut.out.release.expect(0.U)
@@ -2249,7 +2249,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
       }
     }
 
-    it("K5a: simultaneous fixed writebacks release two physical units without wakes") {
+    it("K5a: simultaneous fixed writebacks do not release units without wakes") {
       simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
         initDut(dut)
         dut.in.wakeAck.foreach(_.poke(false))
@@ -2265,7 +2265,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         dut.out.pipes(0).valid.expect(true.B)
         dut.out.pipes(2).valid.expect(true.B)
         dut.out.wake.foreach(_.valid.expect(false.B))
-        dut.out.release.expect(5.U, "release units 0 and 2 on fixed WB fire")
+        dut.out.release.expect(0.U, "fixed WB fire is not a VOQ release source")
         dut.clock.step()
         dut.out.release.expect(0.U)
       }
@@ -3503,7 +3503,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           dut.out.pipes(0).bits.meta.pdest.expect(0x52.U)
           dut.out.pipes(0).bits.meta.robIdx.expect(0x6e.U)
           dut.out.wake.foreach(_.valid.expect(false.B))
-          dut.out.release.expect(1.U, "fixed WB fire releases the allocated unit")
+          dut.out.release.expect(0.U, "fixed WB fire is not a VOQ release source")
           dut.clock.step()
           dut.out.pipes.foreach(_.valid.expect(false.B))
           dut.out.wake.foreach(_.valid.expect(false.B))
@@ -3514,7 +3514,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
       }
     }
 
-    it("holds fixed data under backpressure and releases once on WB fire") {
+    it("holds fixed data under backpressure without releasing on WB fire") {
       simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
         initDut(dut)
         dut.in.wakeAck.foreach(_.poke(false))
@@ -3536,7 +3536,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
           dut.clock.step()
         }
         dut.in.wbReady(0).poke(true)
-        dut.out.release.expect(1.U)
+        dut.out.release.expect(0.U)
         dut.clock.step()
         dut.out.pipes.foreach(_.valid.expect(false.B))
         dut.out.release.expect(0.U)

@@ -324,7 +324,6 @@ class GatherRingUnit[T <: Data](
     (fixedWakeOwned || (wakedUp && wbWait === 0.U))
   out.wb.bits.data := resView.asUInt
   out.wb.bits.meta := meta
-  out.release := fixedWakeOwned && wbFire
 
   // Safety: writeback must never fire while any element's index is unresolved
   // (indexDone all-1). A late-arriving table (progressive / out-of-order
@@ -419,7 +418,6 @@ object GatherRingUnit {
     val flow = ValidIO(new RingFlow)
     val wb = ValidIO(new Res(metaGen))
     val wake = ValidIO(new Wake(metaGen))
-    val release = Bool()
     val meta = ValidIO(metaGen)
     val debug = Option.when(param.debug)(new Debug)
   }

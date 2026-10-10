@@ -1412,16 +1412,13 @@ class GatherRingUnitSpec extends SpecBase {
           for (_ <- 0 until issue2exu + 2) {
             eWb(true, res).apply(dut)
             eWake(false).apply(dut)
-            dut.out.release.expect(false.B)
             dut.out.status.hasIndex.expect(true.B)
             dut.clock.step()
           }
           pWbReady()(dut)
-          dut.out.release.expect(true.B)
           dut.clock.step()
           eWb(false).apply(dut)
           eWake(false).apply(dut)
-          dut.out.release.expect(false.B)
           dut.out.status.hasIndex.expect(false.B)
           dut.out.status.hasTable.expect(false.B)
       }
