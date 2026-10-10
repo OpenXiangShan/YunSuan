@@ -314,13 +314,17 @@ class GatherRingUnit[T <: Data](
   }
 
   // ── Writeback ───────────────────────────────────────
-  // The result stays in this unit until the wake's reserved writeback cycle.
+  // Ordinary single-unit results already have an IssuePipe fixed wake. EI16
+  // gather/rvs3 pairs still own a dynamic wake even when they share one unit.
+  private val fixedWakeOwned = blockSize(0) && !rvs3Placed
   private val wakedUp = RegInit(false.B)
   private val wakeBlocked = RegInit(false.B)
   private val wbWait = RegInit(0.U(WakeDelayWidth.W))
-  out.wb.valid := !flush && !hasWb && done && wakedUp && wbWait === 0.U
+  out.wb.valid := !flush && !hasWb && done &&
+    (fixedWakeOwned || (wakedUp && wbWait === 0.U))
   out.wb.bits.data := resView.asUInt
   out.wb.bits.meta := meta
+  out.release := fixedWakeOwned && wbFire
 
   // Safety: writeback must never fire while any element's index is unresolved
   // (indexDone all-1). A late-arriving table (progressive / out-of-order
@@ -359,7 +363,7 @@ class GatherRingUnit[T <: Data](
     wakeBlocked := true.B
   }
 
-  out.wake.valid := (wakeEligible || wakeBlocked) && !wakedUp
+  out.wake.valid := !fixedWakeOwned && (wakeEligible || wakeBlocked) && !wakedUp
   out.wake.bits.delay := 0.U
   out.wake.bits.meta := meta
 
@@ -415,6 +419,7 @@ object GatherRingUnit {
     val flow = ValidIO(new RingFlow)
     val wb = ValidIO(new Res(metaGen))
     val wake = ValidIO(new Wake(metaGen))
+    val release = Bool()
     val meta = ValidIO(metaGen)
     val debug = Option.when(param.debug)(new Debug)
   }

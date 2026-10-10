@@ -269,8 +269,8 @@ class GatherRing[T <: Data](
 
   /***************************** wb *******************************************/
 
-  // Each unit holds its completed result for issue2exu cycles after its wake is
-  // accepted; the normal WB arbiter selects the due result.
+  // Dynamic results wait issue2exu cycles after wake acceptance. Fixed-owned
+  // single-unit results are already due when complete; both use the WB arbiter.
   private val acceptedWake = Seq.tabulate(NumPipeOut) { p =>
     Mux(in.wakeAck(p), controller.out.wakeSelOH(p), 0.U(NumUnits.W)) & ~in.flush.asUInt
   }
@@ -298,8 +298,8 @@ class GatherRing[T <: Data](
     out.wake(p).valid := controller.out.wakeSelOH(p).orR
     out.wake(p).bits := Mux1H(controller.out.wakeSelOH(p), units.map(_.out.wake.bits))
   }
-  // Release exactly the units whose wake requests were accepted this cycle.
-  out.release := acceptedWake.reduce(_ | _)
+  // Fixed-owned units have no ring wake, so release them on their actual WB fire.
+  out.release := acceptedWake.reduce(_ | _) | VecInit(units.map(_.out.release)).asUInt
 }
 
 object GatherRing {
