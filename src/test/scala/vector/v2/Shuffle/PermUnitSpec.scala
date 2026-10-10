@@ -1968,17 +1968,22 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
 
   // ── Writeback: wbReady / arbitration / status ────────
   describe("Writeback") {
-    it("W1: wake ack reserves writeback independently of wbReady") {
+    it("W1: multi-unit wake ack reserves writeback independently of wbReady") {
       simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
         initDut(dut)
+        dut.in.wakeAck.foreach(_.poke(false))
         dut.in.wbReady(0).poke(false)
-        val table = Table.inc(1)
-        val golden = gatherGolden(0, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
-        pGather(dut, 0, 8, 8, 0, table, Prefill.default(1))
-        dut.clock.step(); pPipeOff(dut, 0)
+        val table = Table.inc(2)
+        val old = Prefill.default(2)
+        val golden = gatherGolden(0, 8, 8, 16, 0, table, 0 until 2, old.take(16), 32)
+        pGather(dut, 0, 8, 8, 0, table.take(16), old.take(16), lmulFrac = 16)
+        pGather(dut, 1, 8, 8, 0, table.drop(16), old.drop(16),
+          lmulFrac = 16, uopIdx = 1, placeIdx = 1)
+        dut.clock.step(); pPipeOff(dut, 0); pPipeOff(dut, 1)
         var cy = 0
         while (cy < 10 && !dut.out.wake(0).valid.peekBoolean()) { dut.clock.step(); cy += 1 }
         dut.out.wake(0).valid.expect(true.B)
+        dut.in.wakeAck(0).poke(true)
         dut.out.release.expect(1.U, "wake ack, not wbReady, releases this entry")
         dut.clock.step()
         dut.in.wakeAck(0).poke(false)
@@ -2033,11 +2038,11 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
     it("W4: same-pipe arbitration U0+U4 -> lower index wins") {
       simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
         initDut(dut)
-        dut.in.wakeAck(0).poke(false)
+        dut.in.wakeAck.foreach(_.poke(false))
+        dut.in.wbReady(0).poke(false)
         val table = Table.inc(1)
         val golden = gatherGolden(0, 8, 8, 8, 0, table, 0 until 1, Prefill.default(1), 16)
-        // U0 and U4 share pipe0; hold both requests before granting the pipe.
-        dut.in.wakeAck(1).poke(false)
+        // U0 and U4 share pipe0; hold both completed results before granting WB.
         pGather(dut, 0, 8, 8, 0, table, Prefill.default(1), blockBase = 0)
         dut.clock.step(); pPipeOff(dut, 0)
         pGather(dut, 0, 8, 8, 0, table, Prefill.default(1), blockBase = 4)
@@ -2047,25 +2052,22 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
                             dut.out.unitStatus(4).done.peekBoolean())) { dut.clock.step(); cy += 1 }
         dut.out.unitStatus(0).done.expect(true.B)
         dut.out.unitStatus(4).done.expect(true.B)
-        dut.out.pipes(0).valid.expect(false.B)
-        dut.out.wake(0).valid.expect(true.B)
-        // U0 wins the first ack, then U4 can reserve the following cycle.
-        dut.in.wakeAck(0).poke(true)
+        dut.out.pipes(0).valid.expect(true.B)
+        dut.out.wake.foreach(_.valid.expect(false.B))
+        dut.out.release.expect(0.U)
+        // U0 wins the first WB, then U4 writes back in the following cycle.
+        dut.in.wbReady(0).poke(true)
+        dut.out.pipes(0).bits.data.expect(golden)
         dut.out.release.expect(1.U)
         dut.clock.step()
-        dut.out.wake(0).valid.expect(true.B)
+        dut.out.pipes(0).valid.expect(true.B)
+        dut.out.pipes(0).bits.data.expect(golden)
         dut.out.release.expect(16.U)
         dut.clock.step()
-        dut.in.wakeAck(0).poke(false)
-        var wbCount = 0
-        for (_ <- 0 until 10) {
-          if (dut.out.pipes(0).valid.peekBoolean()) {
-            wbCount += 1
-            dut.out.pipes(0).bits.data.expect(golden)
-          }
-          dut.clock.step()
-        }
-        wbCount mustBe 2
+        dut.out.pipes(0).valid.expect(false.B)
+        dut.out.release.expect(0.U)
+        dut.out.unitStatus(0).hasIndex.expect(false.B)
+        dut.out.unitStatus(4).hasIndex.expect(false.B)
       }
     }
 
@@ -2247,7 +2249,7 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
       }
     }
 
-    it("K5a: simultaneous wakes release two physical units") {
+    it("K5a: simultaneous fixed writebacks release two physical units without wakes") {
       simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
         initDut(dut)
         dut.in.wakeAck.foreach(_.poke(false))
@@ -2259,21 +2261,12 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         pPipeOff(dut, 0)
         pPipeOff(dut, 2)
 
-        var cycles = 0
-        while (cycles < 12 &&
-          !(dut.out.wake(0).valid.peekBoolean() && dut.out.wake(2).valid.peekBoolean())) {
-          dut.clock.step()
-          cycles += 1
-        }
-        dut.out.wake(0).valid.expect(true.B)
-        dut.out.wake(2).valid.expect(true.B)
-        dut.out.release.expect(0.U)
-        dut.in.wakeAck(0).poke(true.B)
-        dut.in.wakeAck(2).poke(true.B)
-        dut.out.release.expect(5.U, "release units 0 and 2 on ack")
         dut.clock.step()
-        dut.in.wakeAck(0).poke(false.B)
-        dut.in.wakeAck(2).poke(false.B)
+        dut.out.pipes(0).valid.expect(true.B)
+        dut.out.pipes(2).valid.expect(true.B)
+        dut.out.wake.foreach(_.valid.expect(false.B))
+        dut.out.release.expect(5.U, "release units 0 and 2 on fixed WB fire")
+        dut.clock.step()
         dut.out.release.expect(0.U)
       }
     }
@@ -3488,15 +3481,85 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
     }
   }
 
+  describe("single-unit fixed writeback timing") {
+    it("replays vcompress oldVD on the fixed boundary without wake ack") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        dut.in.wakeAck.foreach(_.poke(false))
+        val oldVD = BigInt("8344c0aa5b76129530ac75dc32808aa4", 16)
+        val oldBytes = (0 until numElem).map(i => ((oldVD >> (8 * i)) & 0xff).toInt)
+        val table = Seq(0x00, 0x02, 0x0f, 0x00, 0x08, 0x00, 0x07, 0x01,
+          0x00, 0xff, 0x00, 0x02, 0x0f, 0x00, 0x08, 0x00)
+        for (lmulFrac <- Seq(1, 2, 4, 8)) {
+          pCompress(dut, 1, 0x100, table, oldBytes, lmulFrac = lmulFrac,
+            vl = 2, robIdx = 0x6e, pdest = 0x52)
+          dut.clock.step()
+          pPipeOff(dut, 1)
+          dut.out.pipes.foreach(_.valid.expect(false.B))
+          dut.out.wake.foreach(_.valid.expect(false.B))
+          dut.clock.step()
+          dut.out.pipes(0).valid.expect(true.B, "fixed promise requires data now, not three cycles later")
+          dut.out.pipes(0).bits.data.expect(oldVD)
+          dut.out.pipes(0).bits.meta.pdest.expect(0x52.U)
+          dut.out.pipes(0).bits.meta.robIdx.expect(0x6e.U)
+          dut.out.wake.foreach(_.valid.expect(false.B))
+          dut.out.release.expect(1.U, "fixed WB fire releases the allocated unit")
+          dut.clock.step()
+          dut.out.pipes.foreach(_.valid.expect(false.B))
+          dut.out.wake.foreach(_.valid.expect(false.B))
+          dut.out.release.expect(0.U)
+          dut.out.unitStatus(0).hasIndex.expect(false.B)
+          dut.out.unitStatus(0).hasTable.expect(false.B)
+        }
+      }
+    }
+
+    it("holds fixed data under backpressure and releases once on WB fire") {
+      simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
+        initDut(dut)
+        dut.in.wakeAck.foreach(_.poke(false))
+        dut.in.wbReady(0).poke(false)
+        val table = Table.inc()
+        val oldVD = Prefill.default()
+        val golden = foldBytes(oldVD)
+        pCompress(dut, 1, 0, table, oldVD, lmulFrac = 1, vl = 2, pdest = 0x52)
+        dut.clock.step()
+        pPipeOff(dut, 1)
+        dut.clock.step()
+        for (_ <- 0 until issue2exu + 2) {
+          dut.out.pipes(0).valid.expect(true.B)
+          dut.out.pipes(0).bits.data.expect(golden)
+          dut.out.pipes(0).bits.meta.pdest.expect(0x52.U)
+          dut.out.wake.foreach(_.valid.expect(false.B))
+          dut.out.release.expect(0.U)
+          dut.out.unitStatus(0).hasIndex.expect(true.B)
+          dut.clock.step()
+        }
+        dut.in.wbReady(0).poke(true)
+        dut.out.release.expect(1.U)
+        dut.clock.step()
+        dut.out.pipes.foreach(_.valid.expect(false.B))
+        dut.out.release.expect(0.U)
+        dut.out.unitStatus(0).hasIndex.expect(false.B)
+        dut.out.unitStatus(0).hasTable.expect(false.B)
+      }
+    }
+  }
+
   describe("wake-ack writeback reservation") {
     it("does not write back without ack and writes exactly three cycles after ack") {
       simulate(new PermUnit[FakePermMeta](FakePermMeta())(GatherParam.default)) { dut =>
         initDut(dut)
         dut.in.wakeAck.foreach(_.poke(false))
         dut.in.wbReady.foreach(_.poke(true))
-        pGather(dut, 0, 8, 8, 0, Table.inc(), Prefill.default(), pdest = 0x55)
+        val table = Table.inc(2)
+        val old = Prefill.default(2)
+        pGather(dut, 0, 8, 8, 0, table.take(16), old.take(16), lmulFrac = 16, pdest = 0x55)
+        pGather(dut, 1, 8, 8, 0, table.drop(16), old.drop(16),
+          lmulFrac = 16, uopIdx = 1, placeIdx = 1)
         dut.clock.step()
         pPipeOff(dut, 0)
+        pPipeOff(dut, 1)
 
         for (_ <- 0 until 12) {
           dut.out.pipes.foreach(_.valid.expect(false.B))
@@ -3529,9 +3592,14 @@ class PermUnitSpec extends SpecBase with GatherSpecUtils {
         initDut(dut)
         dut.in.wakeAck.foreach(_.poke(false))
         dut.in.wbReady.foreach(_.poke(true))
-        pGather(dut, 0, 8, 8, 0, Table.inc(), Prefill.default())
+        val table = Table.inc(2)
+        val old = Prefill.default(2)
+        pGather(dut, 0, 8, 8, 0, table.take(16), old.take(16), lmulFrac = 16)
+        pGather(dut, 1, 8, 8, 0, table.drop(16), old.drop(16),
+          lmulFrac = 16, uopIdx = 1, placeIdx = 1)
         dut.clock.step()
         pPipeOff(dut, 0)
+        pPipeOff(dut, 1)
         for (_ <- 0 until 12 if !dut.out.wake(0).valid.peekBoolean()) dut.clock.step()
         dut.out.wake(0).valid.expect(true.B)
         dut.in.wakeAck(0).poke(true)

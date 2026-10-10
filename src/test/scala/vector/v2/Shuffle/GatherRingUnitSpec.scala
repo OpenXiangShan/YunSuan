@@ -55,6 +55,10 @@ class GatherRingUnitSpec extends SpecBase {
       dut.in.flow.bits.blockSize.poke(8)
       dut.in.placeTable.valid.poke(false)
       dut.in.placeIndex.valid.poke(false)
+      dut.in.placeIndex.bits.isRvs3.poke(false)
+      dut.in.placeIndex.bits.placesGather.poke(false)
+      dut.in.placeIndex.bits.placesRvs3.poke(false)
+      dut.in.placeIndex.bits.waitRvs3.poke(false)
       dut.in.wbReady.poke(false)
       dut.in.allTableValid.poke(false)
       dut.in.wakeAck.poke(false)
@@ -138,6 +142,10 @@ class GatherRingUnitSpec extends SpecBase {
       dut.in.placeIndex.bits.blockSize.poke(blkSize)
       dut.in.placeIndex.bits.blockFieldNum.poke(if (fieldNum < 0) blkSize else fieldNum)
       dut.in.placeIndex.valid.poke(true)
+      dut.in.placeIndex.bits.isRvs3.poke(false)
+      dut.in.placeIndex.bits.placesGather.poke(true)
+      dut.in.placeIndex.bits.placesRvs3.poke(false)
+      dut.in.placeIndex.bits.waitRvs3.poke(false)
       for (i <- 0 until 16) {
         val flags = if (fZeros(i)) ElemFlags.ZERO else if (iValid(i)) ElemFlags.LOOKUP else ElemFlags.PREFILL
         val sByte = sew match { case 8 => scalarData(0); case 16 => scalarData(i % 2); case 32 => scalarData(i % 4); case _ => scalarData(i % 8) }
@@ -537,13 +545,15 @@ class GatherRingUnitSpec extends SpecBase {
       }
     }
 
-    it("holds a completed result while the ring waits for wake ack") {
+    it("holds a completed single-unit EI16 pair while the ring waits for wake ack") {
       simulator() { dut =>
         val table = Table.inc()
         val index = Index.allInTable0(1)
         val noLookups = Seq.fill(16)(false)
         initUnit(dut)
         pPlace(1, 0, table, index, noLookups)(dut)
+        // Match a same-cycle merged gather/rvs3 placement, not an ordinary m1 uop.
+        dut.in.placeIndex.bits.placesRvs3.poke(true)
         pWbReady(false)(dut)
         pWakeCtx(true)(dut)
         dut.clock.step()
@@ -1396,7 +1406,24 @@ class GatherRingUnitSpec extends SpecBase {
             // Place table+index, blockSize=1 -> counter=0 immediately
             Cycle(pPlace(tblSize, 0, table, index, indexValid, prefill))(eResult1(res)),
           )
-          acceptWakeAndWriteback(dut, res)
+          pNoPlace(dut)
+          pWbReady(false)(dut)
+          dut.in.wakeAck.poke(false)
+          for (_ <- 0 until issue2exu + 2) {
+            eWb(true, res).apply(dut)
+            eWake(false).apply(dut)
+            dut.out.release.expect(false.B)
+            dut.out.status.hasIndex.expect(true.B)
+            dut.clock.step()
+          }
+          pWbReady()(dut)
+          dut.out.release.expect(true.B)
+          dut.clock.step()
+          eWb(false).apply(dut)
+          eWake(false).apply(dut)
+          dut.out.release.expect(false.B)
+          dut.out.status.hasIndex.expect(false.B)
+          dut.out.status.hasTable.expect(false.B)
       }
     }
   }

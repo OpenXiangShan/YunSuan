@@ -27,7 +27,8 @@ class GatherRingSpec
     for (p <- 0 until NumPipes) {
       dut.in.s0pipes(p).valid.poke(false)
       dut.in.s1pipes(p).valid.poke(false)
-      dut.in.wbReady(p).poke(true)
+      // Observe results before explicitly accepting them, including immediate m1 WB.
+      dut.in.wbReady(p).poke(false)
       dut.in.wakeAck(p).poke(true)
     }
     dut.in.flush.foreach(_.poke(false))
@@ -1002,13 +1003,16 @@ class GatherRingSpec
       simulate(new GatherRing[FakeRobPtr](FakeRobPtr())(GatherCommon.GatherParam.default)) { dut =>
         initDut(dut)
         dut.in.wbReady(0).poke(false)
-        val table = Table.inc(1); val index = Index.allInTable0(1)
+        val table = Table.inc(2); val index = Index.allInTable0(1)
         val iValid = IndexValid.allTrue(1); val pf = Prefill.default(1)
-        pS0(dut, pipe = 0, blockBase = 0, blockSize = 1)
-        dut.clock.step(); pS0Off(dut, pipe = 0)
+        pS0(dut, pipe = 0, blockBase = 0, blockSize = 2)
+        pS0(dut, pipe = 1, blockBase = 0, blockSize = 2, placeIdx = 1)
+        dut.clock.step(); pS0Off(dut, pipe = 0); pS0Off(dut, pipe = 1)
 
-        pS1(dut, pipe = 0, table, index, iValid, pf)
-        dut.clock.step(); pS1Off(dut, pipe = 0)
+        pS1(dut, pipe = 0, table.take(16), index, iValid, pf, blockSize = 2)
+        pS1(dut, pipe = 1, table.drop(16), index, iValid, pf,
+          blockSize = 2, tableIdx = 1, placeIdx = 1)
+        dut.clock.step(); pS1Off(dut, pipe = 0); pS1Off(dut, pipe = 1)
 
         for (_ <- 0 until 12 if !dut.out.wake(0).valid.peekBoolean()) dut.clock.step()
         dut.out.wake(0).valid.expect(true.B)
@@ -1185,9 +1189,9 @@ class GatherRingSpec
         for (p <- 0 until 4) pS1(dut, pipe = p, table, idx(p), iValid, pf, blockBase = p * 2 + 1)
         dut.clock.step()
 
-        // Each pipe accepts at most one wake per cycle, then writes each result
-        // three cycles later. Keep ready asserted throughout the reservation.
+        // Fixed results are already due; collect each before accepting its WB.
         for (p <- 0 until 4) pS1Off(dut, pipe = p)
+        dut.in.wbReady.foreach(_.poke(true))
         val received = Array.fill(NumPipes)(Seq.empty[BigInt])
         for (_ <- 0 until 20) {
           for (p <- 0 until NumPipes if dut.out.pipes(p).valid.peekBoolean()) {
