@@ -209,6 +209,7 @@ class SimTop() extends VPUTestModule {
     vfd.io.start_valid_i := busy && !has_issued && fuType === VPUTestFuType.vfd
     // io.in.ready := vfd.io.start_ready_o
     vfd.io.flush_i := false.B
+    vfd.io.wakeupSuccess := true.B
     vfd.io.fp_format_i := sew
     vfd.io.opa_i := src1
     vfd.io.opb_i := src2
