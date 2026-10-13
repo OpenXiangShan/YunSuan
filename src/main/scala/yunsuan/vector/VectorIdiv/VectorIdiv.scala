@@ -56,8 +56,39 @@ class VectorIdiv extends VectorIdiv.Module {
     }
   }
   // part 3
-  in.ex0.ready := stateReg(idle)
-  out.ex0.valid := stateReg(output)
+  in.ex0.ready := stateReg(idle) && !flush
+
+  val aheadPending = RegInit(false.B)
+  val wbArmed = RegInit(false.B)
+  val outValidBlock = RegInit(0.U(2.W))
+  val naturalAhead = Wire(Bool())
+  out.outValidAhead3Cycle := !stateReg(idle) && !wbArmed &&
+    (aheadPending || naturalAhead) && !flush
+  val accepted = out.outValidAhead3Cycle && in.wakeupSuccess
+  val wbDue = wbArmed && outValidBlock <= 1.U
+  out.ex0.valid := stateReg(output) && wbDue && !flush
+
+  when(flush || in_handshake || out_handshake) {
+    aheadPending := false.B
+    wbArmed := false.B
+    outValidBlock := 0.U
+  }.otherwise {
+    when(accepted) {
+      aheadPending := false.B
+      wbArmed := true.B
+      outValidBlock := 3.U
+    }.otherwise {
+      when(naturalAhead && !wbArmed) {
+        aheadPending := true.B
+      }
+      when(wbArmed && outValidBlock =/= 0.U) {
+        outValidBlock := outValidBlock - 1.U
+      }
+    }
+  }
+  when(wbDue && !flush) {
+    assert(stateReg(output), "VIDiv result missed its accepted T+3 writeback slot")
+  }
 
   val x_reg = RegEnable(dividend_v, in_handshake)
   val d_reg = RegEnable(divisor_v, in_handshake)
@@ -89,7 +120,7 @@ class VectorIdiv extends VectorIdiv.Module {
     divide_8.io.div_in_valid  := stateReg(divide)
     divide_8.io.dividend      := x_reg(end, begin)
     divide_8.io.divisor       := d_reg(end, begin)
-    divide_8.io.div_out_ready := stateReg(output)
+    divide_8.io.div_out_ready := stateReg(divide) && finish && !flush
 
     divide_8_finish(i)        := divide_8.io.div_out_valid
     divide_8_q_result(i)      := divide_8.io.div_out_q
@@ -127,7 +158,7 @@ class VectorIdiv extends VectorIdiv.Module {
     divide_16.io.div_in_valid  := stateReg(divide)
     divide_16.io.dividend      := divide_16_dividend
     divide_16.io.divisor       := divide_16_divisor
-    divide_16.io.div_out_ready := stateReg(output)
+    divide_16.io.div_out_ready := stateReg(divide) && finish && !flush
 
     divide_16_q_result(i)      := divide_16.io.div_out_q
     divide_16_rem_result(i)    := divide_16.io.div_out_rem
@@ -173,7 +204,7 @@ class VectorIdiv extends VectorIdiv.Module {
     divide_32.io.div_in_valid  := stateReg(divide)
     divide_32.io.dividend      := divide_32_dividend
     divide_32.io.divisor       := divide_32_divisor
-    divide_32.io.div_out_ready := stateReg(output)
+    divide_32.io.div_out_ready := stateReg(divide) && finish && !flush
 
     divide_32_q_result(i)      := divide_32.io.div_out_q
     divide_32_rem_result(i)    := divide_32.io.div_out_rem
@@ -225,7 +256,7 @@ class VectorIdiv extends VectorIdiv.Module {
     divide_64.io.div_in_valid  := stateReg(divide)
     divide_64.io.dividend      := divide_64_dividend
     divide_64.io.divisor       := divide_64_divisor
-    divide_64.io.div_out_ready := stateReg(output)
+    divide_64.io.div_out_ready := stateReg(divide) && finish && !flush
 
     divide_64_q_result(i)      := divide_64.io.div_out_q
     divide_64_rem_result(i)    := divide_64.io.div_out_rem
@@ -243,9 +274,9 @@ class VectorIdiv extends VectorIdiv.Module {
   val divide_64_I64_rem = Cat(divide_64_rem_result(1)(Index_bound(3), 0), divide_64_rem_result(0)(Index_bound(3), 0))
 
   val div_out_q_result = Wire(UInt(vWidth.W))
-  val div_out_q_result_reg = RegEnable(div_out_q_result, stateReg(divide))
+  val div_out_q_result_reg = RegEnable(div_out_q_result, stateReg(divide) && finish)
   val div_out_rem_result = Wire(UInt(vWidth.W))
-  val div_out_rem_result_reg = RegEnable(div_out_rem_result, stateReg(divide))
+  val div_out_rem_result_reg = RegEnable(div_out_rem_result, stateReg(divide) && finish)
 
   finish := divide_8_finish.reduce(_ & _) & divide_16_finish.reduce(_ & _) & divide_32_finish.reduce(_ & _) & divide_64_finish.reduce(_ & _)
 
@@ -259,32 +290,36 @@ class VectorIdiv extends VectorIdiv.Module {
   )
   val div_latency_result = max_child_latency + 2.U(VectorIdiv.NonFixedLatencyWidth.W)
   val div_elapsed = RegInit(0.U(VectorIdiv.NonFixedLatencyWidth.W))
-  val div_latency_valid_reg = RegInit(false.B)
-  val div_latency_reg = RegInit(0.U(VectorIdiv.NonFixedLatencyWidth.W))
+  val rawRemaining = RegInit(0.U(VectorIdiv.NonFixedLatencyWidth.W))
   val div_latency_reported = RegInit(false.B)
-  val div_latency_fire = stateReg(divide) && child_latency_valid && !div_latency_reported
+  val div_latency_fire = stateReg(divide) && child_latency_valid && !div_latency_reported && !flush
   when(flush || in_handshake) {
     div_elapsed := 0.U
-    div_latency_valid_reg := false.B
     div_latency_reported := false.B
-  }.elsewhen(stateReg(output)) {
-    div_elapsed := 0.U
+    rawRemaining := 0.U
   }.otherwise {
     when(stateReg(divide)) {
       div_elapsed := div_elapsed + 1.U
     }
-    div_latency_valid_reg := div_latency_fire
+    when(div_latency_reported && rawRemaining =/= 0.U) {
+      rawRemaining := rawRemaining - 1.U
+    }
   }
+  // Child latency starts at child input fire (one cycle after aggregate fire).
+  // The aggregate result capture adds the second cycle to max_child_latency.
+  val elapsed_at_latency_valid = div_elapsed + 1.U(VectorIdiv.NonFixedLatencyWidth.W)
+  val remaining_latency = Mux(
+    div_latency_result > elapsed_at_latency_valid,
+    div_latency_result - elapsed_at_latency_valid,
+    0.U
+  )
   when(div_latency_fire) {
-    val elapsed_at_latency_valid = div_elapsed + 2.U(VectorIdiv.NonFixedLatencyWidth.W)
-    val remaining_latency = Mux(
-      div_latency_result > elapsed_at_latency_valid,
-      div_latency_result - elapsed_at_latency_valid,
-      0.U
-    )
-    div_latency_reg := remaining_latency(VectorIdiv.NonFixedLatencyWidth - 1, 0)
+    rawRemaining := Mux(remaining_latency === 0.U, 0.U, remaining_latency - 1.U)
     div_latency_reported := true.B
   }
+  naturalAhead := stateReg(output) || (stateReg(divide) &&
+    (finish || (div_latency_fire && remaining_latency <= 3.U) ||
+      (div_latency_reported && rawRemaining <= 3.U)))
 
   div_out_q_result := Mux1H(Seq(
     sel8_reg  -> Cat(divide_64_I8_q.asUInt, divide_32_I8_q.asUInt, divide_16_I8_q.asUInt, divide_8_q_result.asUInt),
@@ -302,8 +337,8 @@ class VectorIdiv extends VectorIdiv.Module {
   // output
   out.ex0.bits.q_v := div_out_q_result_reg
   out.ex0.bits.rem_v := div_out_rem_result_reg
-  out.ex0.bits.div_latency.valid := div_latency_valid_reg
-  out.ex0.bits.div_latency.bits := div_latency_reg
+  out.ex0.bits.div_latency.valid := accepted
+  out.ex0.bits.div_latency.bits := 3.U
 
   private def maxUInt(seq: Seq[UInt]): UInt =
     seq.reduce((a, b) => Mux(a > b, a, b))
@@ -314,10 +349,12 @@ object VectorIdiv {
 
   class In extends Bundle {
     val ex0 = Flipped(DecoupledIO(new InEx0))
+    val wakeupSuccess = Input(Bool())
   }
 
   class Out extends Bundle {
     val ex0 = DecoupledIO(new OutEx0)
+    val outValidAhead3Cycle = Bool()
   }
 
   class InEx0 extends Bundle {

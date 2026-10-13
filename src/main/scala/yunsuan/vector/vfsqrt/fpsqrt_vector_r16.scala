@@ -25,6 +25,8 @@ class fpsqrt_vector_r16(
   val fpsqrt_res_o = IO(Output(UInt(64.W)))
   val fflags_o = IO(Output(UInt(20.W)))
   val fp_aIsFpCanonicalNAN = IO(Input(Bool()))
+  val outValidAhead3Cycle = IO(Output(Bool()))
+  val wakeupSuccess = IO(Input(Bool()))
 
   val F64_REM_W = 2 + 54
   val F32_REM_W = 2 + 26
@@ -567,9 +569,39 @@ class fpsqrt_vector_r16(
   val f16_fflags_inexact = Wire(Bool())
   val f32_fflags_inexact = Wire(Bool())
   val f64_fflags_inexact = Wire(Bool())
-  start_ready_o := fsm_q(FSM_PRE_0_BIT)
+  start_ready_o := fsm_q(FSM_PRE_0_BIT) && !flush_i
   start_handshaked := start_valid_i & start_ready_o
-  finish_valid_o := fsm_q(FSM_POST_0_BIT)
+  val aheadPending = RegInit(false.B)
+  val wbArmed = RegInit(false.B)
+  val outValidBlock = RegInit(0.U(2.W))
+  val naturalAhead = start_handshaked && early_finish ||
+    fsm_q(FSM_ITER_BIT) && iter_num_q === 2.U
+  outValidAhead3Cycle := !flush_i && !wbArmed && (naturalAhead || aheadPending)
+  val accepted = outValidAhead3Cycle && wakeupSuccess
+  finish_valid_o := !flush_i && wbArmed && !outValidBlock.orR && fsm_q(FSM_POST_0_BIT)
+  when(flush_i || (finish_valid_o && finish_ready_i)) {
+    aheadPending := false.B
+    wbArmed := false.B
+    outValidBlock := 0.U
+  }.otherwise {
+    when(start_handshaked) {
+      aheadPending := false.B
+      wbArmed := false.B
+      outValidBlock := 0.U
+    }
+    when(outValidAhead3Cycle) {
+      aheadPending := !wakeupSuccess
+      when(accepted) {
+        wbArmed := true.B
+        outValidBlock := "b10".U
+      }
+    }.elsewhen(wbArmed) {
+      outValidBlock := outValidBlock >> 1
+    }
+  }
+  when(wbArmed && !outValidBlock.orR && !flush_i) {
+    assert(fsm_q(FSM_POST_0_BIT), "VFSqrt missed its accepted T+3 completion slot")
+  }
   op_sign_0 := op_i(63)
   op_sign_1 := op_i(31)
   op_sign_2 := op_i(47)
@@ -1474,7 +1506,7 @@ class fpsqrt_vector_r16(
   }.elsewhen(fsm_q === FSM_ITER) {
     fsm_d := Mux(final_iter, FSM_POST_0, FSM_ITER)
   }.elsewhen(fsm_q === FSM_POST_0) {
-    fsm_d := Mux(finish_ready_i, FSM_PRE_0, FSM_POST_0)
+    fsm_d := Mux(finish_valid_o && finish_ready_i, FSM_PRE_0, FSM_POST_0)
   }.otherwise {
     fsm_d := FSM_PRE_0
   }

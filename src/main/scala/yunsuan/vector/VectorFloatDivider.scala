@@ -18,7 +18,7 @@ class VectorFloatDivider() extends Module {
     val frs1_i = Input(UInt(64.W)) // f[rs1]
     val is_frs2_i = Input(Bool()) // if true, f[rs2] / vs1
     val is_frs1_i = Input(Bool()) // if true, vs2 / f[rs1]
-    val is_sqrt_i = Input(Bool()) // must false, not support sqrt now
+    val is_sqrt_i = Input(Bool())
     val rm_i = Input(UInt(3.W))
     val is_vec_i = Input(Bool())
     val fp_aIsFpCanonicalNAN = Input(Bool())
@@ -28,10 +28,15 @@ class VectorFloatDivider() extends Module {
     val finish_ready_i = Input(Bool())
     val fpdiv_res_o = Output(UInt(64.W))
     val fflags_o = Output(UInt(20.W))
+    val outValidAhead3Cycle = Output(Bool())
+    val wakeupSuccess = Input(Bool())
   })
-  val is_sqrt_i = io.is_sqrt_i
+  val ownerActive = RegInit(false.B)
+  val ownerIsSqrt = Reg(Bool())
+  val startFire = io.start_valid_i && io.start_ready_o
+  val selectedIsSqrt = Mux(startFire, io.is_sqrt_i, ownerIsSqrt)
   val u_vector_float_sqrt_r16 = Module(new fpsqrt_vector_r16())
-  u_vector_float_sqrt_r16.start_valid_i := is_sqrt_i & io.start_valid_i
+  u_vector_float_sqrt_r16.start_valid_i := io.is_sqrt_i && startFire
   u_vector_float_sqrt_r16.flush_i := io.flush_i
   u_vector_float_sqrt_r16.fp_format_i := io.fp_format_i - 1.U
   u_vector_float_sqrt_r16.op_i := io.opa_i
@@ -40,7 +45,7 @@ class VectorFloatDivider() extends Module {
   u_vector_float_sqrt_r16.finish_ready_i := io.finish_ready_i
   u_vector_float_sqrt_r16.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
   val u_vector_float_divider_r64 = Module(new VectorFloatDividerR64())
-  u_vector_float_divider_r64.io.start_valid_i := !is_sqrt_i & io.start_valid_i
+  u_vector_float_divider_r64.io.start_valid_i := !io.is_sqrt_i && startFire
   u_vector_float_divider_r64.io.flush_i := io.flush_i
   u_vector_float_divider_r64.io.fp_format_i := io.fp_format_i
   u_vector_float_divider_r64.io.opa_i := io.opa_i
@@ -55,20 +60,28 @@ class VectorFloatDivider() extends Module {
   u_vector_float_divider_r64.io.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
   u_vector_float_divider_r64.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
 
-  io.start_ready_o := u_vector_float_divider_r64.io.start_ready_o & u_vector_float_sqrt_r16.start_ready_o
-  io.finish_valid_o := u_vector_float_divider_r64.io.finish_valid_o | u_vector_float_sqrt_r16.finish_valid_o
-  io.fpdiv_res_o := Mux1H(
-    Seq(
-      u_vector_float_divider_r64.io.finish_valid_o -> u_vector_float_divider_r64.io.fpdiv_res_o,
-      u_vector_float_sqrt_r16.finish_valid_o -> u_vector_float_sqrt_r16.fpsqrt_res_o
-    )
-  )
-  io.fflags_o := Mux1H(
-    Seq(
-      u_vector_float_divider_r64.io.finish_valid_o -> u_vector_float_divider_r64.io.fflags_o,
-      u_vector_float_sqrt_r16.finish_valid_o -> u_vector_float_sqrt_r16.fflags_o
-    )
-  )
+  io.start_ready_o := !ownerActive && !io.flush_i &&
+    u_vector_float_divider_r64.io.start_ready_o && u_vector_float_sqrt_r16.start_ready_o
+  io.finish_valid_o := ownerActive && !io.flush_i && Mux(ownerIsSqrt,
+    u_vector_float_sqrt_r16.finish_valid_o, u_vector_float_divider_r64.io.finish_valid_o)
+  // A blocked finish must not zero the raw data of the selected owner.
+  io.fpdiv_res_o := Mux(ownerIsSqrt,
+    u_vector_float_sqrt_r16.fpsqrt_res_o, u_vector_float_divider_r64.io.fpdiv_res_o)
+  io.fflags_o := Mux(ownerIsSqrt,
+    u_vector_float_sqrt_r16.fflags_o, u_vector_float_divider_r64.io.fflags_o)
+  io.outValidAhead3Cycle := (ownerActive || startFire) && !io.flush_i && Mux(selectedIsSqrt,
+    u_vector_float_sqrt_r16.outValidAhead3Cycle, u_vector_float_divider_r64.io.outValidAhead3Cycle)
+  u_vector_float_sqrt_r16.wakeupSuccess := Mux(
+    selectedIsSqrt && u_vector_float_sqrt_r16.outValidAhead3Cycle, io.wakeupSuccess, true.B)
+  u_vector_float_divider_r64.io.wakeupSuccess := Mux(
+    !selectedIsSqrt && u_vector_float_divider_r64.io.outValidAhead3Cycle, io.wakeupSuccess, true.B)
+
+  when(io.flush_i || (io.finish_valid_o && io.finish_ready_i)) {
+    ownerActive := false.B
+  }.elsewhen(startFire) {
+    ownerActive := true.B
+    ownerIsSqrt := io.is_sqrt_i
+  }
 }
 
 class VectorFloatDividerR64() extends Module {
@@ -94,6 +107,8 @@ class VectorFloatDividerR64() extends Module {
     val finish_ready_i = Input(Bool())
     val fpdiv_res_o = Output(UInt(64.W))
     val fflags_o = Output(UInt(20.W))
+    val outValidAhead3Cycle = Output(Bool())
+    val wakeupSuccess = Input(Bool())
 
   })
 
@@ -213,15 +228,48 @@ class VectorFloatDividerR64() extends Module {
   }.elsewhen(fsm_q === FSM_ITER) {
     fsm_d := Mux(final_iter, FSM_POST_0, FSM_ITER)
   }.elsewhen(fsm_q === FSM_POST_0) {
-    fsm_d := Mux(is_vec_q | res_is_denormal_f64_0, FSM_POST_1, Mux(!is_vec_q & io.finish_ready_i, FSM_PRE_0, FSM_POST_0))
+    fsm_d := Mux(is_vec_q | res_is_denormal_f64_0, FSM_POST_1,
+      Mux(io.finish_valid_o && io.finish_ready_i, FSM_PRE_0, FSM_POST_0))
   }.elsewhen(fsm_q === FSM_POST_1) {
-    fsm_d := Mux(io.finish_ready_i, FSM_PRE_0, FSM_POST_1)
+    fsm_d := Mux(io.finish_valid_o && io.finish_ready_i, FSM_PRE_0, FSM_POST_1)
   }.otherwise {
     fsm_d := FSM_PRE_0
   }
-  io.start_ready_o := fsm_q(FSM_PRE_0_BIT)
+  io.start_ready_o := fsm_q(FSM_PRE_0_BIT) && !io.flush_i
   val start_handshaked = io.start_valid_i & io.start_ready_o
-  io.finish_valid_o := fsm_q(FSM_POST_1_BIT) | (fsm_q(FSM_POST_0_BIT) & !is_vec_q & ~res_is_denormal_f64_0)
+  val rawFinish = fsm_q(FSM_POST_1_BIT) ||
+    (fsm_q(FSM_POST_0_BIT) && !is_vec_q && !res_is_denormal_f64_0)
+  val naturalAhead = Wire(Bool())
+  val aheadPending = RegInit(false.B)
+  val wbArmed = RegInit(false.B)
+  val outValidBlock = RegInit(0.U(2.W))
+  io.outValidAhead3Cycle := !io.flush_i && !wbArmed && (naturalAhead || aheadPending)
+  val accepted = io.outValidAhead3Cycle && io.wakeupSuccess
+  io.finish_valid_o := !io.flush_i && wbArmed && !outValidBlock.orR && rawFinish
+
+  when(io.flush_i || (io.finish_valid_o && io.finish_ready_i)) {
+    aheadPending := false.B
+    wbArmed := false.B
+    outValidBlock := 0.U
+  }.otherwise {
+    when(start_handshaked) {
+      aheadPending := false.B
+      wbArmed := false.B
+      outValidBlock := 0.U
+    }
+    when(io.outValidAhead3Cycle) {
+      aheadPending := !io.wakeupSuccess
+      when(accepted) {
+        wbArmed := true.B
+        outValidBlock := "b10".U
+      }
+    }.elsewhen(wbArmed) {
+      outValidBlock := outValidBlock >> 1
+    }
+  }
+  when(wbArmed && !outValidBlock.orR && !io.flush_i) {
+    assert(rawFinish, "VFDiv missed its accepted T+3 completion slot")
+  }
 
   val opa_sign_f64_0 = Mux1H(
     Seq(
@@ -553,6 +601,10 @@ class VectorFloatDividerR64() extends Module {
 
   val out_exp_diff_en = start_handshaked | fsm_q(FSM_PRE_2_BIT)
   val iter_num_q = Reg(UInt(4.W))
+  // Vector results always cross POST0 and POST1, including normal results.
+  naturalAhead := start_handshaked && !io.is_vec_i && (early_finish || opb_is_power_of_2_f64_0) ||
+    fsm_q(FSM_ITER_BIT) && Mux(is_vec_q || res_is_denormal_f64_0, iter_num_q === 1.U, iter_num_q === 2.U) ||
+    fsm_q(FSM_PRE_2_BIT) && !is_vec_q && fp_format_q_is_fp16
 
 
   val out_exp_diff_d_f64_0 = Mux(
