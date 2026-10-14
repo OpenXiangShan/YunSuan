@@ -10,6 +10,9 @@ import yunsuan.vector.Common.VSew._
 class VMoveInfo extends Bundle {
   val vm = Bool()
   val vsew = UInt(2.W)
+  val imm5   = UInt(5.W)  // K, the element offset
+  val vlmul  = UInt(3.W)
+  val uopIdx = UInt(3.W)  // destination register index j
 }
 
 class VectorMoveInputBundle(vlen: Int) extends Bundle {
@@ -70,12 +73,49 @@ class VectorMove extends Module {
   val vmvnrResult = Wire(UInt(VLEN.W))
   vmvnrResult := vs2
 
+  // slide window: Lo half is vs1 (the broadcast scalar for .vx/.vf), Hi half is vs2.
+  val slideBase = Cat(vs2, vs1)
+
+  // Shift amount in bits
+  val slideShift  = Cat(Mux(isSlide1Up, 1.U(5.W), io.in.bits.info.imm5) << vsew, 0.U(3.W))
+  // offset in bits
+  val slideOffset = slideShift(log2Ceil(VLEN) - 1, 0)
+  // offset in registers
+  val slideRegOff = slideShift(log2Ceil(VLEN) + 3, log2Ceil(VLEN))
+
+  val slideUpResult = (slideBase << slideOffset)(2 * VLEN - 1, VLEN) 
+  val slideDownBase = (slideBase >> slideOffset)(VLEN - 1, 0)
+
+  val vlmul = io.in.bits.info.vlmul
+
+  // Register feeding this uop's window slice.
+  val slideRegUopLo = slideRegOff +& io.in.bits.info.uopIdx
+  val slideRegUopHi = slideRegUopLo +% 1.U
+  val slideRegRange = MuxLookup(vlmul, 1.U(5.W))(Seq(1.U -> 2.U(5.W), 2.U -> 4.U(5.W), 3.U -> 8.U(5.W)))
+
+  val slideRegFrac = MuxLookup(vlmul, Fill(VLEN, 1.U))(Seq(
+    5.U -> "hffff".U(VLEN.W),
+    6.U -> "hffffffff".U(VLEN.W),
+    7.U -> "hffffffffffffffff".U(VLEN.W)
+  ))
+
+  // A half is kept iff its register index is inside the group.
+  def slideHalf(reg: UInt): UInt = Mux(reg < slideRegRange, slideRegFrac, 0.U(VLEN.W))
+
+  // Shifted by the same amount as the window so the AND below lines up with the surviving bytes.
+  val slideMask = (Cat(slideHalf(slideRegUopHi), slideHalf(slideRegUopLo)) >> slideOffset)(VLEN - 1, 0)
+
+  val slideDownResult = slideDownBase & slideMask
+
   val vd = Wire(UInt(VLEN.W))
   vd := Mux1H(Seq(
     isVS2X -> vmvResult,
     isNR -> vmvnrResult,
     isX2VS -> vs1,
     isVmerge -> vmergeResult,
+    isSlide1Up -> slideUpResult,
+    isSlideUpVi -> slideUpResult,
+    isSlideDownVi -> slideDownResult,
   ))
 
   io.out.valid := valid

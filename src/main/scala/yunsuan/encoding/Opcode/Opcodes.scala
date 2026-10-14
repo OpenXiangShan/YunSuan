@@ -1733,7 +1733,7 @@ object Opcodes {
         getOpClass.isOneOf(CSHIFT) && getOp.isOneOf(SLL) && getDataType.isOneOf(S2VDW)
       def isZvbbBitop(implicit op: BitPat): Boolean =
         getOpClass.isOneOf(BITOP) && getOp.isOneOf(REV8, BREV, BREV8, CLZ, CTZ, CPOP_V)
-
+        
       def getLat(implicit op: BitPat): Int = {
         if (isVroShift || isVwsll || isZvbbBitop) 1
         else if (isSat || isMaxMin || isNClip) 1
@@ -2107,7 +2107,6 @@ object Opcodes {
     val SLIDEUP       = bb"01010"
     val SLIDEDOWN     = bb"01110"
     val COMPRESS      = bb"11101"
-    val SLIDE1UP      = bb"01001"
     val SLIDE1DOWN    = bb"01101"
 
     val vrgather_v_e8m1     = DvSvlS2vS1(M1, RGATHER_V   , E8 )
@@ -2226,22 +2225,6 @@ object Opcodes {
     val vcompress_e64m2     = DvSvlS2vS1(M2, COMPRESS    , E64)
     val vcompress_e64m4     = DvSvlS2vS1(M4, COMPRESS    , E64)
     val vcompress_e64m8     = DvSvlS2vS1(M8, COMPRESS    , E64)
-    val vslide1up_e8m1      = DvSvlS2vS1(M1, SLIDE1UP    , E8 )
-    val vslide1up_e8m2      = DvSvlS2vS1(M2, SLIDE1UP    , E8 )
-    val vslide1up_e8m4      = DvSvlS2vS1(M4, SLIDE1UP    , E8 )
-    val vslide1up_e8m8      = DvSvlS2vS1(M8, SLIDE1UP    , E8 )
-    val vslide1up_e16m1     = DvSvlS2vS1(M1, SLIDE1UP    , E16)
-    val vslide1up_e16m2     = DvSvlS2vS1(M2, SLIDE1UP    , E16)
-    val vslide1up_e16m4     = DvSvlS2vS1(M4, SLIDE1UP    , E16)
-    val vslide1up_e16m8     = DvSvlS2vS1(M8, SLIDE1UP    , E16)
-    val vslide1up_e32m1     = DvSvlS2vS1(M1, SLIDE1UP    , E32)
-    val vslide1up_e32m2     = DvSvlS2vS1(M2, SLIDE1UP    , E32)
-    val vslide1up_e32m4     = DvSvlS2vS1(M4, SLIDE1UP    , E32)
-    val vslide1up_e32m8     = DvSvlS2vS1(M8, SLIDE1UP    , E32)
-    val vslide1up_e64m1     = DvSvlS2vS1(M1, SLIDE1UP    , E64)
-    val vslide1up_e64m2     = DvSvlS2vS1(M2, SLIDE1UP    , E64)
-    val vslide1up_e64m4     = DvSvlS2vS1(M4, SLIDE1UP    , E64)
-    val vslide1up_e64m8     = DvSvlS2vS1(M8, SLIDE1UP    , E64)
     val vslide1down_e8m1    = DvSvlS2vS1(M1, SLIDE1DOWN  , E8 )
     val vslide1down_e8m2    = DvSvlS2vS1(M2, SLIDE1DOWN  , E8 )
     val vslide1down_e8m4    = DvSvlS2vS1(M4, SLIDE1DOWN  , E8 )
@@ -2288,21 +2271,27 @@ object Opcodes {
 
   trait VMoveOpcode extends Opcodes with DataType {
     // uop of vmv.v.v and vmerge.vvm
-    private val MERGE_VV = bb"000"
+    private val MERGE_VV = bb"0000"
     // uop of vmv.v.x, vmv.v.i, vfmv.v.f, vmerge.vxm, vmerge.vim, vfmerge.vfm
-    private val MERGE_VX = bb"001"
+    private val MERGE_VX = bb"0001"
     // uop of vmv1r, vmv2r, vmv4r, vmv8r
-    private val MV_NR = bb"010"
+    private val MV_NR = bb"0010"
     // uop of vmv.s.x, vfmv.s.f
-    private val MV_X2VS = bb"101"
+    private val MV_X2VS = bb"0101"
     // uop of vmv.x.s, vfmv.f.s
-    private val MV_VS2X = bb"110"
+    private val MV_VS2X = bb"0110"
     // uop of MRF to VRF
-    private val MV_M2V  = bb"011"
+    private val MV_M2V  = bb"0011"
     // uop of VRF to MRF
-    private val MV_V2M  = bb"100"
+    private val MV_V2M  = bb"0100"
 
-    private val TAIL = bb"111"
+    private val TAIL = bb"0111"
+
+    private val SLIDEUP_VI       = bb"1000"
+    private val SLIDEDOWN_VI     = bb"1001"
+    private val SLIDE1UP_HEAD_VX = bb"1010"
+    private val SLIDE1UP_HEAD_VF = bb"1011"
+    private val SLIDE1UP_BODY_VP = bb"1100"
 
     val vmerge_vv_e8  = DvSvlS2vS1(MERGE_VV, E8 )
     val vmerge_vv_e16 = DvSvlS2vS1(MERGE_VV, E16)
@@ -2334,8 +2323,27 @@ object Opcodes {
     val VMV_M2V       = Value(MV_M2V  , EX)
     val VMV_V2M       = Value(MV_V2M  , EX)
 
-    protected def getSubOp(implicit op: UInt): UInt = op(4, 2)
-    protected def getSubOp(op: BitPat): BitPat = op(4, 2)
+    val vslideup_vi_e8           = DvSvlS2vS1v(SLIDEUP_VI      , E8 ) + Src3Vp
+    val vslideup_vi_e16          = DvSvlS2vS1v(SLIDEUP_VI      , E16) + Src3Vp
+    val vslideup_vi_e32          = DvSvlS2vS1v(SLIDEUP_VI      , E32) + Src3Vp
+    val vslideup_vi_e64          = DvSvlS2vS1v(SLIDEUP_VI      , E64) + Src3Vp
+    val vslidedown_vi_e8         = DvSvlS2vS1v(SLIDEDOWN_VI    , E8 )
+    val vslidedown_vi_e16        = DvSvlS2vS1v(SLIDEDOWN_VI    , E16)
+    val vslidedown_vi_e32        = DvSvlS2vS1v(SLIDEDOWN_VI    , E32)
+    val vslidedown_vi_e64        = DvSvlS2vS1v(SLIDEDOWN_VI    , E64)
+    val vslide1up_head_vx_e8     = DvSvlS2vS1(SLIDE1UP_HEAD_VX, E8 ) + Src1Gp
+    val vslide1up_head_vx_e16    = DvSvlS2vS1(SLIDE1UP_HEAD_VX, E16) + Src1Gp
+    val vslide1up_head_vx_e32    = DvSvlS2vS1(SLIDE1UP_HEAD_VX, E32) + Src1Gp
+    val vslide1up_head_vx_e64    = DvSvlS2vS1(SLIDE1UP_HEAD_VX, E64) + Src1Gp
+    val vslide1up_head_vf_e16    = DvSvlS2vS1(SLIDE1UP_HEAD_VF, E16) + Src1Fp
+    val vslide1up_head_vf_e32    = DvSvlS2vS1(SLIDE1UP_HEAD_VF, E32) + Src1Fp
+    val vslide1up_head_vf_e64    = DvSvlS2vS1(SLIDE1UP_HEAD_VF, E64) + Src1Fp
+    val vslide1up_body_vp_e8     = DvSvlS2vS1v(SLIDE1UP_BODY_VP, E8 )
+    val vslide1up_body_vp_e16    = DvSvlS2vS1v(SLIDE1UP_BODY_VP, E16)
+    val vslide1up_body_vp_e32    = DvSvlS2vS1v(SLIDE1UP_BODY_VP, E32)
+    val vslide1up_body_vp_e64    = DvSvlS2vS1v(SLIDE1UP_BODY_VP, E64)
+    protected def getSubOp(implicit op: UInt): UInt = op(5, 2)
+    protected def getSubOp(op: BitPat): BitPat = op(5, 2)
 
     def getElemWidth(implicit op: UInt): UInt = op(1, 0)
 
@@ -2368,11 +2376,24 @@ object Opcodes {
     def isVfScalarMoveFromVec(implicit op: UInt): Bool = isVfmv_f_s
     def isVfScalarMoveToVec(implicit op: UInt): Bool = isVfmv_s_f
 
+    def isSimpleSlide(implicit op: UInt): Bool = op(5)
+    def isSlide1upHead(implicit op: UInt): Bool = getSubOp.isOneOf(SLIDE1UP_HEAD_VX, SLIDE1UP_HEAD_VF)
+    def isSlide1upBody(implicit op: UInt): Bool = getSubOp.isOneOf(SLIDE1UP_BODY_VP)
+    def isSlide1Up(implicit op: UInt): Bool = getSubOp.isOneOf(SLIDE1UP_HEAD_VX, SLIDE1UP_HEAD_VF, SLIDE1UP_BODY_VP)
+    def isSlideUpVi(implicit op: UInt): Bool = getSubOp.isOneOf(SLIDEUP_VI)
+    def isSlideDownVi(implicit op: UInt): Bool = getSubOp.isOneOf(SLIDEDOWN_VI)
+
     def needNoMask(implicit op: UInt) = getSubOp.isOneOf(MV_NR, MV_X2VS, MERGE_VV, MERGE_VX)
     def vlIsOne(implicit op: UInt) = getSubOp.isOneOf(MV_X2VS)
     def vlIsZeroUpdate(implicit op: UInt) = getSubOp.isOneOf(MV_VS2X, MV_NR)
 
     def isLegal(implicit op: UInt) = getSubOp.isOneOf(this.allBitPats.map(getSubOp))
+
+    object LitUtil {
+      def getSubOp(implicit op: BitPat): BitPat = op(5, 2)
+
+      def isSimpleSlide(implicit op: BitPat): Boolean = op(5).value == 1
+    }
 
     // The latency of all uops in move is 0
     override def getLat(opcode: Opcode): Int = 0
