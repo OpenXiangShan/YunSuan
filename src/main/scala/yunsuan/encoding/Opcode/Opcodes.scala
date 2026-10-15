@@ -2292,6 +2292,7 @@ object Opcodes {
     private val SLIDE1UP_HEAD_VX = bb"1010"
     private val SLIDE1UP_HEAD_VF = bb"1011"
     private val SLIDE1UP_BODY_VP = bb"1100"
+    private val GATHER_VI        = bb"1101"
 
     val vmerge_vv_e8  = DvSvlS2vS1(MERGE_VV, E8 )
     val vmerge_vv_e16 = DvSvlS2vS1(MERGE_VV, E16)
@@ -2342,6 +2343,10 @@ object Opcodes {
     val vslide1up_body_vp_e16    = DvSvlS2vS1v(SLIDE1UP_BODY_VP, E16)
     val vslide1up_body_vp_e32    = DvSvlS2vS1v(SLIDE1UP_BODY_VP, E32)
     val vslide1up_body_vp_e64    = DvSvlS2vS1v(SLIDE1UP_BODY_VP, E64)
+    val vrgather_vi_e8           = DvSvlS2vS1v(GATHER_VI       , E8 )
+    val vrgather_vi_e16          = DvSvlS2vS1v(GATHER_VI       , E16)
+    val vrgather_vi_e32          = DvSvlS2vS1v(GATHER_VI       , E32)
+    val vrgather_vi_e64          = DvSvlS2vS1v(GATHER_VI       , E64)
     protected def getSubOp(implicit op: UInt): UInt = op(5, 2)
     protected def getSubOp(op: BitPat): BitPat = op(5, 2)
 
@@ -2382,6 +2387,7 @@ object Opcodes {
     def isSlide1Up(implicit op: UInt): Bool = getSubOp.isOneOf(SLIDE1UP_HEAD_VX, SLIDE1UP_HEAD_VF, SLIDE1UP_BODY_VP)
     def isSlideUpVi(implicit op: UInt): Bool = getSubOp.isOneOf(SLIDEUP_VI)
     def isSlideDownVi(implicit op: UInt): Bool = getSubOp.isOneOf(SLIDEDOWN_VI)
+    def isGatherVi(implicit op: UInt): Bool = getSubOp.isOneOf(GATHER_VI)
 
     def needNoMask(implicit op: UInt) = getSubOp.isOneOf(MV_NR, MV_X2VS, MERGE_VV, MERGE_VX)
     def vlIsOne(implicit op: UInt) = getSubOp.isOneOf(MV_X2VS)

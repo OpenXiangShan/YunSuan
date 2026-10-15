@@ -107,6 +107,17 @@ class VectorMove extends Module {
 
   val slideDownResult = slideDownBase & slideMask
 
+  // Frac mask
+  val gatherViElem  = ((vs2 & slideRegFrac) >> slideOffset)(VLEN - 1, 0)
+  val gatherViSplat = Mux1H(Seq(
+    (vsew === e8)  -> Fill(VLEN / 8 , gatherViElem(7 , 0)),
+    (vsew === e16) -> Fill(VLEN / 16, gatherViElem(15, 0)),
+    (vsew === e32) -> Fill(VLEN / 32, gatherViElem(31, 0)),
+    (vsew === e64) -> Fill(VLEN / 64, gatherViElem(63, 0)),
+  ))
+
+  val gatherViResult  = Mux(slideRegOff < slideRegRange, gatherViSplat, 0.U(VLEN.W))
+
   val vd = Wire(UInt(VLEN.W))
   vd := Mux1H(Seq(
     isVS2X -> vmvResult,
@@ -116,6 +127,7 @@ class VectorMove extends Module {
     isSlide1Up -> slideUpResult,
     isSlideUpVi -> slideUpResult,
     isSlideDownVi -> slideDownResult,
+    isGatherVi -> gatherViResult,
   ))
 
   io.out.valid := valid
