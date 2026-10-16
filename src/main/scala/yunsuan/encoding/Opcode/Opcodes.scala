@@ -489,6 +489,7 @@ object Opcodes {
     private[Opcodes] val FMAXM  = bb"1001"
     // TODO
     private[Opcodes] val FWADD4 = bb"1010"
+    private[Opcodes] val FFOLD  = bb"1011"
 
     def getOpNum(implicit op: UInt): Bool = op(5)
 
@@ -527,6 +528,7 @@ object Opcodes {
     def isFsgnjx(implicit op: UInt): Bool = getSubOpcode === FSGNJX
     def isFminm(implicit op: UInt): Bool = getSubOpcode === FMINM
     def isFmaxm(implicit op: UInt): Bool = getSubOpcode === FMAXM
+    def isFfold(implicit op: UInt): Bool = getSubOpcode === FFOLD
 
     def isFmul(implicit op: UInt): Bool = {
       getOpNum === OP2 && getSubOpcode === FMUL
@@ -719,6 +721,9 @@ object Opcodes {
 
     val vfwadd4_fp16 : Opcode = Value(FWADD4, OP2, S2V, DW, FP16, V)
     val vfwadd4_fp32 : Opcode = Value(FWADD4, OP2, S2V, DW, FP32, V)
+    val vffold_fp16: Opcode = DvSvlS2vS1S3v(FFOLD, OP2, S2V, DV, FP16, V)
+    val vffold_fp32: Opcode = DvSvlS2vS1S3v(FFOLD, OP2, S2V, DV, FP32, V)
+    val vffold_fp64: Opcode = DvSvlS2vS1S3v(FFOLD, OP2, S2V, DV, FP64, V)
     // There are no widen uops when FP64
 
     Opcodes.updateMaxFixLat(this.getMaxLat)

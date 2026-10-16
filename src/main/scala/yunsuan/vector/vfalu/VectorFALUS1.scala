@@ -13,6 +13,21 @@ class VectorFALUS1 extends VFModule{
     val out    = Output(new VectorFALUOutput())
   })
 
+  // --- for vfredusum ---
+  val fpA = io.fromS0.fpA
+  val fpB = io.fromS0.fpB
+  val maskFpA = io.fromS0.maskFpA
+  val maskFpB = io.fromS0.maskFpB
+  val isFold = io.fromS0.isFold
+
+  val isFoldFp16 = io.fromS0.isArithFp16 && isFold
+  val isFoldFp32 = io.fromS0.isArithFp32 && isFold
+  val isFoldFp64 = io.fromS0.isArithFp64 && isFold
+  val isArithOtherFp16 = io.fromS0.isArithFp16 && !isFold
+  val isArithOtherFp32 = io.fromS0.isArithFp32 && !isFold
+  val isArithOtherFp64 = io.fromS0.isArithFp64 && !isFold
+  // --- for vfredusum ---
+
   val isArithFp16 = io.fromS0.isArithFp16
   val isArithFp32 = io.fromS0.isArithFp32
   val isArithFp64 = io.fromS0.isArithFp64
@@ -40,17 +55,55 @@ class VectorFALUS1 extends VFModule{
 
   val arithFFlags = VFAlgoUtils.expandFflags(arithFp16FFlags, arithFp32FFlags, arithFp64FFlags, isArithFp16, isArithFp32, isArithFp64)
 
+  // --- for vfredusum ---
+  val maskFpAs = VecInit(Seq.tabulate(4)(i => maskFpA(i)))
+  val maskFpBs = VecInit(Seq.tabulate(4)(i => maskFpB(i)))
+  val fpA16s = VFAlgoUtils.split2Vec(fpA, 4)
+  val fpB16s = VFAlgoUtils.split2Vec(fpB, 4)
+  val fpA32s = VFAlgoUtils.split2Vec(fpA, 2)
+  val fpB32s = VFAlgoUtils.split2Vec(fpB, 2)
+  val foldFp16OutRes = Cat(Seq.tabulate(4)(i => Mux1H(Seq(
+    ( maskFpAs(i) &&  maskFpBs(i)) -> arithS1Fp16(i).io.outRes,
+    (!maskFpAs(i) &&  maskFpBs(i)) -> fpB16s(i),
+    ( maskFpAs(i) && !maskFpBs(i)) -> fpA16s(i),
+    (!maskFpAs(i) && !maskFpBs(i)) -> Cat(1.U(1.W), 0.U(15.W)),
+  ))).reverse)
+
+  val foldFp32OutRes = Cat(Seq.tabulate(2)(i => Mux1H(Seq(
+    ( maskFpAs(i) &&  maskFpBs(i)) -> arithS1Fp32(i).io.outRes,
+    (!maskFpAs(i) &&  maskFpBs(i)) -> fpB32s(i),
+    ( maskFpAs(i) && !maskFpBs(i)) -> fpA32s(i),
+    (!maskFpAs(i) && !maskFpBs(i)) -> Cat(1.U(1.W), 0.U(31.W)),
+  ))).reverse)
+  val foldFp64OutRes = Mux1H(Seq(
+    ( maskFpAs(0) &&  maskFpBs(0)) -> arithS1Fp64.io.outRes,
+    (!maskFpAs(0) &&  maskFpBs(0)) -> fpB,
+    ( maskFpAs(0) && !maskFpBs(0)) -> fpA,
+    (!maskFpAs(0) && !maskFpBs(0)) -> Cat(1.U(1.W), 0.U(63.W)),
+  ))
+
+  val foldFp16FFlags = arithS1Fp16.zipWithIndex.map { case (mod, i) => Mux(maskFpAs(i) && maskFpBs(i), mod.io.outFlags, 0.U(flagsWidth.W)) }
+  val foldFp32FFlags = arithS1Fp32.zipWithIndex.map { case (mod, i) => Mux(maskFpAs(i) && maskFpBs(i), mod.io.outFlags, 0.U(flagsWidth.W)) }
+  val foldFp64FFlags = Mux(maskFpAs(0) && maskFpBs(0), arithS1Fp64.io.outFlags, 0.U(flagsWidth.W))
+
+  val foldFFlags = VFAlgoUtils.expandFflags(foldFp16FFlags, foldFp32FFlags, foldFp64FFlags, isArithFp16, isArithFp32, isArithFp64)
+  // --- for vfredusum ---
+
   val miscOutRes    = io.fromS0.miscS0ToS1.result
   val miscOutFFlags = io.fromS0.miscS0ToS1.fflags
 
   io.out.fpResult := Mux1H(Seq(
-    isArithFp16 -> arithFp16OutRes,
-    isArithFp32 -> arithFp32OutRes,
-    isArithFp64 -> arithFp64OutRes,
+    isArithOtherFp16 -> arithFp16OutRes,
+    isArithOtherFp32 -> arithFp32OutRes,
+    isArithOtherFp64 -> arithFp64OutRes,
+    isFoldFp16 -> foldFp16OutRes,
+    isFoldFp32 -> foldFp32OutRes,
+    isFoldFp64 -> foldFp64OutRes,
     isMisc      -> miscOutRes
   ))
   io.out.fflagsVec := Mux1H(Seq(
-    isArith -> arithFFlags,
+    (isArith && !isFold) -> arithFFlags,
+    (isArith &&  isFold) -> foldFFlags,
     isMisc  -> miscOutFFlags
   ))
 }

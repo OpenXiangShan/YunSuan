@@ -19,6 +19,10 @@ class VectorFALUInput extends VFBundle {
   val inCtrlFromVFMul = new VFMul2VFALUCtrlBundle
   val isSubFromVFMul  = Bool()
 
+  // for vfredusum introduced vffold_vv
+  val maskFpA = UInt(4.W)
+  val maskFpB = UInt(4.W)
+
   def fpAAppends32: Vec[UInt] = VFAlgoUtils.split2VecManual(fpAAppend, fpMaxWidth / floatWidth("fp32"), fpAAppendWidth("fp32"))
   def fpAAppends16: Vec[UInt] = VFAlgoUtils.split2VecManual(fpAAppend, fpMaxWidth / floatWidth("fp16"), fpAAppendWidth("fp16"))
 }

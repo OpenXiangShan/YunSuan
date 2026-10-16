@@ -18,6 +18,13 @@ class VectorFALUS0ToS1Bundle extends VFBundle {
   val isArithFp32     = Bool()
   val isArithFp64     = Bool()
   val isMisc          = Bool()
+
+  // for vfredusum introduced vffold_vv
+  val fpA     = UInt(fpMaxWidth.W)
+  val fpB     = UInt(fpMaxWidth.W)
+  val maskFpA = UInt(4.W)
+  val maskFpB = UInt(4.W)
+  val isFold  = Bool()
 }
 
 class VectorFALUS0 extends VFModule {
@@ -52,8 +59,8 @@ class VectorFALUS0 extends VFModule {
 
   // op -> ctrl signal: fadd/fsub go to the adder, max/min/sgnj/class all go to the misc unit below
   val isFclass = VFMacOpcode.isVfclass
-  val isSub    = (isFMA && isSubFromFMUL) || (!isFMA && VFMacOpcode.isFsub)
-  val isArith  = !isFclass && (isFMA || VFMacOpcode.isFadd || VFMacOpcode.isFsub)
+  val isSub    = Mux(isFMA, isSubFromFMUL, VFMacOpcode.isFsub)
+  val isArith  = !isFclass && (isFMA || VFMacOpcode.isFadd || VFMacOpcode.isFsub || VFMacOpcode.isFfold)
   val isMisc   = !isArith
 
   val faddersS0Fp16 = Seq.fill(elemNum("fp16"))(Module(new FALUAddS0(16)))
@@ -109,4 +116,11 @@ class VectorFALUS0 extends VFModule {
   io.toS1.isArithFp32 := isArith && isfp32
   io.toS1.isArithFp64 := isArith && isfp64
   io.toS1.isMisc      := isMisc
+
+  // for vfredusum
+  io.toS1.fpA     := io.in.fpA
+  io.toS1.fpB     := io.in.fpB
+  io.toS1.maskFpA := io.in.maskFpA
+  io.toS1.maskFpB := io.in.maskFpB
+  io.toS1.isFold  := VFMacOpcode.isFfold
 }
