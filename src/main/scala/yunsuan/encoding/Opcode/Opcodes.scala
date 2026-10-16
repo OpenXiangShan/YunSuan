@@ -2027,9 +2027,6 @@ object Opcodes {
     val vredand = 36.U(6.W)
     val vredor  = 37.U(6.W)
     val vredxor = 38.U(6.W)
-    val vfRedComp = "b0001".U(4.W)
-    val vfRedUSum = "b0010".U(4.W)
-    val vfRedOSum = "b0100".U(4.W)
 
     def isReduction(implicit op: UInt): Bool =
       Seq(vredsum, vredmax, vredmin, vredand, vredor, vredxor).map(op === _).reduce(_ || _)
