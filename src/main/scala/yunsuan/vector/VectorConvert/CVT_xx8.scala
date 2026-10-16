@@ -59,12 +59,10 @@ class FP32ToFloat8Format(
   val normalFrac = normalRounded(fracWidth - 1, 0)
   val normalExp = Wire(SInt(12.W))
   normalExp := sourceExp + bias.S(12.W) + normalCarry.asUInt.zext
+  // A magnitude that rounds down to the maximum finite value
+  // is therefore only inexact (NX), never an overflow. --physics1024
   val roundedOverflows = normalExp > maxFiniteExp.S(12.W) ||
     (normalExp === maxFiniteExp.S(12.W) && normalFrac > maxFiniteFrac.U)
-  val maxFiniteUnbiasedExp = maxFiniteExp - bias
-  val maxFiniteSig = (((1 << fracWidth) | maxFiniteFrac) << (23 - fracWidth)).U(24.W)
-  val exactMagnitudeOverflows = sourceExp > maxFiniteUnbiasedExp.S(12.W) ||
-    (sourceExp === maxFiniteUnbiasedExp.S(12.W) && normalizedSig > maxFiniteSig)
   val normalPayload = sign ## normalExp.asUInt(expWidth - 1, 0) ## normalFrac
 
   val subShiftSigned = (23 + minNormalExp - fracWidth).S(12.W) - sourceExp
@@ -95,8 +93,7 @@ class FP32ToFloat8Format(
   val overflowPayload = if (hasInfinity) Mux(toInfinity, infinityPayload, maxFinitePayload) else maxFinitePayload
   val infinityResult = if (hasInfinity) infinityPayload else maxFinitePayload
 
-  val finiteOverflow = !isZero && !isInf && !isNaN && useNormal &&
-    (exactMagnitudeOverflows || roundedOverflows)
+  val finiteOverflow = !isZero && !isInf && !isNaN && useNormal && roundedOverflows
   val infinityOverflow = isInf && !hasInfinity.B
   val overflow = finiteOverflow || infinityOverflow
   val roundedInexact = Mux(useNormal, normalRounder.io.inexact, subRounder.io.inexact)

@@ -16,6 +16,8 @@ struct EmuArgs {
   uint64_t enable_waveform;
   bool vfexp2_only;
   uint8_t vfexp2_format;
+  bool lowp_only;
+  uint8_t lowp_format;
 
   bool verbose;
 
@@ -28,6 +30,8 @@ struct EmuArgs {
     enable_waveform = false;
     vfexp2_only = false;
     vfexp2_format = 0;
+    lowp_only = false;
+    lowp_format = LOWP_MODE_MIXED;
     verbose = false;
   }
 };

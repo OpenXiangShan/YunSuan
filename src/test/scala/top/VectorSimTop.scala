@@ -70,6 +70,9 @@ class VSTInputIO extends VPUTestBundle {
   val rm_s = UInt(2.W)
 
   val vinfo = new VecInfoBundle
+
+  val isMXFP = Bool()    // FP32 -> MXFP8/MXFP4 (UE8M0 scaled) conversion
+  val factor = UInt(8.W) // UE8M0 scale exponent, mirrors vs2[7:0] in the SoC
 }
 
 class VSTOutputIO extends VPUTestBundle {
@@ -280,6 +283,8 @@ class SimTop() extends VPUTestModule {
     vcvt.io.isFpToVecInst := false.B
     vcvt.io.isFround := 0.U
     vcvt.io.isFcvtmod := false.B
+    vcvt.io.isMXFP := in.isMXFP
+    vcvt.io.factor := in.factor
     vfexp2.io.fire := busy
     vfexp2.io.sew := sew
     vfexp2.io.opType := opcode

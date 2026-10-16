@@ -26,6 +26,8 @@ static inline void print_help(const char *file) {
   printf("  -O, --max-operations=NUM   execute at most NUM instructions\n");
   printf("      --vfexp2-only          restrict random testing to vfexp2/vfexp2bf16\n");
   printf("      --vfexp2-format=FMT    vfexp2 format: mixed|fp16|bf16|fp32\n");
+  printf("      --lowp-only=FMT        restrict random testing to the low precision conversions,\n");
+  printf("                             FMT: mixed|mxfp8|mxfp4|xx8-int8|xx8-e4m3|xx8-e5m2\n");
   printf("  -b, --log-begin=NUM        display log from NUM th cycle\n");
   printf("  -e, --log-end=NUM          stop display log at NUM th cycle\n");
   printf("      --dump-wave            dump waveform when log is enabled\n");
@@ -42,6 +44,17 @@ static inline uint8_t parse_vfexp2_format(const char *str) {
   exit(EINVAL);
 }
 
+static inline uint8_t parse_lowp_format(const char *str) {
+  if (!strcmp(str, "mixed")) return LOWP_MODE_MIXED;
+  if (!strcmp(str, "mxfp8")) return LOWP_MODE_MXFP8;
+  if (!strcmp(str, "mxfp4")) return LOWP_MODE_MXFP4;
+  if (!strcmp(str, "xx8-int8")) return LOWP_MODE_XX8_INT8;
+  if (!strcmp(str, "xx8-e4m3")) return LOWP_MODE_XX8_E4M3;
+  if (!strcmp(str, "xx8-e5m2")) return LOWP_MODE_XX8_E5M2;
+  printf("[ERROR] --lowp-only must be one of mixed|mxfp8|mxfp4|xx8-int8|xx8-e4m3|xx8-e5m2\n");
+  exit(EINVAL);
+}
+
 inline EmuArgs parse_args(int argc, const char *argv[]) {
   EmuArgs args;
   int long_index = 0;
@@ -49,6 +62,7 @@ inline EmuArgs parse_args(int argc, const char *argv[]) {
     { "dump-wave",         0, NULL,  0  },
     { "vfexp2-only",       0, NULL,  0  },
     { "vfexp2-format",     1, NULL,  0  },
+    { "lowp-only",         1, NULL,  0  },
     { "seed",              1, NULL, 's' },
     { "max-cycles",        1, NULL, 'C' },
     { "max-operations",    1, NULL, 'O' },
@@ -67,6 +81,7 @@ inline EmuArgs parse_args(int argc, const char *argv[]) {
           case 0: args.enable_waveform = true; continue;
           case 1: args.vfexp2_only = true; continue;
           case 2: args.vfexp2_format = parse_vfexp2_format(optarg); continue;
+          case 3: args.lowp_only = true; args.lowp_format = parse_lowp_format(optarg); continue;
         }
       default:
         print_help(argv[0]);
@@ -110,6 +125,7 @@ Emulator::Emulator(int argc, const char *argv[]):
   
   test_driver.set_default_value(dut_ptr);
   test_driver.configure_vfexp2_test(args.vfexp2_only, args.vfexp2_format);
+  test_driver.configure_lowp_test(args.lowp_only, args.lowp_format);
   reset_ncycles(10);
 }
 
