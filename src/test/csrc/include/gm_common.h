@@ -64,7 +64,7 @@ class SGMFloatCvt : public VGMFloatBase {
 };
 
 
-// Zvfofp8min/Zvfofp4min low precision conversions (FP32 -> MXFP8/MXFP4/INT8/E4M3/E5M2)
+// low precision conversions (FP32 -> MXFP8/MXFP4/INT8/E4M3/E5M2)
 class VGMLowPrecisionCvt : public VPUGoldenModel {
   public:
     VecOutput get_expected_output(VecInput input);

@@ -91,7 +91,7 @@ uint64_t extract_lane_input_bits(const VecInput &input, int lane, int width) {
   return (input.src1[word] >> shift) & width_mask(width);
 }
 
-// custom low precision conversions (Zvfofp8min/Zvfofp4min)
+// custom low precision conversions (FP32 -> MXFP8/MXFP4/INT8/E4M3/E5M2)
 bool is_lowp_optype(uint8_t fuOpType) {
   return fuOpType == VFNCVT_MXFP8_FFW || fuOpType == VFNCVT_MXFP4_FFW ||
          fuOpType == VFNCVTXX8_INT8 || fuOpType == VFNCVTXX8_E4M3 ||

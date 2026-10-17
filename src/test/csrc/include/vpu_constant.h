@@ -262,7 +262,7 @@ extern "C"{
 
 
 // vconvert type 
-  #define VFCVT_NUM 25  // for random
+  #define VFCVT_NUM 30  // for random
   #define VFCVT_XUFV       (binstoi("10000000")) 
   #define VFCVT_XFV        (binstoi("10000001")) 
   #define VFCVT_FXUV       (binstoi("01000010")) 
@@ -287,7 +287,7 @@ extern "C"{
   #define VFNCVT_RTZ_XUFW  (binstoi("10010110")) 
   #define VFNCVT_RTZ_XFW   (binstoi("10010111")) 
 
-  // Custom low precision conversions (Zvfofp8min/Zvfofp4min)
+  // Custom low precision conversions (FP32 -> MXFP8/MXFP4/INT8/E4M3/E5M2)
   #define VFNCVT_MXFP8_FFW (binstoi("11110000"))
   #define VFNCVT_MXFP4_FFW (binstoi("11110001"))
   #define VFNCVTXX8_INT8   (binstoi("11110010"))
@@ -342,7 +342,8 @@ extern "C"{
   #define VFCVT_ALL_OPTYPES {VFCVT_XUFV, VFCVT_XFV, VFCVT_FXUV, VFCVT_FXV, VFCVT_RTZ_XUFV, VFCVT_RTZ_XFV, \
   VFWCVT_XUFV, VFWCVT_XFV, VFWCVT_FXUV, VFWCVT_FXV, VFWCVT_FFV, VFWCVT_RTZ_XUFV, VFWCVT_RTZ_XFV, \
   VFNCVT_XUFW, VFNCVT_XFW, VFNCVT_FXUW, VFNCVT_FXW, VFNCVT_FFW, VFNCVT_ROD_FFW, VFNCVT_RTZ_XUFW ,VFNCVT_RTZ_XFW, \
-  VFRSQRT7, VFREC7, VFEXP2, VFEXP2BF16}
+  VFRSQRT7, VFREC7, VFEXP2, VFEXP2BF16, \
+  VFNCVT_MXFP8_FFW, VFNCVT_MXFP4_FFW, VFNCVTXX8_INT8, VFNCVTXX8_E4M3, VFNCVTXX8_E5M2}
 
   #define VFCVT_8_NUM 7
   #define VFCVT_8_OPTYPES {VFWCVT_FXUV, VFWCVT_FXV, VFNCVT_XUFW, VFNCVT_XFW, VFNCVT_RTZ_XUFW, VFNCVT_RTZ_XFW, VFNCVT_MXFP8_FFW}

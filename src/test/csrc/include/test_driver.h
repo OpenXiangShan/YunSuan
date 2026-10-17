@@ -36,7 +36,7 @@ enum Vfexp2FormatMode {
   VFEXP2_MODE_FP32 = 3
 };
 
-// custom low precision conversions (Zvfofp8min/Zvfofp4min)
+// custom low precision conversions (FP32 -> MXFP8/MXFP4/INT8/E4M3/E5M2)
 enum LowpFormatMode {
   LOWP_MODE_MIXED = 0,
   LOWP_MODE_MXFP8 = 1,
