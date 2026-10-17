@@ -110,16 +110,17 @@ class GatherRing[T <: Data](
       bits.passedEntry := true.B
       bits
     }
+
     val ring2FlowSource = Option.when(i % 2 == 0)(makeValidIO(
-      ring2TailUnits(i / 2).out.flow.valid && (units(i).out.status.blockSize & 2.U).orR,
+      ring2TailUnits(i / 2).out.flow.valid && (ring2TailUnits(i / 2).out.flow.bits.blockSize & 2.U).orR,
       looped(ring2TailUnits(i / 2)))
     )
     val ring4FlowSource = Option.when(i % 4 == 0)(makeValidIO(
-      ring4TailUnits(i / 4).out.flow.valid && (units(i).out.status.blockSize & 4.U).orR,
+      ring4TailUnits(i / 4).out.flow.valid && (ring4TailUnits(i / 4).out.flow.bits.blockSize & 4.U).orR,
       looped(ring4TailUnits(i / 4)))
     )
     val ring8FlowSource = Option.when(i % 8 == 0)(makeValidIO(
-      ring8TailUnits(i / 8).out.flow.valid && (units(i).out.status.blockSize & 8.U).orR,
+      ring8TailUnits(i / 8).out.flow.valid && (ring8TailUnits(i / 8).out.flow.bits.blockSize & 8.U).orR,
       looped(ring8TailUnits(i / 8)))
     )
 
@@ -233,6 +234,7 @@ class GatherRing[T <: Data](
   // unitStatus output
   for (i <- 0 until NumUnits) {
     out.unitStatus(i) := units(i).out.status
+    out.unitFlowValid(i) := units(i).in.flow.valid
   }
   // debug (indexOrRes / indexDone) threaded from units
   out.debug.foreach { dbg =>
@@ -322,6 +324,9 @@ object GatherRing {
     val release = UInt(NumUnits.W)
     val metas = Vec(NumUnits, ValidIO(metaGen))
     val unitStatus = Vec(NumUnits, new Status)
+    // Test-visible ring flow valid per unit: lets GatherRingSpec check which unit the
+    // size-specific loopbacks address without depending on the writeback handshake.
+    val unitFlowValid = Vec(NumUnits, Bool())
     // arbitrated vperm wakeup requests (mirror of pipes)
     val wake = Vec(NumPipeOut, ValidIO(new GatherRingUnit.Wake(metaGen)))
     val debug = Option.when(param.debug)(Vec(NumUnits, new GatherRingUnit.Debug))
