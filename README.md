@@ -7,6 +7,8 @@ This repo includes XiangShan's function units
 * Prepare environment with verilator/mill.
 * `make emu [EMU_TRACE=1]`
 * `./build/emu [-C MAX_CYCLES] [-O MAX_OPERATIONS] [--dump-wave] [-b begin_dump] [-e end_dump]`
+* `./build/emu --lowp-only=FMT` restricts the random test to the custom low precision conversions,
+  FMT is one of `mixed|mxfp8|mxfp4|xx8-int8|xx8-e4m3|xx8-e5m2`.
 
 Others:
 

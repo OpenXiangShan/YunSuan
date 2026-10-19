@@ -36,6 +36,16 @@ enum Vfexp2FormatMode {
   VFEXP2_MODE_FP32 = 3
 };
 
+// custom low precision conversions (FP32 -> MXFP8/MXFP4/INT8/E4M3/E5M2)
+enum LowpFormatMode {
+  LOWP_MODE_MIXED = 0,
+  LOWP_MODE_MXFP8 = 1,
+  LOWP_MODE_MXFP4 = 2,
+  LOWP_MODE_XX8_INT8 = 3,
+  LOWP_MODE_XX8_E4M3 = 4,
+  LOWP_MODE_XX8_E5M2 = 5
+};
+
 struct Vfexp2LaneStats {
   uint64_t total = 0;
   uint64_t exact = 0;
@@ -69,6 +79,7 @@ private:
   VGMIntegerDividier vid;
   VGMFloatCvt vcvt;
   VGMFloatExp2 vexp2;
+  VGMLowPrecisionCvt lowp;
   SGMFloatCvt scvt;
 
   bool vfexp2_only;
@@ -78,7 +89,16 @@ private:
   Vfexp2LaneStats vfexp2_stats[3];
   Vfexp2WorstEntry vfexp2_worst[3][3];
 
+  bool lowp_only;
+  uint8_t lowp_format_mode;
+  uint64_t lowp_case_count[5] = {};
+
   uint8_t pick_vfexp2_format() const;
+  uint8_t pick_lowp_mode() const;
+  uint32_t gen_lowp_fp32_lane(uint8_t factor);
+  void get_random_lowp_input();
+  bool is_lowp_case() const;
+  static const char *lowp_mode_name(uint8_t format_mode);
   uint64_t gen_exp2_lane_bits(uint8_t format_mode);
   void get_random_exp2_input();
   bool is_vfexp2_case() const;
@@ -92,6 +112,7 @@ public:
 
   void set_default_value(VSimTop *dut_ptr);
   void configure_vfexp2_test(bool enabled, uint8_t format_mode);
+  void configure_lowp_test(bool enabled, uint8_t format_mode);
   void set_test_type();
   void gen_next_test_case(/*type wanted*/);
   

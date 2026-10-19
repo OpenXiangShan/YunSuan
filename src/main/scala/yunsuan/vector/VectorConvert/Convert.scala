@@ -15,6 +15,8 @@ class VectorCvtIO(width: Int) extends Bundle {
   val isFpToVecInst = Input(Bool())
   val isFround = Input(UInt(2.W))
   val isFcvtmod = Input(Bool())
+  val isMXFP = Input(Bool())
+  val factor = Input(UInt(8.W))
 
   val result = Output(UInt(width.W))
   val fflags = Output(UInt(20.W))
@@ -24,9 +26,13 @@ class VectorCvt(xlen :Int) extends Module{
 
   val io = IO(new VectorCvtIO(xlen))
   val (fire, src, opType, sew, rm, isFpToVecInst, isFround, isFcvtmod) = (io.fire, io.src, io.opType, io.sew, io.rm, io.isFpToVecInst, io.isFround, io.isFcvtmod)
+  val isMXFP = io.isMXFP && (sew === "b00".U || sew === "b01".U)
+  val isMXFPOut = RegEnable(RegEnable(isMXFP, false.B, fire), false.B, GatedValidRegNext(fire))
   val widen = opType(4, 3) // 0->single 1->widen 2->norrow => width of result
   val isVfnCvtBf16 = opType === VfcvtType.vfncvtbf16_ffw
   val isVfwCvtBf16 = opType === VfcvtType.vfwcvtbf16_ffv
+  val isXX8 = opType === VfcvtType.vfncvtxx8_int8 || opType === VfcvtType.vfncvtxx8_e4m3 || opType === VfcvtType.vfncvtxx8_e5m2
+  val isXX8Out = RegEnable(RegEnable(isXX8, false.B, fire), false.B, GatedValidRegNext(fire))
 
   // input width 8， 16， 32， 64
   val input1H = Wire(UInt(4.W))
@@ -49,7 +55,7 @@ class VectorCvt(xlen :Int) extends Module{
       BitPat("b0000")
     )
   )
-  input1H := Mux(isVfnCvtBf16, "b0100".U, Mux(isVfwCvtBf16, "b0010".U, commonInput1H))
+  input1H := Mux(isXX8 || isVfnCvtBf16, "b0100".U, Mux(isVfwCvtBf16, "b0010".U, commonInput1H))
 
   // output width 8， 16， 32， 64
   val output1H = Wire(UInt(4.W))
@@ -72,7 +78,7 @@ class VectorCvt(xlen :Int) extends Module{
       BitPat("b0000")
     )
   )
-  output1H := Mux(isVfnCvtBf16, "b0010".U, Mux(isVfwCvtBf16, "b0100".U, commonOutput1H))
+  output1H := Mux(isXX8, "b0001".U, Mux(isVfnCvtBf16, "b0010".U, Mux(isVfwCvtBf16, "b0100".U, commonOutput1H)))
   dontTouch(input1H)
   dontTouch(output1H)
 
@@ -101,17 +107,47 @@ class VectorCvt(xlen :Int) extends Module{
   val (result2, fflags2) = VCVT(16)(fire, in2, opType, sew, rm, input1H, output1H, isFpToVecInst, isFround, isFcvtmod)
   val (result3, fflags3) = VCVT(16)(fire, in3, opType, sew, rm, input1H, output1H, isFpToVecInst, isFround, isFcvtmod)
 
-  io.result := Mux1H(outputWidth1H, Seq(
+  val mxfp0 = Module(new CVT_mxfp)
+  val mxfp1 = Module(new CVT_mxfp)
+  for ((converter, input) <- Seq((mxfp0, element32(0)), (mxfp1, element32(1)))) {
+    converter.io.fire := fire
+    converter.io.src := input
+    converter.io.factor := io.factor
+    converter.io.rm := rm
+    converter.io.isFp4 := sew === "b01".U
+  }
+  val mxfpResult = Mux(
+    RegEnable(RegEnable(sew === "b01".U, false.B, fire), false.B, GatedValidRegNext(fire)),
+    Cat(0.U(56.W), mxfp1.io.result(3, 0), mxfp0.io.result(3, 0)),
+    Cat(0.U(48.W), mxfp1.io.result, mxfp0.io.result)
+  )
+  val mxfpFflags = Cat(0.U(10.W), mxfp1.io.fflags, mxfp0.io.fflags)
+
+  val commonResult = Mux1H(outputWidth1H, Seq(
     result3(7,0) ## result2(7,0) ## result1(7,0) ## result0(7,0),
     result3(15,0) ## result2(15,0) ## result1(15,0) ## result0(15,0),
     result1(31,0) ## result0(31,0),
     result0
   ))
 
-  io.fflags := Mux1H(outputWidth1H, Seq(
+  val commonFflags = Mux1H(outputWidth1H, Seq(
     fflags3 ## fflags2 ## fflags1 ## fflags0,
     fflags3 ## fflags2 ## fflags1 ## fflags0,
     fflags1 ## fflags0,
     fflags0
   ))
+
+  val xx8Converters = element32.map { element =>
+    val converter = Module(new CVT_xx8)
+    converter.io.fire := fire
+    converter.io.src := element
+    converter.io.opType := opType
+    converter.io.rm := rm
+    converter
+  }
+  val xx8Result = Cat(0.U(48.W), xx8Converters(1).io.result, xx8Converters(0).io.result)
+  val xx8Fflags = Cat(0.U(10.W), xx8Converters(1).io.fflags, xx8Converters(0).io.fflags)
+
+  io.result := Mux(isXX8Out, xx8Result, Mux(isMXFPOut, mxfpResult, commonResult))
+  io.fflags := Mux(isXX8Out, xx8Fflags, Mux(isMXFPOut, mxfpFflags, commonFflags))
 }

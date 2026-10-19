@@ -26,6 +26,8 @@ struct VecInput {
   uint8_t rm; // only 3 bits
   uint8_t rm_s; //only 2 bits
   VecInfo vinfo;
+  bool isMXFP; // FP32 -> MXFP8/MXFP4 (UE8M0 scaled) conversion
+  uint8_t factor; // UE8M0 scale exponent, mirrors vs2[7:0] in the SoC
 };
 
 struct VecOutput {
@@ -119,6 +121,8 @@ struct ElementInput {
   uint8_t uop_idx;
   uint8_t rm;
   uint8_t rm_s;
+  bool isMXFP;
+  uint8_t factor;
 };
 
 

@@ -91,10 +91,33 @@ uint64_t extract_lane_input_bits(const VecInput &input, int lane, int width) {
   return (input.src1[word] >> shift) & width_mask(width);
 }
 
+// custom low precision conversions (FP32 -> MXFP8/MXFP4/INT8/E4M3/E5M2)
+bool is_lowp_optype(uint8_t fuOpType) {
+  return fuOpType == VFNCVT_MXFP8_FFW || fuOpType == VFNCVT_MXFP4_FFW ||
+         fuOpType == VFNCVTXX8_INT8 || fuOpType == VFNCVTXX8_E4M3 ||
+         fuOpType == VFNCVTXX8_E5M2;
+}
+
+bool is_mxfp_optype(uint8_t fuOpType) {
+  return fuOpType == VFNCVT_MXFP8_FFW || fuOpType == VFNCVT_MXFP4_FFW;
+}
+
+int lowp_mode_of_optype(uint8_t fuOpType) {
+  switch (fuOpType) {
+    case VFNCVT_MXFP8_FFW: return LOWP_MODE_MXFP8;
+    case VFNCVT_MXFP4_FFW: return LOWP_MODE_MXFP4;
+    case VFNCVTXX8_INT8: return LOWP_MODE_XX8_INT8;
+    case VFNCVTXX8_E4M3: return LOWP_MODE_XX8_E4M3;
+    case VFNCVTXX8_E5M2: return LOWP_MODE_XX8_E5M2;
+    default: return 0;
+  }
+}
+
 } // namespace
 
 TestDriver::TestDriver():
-  issued(false), vfexp2_only(false), vfexp2_format_mode(VFEXP2_MODE_MIXED), vfexp2_logged_diffs(0), verbose(false), keepinput(false)
+  issued(false), vfexp2_only(false), vfexp2_format_mode(VFEXP2_MODE_MIXED), vfexp2_logged_diffs(0),
+  lowp_only(false), lowp_format_mode(LOWP_MODE_MIXED), verbose(false), keepinput(false)
 {
   // aviod random value
   set_test_type();
@@ -115,6 +138,13 @@ void TestDriver::configure_vfexp2_test(bool enabled, uint8_t format_mode) {
   set_test_type();
   gen_next_test_case();
 }
+void TestDriver::configure_lowp_test(bool enabled, uint8_t format_mode) {
+  lowp_only = enabled;
+  lowp_format_mode = format_mode;
+  set_test_type();
+  gen_next_test_case();
+}
+
 // fix set_test_type to select fuType
 void TestDriver::set_test_type() {
   if (vfexp2_only) {
@@ -122,6 +152,11 @@ void TestDriver::set_test_type() {
     test_type.pick_fuOpType = false;
     test_type.fuType = VFloatCvt;
     test_type.fuOpType = VFEXP2;
+  } else if (lowp_only) {
+    test_type.pick_fuType = true;
+    test_type.pick_fuOpType = true;
+    test_type.fuType = VFloatCvt;
+    test_type.fuOpType = VFNCVT_MXFP8_FFW; // the concrete optype is picked per test case
   } else {
     test_type.pick_fuType = false;
     test_type.pick_fuOpType = false;
@@ -225,6 +260,102 @@ void TestDriver::get_random_exp2_input() {
 
 bool TestDriver::is_vfexp2_case() const {
   return input.fuType == VFloatCvt && (input.fuOpType == VFEXP2 || input.fuOpType == VFEXP2BF16);
+}
+
+const char *TestDriver::lowp_mode_name(uint8_t format_mode) {
+  switch (format_mode) {
+    case LOWP_MODE_MXFP8: return "mxfp8";
+    case LOWP_MODE_MXFP4: return "mxfp4";
+    case LOWP_MODE_XX8_INT8: return "xx8-int8";
+    case LOWP_MODE_XX8_E4M3: return "xx8-e4m3";
+    case LOWP_MODE_XX8_E5M2: return "xx8-e5m2";
+    default: return "mixed";
+  }
+}
+
+uint8_t TestDriver::pick_lowp_mode() const {
+  if (lowp_format_mode != LOWP_MODE_MIXED) return lowp_format_mode;
+  const uint8_t modes[5] = {LOWP_MODE_MXFP8, LOWP_MODE_MXFP4, LOWP_MODE_XX8_INT8,
+                            LOWP_MODE_XX8_E4M3, LOWP_MODE_XX8_E5M2};
+  return modes[rand() % 5];
+}
+
+uint32_t TestDriver::gen_lowp_fp32_lane(uint8_t factor) {
+  const uint32_t specials[] = {
+    0x00000000U, 0x80000000U, // +-0
+    0x7f800000U, 0xff800000U, // +-inf
+    0x7fc00000U, 0x7f800001U, // qNaN / sNaN
+    0x00000001U, 0x007fffffU, // subnormals
+    0x00800000U, 0x7f7fffffU, 0xff7fffffU, // +-min normal, +-max normal
+    0x3f800000U, 0xbf800000U, 0x3f000000U, 0x40000000U, // 1.0, -1.0, 0.5, 2.0
+  };
+  if (rand() % 6 == 0) return specials[rand() % (sizeof(specials) / sizeof(specials[0]))];
+
+  // Bias the exponent so that the scaled exponent sweeps the subnormal/normal/overflow ranges
+  // of the target format for the current UE8M0 scale.
+  int scaled_target = (int)(rand() % 40) - 16;
+  int exp_field = scaled_target + (int)factor - 127;
+  if (exp_field > 254) exp_field = 254;
+  if (exp_field < 0) exp_field = 0;
+
+  uint32_t frac;
+  switch (rand() % 4) {
+    case 0: frac = 0; break;                                        // exact
+    case 1: frac = (uint32_t)((rand() & 0xf) << 19); break;         // tie candidates
+    case 2: frac = (uint32_t)(rand64() & 0x7fffffU & ~0x3ffU); break;
+    default: frac = (uint32_t)(rand64() & 0x7fffffU); break;
+  }
+  const uint32_t sign = (rand() & 1) ? 0x80000000U : 0U;
+  return sign | ((uint32_t)exp_field << 23) | frac;
+}
+
+void TestDriver::get_random_lowp_input() {
+  memset(&input, 0, sizeof(input));
+
+  const uint8_t mode = pick_lowp_mode();
+  const bool is_mxfp = mode == LOWP_MODE_MXFP8 || mode == LOWP_MODE_MXFP4;
+  input.fuType = VFloatCvt;
+  switch (mode) {
+    case LOWP_MODE_MXFP8: input.fuOpType = VFNCVT_MXFP8_FFW; input.sew = 0; break;
+    case LOWP_MODE_MXFP4: input.fuOpType = VFNCVT_MXFP4_FFW; input.sew = 1; break;
+    case LOWP_MODE_XX8_INT8: input.fuOpType = VFNCVTXX8_INT8; input.sew = 2; break;
+    case LOWP_MODE_XX8_E4M3: input.fuOpType = VFNCVTXX8_E4M3; input.sew = 2; break;
+    default: input.fuOpType = VFNCVTXX8_E5M2; input.sew = 2; break;
+  }
+  input.widen = false;
+  input.src_widen = false;
+  input.is_frs1 = false;
+  input.is_frs2 = false;
+  input.uop_idx = 0;
+  input.rm_s = 0;
+  input.rm = rand() % 5;
+  input.vinfo.vlmul = 0;
+  input.vinfo.vl = (VLEN / 8) >> input.sew;
+  input.vinfo.vstart = 0;
+  input.vinfo.vm = true;
+  input.vinfo.ta = false;
+  input.vinfo.ma = false;
+
+  // the UE8M0 scale of the MXFP conversions is broadcast from vs2[7:0], 0xff is the NaN encoding
+  const uint8_t factor = (rand() % 16 == 0) ? 0xff : (uint8_t)(rand() & 0xff);
+  input.isMXFP = is_mxfp;
+  input.factor = factor;
+  input.src2[0] = (uint64_t)factor;
+  input.src2[1] = rand64();
+  input.src3[0] = rand64();
+  input.src3[1] = rand64();
+  input.src4[0] = rand64();
+  input.src4[1] = rand64();
+
+  for (int lane = 0; lane < 4; lane++) {
+    const uint32_t value = gen_lowp_fp32_lane(factor);
+    input.src1[lane / 2] |= (uint64_t)value << (32 * (lane % 2));
+  }
+  lowp_case_count[mode - 1]++;
+}
+
+bool TestDriver::is_lowp_case() const {
+  return input.fuType == VFloatCvt && is_lowp_optype(input.fuOpType);
 }
 
 void TestDriver::gen_next_test_case() {
@@ -560,7 +691,12 @@ void TestDriver::get_random_input() {
     get_random_exp2_input();
     return;
   }
- 
+
+  if (lowp_only) {
+    get_random_lowp_input();
+    return;
+  }
+
   input.src1[0] = rand64();
   input.src1[1] = rand64();
   input.src2[0] = rand64();
@@ -629,6 +765,11 @@ void TestDriver::get_random_input() {
     input.rm = rand() % 5;
   }
 
+  // MXFP conversions take a broadcast UE8M0 scale from vs2[7:0]
+  input.isMXFP = input.fuType == VFloatCvt && is_mxfp_optype(input.fuOpType);
+  input.factor = (uint8_t)(input.src2[0] & 0xff);
+  if (is_lowp_case()) { lowp_case_count[lowp_mode_of_optype(input.fuOpType) - 1]++; }
+
   if (input.fuType == VIntegerDivider) {
     gen_random_idiv_input();
   }
@@ -664,6 +805,7 @@ void TestDriver::get_expected_output() {
       expect_output = vid.get_expected_output(input); return;
     case VFloatCvt:
       if (verbose) { printf("FuType:%d, choose VFloatCvt %d\n", input.fuType, VFloatCvt); }
+      if (is_lowp_case()) { expect_output = lowp.get_expected_output(input); return; }
       expect_output = is_vfexp2_case() ? vexp2.get_expected_output(input) : vcvt.get_expected_output(input); return;
     case FloatCvtF2X:
       if (verbose) { printf("FuType:%d, choose FloatCvtF2X %d\n", input.fuType, FloatCvtF2X); }
@@ -798,6 +940,8 @@ bool TestDriver::assign_input_raising(VSimTop *dut_ptr) {
   dut_ptr->io_in_bits_vinfo_vm     = input.vinfo.vm;
   dut_ptr->io_in_bits_vinfo_ta     = input.vinfo.ta;
   dut_ptr->io_in_bits_vinfo_ma     = input.vinfo.ma;
+  dut_ptr->io_in_bits_isMXFP      = input.isMXFP;
+  dut_ptr->io_in_bits_factor      = input.factor;
   return  dut_ptr->io_in_valid;
 }
 
@@ -842,6 +986,7 @@ void TestDriver::display_ref_input() {
   printf("  src1 %016lx_%016lx src2 %016lx_%016lx src3 %016lx_%016lx src4 %016lx_%016lx\n", input.src1[1], input.src1[0], input.src2[1], input.src2[0], input.src3[1], input.src3[0], input.src4[1], input.src4[0]);
   printf("  fuType %x fuOpType %x sew %x uop_idx %d src_widen %d widen %d is_frs1 %d rm %d\n", input.fuType, input.fuOpType, input.sew, input.uop_idx, input.src_widen, input.widen, input.is_frs1, input.rm);
   printf("  vstart %d vl %d vlmul %x vm %d ta %d ma %d\n", input.vinfo.vstart, input.vinfo.vl, input.vinfo.vlmul, input.vinfo.vm, input.vinfo.ta, input.vinfo.ma);
+  printf("  isMXFP %d factor %x\n", input.isMXFP, input.factor);
 }
 
 void TestDriver::display_ref_output() {
@@ -861,6 +1006,17 @@ void TestDriver::display() {
 }
 
 void TestDriver::print_summary() const {
+  uint64_t lowp_total = 0;
+  for (uint8_t mode = LOWP_MODE_MXFP8; mode <= LOWP_MODE_XX8_E5M2; mode++) {
+    lowp_total += lowp_case_count[mode - 1];
+  }
+  if (lowp_total != 0) {
+    printf("==== low precision conversion summary ====\n");
+    for (uint8_t mode = LOWP_MODE_MXFP8; mode <= LOWP_MODE_XX8_E5M2; mode++) {
+      if (lowp_case_count[mode - 1] == 0) continue;
+      printf("  [%s] operations=%lu\n", lowp_mode_name(mode), lowp_case_count[mode - 1]);
+    }
+  }
   if (!vfexp2_only) return;
 
   printf("==== VFEXP2 comparison summary ====\n");
