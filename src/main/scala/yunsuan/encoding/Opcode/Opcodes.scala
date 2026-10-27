@@ -417,6 +417,7 @@ object Opcodes {
     VRedOpcodes,
     VIPermOpcode,
     VMoveOpcode,
+    VXMoveOpcode,
     VSha256msOpcode,
     VSha256cOpcode,
   )
@@ -2280,8 +2281,6 @@ object Opcodes {
     private val MV_NR = bb"0010"
     // uop of vmv.s.x, vfmv.s.f
     private val MV_X2VS = bb"0101"
-    // uop of vmv.x.s, vfmv.f.s
-    private val MV_VS2X = bb"0110"
     // uop of MRF to VRF
     private val MV_M2V  = bb"0011"
     // uop of VRF to MRF
@@ -2318,10 +2317,6 @@ object Opcodes {
     val vmv_x2vs_e16  = DsS1a(MV_X2VS , E16)
     val vmv_x2vs_e32  = DsS1a(MV_X2VS , E32)
     val vmv_x2vs_e64  = DsS1a(MV_X2VS , E64)
-    val vmv_vs2x_e8   = DaS2s(MV_VS2X , E8 )
-    val vmv_vs2x_e16  = DaS2s(MV_VS2X , E16)
-    val vmv_vs2x_e32  = DaS2s(MV_VS2X , E32)
-    val vmv_vs2x_e64  = DaS2s(MV_VS2X , E64)
     val vtail         = Value(TAIL    , EX ) + VpWen
     val VMV_M2V       = Value(MV_M2V  , EX)
     val VMV_V2M       = Value(MV_V2M  , EX)
@@ -2354,7 +2349,6 @@ object Opcodes {
 
     def getElemWidth(implicit op: UInt): UInt = op(1, 0)
 
-    def isVS2X(implicit op: UInt): Bool = getSubOp.isOneOf(MV_VS2X)
     def isX2VS(implicit op: UInt): Bool = getSubOp.isOneOf(MV_X2VS) || getSubOp.isOneOf(MV_M2V) || getSubOp.isOneOf(MV_V2M)
     def isNR(implicit op: UInt): Bool = getSubOp.isOneOf(MV_NR)
     def isVmerge(implicit op: UInt): Bool = getSubOp.isOneOf(MERGE_VV, MERGE_VX)
@@ -2368,16 +2362,12 @@ object Opcodes {
       vmerge_vx_e32.encode,
       vmerge_vx_e64.encode,
     )
-    def isVfmv_f_s(implicit op: UInt): Bool = op.isOneOf(
-      vmv_vs2x_e16.encode,
-      vmv_vs2x_e32.encode,
-      vmv_vs2x_e64.encode,
-    )
     def isVfmv_s_f(implicit op: UInt): Bool = op.isOneOf(
       vmv_x2vs_e16.encode,
       vmv_x2vs_e32.encode,
       vmv_x2vs_e64.encode,
     )
+    def isVfmv_f_s(implicit op: UInt): Bool = VXMoveOpcode.isVfmv_f_s
     def isVfmv(implicit op: UInt): Bool = isVfmv_f_s || isVfmv_s_f
     def isVfScalarMove(implicit op: UInt): Bool = isVfmv
     def isVfScalarMoveFromVec(implicit op: UInt): Bool = isVfmv_f_s
@@ -2393,7 +2383,7 @@ object Opcodes {
 
     def needNoMask(implicit op: UInt) = getSubOp.isOneOf(MV_NR, MV_X2VS, MERGE_VV, MERGE_VX)
     def vlIsOne(implicit op: UInt) = getSubOp.isOneOf(MV_X2VS)
-    def vlIsZeroUpdate(implicit op: UInt) = getSubOp.isOneOf(MV_VS2X, MV_NR)
+    def vlIsZeroUpdate(implicit op: UInt) = getSubOp.isOneOf(MV_NR)
 
     def isLegal(implicit op: UInt) = getSubOp.isOneOf(this.allBitPats.map(getSubOp))
 
@@ -2406,6 +2396,33 @@ object Opcodes {
     // The latency of all uops in move is 0
     override def getLat(opcode: Opcode): Int = 0
   }
+
+  trait VXMoveOpcode extends Opcodes with DataType {
+    private val MV_VS2X = bb"0110"
+
+    val vmv_vs2x_e8   = DaS2s(MV_VS2X , E8 )
+    val vmv_vs2x_e16  = DaS2s(MV_VS2X , E16)
+    val vmv_vs2x_e32  = DaS2s(MV_VS2X , E32)
+    val vmv_vs2x_e64  = DaS2s(MV_VS2X , E64)
+
+    protected def getSubOp(implicit op: UInt): UInt = op(5, 2)
+    protected def getSubOp(op: BitPat): BitPat = op(5, 2)
+
+    def getElemWidth(implicit op: UInt): UInt = op(1, 0)
+
+    def isVS2X(implicit op: UInt): Bool = getSubOp.isOneOf(MV_VS2X)
+    def vlIsZeroUpdate(implicit op: UInt) = getSubOp.isOneOf(MV_VS2X)
+    def isLegal(implicit op: UInt) = getSubOp.isOneOf(this.allBitPats.map(getSubOp))
+    def isVfmv_f_s(implicit op: UInt): Bool = op.isOneOf(
+      vmv_vs2x_e16.encode,
+      vmv_vs2x_e32.encode,
+      vmv_vs2x_e64.encode,
+    )
+
+    override def getLat(opcode: Opcode): Int = 0
+  }
+
+  object VXMoveOpcode extends VXMoveOpcode
 
   object VMoveOpcode extends VMoveOpcode
 

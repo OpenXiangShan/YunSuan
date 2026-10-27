@@ -60,15 +60,6 @@ class VectorMove extends Module {
   val vmergeResult = Wire(UInt(VLEN.W))
   vmergeResult := Mux(vm, vmergeVs1Data, vmergeTmp.asUInt)
 
-  // vmv.x.s, vfmv.f.s
-  val vmvResult = Wire(UInt(64.W))
-  vmvResult := Mux1H(Seq(
-    (vsew === e8)  -> BitsExtend(vs2( 7, 0), 64, true.B),
-    (vsew === e16) -> BitsExtend(vs2(15, 0), 64, true.B),
-    (vsew === e32) -> BitsExtend(vs2(31, 0), 64, true.B),
-    (vsew === e64) -> vs2(63, 0)
-  ))
-
   // vmv<nr>r.v
   val vmvnrResult = Wire(UInt(VLEN.W))
   vmvnrResult := vs2
@@ -120,7 +111,6 @@ class VectorMove extends Module {
 
   val vd = Wire(UInt(VLEN.W))
   vd := Mux1H(Seq(
-    isVS2X -> vmvResult,
     isNR -> vmvnrResult,
     isX2VS -> vs1,
     isVmerge -> vmergeResult,
@@ -134,6 +124,8 @@ class VectorMove extends Module {
   io.out.bits.vd := vd
 
   dontTouch(vmergeResult)
-  dontTouch(vmvResult)
   dontTouch(vmvnrResult)
+  dontTouch(slideUpResult)
+  dontTouch(slideDownResult)
+  dontTouch(gatherViResult)
 }
