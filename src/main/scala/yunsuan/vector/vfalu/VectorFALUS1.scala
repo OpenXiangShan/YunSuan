@@ -58,6 +58,10 @@ class VectorFALUS1 extends VFModule{
   // --- for vfredusum ---
   val maskFpAs = VecInit(Seq.tabulate(4)(i => maskFpA(i)))
   val maskFpBs = VecInit(Seq.tabulate(4)(i => maskFpB(i)))
+  // The next tree layers are unmasked vfadd. Empty pairs must supply an
+  // additive identity that preserves signed zero: +0 for RDN, -0 otherwise
+  // (including RUP). The adder pipeline already carries the common rm.
+  val foldZeroSign = io.fromS0.arithS0ToS1Fp64.rm =/= 2.U
   val fpA16s = VFAlgoUtils.split2Vec(fpA, 4)
   val fpB16s = VFAlgoUtils.split2Vec(fpB, 4)
   val fpA32s = VFAlgoUtils.split2Vec(fpA, 2)
@@ -66,20 +70,20 @@ class VectorFALUS1 extends VFModule{
     ( maskFpAs(i) &&  maskFpBs(i)) -> arithS1Fp16(i).io.outRes,
     (!maskFpAs(i) &&  maskFpBs(i)) -> fpB16s(i),
     ( maskFpAs(i) && !maskFpBs(i)) -> fpA16s(i),
-    (!maskFpAs(i) && !maskFpBs(i)) -> Cat(1.U(1.W), 0.U(15.W)),
+    (!maskFpAs(i) && !maskFpBs(i)) -> Cat(foldZeroSign, 0.U(15.W)),
   ))).reverse)
 
   val foldFp32OutRes = Cat(Seq.tabulate(2)(i => Mux1H(Seq(
     ( maskFpAs(i) &&  maskFpBs(i)) -> arithS1Fp32(i).io.outRes,
     (!maskFpAs(i) &&  maskFpBs(i)) -> fpB32s(i),
     ( maskFpAs(i) && !maskFpBs(i)) -> fpA32s(i),
-    (!maskFpAs(i) && !maskFpBs(i)) -> Cat(1.U(1.W), 0.U(31.W)),
+    (!maskFpAs(i) && !maskFpBs(i)) -> Cat(foldZeroSign, 0.U(31.W)),
   ))).reverse)
   val foldFp64OutRes = Mux1H(Seq(
     ( maskFpAs(0) &&  maskFpBs(0)) -> arithS1Fp64.io.outRes,
     (!maskFpAs(0) &&  maskFpBs(0)) -> fpB,
     ( maskFpAs(0) && !maskFpBs(0)) -> fpA,
-    (!maskFpAs(0) && !maskFpBs(0)) -> Cat(1.U(1.W), 0.U(63.W)),
+    (!maskFpAs(0) && !maskFpBs(0)) -> Cat(foldZeroSign, 0.U(63.W)),
   ))
 
   val foldFp16FFlags = arithS1Fp16.zipWithIndex.map { case (mod, i) => Mux(maskFpAs(i) && maskFpBs(i), mod.io.outFlags, 0.U(flagsWidth.W)) }
