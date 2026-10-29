@@ -18,7 +18,7 @@ class VectorFALUS1 extends VFModule{
   val fpB = io.fromS0.fpB
   val maskFpA = io.fromS0.maskFpA
   val maskFpB = io.fromS0.maskFpB
-  val isFold = io.fromS0.isFold
+  val isFold = io.fromS0.isFoldFirst
 
   val isFoldFp16 = io.fromS0.isArithFp16 && isFold
   val isFoldFp32 = io.fromS0.isArithFp32 && isFold

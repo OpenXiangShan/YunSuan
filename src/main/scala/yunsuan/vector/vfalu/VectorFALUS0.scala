@@ -24,7 +24,7 @@ class VectorFALUS0ToS1Bundle extends VFBundle {
   val fpB     = UInt(fpMaxWidth.W)
   val maskFpA = UInt(4.W)
   val maskFpB = UInt(4.W)
-  val isFold  = Bool()
+  val isFoldFirst  = Bool()
 }
 
 class VectorFALUS0 extends VFModule {
@@ -122,5 +122,5 @@ class VectorFALUS0 extends VFModule {
   io.toS1.fpB     := io.in.fpB
   io.toS1.maskFpA := io.in.maskFpA
   io.toS1.maskFpB := io.in.maskFpB
-  io.toS1.isFold  := VFMacOpcode.isFfold
+  io.toS1.isFoldFirst := VFMacOpcode.isFfoldNorm || VFMacOpcode.isFfoldMask
 }

@@ -490,7 +490,11 @@ object Opcodes {
     private[Opcodes] val FMAXM  = bb"1001"
     // TODO
     private[Opcodes] val FWADD4 = bb"1010"
-    private[Opcodes] val FFOLD  = bb"1011"
+
+    private[Opcodes] val FFOLDN = bb"1100"
+    private[Opcodes] val FMISC_CLASS = bb"1101"
+    private[Opcodes] val FFOLDM = bb"1110"
+    private[Opcodes] val FFOLDI = bb"1111"
 
     def getOpNum(implicit op: UInt): Bool = op(5)
 
@@ -529,7 +533,10 @@ object Opcodes {
     def isFsgnjx(implicit op: UInt): Bool = getSubOpcode === FSGNJX
     def isFminm(implicit op: UInt): Bool = getSubOpcode === FMINM
     def isFmaxm(implicit op: UInt): Bool = getSubOpcode === FMAXM
-    def isFfold(implicit op: UInt): Bool = getSubOpcode === FFOLD
+    def isFfoldNorm(implicit op: UInt): Bool = getSubOpcode === FFOLDN
+    def isFfoldMask(implicit op: UInt): Bool = getSubOpcode === FFOLDM
+    def isFfoldInt(implicit op: UInt): Bool = getSubOpcode === FFOLDI
+    def isFfold(implicit op: UInt): Bool = isFfoldNorm || isFfoldMask || isFfoldInt
 
     def isFmul(implicit op: UInt): Bool = {
       getOpNum === OP2 && getSubOpcode === FMUL
@@ -646,10 +653,6 @@ object Opcodes {
    * Kept apart from [[FMacOpcode]]: the two halves share the encoding layout, not the definitions.
    */
   trait VFMacOpcode extends FMacOpcodeCore {
-    // vfclass is the FMISC(2b)|FCLASS(4b) pattern, which no other subopcode of this space uses.
-    private[Opcodes] val FMISC  = bb"11"
-    private[Opcodes] val FCLASS = bb"0100"
-
     val vfmul_fp16   : Opcode = DvSvlS2vS1(FMUL, OP2, S2V, DV, FP16, V)
     val vfmul_fp32   : Opcode = DvSvlS2vS1(FMUL, OP2, S2V, DV, FP32, V)
     val vfmul_fp64   : Opcode = DvSvlS2vS1(FMUL, OP2, S2V, DV, FP64, V)
@@ -708,9 +711,9 @@ object Opcodes {
     val vfsgnjx_fp16 : Opcode = DvSvlS2vS1(FSGNJX, OP2, S2V, DV, FP16, V)
     val vfsgnjx_fp32 : Opcode = DvSvlS2vS1(FSGNJX, OP2, S2V, DV, FP32, V)
     val vfsgnjx_fp64 : Opcode = DvSvlS2vS1(FSGNJX, OP2, S2V, DV, FP64, V)
-    val vfclass_fp16 : Opcode = DvSvlS2v(FMISC, FCLASS, DV, FP16, V)
-    val vfclass_fp32 : Opcode = DvSvlS2v(FMISC, FCLASS, DV, FP32, V)
-    val vfclass_fp64 : Opcode = DvSvlS2v(FMISC, FCLASS, DV, FP64, V)
+    val vfclass_fp16 : Opcode = DvSvlS2v(FMISC_CLASS, OP2, S2V, DV, FP16, V)
+    val vfclass_fp32 : Opcode = DvSvlS2v(FMISC_CLASS, OP2, S2V, DV, FP32, V)
+    val vfclass_fp64 : Opcode = DvSvlS2v(FMISC_CLASS, OP2, S2V, DV, FP64, V)
     val vfwadd_fp16  : Opcode = DvSvlS2vS1(FADD, OP2, S2V, DW, FP16, V)
     val vfwadd_fp32  : Opcode = DvSvlS2vS1(FADD, OP2, S2V, DW, FP32, V)
     val vfwsub_fp16  : Opcode = DvSvlS2vS1(FSUB, OP2, S2V, DW, FP16, V)
@@ -722,9 +725,15 @@ object Opcodes {
 
     val vfwadd4_fp16 : Opcode = Value(FWADD4, OP2, S2V, DW, FP16, V)
     val vfwadd4_fp32 : Opcode = Value(FWADD4, OP2, S2V, DW, FP32, V)
-    val vffold_fp16: Opcode = DvSvlS2vS1S3v(FFOLD, OP2, S2V, DV, FP16, V)
-    val vffold_fp32: Opcode = DvSvlS2vS1S3v(FFOLD, OP2, S2V, DV, FP32, V)
-    val vffold_fp64: Opcode = DvSvlS2vS1S3v(FFOLD, OP2, S2V, DV, FP64, V)
+    val vffold_n_fp16: Opcode = DvSvlS2vS1(FFOLDN, OP2, S2V, DV, FP16, V) // Normal
+    val vffold_n_fp32: Opcode = DvSvlS2vS1(FFOLDN, OP2, S2V, DV, FP32, V) // Normal
+    val vffold_n_fp64: Opcode = DvSvlS2vS1(FFOLDN, OP2, S2V, DV, FP64, V) // Normal
+    val vffold_m_fp16: Opcode = DvSvlS2vS1S3v(FFOLDM, OP2, S2V, DV, FP16, V) // Masked
+    val vffold_m_fp32: Opcode = DvSvlS2vS1S3v(FFOLDM, OP2, S2V, DV, FP32, V) // Masked
+    val vffold_m_fp64: Opcode = DvSvlS2vS1S3v(FFOLDM, OP2, S2V, DV, FP64, V) // Masked
+    val vffold_i_fp16: Opcode = DvSvlS2vS1(FFOLDI, OP2, S2V, DV, FP16, V) // Internal
+    val vffold_i_fp32: Opcode = DvSvlS2vS1(FFOLDI, OP2, S2V, DV, FP32, V) // Internal
+    val vffold_i_fp64: Opcode = DvSvlS2vS1(FFOLDI, OP2, S2V, DV, FP64, V) // Internal
     // There are no widen uops when FP64
 
     Opcodes.updateMaxFixLat(this.getMaxLat)
@@ -737,7 +746,7 @@ object Opcodes {
     def isVfsgnjn(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FSGNJN
     def isVfsgnjx(implicit op: UInt): Bool = getVs2Format === S2V && getDestMode === DV && getSubOpcode === FSGNJX
     // vfclass uses the FMISC/FCLASS fields of the encoding instead of a subopcode of its own
-    def isVfclass(implicit op: UInt): Bool = op(9, 8) === FMISC && op(7, 4) === FCLASS && op(3) === DV
+    def isVfclass(implicit op: UInt): Bool = getSubOpcode === FMISC_CLASS && getDestMode === DV
 
     def isVfwFadd(implicit op: UInt): Bool = getSubOpcode === FADD && getDestMode === DW
     def isVfwFsub(implicit op: UInt): Bool = getSubOpcode === FSUB && getDestMode === DW
