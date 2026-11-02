@@ -414,7 +414,7 @@ object Opcodes {
     VIMacOpcode,
     VIDivOpcode,
     VIRedOpcode,
-    VRedOpcodes,
+    VRedOpcode,
     VIPermOpcode,
     VMoveOpcode,
     VXMoveOpcode,
@@ -2035,7 +2035,7 @@ object Opcodes {
 
   object VIRedOpcode extends VIRedOpcode
 
-  trait VRedOpcodes extends Opcodes with DataType {
+  trait VRedOpcode extends Opcodes with DataType {
     val vredsum = 33.U(6.W)
     val vredmax = 34.U(6.W)
     val vredmin = 35.U(6.W)
@@ -2103,10 +2103,22 @@ object Opcodes {
     val vwredsumu_e16 = DvSvlS2vS1v(SUMU, DW, E16)
     val vwredsumu_e32 = DvSvlS2vS1v(SUMU, DW, E32)
 
-    override def getLat(opcode: Opcode): Int = 2
+    object LitUtil {
+      def getOp(implicit op: BitPat): BitPat = op(6, 3)
+
+      def getLat(implicit op: BitPat): Int = {
+        if (getOp == AND || getOp == OR || getOp == XOR) 0
+        else 1
+      }
+    }
   }
 
-  object VRedOpcodes extends VRedOpcodes
+  object VRedOpcode extends VRedOpcode {
+    override def getLat(opcode: Opcode): Int = {
+      require(this.all.contains(opcode))
+      LitUtil.getLat(opcode.encode)
+    }
+  }
 
   trait VIPermOpcode extends Opcodes with DataType with LmulType {
 
