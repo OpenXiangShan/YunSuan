@@ -13,36 +13,40 @@ class VectorFloatMiscInput extends VFBundle {
   val isfp32   = Bool()
   val isfp64   = Bool()
   val op       = VFMacOpcode()
+
+  // for vfredusum introduced vfadd_vl[_m]
+  val maskSrc0 = UInt(4.W)
+  val maskSrc1 = UInt(4.W)
 }
 
 class VectorFloatMiscOutput extends VFBundle {
-  val result = Output(UInt(fpMaxWidth.W))
-  val fflags = Output(Vec(fpMaxWidth / byte, UInt(flagsWidth.W)))
-}
-
-class VectorFloatMiscIO extends Bundle {
-  val in  = Input(new VectorFloatMiscInput())
-  val out = Output(new VectorFloatMiscOutput())
+  val result = UInt(fpMaxWidth.W)
+  val fflags = Vec(fpMaxWidth / byte, UInt(flagsWidth.W))
 }
 
 class VectorFloatMisc extends VFModule {
-  val io = IO(new VectorFloatMiscIO())
+  val in  = IO(Input(new VectorFloatMiscInput()))
+  val out = IO(Output(new VectorFloatMiscOutput()))
 
-  private val src0   = io.in.src0
-  private val src1   = io.in.src1
-  private val isFp16 = io.in.isfp16
-  private val isFp32 = io.in.isfp32
-  private val isFp64 = io.in.isfp64
-  private implicit val op: UInt = io.in.op
+  private val src0   = in.src0
+  private val src1   = in.src1
+  private val isFp16 = in.isfp16
+  private val isFp32 = in.isfp32
+  private val isFp64 = in.isfp64
+  private val maskSrc0 = in.maskSrc0
+  private val maskSrc1 = in.maskSrc1
+  private implicit val op: UInt = in.op
 
-  private val isFmax   = VFMacOpcode.isFmax
-  private val isFmin   = VFMacOpcode.isFmin
+  private val isFmax   = VFMacOpcode.isFmaxAll
+  private val isFmin   = VFMacOpcode.isFminAll
   private val isFsgnj  = VFMacOpcode.isFsgnj
   private val isFsgnjn = VFMacOpcode.isFsgnjn
   private val isFsgnjx = VFMacOpcode.isFsgnjx
   private val isFclass = VFMacOpcode.isVfclass
+  private val isTreeConsiderVl = VFMacOpcode.isTreeConsiderVl
 
   private val isFsgn = isFsgnj || isFsgnjn || isFsgnjx
+  private val isMinMax = isFmin || isFmax
 
   private val src0F16Vec = VFAlgoUtils.split2Vec(src0, elemNum("fp16"))
   private val src0F32Vec = VFAlgoUtils.split2Vec(src0, elemNum("fp32"))
@@ -99,7 +103,7 @@ class VectorFloatMisc extends VFModule {
     isFp64 -> (if (i < 1) !src1(quiteBit("fp64"))          else true.B)
   )) && src1IsNanSeq(i))
   private val isSNanSeq = src0IsSNanSeq.zip(src1IsSNanSeq).map { case (src0IsSNan, src1IsSNan) => src0IsSNan || src1IsSNan }
-  private val fflagsEach16bit = isSNanSeq.map(isSNan => Mux(isFsgn, 0.U(5.W), Cat(isSNan, 0.U(4.W))))
+  private val fflagsEachElem = isSNanSeq.map(isSNan => Mux(isFsgn, 0.U(5.W), Cat(isSNan, 0.U(4.W))))
 
   private val src0AbsVec = Wire(Vec(4, UInt((fpMaxWidth - 1).W)))
   src0AbsVec.zipWithIndex.foreach { case (src, i) => src := Mux1H(Seq(
@@ -167,7 +171,7 @@ class VectorFloatMisc extends VFModule {
     resultIsSrc01H(0)         -> src0,
     resultIsSrc11H(0)         -> src1
   ))
-  private val resultMaxMin = Mux1H(Seq(
+  private val resultMaxMinNormal = Mux1H(Seq(
     isFp16 -> Cat(resultMaxMinF16Seq.reverse),
     isFp32 -> Cat(resultMaxMinF32Seq.reverse),
     isFp64 -> resultMaxMinF64
@@ -220,19 +224,63 @@ class VectorFloatMisc extends VFModule {
   private val fp32Class = Cat(src0F32Vec.map(classifyElement(_, "fp32")).reverse)
   private val fp64Class = classifyElement(src0, "fp64")
 
-  io.out.result := Mux(
-    isFclass,
-    Mux1H(Seq(
-      isFp16 -> fp16Class,
-      isFp32 -> fp32Class,
-      isFp64 -> fp64Class
-    )),
-    Mux(isFsgn, resultFsgn, resultMaxMin)
-  )
+  private val resultFclass = Mux1H(Seq(
+    isFp16 -> fp16Class,
+    isFp32 -> fp32Class,
+    isFp64 -> fp64Class
+  ))
+
+  private val ZeroOperandFp16 = Mux(isFmin, infPositive("fp16"), infNegative("fp16"))
+  private val ZeroOperandFp32 = Mux(isFmin, infPositive("fp32"), infNegative("fp32"))
+  private val ZeroOperandFp64 = Mux(isFmin, infPositive("fp64"), infNegative("fp64"))
+
+  private val treeFp16OutRes = Cat(Seq.tabulate(4)(i => Mux1H(Seq(
+    ( maskSrc0(i) &&  maskSrc1(i)) -> resultMaxMinF16Seq(i),
+    (!maskSrc0(i) &&  maskSrc1(i)) -> src1F16Vec(i),
+    ( maskSrc0(i) && !maskSrc1(i)) -> src0F16Vec(i),
+    (!maskSrc0(i) && !maskSrc1(i)) -> ZeroOperandFp16
+  ))).reverse)
+  private val treeFp32OutRes = Cat(Seq.tabulate(2)(i => Mux1H(Seq(
+    ( maskSrc0(i) &&  maskSrc1(i)) -> resultMaxMinF32Seq(i),
+    (!maskSrc0(i) &&  maskSrc1(i)) -> src1F32Vec(i),
+    ( maskSrc0(i) && !maskSrc1(i)) -> src0F32Vec(i),
+    (!maskSrc0(i) && !maskSrc1(i)) -> ZeroOperandFp32
+  ))).reverse)
+  private val treeFp64OutRes = Mux1H(Seq(
+    ( maskSrc0(0) &&  maskSrc1(0)) -> resultMaxMinF64,
+    (!maskSrc0(0) &&  maskSrc1(0)) -> src1,
+    ( maskSrc0(0) && !maskSrc1(0)) -> src0,
+    (!maskSrc0(0) && !maskSrc1(0)) -> ZeroOperandFp64
+  ))
+  private val resultMaxMinTree = Mux1H(Seq(
+    isFp16 -> treeFp16OutRes,
+    isFp32 -> treeFp32OutRes,
+    isFp64 -> treeFp64OutRes
+  ))
+  private val resultMaxMin = Mux(isTreeConsiderVl, resultMaxMinTree, resultMaxMinNormal)
+
+  private val maskEachElemTreeOp = Seq.tabulate(4)(i => Mux1H(Seq(
+    isFp16 -> (           maskSrc0(i) && maskSrc1(i)),
+    isFp32 -> (if (i < 2) maskSrc0(i) && maskSrc1(i) else false.B),
+    isFp64 -> (if (i < 1) maskSrc0(i) && maskSrc1(i) else false.B)
+  )))
+  private val fflagsEachElemTreeOp = maskEachElemTreeOp.zip(isSNanSeq).map { case (mask, isSNan) =>
+    Mux(mask, Cat(isSNan, 0.U(4.W)), 0.U(5.W))
+  }
+
+  out.result := Mux1H(Seq(
+    isFclass -> resultFclass,
+    isFsgn   -> resultFsgn,
+    isMinMax -> resultMaxMin,
+  ))
   // vfclass and vfsgnj raise no exception flag; vfmax/vfmin raise NV on a signaling NaN
-  io.out.fflags := Mux(
+  out.fflags := Mux(
     isFclass,
-    0.U.asTypeOf(io.out.fflags),
-    VFAlgoUtils.expandFflags(fflagsEach16bit, isFp16, isFp32, isFp64)
+    0.U.asTypeOf(out.fflags),
+    Mux(
+      isTreeConsiderVl,
+      VFAlgoUtils.expandFflags(fflagsEachElemTreeOp, isFp16, isFp32, isFp64),
+      VFAlgoUtils.expandFflags(fflagsEachElem, isFp16, isFp32, isFp64)
+    )
   )
 }

@@ -19,7 +19,7 @@ class VectorFALUInput extends VFBundle {
   val inCtrlFromVFMul = new VFMul2VFALUCtrlBundle
   val isSubFromVFMul  = Bool()
 
-  // for vfredusum introduced vffold_vv
+  // for vfredusum introduced vfadd_vl[_m]
   val maskFpA = UInt(4.W)
   val maskFpB = UInt(4.W)
 

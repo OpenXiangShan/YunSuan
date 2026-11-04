@@ -40,6 +40,8 @@ trait VFParas {
   def getAbs(fpNum: UInt)(implicit fpType: String) = fpNum(floatWidth - 2, 0)
 
   def canonicalNan(implicit fpType: String) = Cat(false.B, Fill(exponentWidth + 1, true.B), Fill(significandWidth - 1, false.B))
+  def infPositive(implicit fpType: String) = Cat(false.B, Fill(exponentWidth, true.B), Fill(significandWidth, false.B))
+  def infNegative(implicit fpType: String) = Cat( true.B, Fill(exponentWidth, true.B), Fill(significandWidth, false.B))
 }
 
 class VFBundle extends Bundle with VFParas

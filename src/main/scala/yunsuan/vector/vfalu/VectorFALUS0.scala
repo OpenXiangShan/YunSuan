@@ -19,12 +19,12 @@ class VectorFALUS0ToS1Bundle extends VFBundle {
   val isArithFp64     = Bool()
   val isMisc          = Bool()
 
-  // for vfredusum introduced vffold_vv
+  // for vfredusum introduced vfadd_vl
   val fpA     = UInt(fpMaxWidth.W)
   val fpB     = UInt(fpMaxWidth.W)
   val maskFpA = UInt(4.W)
   val maskFpB = UInt(4.W)
-  val isFoldFirst  = Bool()
+  val isTreeConsiderVl = Bool()
 }
 
 class VectorFALUS0 extends VFModule {
@@ -60,7 +60,7 @@ class VectorFALUS0 extends VFModule {
   // op -> ctrl signal: fadd/fsub go to the adder, max/min/sgnj/class all go to the misc unit below
   val isFclass = VFMacOpcode.isVfclass
   val isSub    = Mux(isFMA, isSubFromFMUL, VFMacOpcode.isFsub)
-  val isArith  = !isFclass && (isFMA || VFMacOpcode.isFadd || VFMacOpcode.isFsub || VFMacOpcode.isFfold)
+  val isArith  = !isFclass && (isFMA || VFMacOpcode.isFadd || VFMacOpcode.isFsub || VFMacOpcode.isTreeFadd)
   val isMisc   = !isArith
 
   val faddersS0Fp16 = Seq.fill(elemNum("fp16"))(Module(new FALUAddS0(16)))
@@ -101,13 +101,15 @@ class VectorFALUS0 extends VFModule {
   io.toS1.arithS0ToS1Fp64           := fadderS0Fp64.io.toS1
 
   val miscS0 = Module(new VectorFloatMisc)
-  miscS0.io.in.src0   := io.in.fpA
-  miscS0.io.in.src1   := io.in.fpB
-  miscS0.io.in.isfp16 := isfp16
-  miscS0.io.in.isfp32 := isfp32
-  miscS0.io.in.isfp64 := isfp64
-  miscS0.io.in.op     := op
-  io.toS1.miscS0ToS1  := miscS0.io.out
+  miscS0.in.src0     := io.in.fpA
+  miscS0.in.src1     := io.in.fpB
+  miscS0.in.isfp16   := isfp16
+  miscS0.in.isfp32   := isfp32
+  miscS0.in.isfp64   := isfp64
+  miscS0.in.op       := op
+  miscS0.in.maskSrc0 := io.in.maskFpA
+  miscS0.in.maskSrc1 := io.in.maskFpB
+  io.toS1.miscS0ToS1 := miscS0.out
 
   /*
     Vector Float-point Reduction Unit
@@ -122,5 +124,5 @@ class VectorFALUS0 extends VFModule {
   io.toS1.fpB     := io.in.fpB
   io.toS1.maskFpA := io.in.maskFpA
   io.toS1.maskFpB := io.in.maskFpB
-  io.toS1.isFoldFirst := VFMacOpcode.isFfoldNorm || VFMacOpcode.isFfoldMask
+  io.toS1.isTreeConsiderVl := VFMacOpcode.isTreeConsiderVl
 }
