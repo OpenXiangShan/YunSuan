@@ -32,61 +32,57 @@ case object XorOp extends BitOp {
   override def apply(a: UInt, b: UInt): UInt = a ^ b
 }
 
-trait ReductionParam {
-  val VLEN = 128
-  val XLEN = 64
-  val vlenb = VLEN / 8
-}
-
 // TODO:
 // 1. set final outputs properly
 // 2. move vs1 initialization to top module instead of submodules
 // 3. modify name of input port
 // FIXME: considering vstart
-class NewReduction extends Module with ReductionParam {
-  val io = IO(new Bundle {
-    val in = Flipped(ValidIO(new VIFuInput))
-    val out = Output(new VIFuOutput)
-  })
-  val vs1 = io.in.bits.vs1
-  val vs2 = io.in.bits.vs2
-  val old_vd = io.in.bits.old_vd
-  val vmask = io.in.bits.mask
-  val opcode = io.in.bits.opcode
-  val srcTypeVs2 = io.in.bits.srcType(0)
-  val vsew = srcTypeVs2(1, 0)
-  val srcTypeVs1 = io.in.bits.srcType(1)
-  val vdType = io.in.bits.vdType
-  val vm = io.in.bits.info.vm
-  val ma = io.in.bits.info.ma
-  val ta = io.in.bits.info.ta
-  val vlmul = io.in.bits.info.vlmul
-  val vl = io.in.bits.info.vl
-  val uopIdx = io.in.bits.info.uopIdx
-  val InValid = io.in.valid
+class NewReduction extends NewReduction.Module {
+  val in = IO(Flipped(ValidIO(new NewReduction.In)))
+  val out = IO(Output(new VIFuOutput))
 
-  // LMUL>1 is split into sequential per-register vred_*/vwredsum_* uops.
-  // Each uop must only see its slice of VL; feeding the full VL would
-  // over-activate a later register (vredor of tail 0xFF → …ffffffff).
-  val signed = srcTypeVs2(3, 2) === 1.U
-  val widen = vdType(1, 0) === (srcTypeVs2(1, 0) + 1.U)
+  val InValid = in.valid
+  val vs1 = in.bits.data.vs1
+  val vs2 = in.bits.data.vs2
+  val old_vd = in.bits.data.old_vd
+  val vmask = in.bits.data.mask
+  val opcode = in.bits.ctrl.opcode
+  val vs1Type = in.bits.ctrl.vs1Type
+  val vs2Type = in.bits.ctrl.vs2Type
+  val vsew = vs2Type(1, 0)
+  val vdType = in.bits.ctrl.vdType
+  val vm = in.bits.ctrl.vm
+  val ma = in.bits.ctrl.ma
+  val ta = in.bits.ctrl.ta
+  val vlmul = in.bits.ctrl.vlmul
+  val vl = in.bits.ctrl.vl
+  val uopIdx = in.bits.ctrl.uopIdx
+  val treeFinal = in.bits.ctrl.treeFinal
+
+  private implicit val op = opcode
+
+  // A tree's scalar-final uop consumes partials that have already been
+  // neutralized for vl and v0 by the first layer. Single-uop reductions
+  // still apply the architectural vl and mask here.
+  val signed = vs2Type(3, 2) === 1.U
+  val widen = vdType(1, 0) === (vs2Type(1, 0) + 1.U)
   val elemsPerReg = (vlenb.U >> vsew).asUInt
   val vlBase = (uopIdx * elemsPerReg).asUInt
   val vlRemain = Mux(vl <= vlBase, 0.U,
     Mux((vl - vlBase) >= elemsPerReg, elemsPerReg, vl - vlBase))
   val vlRemainBytes = vlRemain << vsew
-  val max = VRedOpcode.isVredmax(opcode.op)
+  val max = VRedOpcode.isVredmax || VRedOpcode.isVredmaxu
 
-  val vredsum_vs = VRedOpcode.isVredsum(opcode.op)
-  val vredmax_vs = VRedOpcode.isVredmax(opcode.op) && srcTypeVs2(2).asBool
-  val vredmaxu_vs = VRedOpcode.isVredmax(opcode.op) && !srcTypeVs2(2).asBool
-  val vredmin_vs = VRedOpcode.isVredmin(opcode.op) && srcTypeVs2(2).asBool
-  val vredminu_vs = VRedOpcode.isVredmin(opcode.op) && !srcTypeVs2(2).asBool
-  val vredand_vs = VRedOpcode.isVredand(opcode.op)
-  val vredor_vs = VRedOpcode.isVredor(opcode.op)
-  val vredxor_vs = VRedOpcode.isVredxor(opcode.op)
-  val vwredsum_vs = VRedOpcode.isVredsum(opcode.op) && srcTypeVs2(2).asBool && (vdType(1, 0) === (srcTypeVs2(1, 0) + 1.U))
-  val vwredsumu_vs = VRedOpcode.isVredsum(opcode.op) && !srcTypeVs2(2).asBool && (vdType(1, 0) === (srcTypeVs2(1, 0) + 1.U))
+  val vredsum_vs = VRedOpcode.isVredsum
+  val vredand_vs = VRedOpcode.isVredand
+  val vredor_vs = VRedOpcode.isVredor
+  val vredxor_vs = VRedOpcode.isVredxor
+  val vredminu_vs = VRedOpcode.isVredminu
+  val vredmin_vs = VRedOpcode.isVredmin
+  val vredmaxu_vs = VRedOpcode.isVredmaxu
+  val vredmax_vs = VRedOpcode.isVredmax
+  val vwredsum_vs = VRedOpcode.isVwredsum
+  val vwredsumu_vs = VRedOpcode.isVwredsumu
 
   val vs2_bytes = vs2.asTypeOf(Vec(vlenb, UInt(8.W)))
   val vs2_masked = Wire(UInt(VLEN.W))
@@ -100,6 +96,7 @@ class NewReduction extends Module with ReductionParam {
   val vredcomp = vredmax_vs || vredmaxu_vs || vredmin_vs || vredminu_vs
   val logicRes = Wire(UInt(VLEN.W))
   val vredlogic = vredand_vs || vredor_vs || vredxor_vs
+  val vwred =vwredsum_vs || vwredsumu_vs
 
   val valid_s1_r = RegNext(valid, false.B)
   val vsew_s1_r = RegEnable(vsew, valid)
@@ -161,7 +158,8 @@ class NewReduction extends Module with ReductionParam {
       VSew.e32 -> vmask(i >> 2),
       VSew.e64 -> vmask(i >> 3),
     ))
-    vs2m_bytes(i) := Mux((!vm && !mask) || (i.U >= vlRemainBytes.asUInt), fillByte, vs2_bytes(i))
+    vs2m_bytes(i) := Mux(!treeFinal && ((!vm && !mask) || (i.U >= vlRemainBytes.asUInt)),
+      fillByte, vs2_bytes(i))
   }
   vs2_masked := Cat(vs2m_bytes.reverse)
 
@@ -186,15 +184,15 @@ class NewReduction extends Module with ReductionParam {
   ))
 
   // stage 0 ~ 1
-  val vredwsumMod = Module(new VRedWSUM())
-  vredwsumMod.in.valid := valid
-  vredwsumMod.in.bits.signed := signed
-  vredwsumMod.in.bits.widen := widen
-  vredwsumMod.in.bits.vsew := vsew
-  vredwsumMod.in.bits.v1 := vs2_masked(127, 0)
-  vredwsumMod.in.bits.v2 := vs1
+  val vwredsumMod = Module(new VWRedSUM())
+  vwredsumMod.in.valid := valid
+  vwredsumMod.in.bits.signed := signed
+  vwredsumMod.in.bits.widen := widen
+  vwredsumMod.in.bits.vsew := vsew
+  vwredsumMod.in.bits.v1 := vs2_masked(127, 0)
+  vwredsumMod.in.bits.v2 := vs1
 
-  sumRes_s1 := Cat(0.U((VLEN - XLEN).W), vredwsumMod.out)
+  sumRes_s1 := Cat(0.U((VLEN - XLEN).W), vwredsumMod.out)
 
   // stage 0 ~ 1
   val vredcompMod = Module(new VRedComp())
@@ -225,15 +223,58 @@ class NewReduction extends Module with ReductionParam {
   val vd_updated_s0 = Mux(ta,      (vd_mask      | vd_val_s0), ((vd_mask      & old_vd)      | vd_val_s0))
   val vd_updated_s1 = Mux(ta_s1_r, (vd_mask_s1_r | vd_val_s1), ((vd_mask_s1_r & old_vd_s1_r) | vd_val_s1))
   // vl=0: pass old_vd through unchanged (do not apply EEW tu/ta update).
-  io.out.vd := Mux(
+  out.vd := Mux(
     valid_s1_r && vredLat1_s1,
     Mux(vlIsZero_s1_r, old_vd_s1_r, vd_updated_s1),
     Mux(vlIsZero,      old_vd,      vd_updated_s0),
   )
-  io.out.vxsat := false.B
+  out.vxsat := false.B
 }
 
-class VRedTemplate(val op: BitOp) extends Module with ReductionParam {
+object NewReduction {
+  class In extends Bundle {
+    val ctrl = new InCtrl
+    val data = new InData
+  }
+
+  class InCtrl extends Bundle {
+    val opcode = VRedOpcode()
+    val vs1Type = UInt(4.W)
+    val vs2Type = UInt(4.W)
+    val vdType  = UInt(4.W)
+    val vm = Bool()
+    val ma = Bool()
+    val ta = Bool()
+    val vlmul = VLmul()
+    val vl = UInt(8.W)
+    val uopIdx = UInt(3.W)
+    val treeFinal = Bool()
+  }
+
+  class InData extends Bundle {
+    val vs1 = UInt(VLEN.W)
+    val vs2 = UInt(VLEN.W)
+    val old_vd = UInt(VLEN.W)
+    val mask = UInt(VLEN.W)
+  }
+
+  trait Config {
+    val VLEN = 128
+    val XLEN = 64
+    val vlenb = VLEN / 8
+  }
+
+  trait Util {
+    self: Config =>
+    def WidthData(): UInt = UInt(VLEN.W)
+  }
+
+  class Bundle extends chisel3.Bundle with Config with Util
+
+  class Module extends chisel3.Module with Config with Util
+}
+
+class VRedTemplate(val op: BitOp) extends NewReduction.Module {
   override def desiredName = s"VRed_${op.tag}"
 
   val io = IO(new Bundle {
@@ -450,15 +491,15 @@ class compare_3to1(w: Int) extends Module {
   }
 }
 */
-class VRedWSUM extends Module {
-  class VRedWSUMIn extends Bundle {
+class VWRedSUM extends Module {
+  class VWRedSUMIn extends Bundle {
     val widen = Bool()
     val signed = Bool()
     val vsew = UInt(2.W)
     val v1 = UInt(128.W)
     val v2 = UInt(64.W)
   }
-  val in = IO(Flipped(ValidIO(new VRedWSUMIn)))
+  val in = IO(Flipped(ValidIO(new VWRedSUMIn)))
   val out = IO(Output(UInt(64.W)))
   val vector = in.bits.v1
   val scalar = in.bits.v2
@@ -687,6 +728,6 @@ object VerilogNewRed extends App {
   emitVerilog(new NewReduction(), Array("--target-dir", "out/new-reduction-smoke"))
 }
 
-object VerilogVRedWSUM extends App {
-  emitVerilog(new VRedWSUM(), Array("--target-dir", "out/reduction-smoke"))
+object VerilogVWRedSUM extends App {
+  emitVerilog(new VWRedSUM(), Array("--target-dir", "out/reduction-smoke"))
 }

@@ -20,6 +20,8 @@ class VIAlu extends VIAlu.Module {
   adder.in.ctrl := ex0.bits.ctrl.adder
   adder.in.data.vs1 := ex0.bits.data.vs1
   adder.in.data.vs2 := ex0.bits.data.vs2
+  adder.in.data.maskVs1 := ex0.bits.data.maskVs1
+  adder.in.data.maskVs2 := ex0.bits.data.maskVs2
   adder.in.data.vs1Widen := ex0.bits.data.vs1Widen
   adder.in.data.vs2Widen := ex0.bits.data.vs2Widen
   adder.in.data.mask := ex0.bits.data.mask
@@ -28,6 +30,8 @@ class VIAlu extends VIAlu.Module {
   misc.in.ctrl := ex0.bits.ctrl.misc
   misc.in.data.vs1 := ex0.bits.data.vs1
   misc.in.data.vs2 := ex0.bits.data.vs2
+  misc.in.data.maskVs1 := ex0.bits.data.maskVs1
+  misc.in.data.maskVs2 := ex0.bits.data.maskVs2
   misc.in.data.vs1Widen := ex0.bits.data.vs1Widen
   misc.in.data.vs2Widen := ex0.bits.data.vs2Widen
   misc.in.data.vidBase := ex0.bits.data.vidBase
@@ -36,6 +40,8 @@ class VIAlu extends VIAlu.Module {
   fixPoint.in.ctrl := ex1.bits.ctrl.fixPoint
   fixPoint.in.data.vs1 := ex1.bits.data.vs1
   fixPoint.in.data.vs2 := ex1.bits.data.vs2
+  fixPoint.in.data.maskVs1 := ex1.bits.data.maskVs1
+  fixPoint.in.data.maskVs2 := ex1.bits.data.maskVs2
   fixPoint.in.adderData := RegEnable(adder.out.mid, ex0.valid)
   fixPoint.in.miscData := RegEnable(misc.out.mid, ex0.valid)
 
@@ -125,6 +131,8 @@ object VIAlu {
   class InDataEx0 extends Bundle {
     val vs2 = UInt(dWidth.W)
     val vs1 = UInt(dWidth.W)
+    val maskVs2 = UInt(maskWidth.W)
+    val maskVs1 = UInt(maskWidth.W)
     val vs2Widen = UInt(dWidth.W)
     val vs1Widen = UInt(dWidth.W)
     val mask = UInt((dWidth / 8).W)
@@ -134,6 +142,8 @@ object VIAlu {
   class InDataEx1 extends Bundle {
     val vs2 = UInt(dWidth.W)
     val vs1 = UInt(dWidth.W)
+    val maskVs2 = UInt(maskWidth.W)
+    val maskVs1 = UInt(maskWidth.W)
   }
 
   class OutData extends Bundle {

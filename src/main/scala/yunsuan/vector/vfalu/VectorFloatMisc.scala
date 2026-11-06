@@ -230,9 +230,9 @@ class VectorFloatMisc extends VFModule {
     isFp64 -> fp64Class
   ))
 
-  private val ZeroOperandFp16 = Mux(isFmin, infPositive("fp16"), infNegative("fp16"))
-  private val ZeroOperandFp32 = Mux(isFmin, infPositive("fp32"), infNegative("fp32"))
-  private val ZeroOperandFp64 = Mux(isFmin, infPositive("fp64"), infNegative("fp64"))
+  private val ZeroOperandFp16 = Mux(isFmin, canonicalNan("fp16"), canonicalNan("fp16"))
+  private val ZeroOperandFp32 = Mux(isFmin, canonicalNan("fp32"), canonicalNan("fp32"))
+  private val ZeroOperandFp64 = Mux(isFmin, canonicalNan("fp64"), canonicalNan("fp64"))
 
   private val treeFp16OutRes = Cat(Seq.tabulate(4)(i => Mux1H(Seq(
     ( maskSrc0(i) &&  maskSrc1(i)) -> resultMaxMinF16Seq(i),

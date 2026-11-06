@@ -34,10 +34,13 @@ class Misc extends VIAlu.Module {
   private val isSigned = in.ctrl.isSigned
   private val isLeftShiftLogic = in.ctrl.isLeftShiftLogic
   private val isCtz = in.ctrl.isCtz
+  private val isTreeFirst = in.ctrl.isTreeFirst
   private val rm = in.vxrm
 
   private val vs2 = in.data.vs2
   private val vs1 = in.data.vs1
+  private val maskVs2 = in.data.maskVs2
+  private val maskVs1 = in.data.maskVs1
   private val vs2Widen = in.data.vs2Widen
   private val vs1Widen = in.data.vs1Widen
 
@@ -96,9 +99,19 @@ class Misc extends VIAlu.Module {
 
   res.ext := ext.asUInt
 
-  res.and   := vs2 & vs1
-  res.or    := vs2 | vs1
-  res.xor   := vs2 ^ vs1
+  private val vs1Vec = (0 until maskWidth).map(i => vs1(8 * i + 7, 8 * i))
+  private val vs2Vec = (0 until maskWidth).map(i => vs2(8 * i + 7, 8 * i))
+  private val andNeutral = "hff".U(8.W)
+  private val orXorNeutral = 0.U(8.W)
+
+  private val treeAndVs1 = Cat(Seq.tabulate(maskWidth) { i => Mux(!isTreeFirst || maskVs1(i), vs1Vec(i), andNeutral) }.reverse)
+  private val treeAndVs2 = Cat(Seq.tabulate(maskWidth) { i => Mux(!isTreeFirst || maskVs2(i), vs2Vec(i), andNeutral) }.reverse)
+  private val treeOrXorVs1 = Cat(Seq.tabulate(maskWidth) { i => Mux(!isTreeFirst || maskVs1(i), vs1Vec(i), orXorNeutral) }.reverse)
+  private val treeOrXorVs2 = Cat(Seq.tabulate(maskWidth) { i => Mux(!isTreeFirst || maskVs2(i), vs2Vec(i), orXorNeutral) }.reverse)
+
+  res.and   := treeAndVs2 & treeAndVs1
+  res.or    := treeOrXorVs2 | treeOrXorVs1
+  res.xor   := treeOrXorVs2 ^ treeOrXorVs1
   res.vnand := ~res.and
   res.vandn := (vs2 & (~vs1).asUInt)
   res.vnor  := ~res.or
@@ -539,11 +552,14 @@ object Misc {
     val isSigned = Bool()
     val isLeftShiftLogic = Bool()
     val isCtz = Bool()
+    val isTreeFirst = Bool()
   }
 
   class InData extends VIAlu.Bundle {
     val vs2 = WidthData()
     val vs1 = WidthData()
+    val maskVs2 = MaskData()
+    val maskVs1 = MaskData()
     val vs2Widen = WidthData()
     val vs1Widen = WidthData()
     // Global index of the first element in this 64-bit lane.

@@ -20,9 +20,12 @@ class FixPoint extends Module with VIAlu.Config {
   private val isMaxMin = in.ctrl.isMaxMin
   private val isMax = in.ctrl.isMax
   private val isNClip = in.ctrl.isNClip
+  private val isTreeFirst = in.ctrl.isTreeFirst
 
   private val vs2 = in.data.vs2
   private val vs1 = in.data.vs1
+  private val maskVs2 = in.data.maskVs2
+  private val maskVs1 = in.data.maskVs1
 
   private val ltResult = in.adderData.lt
   private val vxsatAdder = in.adderData.vxsatAdder
@@ -56,10 +59,35 @@ class FixPoint extends Module with VIAlu.Config {
   private val maxMinVec = Wire(Vec(8, UInt(8.W)))
   for (i <- 0 until 8) {
     val select = selectPos(ltResult, i)
-    maxMinVec(i) := Mux(select ^ isMax, vs2(i * 8 + 7, i * 8), vs1(i * 8 + 7, i * 8))
+    maxMinVec(i) := Mux(select ^ (isMax), vs2(i * 8 + 7, i * 8), vs1(i * 8 + 7, i * 8))
   }
   private val maxMinResult = Wire(UInt(dWidth.W))
   maxMinResult := maxMinVec.asUInt
+
+  private val vs1Vec = (0 until maskWidth).map(i => vs1(8 * i + 7, 8 * i))
+  private val vs2Vec = (0 until maskWidth).map(i => vs2(8 * i + 7, 8 * i))
+
+  val bytesPerElem = Cat(sel64, sel32, sel16, sel8)
+  val neutral = (0 until maskWidth).map { byte =>
+    val isSignByte = (((byte + 1).U & (bytesPerElem - 1.U)) === 0.U)
+    Mux1H(Seq(
+      ( isMax &&  isSigned) -> Mux(isSignByte, "h80".U(8.W), 0.U(8.W)),
+      (!isMax &&  isSigned) -> Mux(isSignByte, "h7f".U(8.W), "hff".U(8.W)),
+      ( isMax && !isSigned) -> 0.U(8.W),
+      (!isMax && !isSigned) -> "hff".U(8.W),
+    ))
+  }
+
+  private val treeMaxMinResult = Wire(UInt(dWidth.W))
+  treeMaxMinResult := Cat((0 until maskWidth).map { i =>
+    Mux(!isTreeFirst || maskVs1(i) && maskVs2(i), maxMinVec(i),
+      Mux1H(Seq(
+        (!maskVs1(i) &&  maskVs2(i)) -> vs2Vec(i),
+        ( maskVs1(i) && !maskVs2(i)) -> vs1Vec(i),
+        (!maskVs1(i) && !maskVs2(i)) -> neutral(i),
+      ))
+    )
+  }.reverse)
 
   private val satOverflowSign = Wire(UInt(8.W))
   satOverflowSign := Mux1H(Seq(
@@ -115,7 +143,7 @@ class FixPoint extends Module with VIAlu.Config {
 
   out.res.vd := Mux1H(Seq(
     isSat -> satResult,
-    isMaxMin -> maxMinResult,
+    isMaxMin -> treeMaxMinResult,
   ))
 
   out.res.narrowVd := nClipResult
@@ -146,11 +174,14 @@ object FixPoint {
     val isMaxMin = Bool()
     val isMax = Bool()
     val isNClip = Bool()
+    val isTreeFirst = Bool()
   }
 
   class InData extends VIAlu.Bundle {
     val vs2 = WidthData()
     val vs1 = WidthData()
+    val maskVs2 = MaskData()
+    val maskVs1 = MaskData()
   }
 
   class OutRes extends VIAlu.Bundle {

@@ -413,7 +413,6 @@ object Opcodes {
     VMAluOpcode,
     VIMacOpcode,
     VIDivOpcode,
-    VIRedOpcode,
     VRedOpcode,
     VIPermOpcode,
     VMoveOpcode,
@@ -1280,6 +1279,12 @@ object Opcodes {
     private val S2F4DV = bb"110"
     private val S2F2DV = bb"111"
 
+    // Integer reduction folds use otherwise MOVE-only data types to encode
+    // first-layer masked/unmasked and subsequent full-register operations.
+    private val TREE_VL_M  = S2F8DV
+    private val TREE_VL    = S2F4DV
+    private val TREE_NO_VL = S2F2DV
+
     private val useSUB = bb"1"
     private val noSUB = bb"0"
 
@@ -1385,6 +1390,36 @@ object Opcodes {
     private val ROL   = bb"0" ## UGN ## bb"11"
     private val CLIPU = bb"1" ## UGN ## bb"00"
     private val CLIP  = bb"1" ## SGN ## bb"00"
+
+    private def redTree(op: BitPat, opClass: BitPat, mode: BitPat)(implicit name: SourceName): Seq[Opcode] =
+      Seq((E8, "e8"), (E16, "e16"), (E32, "e32"), (E64, "e64")).map { case (sew, sewName) =>
+        DvSvlS2vS1(op, opClass, mode, sew)(s"${name}_${sewName}")
+      }
+
+    val vadd_tree_vl_m  = redTree(ADD,  ADDER, TREE_VL_M)
+    val vadd_tree_vl    = redTree(ADD,  ADDER, TREE_VL)
+    val vadd_tree_no_vl = redTree(ADD,  ADDER, TREE_NO_VL)
+    val vand_tree_vl_m  = redTree(AND,  LOGIC, TREE_VL_M)
+    val vand_tree_vl    = redTree(AND,  LOGIC, TREE_VL)
+    val vand_tree_no_vl = redTree(AND,  LOGIC, TREE_NO_VL)
+    val vor_tree_vl_m   = redTree(OR,   LOGIC, TREE_VL_M)
+    val vor_tree_vl     = redTree(OR,   LOGIC, TREE_VL)
+    val vor_tree_no_vl  = redTree(OR,   LOGIC, TREE_NO_VL)
+    val vxor_tree_vl_m  = redTree(XOR,  LOGIC, TREE_VL_M)
+    val vxor_tree_vl    = redTree(XOR,  LOGIC, TREE_VL)
+    val vxor_tree_no_vl = redTree(XOR,  LOGIC, TREE_NO_VL)
+    val vminu_tree_vl_m  = redTree(MINU, ADDER, TREE_VL_M)
+    val vminu_tree_vl    = redTree(MINU, ADDER, TREE_VL)
+    val vminu_tree_no_vl = redTree(MINU, ADDER, TREE_NO_VL)
+    val vmin_tree_vl_m  = redTree(MIN,  ADDER, TREE_VL_M)
+    val vmin_tree_vl    = redTree(MIN,  ADDER, TREE_VL)
+    val vmin_tree_no_vl = redTree(MIN,  ADDER, TREE_NO_VL)
+    val vmaxu_tree_vl_m  = redTree(MAXU, ADDER, TREE_VL_M)
+    val vmaxu_tree_vl    = redTree(MAXU, ADDER, TREE_VL)
+    val vmaxu_tree_no_vl = redTree(MAXU, ADDER, TREE_NO_VL)
+    val vmax_tree_vl_m  = redTree(MAX,  ADDER, TREE_VL_M)
+    val vmax_tree_vl    = redTree(MAX,  ADDER, TREE_VL)
+    val vmax_tree_no_vl = redTree(MAX,  ADDER, TREE_NO_VL)
 
     val vadd_e8   = DvSvlS2vS1(ADD, ADDER, S2VDV, E8)
     val vadd_e16  = DvSvlS2vS1(ADD, ADDER, S2VDV, E16)
@@ -1499,6 +1534,18 @@ object Opcodes {
     val vsext4_e8  = DvSvlS2v(SEXT, MOVE, S2F4DV, E8 )
     val vsext4_e16 = DvSvlS2v(SEXT, MOVE, S2F4DV, E16)
     val vsext8_e8  = DvSvlS2v(SEXT, MOVE, S2F8DV, E8 )
+
+    private def redWTree(op: BitPat, opClass: BitPat, mode: BitPat)(implicit name: SourceName): Seq[Opcode] =
+      Seq((E8, "e8"), (E16, "e16"), (E32, "e32")).map { case (sew, sewName) =>
+        DvSvlS2vS1(op, opClass, mode, sew)(s"${name}_${sewName}")
+      }
+
+    // TODO: Widening reductions fold each pair of source registers into one wide
+    //       partial scalar before the ordinary wide-element addition tree.
+    val vwadd4_tree_vl_m  = redWTree(WADD4,  CADDER, TREE_VL_M)
+    val vwadd4_tree_vl    = redWTree(WADD4,  CADDER, TREE_VL)
+    val vwadd4u_tree_vl_m = redWTree(WADD4U, CADDER, TREE_VL_M)
+    val vwadd4u_tree_vl   = redWTree(WADD4U, CADDER, TREE_VL)
 
     val vwaddu_e8    = DvSvlS2vS1(WADDU, CADDER, S2VDW, E8)
     val vwaddu_e16   = DvSvlS2vS1(WADDU, CADDER, S2VDW, E16)
@@ -1697,9 +1744,16 @@ object Opcodes {
     def isZext4(implicit op: UInt): Bool = getOpClass === MOVE && getOp === ZEXT && getDataType === S2F4DV
     def isZext8(implicit op: UInt): Bool = getOpClass === MOVE && getOp === ZEXT && getDataType === S2F8DV
 
-    def isExt2(implicit op: UInt): Bool = getDataType === S2F2DV
-    def isExt4(implicit op: UInt): Bool = getDataType === S2F4DV
-    def isExt8(implicit op: UInt): Bool = getDataType === S2F8DV
+    def isExt2(implicit op: UInt): Bool = getOpClass === MOVE && getDataType === S2F2DV
+    def isExt4(implicit op: UInt): Bool = getOpClass === MOVE && getDataType === S2F4DV
+    def isExt8(implicit op: UInt): Bool = getOpClass === MOVE && getDataType === S2F8DV
+
+    private def notTreeReds(implicit op: UInt): Bool = getOpClass.isOneOf(ADDER, LOGIC)
+    def isRedTreeOp(implicit op: UInt): Bool      = notTreeReds && getDataType.isOneOf(TREE_VL_M, TREE_VL, TREE_NO_VL)
+    def isRedTreeOpFirst(implicit op: UInt): Bool = notTreeReds && getDataType.isOneOf(TREE_VL_M, TREE_VL)
+    def isRedTreeVlMask(implicit op: UInt): Bool  = notTreeReds && getDataType === TREE_VL_M
+    def isRedTreeVl(implicit op: UInt): Bool      = notTreeReds && getDataType === TREE_VL
+    def isRedTreeNoVl(implicit op: UInt): Bool    = notTreeReds && getDataType === TREE_NO_VL
 
     def isSigned(implicit op: UInt): Bool = getOp.apply(2)
 
@@ -1774,7 +1828,7 @@ object Opcodes {
       def isPop(implicit op: UInt): Bool = getOpClass === BITOP && getDataType === S2VDV && getOp === CPOP_V
       def isAvg(implicit op: UInt): Bool = getOpClass === CADDER && getDataType === S2VDV && getOp.isOneOf(AADDU, AADD, ASUBU, ASUB)
       def isAdder(implicit op: UInt): Bool = Mux1H(Seq(
-        (getOpClass === ADDER  && getDataType === S2VDV)             -> getOp.isOneOf(ADD, SUB, ADC, SBC),
+        (getOpClass === ADDER  && (getDataType.isOneOf(S2VDV, TREE_VL_M, TREE_VL, TREE_NO_VL))) -> getOp.isOneOf(ADD, SUB, ADC, SBC),
         (getOpClass === CADDER && getDataType.isOneOf(S2VDW, S2WDW)) -> getOp.isOneOf(WADDU, WADD, WSUBU, WSUB),
       ))
     }
@@ -2021,92 +2075,25 @@ object Opcodes {
 
   object VIDivOpcode extends VIDivOpcode
 
-  trait VIRedOpcode extends Opcodes with DataType {
-    private val DV = bb"0"
-    private val DW = bb"1"
-
-    private val SUM  = bb"0000"
-    private val AND  = bb"0001"
-    private val OR   = bb"0010"
-    private val XOR  = bb"0011"
-    private val MINU = bb"0100"
-    private val MIN  = bb"0101"
-    private val MAXU = bb"0110"
-    private val MAX  = bb"0111"
-
-    private val SUMU = bb"1000"
-
-    val vredsum_e8   = DvSvlS2vS1(SUM , DV, E8 )
-    val vredsum_e16  = DvSvlS2vS1(SUM , DV, E16)
-    val vredsum_e32  = DvSvlS2vS1(SUM , DV, E32)
-    val vredsum_e64  = DvSvlS2vS1(SUM , DV, E64)
-    val vredand_e8   = DvSvlS2vS1(AND , DV, E8 )
-    val vredand_e16  = DvSvlS2vS1(AND , DV, E16)
-    val vredand_e32  = DvSvlS2vS1(AND , DV, E32)
-    val vredand_e64  = DvSvlS2vS1(AND , DV, E64)
-    val vredor_e8    = DvSvlS2vS1(OR  , DV, E8 )
-    val vredor_e16   = DvSvlS2vS1(OR  , DV, E16)
-    val vredor_e32   = DvSvlS2vS1(OR  , DV, E32)
-    val vredor_e64   = DvSvlS2vS1(OR  , DV, E64)
-    val vredxor_e8   = DvSvlS2vS1(XOR , DV, E8 )
-    val vredxor_e16  = DvSvlS2vS1(XOR , DV, E16)
-    val vredxor_e32  = DvSvlS2vS1(XOR , DV, E32)
-    val vredxor_e64  = DvSvlS2vS1(XOR , DV, E64)
-    val vredminu_e8  = DvSvlS2vS1(MINU, DV, E8 )
-    val vredminu_e16 = DvSvlS2vS1(MINU, DV, E16)
-    val vredminu_e32 = DvSvlS2vS1(MINU, DV, E32)
-    val vredminu_e64 = DvSvlS2vS1(MINU, DV, E64)
-    val vredmin_e8   = DvSvlS2vS1(MIN , DV, E8 )
-    val vredmin_e16  = DvSvlS2vS1(MIN , DV, E16)
-    val vredmin_e32  = DvSvlS2vS1(MIN , DV, E32)
-    val vredmin_e64  = DvSvlS2vS1(MIN , DV, E64)
-    val vredmaxu_e8  = DvSvlS2vS1(MAXU, DV, E8 )
-    val vredmaxu_e16 = DvSvlS2vS1(MAXU, DV, E16)
-    val vredmaxu_e32 = DvSvlS2vS1(MAXU, DV, E32)
-    val vredmaxu_e64 = DvSvlS2vS1(MAXU, DV, E64)
-    val vredmax_e8   = DvSvlS2vS1(MAX , DV, E8 )
-    val vredmax_e16  = DvSvlS2vS1(MAX , DV, E16)
-    val vredmax_e32  = DvSvlS2vS1(MAX , DV, E32)
-    val vredmax_e64  = DvSvlS2vS1(MAX , DV, E64)
-
-    val vwredsum_e8   = DvSvlS2vS1(SUM, DW, E8 )
-    val vwredsum_e16  = DvSvlS2vS1(SUM, DW, E16)
-    val vwredsum_e32  = DvSvlS2vS1(SUM, DW, E32)
-    val vwredsumu_e8  = DvSvlS2vS1(SUMU, DW, E8 )
-    val vwredsumu_e16 = DvSvlS2vS1(SUMU, DW, E16)
-    val vwredsumu_e32 = DvSvlS2vS1(SUMU, DW, E32)
-  }
-
-  object VIRedOpcode extends VIRedOpcode
-
   trait VRedOpcode extends Opcodes with DataType {
-    val vredsum = 33.U(6.W)
-    val vredmax = 34.U(6.W)
-    val vredmin = 35.U(6.W)
-    val vredand = 36.U(6.W)
-    val vredor  = 37.U(6.W)
-    val vredxor = 38.U(6.W)
-
-    def isReduction(implicit op: UInt): Bool =
-      Seq(vredsum, vredmax, vredmin, vredand, vredor, vredxor).map(op === _).reduce(_ || _)
-    def isVredsum(implicit op: UInt): Bool = op === vredsum
-    def isVredmax(implicit op: UInt): Bool = op === vredmax
-    def isVredmin(implicit op: UInt): Bool = op === vredmin
-    def isVredand(implicit op: UInt): Bool = op === vredand
-    def isVredor(implicit op: UInt): Bool = op === vredor
-    def isVredxor(implicit op: UInt): Bool = op === vredxor
-
     private val DV = bb"0"
     private val DW = bb"1"
-    private val SUM  = bb"0000"
-    private val AND  = bb"0001"
-    private val OR   = bb"0010"
-    private val XOR  = bb"0011"
-    private val MINU = bb"0100"
-    private val MIN  = bb"0101"
-    private val MAXU = bb"0110"
-    private val MAX  = bb"0111"
-    private val SUMU = bb"1000"
+
+    private val SGN = bb"1"
+    private val UGN = bb"0"
+
+    /**
+     * sub opcode of [[ADDER]]
+     */
+    private val SUM  = SGN ## bb"000"
+    private val SUMU = UGN ## bb"000"
+    private val AND  = UGN ## bb"001"
+    private val OR   = UGN ## bb"010"
+    private val XOR  = UGN ## bb"011"
+    private val MINU = UGN ## bb"100"
+    private val MIN  = SGN ## bb"100"
+    private val MAXU = UGN ## bb"101"
+    private val MAX  = SGN ## bb"101"
 
     val vredsum_e8   = DvSvlS2vS1v(SUM , DV, E8 )
     val vredsum_e16  = DvSvlS2vS1v(SUM , DV, E16)
@@ -2146,6 +2133,22 @@ object Opcodes {
     val vwredsumu_e8  = DvSvlS2vS1v(SUMU, DW, E8 )
     val vwredsumu_e16 = DvSvlS2vS1v(SUMU, DW, E16)
     val vwredsumu_e32 = DvSvlS2vS1v(SUMU, DW, E32)
+
+    def getOp(implicit op: UInt): UInt = op(6, 3)
+    def getDestMode(implicit op: UInt): Bool = op(2)
+    def getSew(implicit op: UInt): UInt = op(1, 0)
+
+    def isSigned(implicit op: UInt): Bool    = getOp.apply(3)
+    def isVredsum(implicit op: UInt): Bool   = getOp === SUM && !getDestMode
+    def isVredand(implicit op: UInt): Bool   = getOp === AND
+    def isVredor(implicit op: UInt): Bool    = getOp === OR
+    def isVredxor(implicit op: UInt): Bool   = getOp === XOR
+    def isVredminu(implicit op: UInt): Bool  = getOp === MINU
+    def isVredmin(implicit op: UInt): Bool   = getOp === MIN
+    def isVredmaxu(implicit op: UInt): Bool  = getOp === MAXU
+    def isVredmax(implicit op: UInt): Bool   = getOp === MAX
+    def isVwredsum(implicit op: UInt): Bool  = getOp === SUM && getDestMode
+    def isVwredsumu(implicit op: UInt): Bool = getOp === SUMU
 
     object LitUtil {
       def getOp(implicit op: BitPat): BitPat = op(6, 3)

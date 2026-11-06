@@ -26,10 +26,13 @@ class Adder extends VIAlu.Module {
   private val isVmsbc = in.ctrl.isVmsbc
   private val isAvg = in.ctrl.isAvg
   private val vm = in.ctrl.vm
+  private val isTreeFirst = in.ctrl.isTreeFirst
   private val rm = in.vxrm
 
   private val vs2 = in.data.vs2
   private val vs1 = in.data.vs1
+  private val maskVs2 = in.data.maskVs2
+  private val maskVs1 = in.data.maskVs1
   private val vs2Widen = in.data.vs2Widen
   private val vs1Widen = in.data.vs1Widen
   private val mask = in.data.mask
@@ -252,6 +255,17 @@ class Adder extends VIAlu.Module {
 
   private val originAddResult = Wire(UInt(dWidth.W))
   originAddResult := originResult.asUInt
+
+  private val treeAddResult = Wire(UInt(dWidth.W))
+  treeAddResult := Cat((0 until maskWidth).map { i =>
+    Mux(!isTreeFirst || maskVs1(i) && maskVs2(i), originResult(i),
+      Mux1H(Seq(
+        (!maskVs1(i) &&  maskVs2(i)) -> vs2Vec(i),
+        ( maskVs1(i) && !maskVs2(i)) -> vs1Vec(i),
+        (!maskVs1(i) && !maskVs2(i)) -> 0.U(8.W),
+      ))
+    )
+  }.reverse)
 
   private val l0SPlus2 = Wire(UInt(80.W))
   private val l0CPlus2 = Wire(UInt(80.W))
@@ -481,7 +495,7 @@ class Adder extends VIAlu.Module {
 
   out.res.avg := avgResult
   out.res.adcCmpMask := addCarryCmpMask
-  out.res.adder := originAddResult
+  out.res.adder := treeAddResult
 
   out.mid.adder := originAddResult
   out.mid.lt := ltResult
@@ -580,11 +594,14 @@ object Adder extends VIAlu.Config {
     val isVmsbc = Bool()
     val isAvg = Bool()
     val vm = Bool()
+    val isTreeFirst = Bool()
   }
 
   class InData extends VIAlu.Bundle {
     val vs2 = UInt(dWidth.W)
     val vs1 = UInt(dWidth.W)
+    val maskVs2 = UInt(maskWidth.W)
+    val maskVs1 = UInt(maskWidth.W)
     val vs2Widen = UInt(dWidth.W)
     val vs1Widen = UInt(dWidth.W)
     // One mask bit per byte. Wider elements consume the bit of their first byte.
