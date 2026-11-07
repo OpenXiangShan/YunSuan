@@ -961,17 +961,17 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
   val fireS3 = GatedValidRegNext(fireS2)
   val fireS4 = GatedValidRegNext(fireS3)
   val fireS5 = GatedValidRegNext(fireS4)
-  val rmS1 = RegEnable(io.rm, 0.U(3.W), io.fire)
-  val rmS2 = RegEnable(rmS1, 0.U(3.W), fireS1)
-  val rmS3 = RegEnable(rmS2, 0.U(3.W), fireS2)
-  val rmS4 = RegEnable(rmS3, 0.U(3.W), fireS3)
-  val rmS5 = RegEnable(rmS4, 0.U(3.W), fireS4)
+  val rmS1 = RegEnable(io.rm, io.fire)
+  val rmS2 = RegEnable(rmS1, fireS1)
+  val rmS3 = RegEnable(rmS2, fireS2)
+  val rmS4 = RegEnable(rmS3, fireS3)
+  val rmS5 = RegEnable(rmS4, fireS4)
 
-  val isBF16_S1: Option[Bool] = if (hasBF16) Some(RegEnable(io.isBF16, false.B, io.fire)) else None
-  val isBF16_S2: Option[Bool] = if (hasBF16) Some(RegEnable(isBF16_S1.get, false.B, fireS1)) else None
-  val isBF16_S3: Option[Bool] = if (hasBF16) Some(RegEnable(isBF16_S2.get, false.B, fireS2)) else None
-  val isBF16_S4: Option[Bool] = if (hasBF16) Some(RegEnable(isBF16_S3.get, false.B, fireS3)) else None
-  val isBF16_S5: Option[Bool] = if (hasBF16) Some(RegEnable(isBF16_S4.get, false.B, fireS4)) else None
+  val isBF16_S1: Option[Bool] = if (hasBF16) Some(RegEnable(io.isBF16, io.fire)) else None
+  val isBF16_S2: Option[Bool] = if (hasBF16) Some(RegEnable(isBF16_S1.get, fireS1)) else None
+  val isBF16_S3: Option[Bool] = if (hasBF16) Some(RegEnable(isBF16_S2.get, fireS2)) else None
+  val isBF16_S4: Option[Bool] = if (hasBF16) Some(RegEnable(isBF16_S3.get, fireS3)) else None
+  val isBF16_S5: Option[Bool] = if (hasBF16) Some(RegEnable(isBF16_S4.get, fireS4)) else None
 
   // Coefficient lookups are distributed across S1/S2/S4. Each stage selects
   // only the coefficient it consumes next, while segIdx is pipelined.
@@ -1034,26 +1034,22 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
 
   val stage1SpecialKind = RegEnable(
     stage1SpecialKindNext,
-    VecInit(Seq.fill(laneCount)(spNone)),
     io.fire
   )
   val stage1HasFrac =
-    RegEnable(stage1HasFracNext, VecInit(Seq.fill(laneCount)(false.B)), io.fire)
+    RegEnable(stage1HasFracNext, io.fire)
   val stage1K =
-    RegEnable(stage1KNext, VecInit(Seq.fill(laneCount)(0.S(kWidth.W))), io.fire)
+    RegEnable(stage1KNext, io.fire)
   val stage1LocalT = RegEnable(
     stage1LocalTNext,
-    VecInit(Seq.fill(laneCount)(0.U(localTKeep.W))),
     io.fire
   )
   val stage1SegIdx = RegEnable(
     stage1SegIdxNext,
-    VecInit(Seq.fill(laneCount)(0.U(fmtFP16.segmentBits.W))),
     io.fire
   )
   val stage1CoeffA = RegEnable(
     stage1CoeffANext,
-    VecInit(Seq.fill(laneCount)(0.U(coeffWidth.W))),
     io.fire
   )
 
@@ -1090,31 +1086,26 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
 
   val stage2SpecialKind = RegEnable(
     stage2SpecialKindNext,
-    VecInit(Seq.fill(laneCount)(spNone)),
     fireS1
   )
   val stage2HasFrac =
-    RegEnable(stage2HasFracNext, VecInit(Seq.fill(laneCount)(false.B)), fireS1)
+    RegEnable(stage2HasFracNext, fireS1)
   val stage2K =
-    RegEnable(stage2KNext, VecInit(Seq.fill(laneCount)(0.S(kWidth.W))), fireS1)
+    RegEnable(stage2KNext, fireS1)
   val stage2LocalT = RegEnable(
     stage2LocalTNext,
-    VecInit(Seq.fill(laneCount)(0.U(localTKeep.W))),
     fireS1
   )
   val stage2SegIdx = RegEnable(
     stage2SegIdxNext,
-    VecInit(Seq.fill(laneCount)(0.U(fmtFP16.segmentBits.W))),
     fireS1
   )
   val stage2CoeffB = RegEnable(
     stage2CoeffBNext,
-    VecInit(Seq.fill(laneCount)(0.U(coeffWidth.W))),
     fireS1
   )
   val stage2Product = RegEnable(
     stage2ProductNext,
-    VecInit(Seq.fill(laneCount)(0.U(product1Width.W))),
     fireS1
   )
 
@@ -1138,26 +1129,22 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
 
   val stage3SpecialKind = RegEnable(
     stage3SpecialKindNext,
-    VecInit(Seq.fill(laneCount)(spNone)),
     fireS2
   )
   val stage3HasFrac =
-    RegEnable(stage3HasFracNext, VecInit(Seq.fill(laneCount)(false.B)), fireS2)
+    RegEnable(stage3HasFracNext, fireS2)
   val stage3K =
-    RegEnable(stage3KNext, VecInit(Seq.fill(laneCount)(0.S(kWidth.W))), fireS2)
+    RegEnable(stage3KNext, fireS2)
   val stage3LocalT = RegEnable(
     stage3LocalTNext,
-    VecInit(Seq.fill(laneCount)(0.U(localTKeep.W))),
     fireS2
   )
   val stage3SegIdx = RegEnable(
     stage3SegIdxNext,
-    VecInit(Seq.fill(laneCount)(0.U(fmtFP16.segmentBits.W))),
     fireS2
   )
   val stage3Horner = RegEnable(
     stage3HornerNext,
-    VecInit(Seq.fill(laneCount)(0.U(horner1Width.W))),
     fireS2
   )
 
@@ -1206,21 +1193,18 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
 
   val stage4SpecialKind = RegEnable(
     stage4SpecialKindNext,
-    VecInit(Seq.fill(laneCount)(spNone)),
     fireS3
   )
   val stage4HasFrac =
-    RegEnable(stage4HasFracNext, VecInit(Seq.fill(laneCount)(false.B)), fireS3)
+    RegEnable(stage4HasFracNext, fireS3)
   val stage4K =
-    RegEnable(stage4KNext, VecInit(Seq.fill(laneCount)(0.S(kWidth.W))), fireS3)
+    RegEnable(stage4KNext, fireS3)
   val stage4CoeffC = RegEnable(
     stage4CoeffCNext,
-    VecInit(Seq.fill(laneCount)(0.U(coeffWidth.W))),
     fireS3
   )
   val stage4Product = RegEnable(
     stage4ProductNext,
-    VecInit(Seq.fill(laneCount)(0.U(product2Width.W))),
     fireS3
   )
 
@@ -1256,16 +1240,14 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
 
   val stage5SpecialKind = RegEnable(
     stage5SpecialKindNext,
-    VecInit(Seq.fill(laneCount)(spNone)),
     fireS4
   )
   val stage5HasFrac =
-    RegEnable(stage5HasFracNext, VecInit(Seq.fill(laneCount)(false.B)), fireS4)
+    RegEnable(stage5HasFracNext, fireS4)
   val stage5K =
-    RegEnable(stage5KNext, VecInit(Seq.fill(laneCount)(0.S(kWidth.W))), fireS4)
+    RegEnable(stage5KNext, fireS4)
   val stage5SigScaled = RegEnable(
     stage5SigScaledNext,
-    VecInit(Seq.fill(laneCount)(0.U(sigScaledWidth.W))),
     fireS4
   )
 
@@ -1371,12 +1353,12 @@ class VfExp2(width: Int = 64) extends Module {
 
   io.valid := fireS5
 
-  val sewS1 = RegEnable(io.sew, 0.U(2.W), vfexp2Fire)
-  val sewS2 = RegEnable(sewS1, 0.U(2.W), fireS1)
-  val sewS3 = RegEnable(sewS2, 0.U(2.W), fireS2)
-  val sewS4 = RegEnable(sewS3, 0.U(2.W), fireS3)
-  val sewS5 = RegEnable(sewS4, 0.U(2.W), fireS4)
-  val sewS6 = RegEnable(sewS5, 0.U(2.W), fireS5)
+  val sewS1 = RegEnable(io.sew, vfexp2Fire)
+  val sewS2 = RegEnable(sewS1, fireS1)
+  val sewS3 = RegEnable(sewS2, fireS2)
+  val sewS4 = RegEnable(sewS3, fireS3)
+  val sewS5 = RegEnable(sewS4, fireS4)
+  val sewS6 = RegEnable(sewS5, fireS5)
 
   private val result16 =
     pipe16.io.result(3) ## pipe16.io.result(2) ## pipe16.io.result(1) ## pipe16.io.result(0)
