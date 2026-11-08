@@ -5,7 +5,7 @@ import yunsuan.vector._
 import yunsuan.fpu.fqrt._
 import yunsuan.vector.vfsqrt.fpsqrt_vector_r16
 
-class FloatDivider() extends Module  {
+class FloatDivider(enableTurnover: Boolean = false) extends Module  {
   val QDS_ARCH: Int = 2
   val S1_SPECULATIVE_QDS: Int = 1
   val io = IO(new Bundle {
@@ -29,7 +29,7 @@ class FloatDivider() extends Module  {
     val wakeupSuccess = Input(Bool())
   })
   val is_sqrt_i = io.is_sqrt_i
-  val u_vector_float_sqrt_r16 = Module(new fpsqrt_r16())
+  val u_vector_float_sqrt_r16 = Module(new fpsqrt_r16(enableTurnover = enableTurnover))
   u_vector_float_sqrt_r16.start_valid_i := is_sqrt_i & io.start_valid_i
   u_vector_float_sqrt_r16.flush_i := io.flush_i
   u_vector_float_sqrt_r16.fp_format_i := io.fp_format_i - 1.U
@@ -37,7 +37,7 @@ class FloatDivider() extends Module  {
   u_vector_float_sqrt_r16.rm_i := io.rm_i
   u_vector_float_sqrt_r16.finish_ready_i := io.finish_ready_i
   u_vector_float_sqrt_r16.fp_aIsFpCanonicalNAN := io.fp_aIsFpCanonicalNAN
-  val u_vector_float_divider_r64 = Module(new FloatDividerR64())
+  val u_vector_float_divider_r64 = Module(new FloatDividerR64(enableTurnover = enableTurnover))
   u_vector_float_divider_r64.io.start_valid_i := !is_sqrt_i & io.start_valid_i
   u_vector_float_divider_r64.io.flush_i := io.flush_i
   u_vector_float_divider_r64.io.fp_format_i := io.fp_format_i
@@ -68,7 +68,7 @@ class FloatDivider() extends Module  {
   u_vector_float_divider_r64.io.wakeupSuccess := io.wakeupSuccess
   u_vector_float_sqrt_r16.wakeupSuccess := io.wakeupSuccess
 }
-class FloatDividerR64() extends Module {
+class FloatDividerR64(enableTurnover: Boolean = false) extends Module {
   val QDS_ARCH: Int = 2
   val S1_SPECULATIVE_QDS: Int = 1
   val io = IO(new Bundle {
@@ -155,22 +155,14 @@ class FloatDividerR64() extends Module {
   val final_iter = Wire(Bool())
   fsm_q := fsm_d
 
+  val startState = Mux(early_finish, FSM_POST_1,
+    Mux(opb_is_power_of_2_f64_0, FSM_POST_0, Mux(init_cycles(1), FSM_PRE_2, FSM_PRE_1)))
   when(io.flush_i) {
     fsm_d := FSM_PRE_0
+  }.elsewhen(enableTurnover.B && io.finish_valid_o && io.finish_ready_i && io.start_valid_i) {
+    fsm_d := startState
   }.elsewhen(fsm_q === FSM_PRE_0) {
-    fsm_d := Mux(
-      io.start_valid_i,
-      Mux(
-        early_finish,
-        FSM_POST_1,
-        Mux(
-          opb_is_power_of_2_f64_0,
-          FSM_POST_0,
-          Mux(init_cycles(1), FSM_PRE_2, FSM_PRE_1)
-        )
-      ),
-      FSM_PRE_0
-    )
+    fsm_d := Mux(io.start_valid_i, startState, FSM_PRE_0)
   }.elsewhen(fsm_q === FSM_PRE_1) {
     fsm_d := FSM_PRE_2
   }.elsewhen(fsm_q === FSM_PRE_2) {
@@ -184,8 +176,10 @@ class FloatDividerR64() extends Module {
   }.otherwise {
     fsm_d := FSM_PRE_0
   }
-  io.start_ready_o := fsm_q(FSM_PRE_0_BIT)
+  io.start_ready_o := fsm_q(FSM_PRE_0_BIT) ||
+    (enableTurnover.B && io.finish_valid_o && io.finish_ready_i)
   val start_handshaked = io.start_valid_i & io.start_ready_o
+  val inputPhase = fsm_q(FSM_PRE_0_BIT) || (enableTurnover.B && start_handshaked)
   val wakeupSuccess = io.wakeupSuccess
   val wakeupSuccessReg = RegInit(Bool(), true.B)
   when(io.flush_i){
@@ -214,7 +208,9 @@ class FloatDividerR64() extends Module {
   // three cycles; include the remaining iteration/post cycles, not just idle.
   io.startReadyAhead3Cycle := !start_handshaked && (fsm_q(FSM_PRE_0_BIT) ||
     !io.outValidAhead3Cycle && (fsm_q(FSM_ITER_BIT) && iter_num_q <= 1.U ||
-      fsm_q(FSM_POST_0_BIT) || fsm_q(FSM_POST_1_BIT)))
+      fsm_q(FSM_POST_0_BIT) || fsm_q(FSM_POST_1_BIT)) ||
+    (enableTurnover.B && io.wakeupSuccess && fsm_q(FSM_ITER_BIT) &&
+      Mux(res_is_denormal_f64_0, iter_num_q === 1.U, iter_num_q === 2.U)))
 
   val opa_sign_f64_0 = Mux1H(
     Seq(
@@ -397,7 +393,7 @@ class FloatDividerR64() extends Module {
 
 
   val out_exp_diff_d_f64_0 = Mux(
-    fsm_q(FSM_PRE_0_BIT),
+    inputPhase,
     op_exp_diff_f64_0,
     out_exp_diff_q_f64_0 - iter_num_q(0)
   )
@@ -430,8 +426,8 @@ class FloatDividerR64() extends Module {
   val a_frac_lt_b_frac_l_shifted_f64_0 = quo_iter_q_f64_0(51, 0) < quo_m1_iter_q_f64_0(51, 0)
 
 
-  val prescaled_a_frac_f64_0 = Cat(1.U(1.W), Mux(fsm_q(FSM_PRE_0_BIT), opa_frac_f64_0, quo_iter_q_f64_0(51, 0)))
-  val prescaled_b_frac_f64_0 = Cat(1.U(1.W), Mux(fsm_q(FSM_PRE_0_BIT), opb_frac_f64_0, quo_m1_iter_q_f64_0(51, 0)))
+  val prescaled_a_frac_f64_0 = Cat(1.U(1.W), Mux(inputPhase, opa_frac_f64_0, quo_iter_q_f64_0(51, 0)))
+  val prescaled_b_frac_f64_0 = Cat(1.U(1.W), Mux(inputPhase, opb_frac_f64_0, quo_m1_iter_q_f64_0(51, 0)))
   val scale_factor_idx_f64_0 = prescaled_b_frac_f64_0(51, 49)
 
   val scale_adder_opa_in_f64_0 = Wire(Vec(3, UInt(57.W)))
@@ -605,16 +601,16 @@ class FloatDividerR64() extends Module {
   val sticky_without_rem_f64_0 = Wire(UInt((FP64_FRAC_W + 1).W))
 
   val frac_divisor_d_f64_0 =
-    (Fill(57, fsm_q(FSM_PRE_0_BIT)) & nxt_frac_divisor_pre_0_f64_0) |
+    (Fill(57, inputPhase) & nxt_frac_divisor_pre_0_f64_0) |
       (Fill(57, fsm_q(FSM_PRE_1_BIT)) & nxt_frac_divisor_pre_1_f64_0) |
       (Fill(57, fsm_q(FSM_PRE_2_BIT)) & nxt_frac_divisor_pre_2_f64_0) |
-      (Fill(57, fsm_q(FSM_POST_0_BIT)) & Cat(0.U(3.W), sticky_without_rem_f64_0))
+      (Fill(57, fsm_q(FSM_POST_0_BIT) && !start_handshaked) & Cat(0.U(3.W), sticky_without_rem_f64_0))
   val frac_divisor_en =
     start_handshaked | fsm_q(FSM_PRE_1_BIT) | fsm_q(FSM_PRE_2_BIT) | fsm_q(FSM_POST_0_BIT)
   when(frac_divisor_en) {
 
 
-    val frac_divisor_q_f64_0_temp = Mux(fsm_q(FSM_POST_0_BIT) & !res_is_denormal_f64_0, frac_divisor_q_f64_0, frac_divisor_d_f64_0)
+    val frac_divisor_q_f64_0_temp = Mux(fsm_q(FSM_POST_0_BIT) & !res_is_denormal_f64_0 & !start_handshaked, frac_divisor_q_f64_0, frac_divisor_d_f64_0)
 
     frac_divisor_q_60bit := Cat(frac_divisor_q_f64_0_temp, 0.U(3.W))
   }
@@ -721,16 +717,16 @@ class FloatDividerR64() extends Module {
   )
 
   val quo_iter_d_f64_0 =
-    (Fill(54, fsm_q(FSM_PRE_0_BIT)) & nxt_quo_iter_pre_0_f64_0) |
+    (Fill(54, inputPhase) & nxt_quo_iter_pre_0_f64_0) |
       (Fill(54, fsm_q(FSM_PRE_1_BIT)) & nxt_quo_iter_pre_1_f64_0) |
       (Fill(54, fsm_q(FSM_PRE_2_BIT)) & nxt_quo_iter_pre_2_f64_0) |
       (Fill(54, fsm_q(FSM_ITER_BIT)) & nxt_quo_iter_f64_0(2)(53, 0))
 
   val quo_m1_iter_d_f64_0 =
-    (Fill(54, fsm_q(FSM_PRE_0_BIT)) & nxt_quo_m1_iter_pre_0_f64_0) |
+    (Fill(54, inputPhase) & nxt_quo_m1_iter_pre_0_f64_0) |
       (Fill(54, fsm_q(FSM_PRE_1_BIT)) & nxt_quo_m1_iter_pre_1_f64_0) |
       (Fill(54, fsm_q(FSM_ITER_BIT)) & nxt_quo_m1_iter_f64_0(2)(53, 0)) |
-      (Fill(54, fsm_q(FSM_POST_0_BIT)) & nxt_quo_m1_iter_post_0_f64_0)
+      (Fill(54, fsm_q(FSM_POST_0_BIT) && !start_handshaked) & nxt_quo_m1_iter_post_0_f64_0)
 
   val quo_iter_en =
     start_handshaked |
@@ -761,7 +757,7 @@ class FloatDividerR64() extends Module {
 
 
   val iter_num_d =
-    Mux(fsm_q(FSM_PRE_0_BIT), Cat(0.U(3.W), a_frac_lt_b_frac_f64_0),
+    Mux(inputPhase, Cat(0.U(3.W), a_frac_lt_b_frac_f64_0),
       Mux(fsm_q(FSM_PRE_1_BIT), Cat(0.U(3.W), a_frac_lt_b_frac_l_shifted_f64_0),
         Mux(fsm_q(FSM_PRE_2_BIT), iter_num_needed,
           iter_num_q - 1.U(4.W)
