@@ -167,13 +167,13 @@ void Emulator::reset_ncycles(size_t cycle) {
     dut_ptr->clock = 0;
     dut_ptr->eval();
     #if VM_TRACE == 1
-      tfp->dump(cycles);
+      if (args.enable_waveform) tfp->dump(cycles);
     #endif
     cycles++;
     dut_ptr->clock = 1;
     dut_ptr->eval();
     #if VM_TRACE == 1
-      tfp->dump(cycles);
+      if (args.enable_waveform) tfp->dump(cycles);
     #endif
     cycles++;
   }
