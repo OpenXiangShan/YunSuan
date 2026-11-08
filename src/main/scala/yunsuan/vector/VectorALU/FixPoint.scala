@@ -97,6 +97,15 @@ class FixPoint extends Module with VIAlu.Config {
     sel64 -> "h80".U,
   ))
 
+  private val wadd4SrcAdder = Module(new Wadd4SecondAdder)
+
+  wadd4SrcAdder.in.sel8       := sel8
+  wadd4SrcAdder.in.sel16      := sel16
+  wadd4SrcAdder.in.sel32      := sel32
+  wadd4SrcAdder.in.isSigned   := isSigned
+  wadd4SrcAdder.in.adder      := in.adderData.adder
+  wadd4SrcAdder.in.vxsatAdder := in.adderData.vxsatAdder
+
   private val satVec = Wire(Vec(8, UInt(8.W)))
   for (i <- 0 until 8) {
     satVec(i) := Mux(vxsatAdder(i),
@@ -144,6 +153,7 @@ class FixPoint extends Module with VIAlu.Config {
   out.res.vd := Mux1H(Seq(
     isSat -> satResult,
     isMaxMin -> treeMaxMinResult,
+    in.ctrl.isWadd4Tree -> wadd4SrcAdder.out.vd,
   ))
 
   out.res.narrowVd := nClipResult
@@ -151,6 +161,51 @@ class FixPoint extends Module with VIAlu.Config {
   out.res.narrowVxsat := narrowVxsatMisc
 }
 
+class Wadd4SecondAdder extends VIAlu.Module {
+  class Input extends VIAlu.Bundle {
+    val sel8 = Bool()
+    val sel16 = Bool()
+    val sel32 = Bool()
+    val isSigned = Bool()
+    val adder = WidthData()
+    val vxsatAdder = MaskData()
+  }
+
+  class Output extends VIAlu.Bundle {
+    val vd = WidthData()
+  }
+
+  val in = IO(Input(new Input))
+  val out = IO(Output(new Output))
+
+  // Four shared byte adders. Carry crosses bytes only within a narrow element.
+  private val sums = Wire(Vec(4, UInt(9.W)))
+  for (i <- 0 until 4) {
+    val carryIn = if (i == 0) false.B
+      else if (i == 2) in.sel32 && sums(i - 1)(8)
+      else (in.sel16 || in.sel32) && sums(i - 1)(8)
+    sums(i) := (in.adder(8 * i + 7, 8 * i) +& in.adder(8 * i + 39, 8 * i + 32)) + carryIn
+  }
+
+  // A signed pair's true sign is its truncated sign XOR signed overflow.
+  // For unsigned pairs, overflow is the missing carry above the narrow sum.
+  private def highPart(sign: Bool, overflow: Bool): UInt =
+    Mux(in.isSigned, Fill(3, sign ^ overflow), Cat(0.U(2.W), overflow))
+
+  private def result(width: Int): UInt = {
+    val bytes = width / 8
+    Cat((0 until 32 / width).reverse.map { i =>
+      val last = (i + 1) * bytes - 1
+      val high = highPart(in.adder(8 * last + 7), in.vxsatAdder(last)) +
+        highPart(in.adder(8 * last + 39), in.vxsatAdder(last + 4)) + sums(last)(8)
+      val extendedHigh = Cat(Fill(width - 3, in.isSigned && high(2)), high)
+      val low = Cat((0 until bytes).reverse.map(b => sums(i * bytes + b)(7, 0)))
+      Cat(extendedHigh, low)
+    })
+  }
+
+  out.vd := Mux1H(Seq(in.sel8 -> result(8), in.sel16 -> result(16), in.sel32 -> result(32)))
+}
 object FixPoint {
   class In extends VIAlu.Bundle {
     val vxrm = Vxrm()
@@ -175,6 +230,7 @@ object FixPoint {
     val isMax = Bool()
     val isNClip = Bool()
     val isTreeFirst = Bool()
+    val isWadd4Tree = Bool()
   }
 
   class InData extends VIAlu.Bundle {

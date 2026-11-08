@@ -25,6 +25,7 @@ class Adder extends VIAlu.Module {
   private val isCmpGt = in.ctrl.isCmpGt
   private val isVmsbc = in.ctrl.isVmsbc
   private val isAvg = in.ctrl.isAvg
+  private val isWadd4Tree = in.ctrl.isWadd4Tree
   private val vm = in.ctrl.vm
   private val isTreeFirst = in.ctrl.isTreeFirst
   private val rm = in.vxrm
@@ -369,7 +370,7 @@ class Adder extends VIAlu.Module {
     sel16 -> FillInterleaved(2, Cat(coutSat(7), coutSat(5), coutSat(3), coutSat(1))),
     sel32 -> FillInterleaved(4, Cat(coutSat(7), coutSat(3))),
     sel64 -> FillInterleaved(8, coutSat(7)),
-  ))
+  )) & Mux(isWadd4Tree, maskVs1 & maskVs2, Fill(maskWidth, true.B))
   private val upOverflowUnSign = Wire(Vec(8, Bool()))
   private val downOverflowSign = Wire(Vec(8, Bool()))
 
@@ -497,7 +498,7 @@ class Adder extends VIAlu.Module {
   out.res.adcCmpMask := addCarryCmpMask
   out.res.adder := treeAddResult
 
-  out.mid.adder := originAddResult
+  out.mid.adder := Mux(isWadd4Tree, treeAddResult, originAddResult)
   out.mid.lt := ltResult
   out.mid.vxsatAdder := sat
   out.mid.upOverflowUnSign := upOverflowUnSign.asUInt
@@ -593,6 +594,7 @@ object Adder extends VIAlu.Config {
     val isCmpGt = Bool()
     val isVmsbc = Bool()
     val isAvg = Bool()
+    val isWadd4Tree = Bool()
     val vm = Bool()
     val isTreeFirst = Bool()
   }

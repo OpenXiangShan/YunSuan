@@ -1352,13 +1352,13 @@ object Opcodes {
 
     /**
      * WADD4U:
-     *   vd(i) = waddu( vs1(2i) + vs2(2i) ) + waddu( vs1(2i + 1) + vs2(2i + 1) )
+     *   vd(i) = waddu( vs1(2i) + vs2(2i) ) + waddu( vs1(i + VLEN/(2*SEW)) + vs2(i + VLEN/(2*SEW)) )
      */
     private val WADD4U = noSUB ## UGN ## bb"10"
 
     /**
      * WADD4:
-     *   vd(i) = wadd( vs1(2i) + vs2(2i) ) + wadd( vs1(2i + 1) + vs2(2i + 1) )
+     *   vd(i) = wadd( vs1(i) + vs2(i) ) + wadd( vs1(i + VLEN/(2*SEW)) + vs2(i + VLEN/(2*SEW)) )
      */
     private val WADD4  = noSUB ## SGN ## bb"10"
 
@@ -1748,12 +1748,14 @@ object Opcodes {
     def isExt4(implicit op: UInt): Bool = getOpClass === MOVE && getDataType === S2F4DV
     def isExt8(implicit op: UInt): Bool = getOpClass === MOVE && getDataType === S2F8DV
 
-    private def notTreeReds(implicit op: UInt): Bool = getOpClass.isOneOf(ADDER, LOGIC)
-    def isRedTreeOp(implicit op: UInt): Bool      = notTreeReds && getDataType.isOneOf(TREE_VL_M, TREE_VL, TREE_NO_VL)
-    def isRedTreeOpFirst(implicit op: UInt): Bool = notTreeReds && getDataType.isOneOf(TREE_VL_M, TREE_VL)
-    def isRedTreeVlMask(implicit op: UInt): Bool  = notTreeReds && getDataType === TREE_VL_M
-    def isRedTreeVl(implicit op: UInt): Bool      = notTreeReds && getDataType === TREE_VL
-    def isRedTreeNoVl(implicit op: UInt): Bool    = notTreeReds && getDataType === TREE_NO_VL
+    private def isWadd4(implicit op: UInt): Bool = getOpClass === CADDER && getOp.isOneOf(WADD4, WADD4U)
+    private def isTreeClass(implicit op: UInt): Bool = getOpClass.isOneOf(ADDER, LOGIC) || isWadd4
+    def isRedTreeOp(implicit op: UInt): Bool      = isTreeClass && getDataType.isOneOf(TREE_VL_M, TREE_VL, TREE_NO_VL)
+    def isRedTreeOpFirst(implicit op: UInt): Bool = isTreeClass && getDataType.isOneOf(TREE_VL_M, TREE_VL)
+    def isRedTreeVlMask(implicit op: UInt): Bool  = isTreeClass && getDataType === TREE_VL_M
+    def isRedTreeVl(implicit op: UInt): Bool      = isTreeClass && getDataType === TREE_VL
+    def isRedTreeNoVl(implicit op: UInt): Bool    = isTreeClass && getDataType === TREE_NO_VL
+    def isWadd4Tree(implicit op: UInt): Bool      = isWadd4 && getDataType.isOneOf(TREE_VL_M, TREE_VL)
 
     def isSigned(implicit op: UInt): Bool = getOp.apply(2)
 
@@ -1769,7 +1771,7 @@ object Opcodes {
     def isBitLogic(implicit op: UInt): Bool = getOpClass === LOGIC
     def isLeftShiftLogic(implicit op: UInt): Bool = isShift && getOp.isOneOf(SLL, ROL)
     def isMaxMin(implicit op: UInt): Bool = getOpClass.isOneOf(ADDER) && getOp.isOneOf(MINU, MIN, MAXU, MAX)
-    def isSat(implicit op: UInt): Bool = getOpClass.isOneOf(CADDER) && getOp.isOneOf(SADDU, SADD, SSUBU, SSUB)
+    def isSat(implicit op: UInt): Bool = getOpClass.isOneOf(CADDER) && getOp.isOneOf(SADDU, SADD, SSUBU, SSUB) && getDataType === S2VDV
     def isAvg(implicit op: UInt): Bool = getOpClass.isOneOf(CADDER) && getOp.isOneOf(AADDU, AADD, ASUBU, ASUB) && getDataType === S2VDV
 
     def isNClip(implicit op: UInt): Bool = getOpClass.isOneOf(CSHIFT) && getOp.isOneOf(CLIPU, CLIP)
@@ -1838,7 +1840,9 @@ object Opcodes {
       def getOpClass(implicit op: BitPat): BitPat = op(7, 5)
       def getDataType(implicit op: BitPat): BitPat = op(4, 2)
       def isMaxMin(implicit op: BitPat): Boolean = getOpClass.isOneOf(ADDER) && getOp.isOneOf(MINU, MIN, MAXU, MAX)
-      def isSat(implicit op: BitPat): Boolean = getOpClass.isOneOf(CADDER) && getOp.isOneOf(SADDU, SADD, SSUBU, SSUB)
+      def isSat(implicit op: BitPat): Boolean = getOpClass.isOneOf(CADDER) && getOp.isOneOf(SADDU, SADD, SSUBU, SSUB) && getDataType == S2VDV
+      def isWadd4Tree(implicit op: BitPat): Boolean =
+        getOpClass == CADDER && getOp.isOneOf(WADD4, WADD4U) && getDataType.isOneOf(TREE_VL_M, TREE_VL)
       def isNClip(implicit op: BitPat): Boolean = getOpClass.isOneOf(CSHIFT) && getOp.isOneOf(CLIPU, CLIP)
       def isVroShift(implicit op: BitPat): Boolean =
         getOpClass.isOneOf(SHIFT) && getOp.isOneOf(ROR, ROL) && getDataType.isOneOf(S2VDV)
@@ -1850,6 +1854,7 @@ object Opcodes {
       def getLat(implicit op: BitPat): Int = {
         if (isVroShift || isVwsll || isZvbbBitop) 1
         else if (isSat || isMaxMin || isNClip) 1
+        else if (isWadd4Tree) 1
         else 0
       }
     }
