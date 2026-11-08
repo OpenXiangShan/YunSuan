@@ -39,14 +39,14 @@ ElementOutput VGMFloatAdder::calculation_e32(ElementInput input) {
   switch(input.fuOpType) {
     case VFMACOPCODE_VFADD_FP32:
       if (input.widen) {
-        if (input.src_widen)  output.result = f32_add(f16_to_f32(i2f16((uint16_t)input.src1)), i2f32((uint32_t)input.src2)).v;
+        if (input.src_widen)  output.result = f32_add(i2f32((uint32_t)input.src1), f16_to_f32(i2f16((uint16_t)input.src2))).v;
         else  output.result = f32_add(f16_to_f32(i2f16((uint16_t)input.src1)), f16_to_f32(i2f16((uint16_t)input.src2))).v;
       }
       else output.result = f32_add(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2)).v;
       break;
     case VFMACOPCODE_VFSUB_FP32:
       if (input.widen) {
-        if (input.src_widen)  output.result = f32_sub(f16_to_f32(i2f16((uint16_t)input.src1)), i2f32((uint32_t)input.src2)).v;
+        if (input.src_widen)  output.result = f32_sub(i2f32((uint32_t)input.src1), f16_to_f32(i2f16((uint16_t)input.src2))).v;
         else  output.result = f32_sub(f16_to_f32(i2f16((uint16_t)input.src1)), f16_to_f32(i2f16((uint16_t)input.src2))).v;
       }
       else output.result = f32_sub(i2f32((uint32_t)input.src1), i2f32((uint32_t)input.src2)).v;
@@ -79,14 +79,14 @@ ElementOutput VGMFloatAdder::calculation_e64(ElementInput input) {
   switch(input.fuOpType) {
     case VFMACOPCODE_VFADD_FP64:
       if (input.widen) {
-        if (input.src_widen) output.result = f64_add(f32_to_f64(i2f32((uint32_t)input.src1)), i2f64((uint64_t)input.src2)).v;
+        if (input.src_widen) output.result = f64_add(i2f64((uint64_t)input.src1), f32_to_f64(i2f32((uint32_t)input.src2))).v;
         else output.result = f64_add(f32_to_f64(i2f32((uint32_t)input.src1)), f32_to_f64(i2f32((uint32_t)input.src2))).v;
       }
       else output.result = f64_add(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2)).v;
       break;
     case VFMACOPCODE_VFSUB_FP64:
       if (input.widen) {
-        if (input.src_widen)  output.result = f64_sub(f32_to_f64(i2f32((uint32_t)input.src1)), i2f64((uint64_t)input.src2)).v;
+        if (input.src_widen)  output.result = f64_sub(i2f64((uint64_t)input.src1), f32_to_f64(i2f32((uint32_t)input.src2))).v;
         else  output.result = f64_sub(f32_to_f64(i2f32((uint32_t)input.src1)), f32_to_f64(i2f32((uint32_t)input.src2))).v;
       }
       else output.result = f64_sub(i2f64((uint64_t)input.src1), i2f64((uint64_t)input.src2)).v;
