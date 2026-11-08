@@ -11,6 +11,7 @@ class FloatDivider() extends Module  {
   val io = IO(new Bundle {
     val start_valid_i = Input(Bool())
     val start_ready_o = Output(Bool())
+    val startReadyAhead3Cycle = Output(Bool())
     val flush_i = Input(Bool())
     val fp_format_i = Input(UInt(2.W)) // b01->fp16,b10->fp32,b11->fp64
     val opa_i = Input(UInt(64.W)) // vs2
@@ -49,6 +50,7 @@ class FloatDivider() extends Module  {
   u_vector_float_divider_r64.io.fp_bIsFpCanonicalNAN := io.fp_bIsFpCanonicalNAN
 
   io.start_ready_o := u_vector_float_divider_r64.io.start_ready_o & u_vector_float_sqrt_r16.start_ready_o
+  io.startReadyAhead3Cycle := u_vector_float_divider_r64.io.startReadyAhead3Cycle && u_vector_float_sqrt_r16.startReadyAhead3Cycle
   io.finish_valid_o := u_vector_float_divider_r64.io.finish_valid_o | u_vector_float_sqrt_r16.finish_valid_o
   io.fpdiv_res_o := Mux1H(
     Seq(
@@ -72,6 +74,7 @@ class FloatDividerR64() extends Module {
   val io = IO(new Bundle {
     val start_valid_i = Input(Bool())
     val start_ready_o = Output(Bool())
+    val startReadyAhead3Cycle = Output(Bool())
     val flush_i = Input(Bool())
     val fp_format_i = Input(UInt(2.W)) // b01->fp16,b10->fp32,b11->fp64
     val opa_i = Input(UInt(64.W)) // vs2
@@ -206,6 +209,12 @@ class FloatDividerR64() extends Module {
     start_handshaked && (early_finish || opb_is_power_of_2_f64_0) ||
     fsm_q(FSM_ITER_BIT) && Mux(res_is_denormal_f64_0, iter_num_q === 1.U, iter_num_q === 2.U) ||
     fsm_q(FSM_PRE_2_BIT) && fp_format_q_is_fp16 && !res_is_denormal_after_pre_2
+
+  // Scalar completion consumes finish_valid_o. A selection now reaches EX0 in
+  // three cycles; include the remaining iteration/post cycles, not just idle.
+  io.startReadyAhead3Cycle := !start_handshaked && (fsm_q(FSM_PRE_0_BIT) ||
+    !io.outValidAhead3Cycle && (fsm_q(FSM_ITER_BIT) && iter_num_q <= 1.U ||
+      fsm_q(FSM_POST_0_BIT) || fsm_q(FSM_POST_1_BIT)))
 
   val opa_sign_f64_0 = Mux1H(
     Seq(

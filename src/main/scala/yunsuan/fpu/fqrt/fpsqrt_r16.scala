@@ -16,6 +16,7 @@ class fpsqrt_r16(
 
   val start_valid_i = IO(Input(Bool()))
   val start_ready_o = IO(Output(Bool()))
+  val startReadyAhead3Cycle = IO(Output(Bool()))
   val flush_i = IO(Input(Bool()))
   val fp_format_i = IO(Input(UInt(2.W)))
   val op_i = IO(Input(UInt(64.W)))
@@ -733,6 +734,9 @@ class fpsqrt_r16(
   val isBlock = outValidBlock.orR
   finish_valid_o := fsm_q(FSM_POST_0_BIT) & !isBlock
   outValidAhead3Cycle := !wakeupSuccessReg || start_handshaked && early_finish || fsm_q(FSM_ITER_BIT) && (iter_num_q === 2.U)
+  // Used by the scalar consumer, which consumes finish_valid_o immediately.
+  startReadyAhead3Cycle := !start_handshaked && (fsm_q(FSM_PRE_0_BIT) ||
+    !outValidAhead3Cycle && (fsm_q(FSM_ITER_BIT) && iter_num_q <= 1.U || fsm_q(FSM_POST_0_BIT)))
   when(start_handshaked) {
     fp_fmt_q := fp_fmt_d
     rm_q := rm_d
