@@ -33,7 +33,7 @@ class Emulator {
 private:
   VSimTop *dut_ptr;
 #if VM_TRACE == 1
-  VerilatedVcdC* tfp;
+  VerilatedVcdC* tfp = nullptr;
 #endif
   TestDriver test_driver;
 
