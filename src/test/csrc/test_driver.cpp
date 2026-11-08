@@ -236,7 +236,7 @@ bool TestDriver::gen_random_widen() {
 
 bool TestDriver::gen_random_src_widen() {
   if (input.widen) {
-    switch (test_type.fuType)
+    switch (input.fuType)
     {
       case VFloatAdder: return rand()%2 == 1; break;
       default: return false; break;
