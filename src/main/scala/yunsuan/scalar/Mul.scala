@@ -15,58 +15,87 @@ class MulIO(len: Int) extends Bundle {
   val out = Output(UInt(len.W))
 }
 
-class Mul(xlen: Int) extends Module {
+/** Pure arithmetic carrier recognized by Wolvrix as kBehaviorComputeGroup. */
+class IntMulComputeCarrier extends RawModule {
+  override def desiredName: String = "WolvrixBehaviorComputeGroup_v1_int_mul"
+  val io = IO(new Bundle {
+    val in = Input(UInt(133.W)) // Cat(op[4:0], b[63:0], a[63:0])
+    val out = Output(UInt(64.W))
+  })
+  val a = io.in(63, 0)
+  val b = io.in(127, 64)
+  val op = io.in(132, 128)
+  val product = MultiplyBehavior.product(a, b, !(op(1) && op(0)), !op(1))
+  io.out := Mux(op(2), SignExt(product(31, 0), 64), Mux(op(1, 0) =/= 0.U, product(127, 64), product(63, 0)))
+}
+
+class Mul(xlen: Int, behavior: Boolean = false, computeGrouped: Boolean = false) extends Module {
   val io = IO(new MulIO(xlen))
+  private val computeCarrier = if (behavior && computeGrouped) Some(Module(new IntMulComputeCarrier)) else None
+  val simulationComputeCarrier: Option[RawModule] = computeCarrier
 
-  private val len = xlen
+  if (behavior) {
+    require(xlen == 64, "integer multiply behavior currently supports XLEN=64")
+    val a = io.in.bits.src(0)
+    val b = io.in.bits.src(1)
+    val op = io.in.bits.fuOpType
+    computeCarrier.foreach(_.io.in := Cat(op, b, a))
+    val product = MultiplyBehavior.product(a, b, !(op(1) && op(0)), MULOpType.isSign(op))
+    val ordinaryResult = Mux(MULOpType.isW(op), SignExt(product(31, 0), xlen),
+      Mux(MULOpType.isH(op), product(127, 64), product(63, 0)))
+    val result = computeCarrier.map(_.io.out).getOrElse(ordinaryResult)
+    io.out := MultiplyBehavior.pipeline(result, io.in.valid, 2)
+  } else {
+    val len = xlen
 
-  val validS0 = io.in.valid
-  val validS1 = GatedValidRegNext(validS0)
-  val src = io.in.bits.src
-  val func = io.in.bits.fuOpType
-  val isW = MULOpType.isW(func)
-  val isHi = MULOpType.isH(func)
-  val isWS2 = RegEnable(RegEnable(isW, validS0), validS1)
-  val isHiS2 = RegEnable(RegEnable(isHi, validS0), validS1)
+    val validS0 = io.in.valid
+    val validS1 = GatedValidRegNext(validS0)
+    val src = io.in.bits.src
+    val func = io.in.bits.fuOpType
+    val isW = MULOpType.isW(func)
+    val isHi = MULOpType.isH(func)
+    val isWS2 = RegEnable(RegEnable(isW, validS0), validS1)
+    val isHiS2 = RegEnable(RegEnable(isHi, validS0), validS1)
 
-  private val mulModuleS0 = Module(new MulModuleS0(len))
-  mulModuleS0.io.in.a := src(0)
-  mulModuleS0.io.in.b := src(1)
-  mulModuleS0.io.in.isMul32 := isW
-  mulModuleS0.io.in.isMul64 := ~isW
-  mulModuleS0.io.in.aIsUnSigned := func(1) & func(0)
-  mulModuleS0.io.in.bIsSigned := MULOpType.isSign(func)
-  mulModuleS0.io.in.isHi := isHi
+    val mulModuleS0 = Module(new MulModuleS0(len))
+    mulModuleS0.io.in.a := src(0)
+    mulModuleS0.io.in.b := src(1)
+    mulModuleS0.io.in.isMul32 := isW
+    mulModuleS0.io.in.isMul64 := ~isW
+    mulModuleS0.io.in.aIsUnSigned := func(1) & func(0)
+    mulModuleS0.io.in.bIsSigned := MULOpType.isSign(func)
+    mulModuleS0.io.in.isHi := isHi
 
-  private val ppOutS0 = Wire(Vec(4, UInt(128.W)))
-  ppOutS0 := mulModuleS0.io.out.ppS0
+    val ppOutS0 = Wire(Vec(4, UInt(128.W)))
+    ppOutS0 := mulModuleS0.io.out.ppS0
 
-  private val ppInS1 = Wire(Vec(4, UInt(128.W)))
-  ppInS1 := RegEnable(ppOutS0, validS0)
+    val ppInS1 = Wire(Vec(4, UInt(128.W)))
+    ppInS1 := RegEnable(ppOutS0, validS0)
 
-  private val mulModuleS1 = Module(new MulModuleS1(len))
-  mulModuleS1.io.in.ppIn := ppInS1
+    val mulModuleS1 = Module(new MulModuleS1(len))
+    mulModuleS1.io.in.ppIn := ppInS1
 
-  private val resHighS1 = Wire(Vec(2, UInt(len.W)))
-  private val resLowS1 = Wire(UInt((len + 1).W))
-  resHighS1 := mulModuleS1.io.out.resHigh
-  resLowS1 := mulModuleS1.io.out.resLow
+    val resHighS1 = Wire(Vec(2, UInt(len.W)))
+    val resLowS1 = Wire(UInt((len + 1).W))
+    resHighS1 := mulModuleS1.io.out.resHigh
+    resLowS1 := mulModuleS1.io.out.resLow
 
-  private val resHighS2 = Wire(Vec(2, UInt(len.W)))
-  private val resLowS2 = Wire(UInt((len + 1).W))
-  resHighS2 := RegEnable(resHighS1, validS1)
-  resLowS2 := RegEnable(resLowS1, validS1)
+    val resHighS2 = Wire(Vec(2, UInt(len.W)))
+    val resLowS2 = Wire(UInt((len + 1).W))
+    resHighS2 := RegEnable(resHighS1, validS1)
+    resLowS2 := RegEnable(resLowS1, validS1)
 
-  private val mulModuleS2 = Module(new MulModuleS2(len))
-  mulModuleS2.io.in.resIn := resHighS2
-  mulModuleS2.io.in.resLow := resLowS2
-  mulModuleS2.io.in.isHi := isHiS2
-  mulModuleS2.io.in.isW := isWS2
+    val mulModuleS2 = Module(new MulModuleS2(len))
+    mulModuleS2.io.in.resIn := resHighS2
+    mulModuleS2.io.in.resLow := resLowS2
+    mulModuleS2.io.in.isHi := isHiS2
+    mulModuleS2.io.in.isW := isWS2
 
-  private val result = Wire(UInt(len.W))
-  result := mulModuleS2.io.out.result
+    val result = Wire(UInt(len.W))
+    result := mulModuleS2.io.out.result
 
-  io.out := result
+    io.out := result
+  }
 }
 
 class Booth4 extends Module {

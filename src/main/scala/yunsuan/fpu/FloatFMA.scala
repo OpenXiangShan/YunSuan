@@ -2,12 +2,25 @@ package yunsuan.fpu
 import chisel3._
 import chisel3.util._
 import yunsuan.FmaOpCode
-import yunsuan.util.GatedValidRegNext
+import yunsuan.util.{GatedValidRegNext, MultiplyBehavior}
 import yunsuan.vector._
 
 import scala.collection.mutable.ListBuffer
 
-class FloatFMA() extends Module{
+class FloatMulComputeCarrier(vector: Boolean = false) extends RawModule {
+  override def desiredName: String = if (vector) "WolvrixBehaviorComputeGroup_v1_vec_fp_mul" else "WolvrixBehaviorComputeGroup_v1_fp_mul"
+  val io = IO(new Bundle {
+    val in = Input(UInt(108.W)) // Cat(fp32, fp64, b[52:0], a[52:0])
+    val out = Output(UInt(107.W))
+  })
+  val a = io.in(52, 0)
+  val b = io.in(105, 53)
+  val fp64 = io.in(106)
+  val fp32 = io.in(107)
+  io.out := MultiplyBehavior.significands(a, b, fp64, fp32, vector)
+}
+
+class FloatFMA(behavior: Boolean = false, computeGrouped: Boolean = false) extends Module{
   val exponentWidth : Int = 11
   val significandWidth : Int = 53
   val floatWidth = exponentWidth + significandWidth
@@ -23,6 +36,8 @@ class FloatFMA() extends Module{
     val fp_bIsFpCanonicalNAN = Input(Bool())
     val fp_cIsFpCanonicalNAN = Input(Bool())
   })
+  private val computeCarrier = if (behavior && computeGrouped) Some(Module(new FloatMulComputeCarrier(false))) else None
+  val simulationComputeCarrier: Option[RawModule] = computeCarrier
   def shiftLeftWithMux(srcValue: UInt, shiftValue: UInt): UInt = {
     val vecLength  = shiftValue.getWidth + 1
     val res_vec    = Wire(Vec(vecLength,UInt(srcValue.getWidth.W)))
@@ -256,32 +271,40 @@ class FloatFMA() extends Module{
       Cat(0.U(42.W),fp_b_significand_f16)
     )
   )
-  val U_BoothEncoder = Module(new BoothEncoderF64F32F16(width = significandWidth, is_addend_expand_1bit = true))
-  U_BoothEncoder.io.in_a := booth_in_a
-  U_BoothEncoder.io.in_b := booth_in_b
-  U_BoothEncoder.io.is_fp64 := is_fp64
-  U_BoothEncoder.io.is_fp32 := is_fp32
-  val U_CSAnto2 = Module(new CSA_Nto2With3to2MainPipeline(U_BoothEncoder.io.out_pp.length,U_BoothEncoder.io.out_pp.head.getWidth,pipeLevel = 5))
-  U_CSAnto2.io.fire := fire
-  U_CSAnto2.io.in := U_BoothEncoder.io.out_pp
+  val (productSum, productCarry) = if (behavior) {
+    val exact = MultiplyBehavior.significands(booth_in_a, booth_in_b, is_fp64, is_fp32, vector = false)
+    computeCarrier.foreach(_.io.in := Cat(is_fp32, is_fp64, booth_in_b, booth_in_a))
+    val product = computeCarrier.map(_.io.out).getOrElse(exact)
+    (MultiplyBehavior.pipeline(product, fire, 1), 0.U(107.W))
+  } else {
+    val U_BoothEncoder = Module(new BoothEncoderF64F32F16(width = significandWidth, is_addend_expand_1bit = true))
+    U_BoothEncoder.io.in_a := booth_in_a
+    U_BoothEncoder.io.in_b := booth_in_b
+    U_BoothEncoder.io.is_fp64 := is_fp64
+    U_BoothEncoder.io.is_fp32 := is_fp32
+    val U_CSAnto2 = Module(new CSA_Nto2With3to2MainPipeline(U_BoothEncoder.io.out_pp.length,U_BoothEncoder.io.out_pp.head.getWidth,pipeLevel = 5))
+    U_CSAnto2.io.fire := fire
+    U_CSAnto2.io.in := U_BoothEncoder.io.out_pp
+    (U_CSAnto2.io.out_sum, U_CSAnto2.io.out_car)
+  }
 
-  val CSA3to2_in_a = U_CSAnto2.io.out_sum
+  val CSA3to2_in_a = productSum
   val CSA3to2_in_b = Mux(
     is_fp64_reg0,
-    Cat(U_CSAnto2.io.out_car.head(106), is_sub_f64_reg0 & !rshift_guard_f64 & !rshift_round_f64 & !rshift_sticky_f64),
+    Cat(productCarry.head(106), is_sub_f64_reg0 & !rshift_guard_f64 & !rshift_round_f64 & !rshift_sticky_f64),
     Mux(
       is_fp32_reg0,
-      Cat(U_CSAnto2.io.out_car.head(48), 0.U,
-        U_CSAnto2.io.out_car(57,49),
-        U_CSAnto2.io.out_car(48,1), RegEnable(is_sub_f32, fire) & !rshift_guard_f32 & !rshift_round_f32 & !rshift_sticky_f32
+      Cat(productCarry.head(48), 0.U,
+        productCarry(57,49),
+        productCarry(48,1), RegEnable(is_sub_f32, fire) & !rshift_guard_f32 & !rshift_round_f32 & !rshift_sticky_f32
       ),
-      Cat(Cat(U_CSAnto2.io.out_car.head(22), 0.U,
-        U_CSAnto2.io.out_car(25+58,23+58),
-        U_CSAnto2.io.out_car(22+58,1+58), 0.U),
-        U_CSAnto2.io.out_car(57,49),
-        Cat(U_CSAnto2.io.out_car(48,27), 0.U,
-          U_CSAnto2.io.out_car(25,23),
-          U_CSAnto2.io.out_car(22,1), RegEnable(is_sub_f16, fire) & !rshift_guard_f16 & !rshift_round_f16 & !rshift_sticky_f16)
+      Cat(Cat(productCarry.head(22), 0.U,
+        productCarry(25+58,23+58),
+        productCarry(22+58,1+58), 0.U),
+        productCarry(57,49),
+        Cat(productCarry(48,27), 0.U,
+          productCarry(25,23),
+          productCarry(22,1), RegEnable(is_sub_f16, fire) & !rshift_guard_f16 & !rshift_round_f16 & !rshift_sticky_f16)
 
       )
     )
@@ -299,7 +322,7 @@ class FloatFMA() extends Module{
       )
     )
   )
-  val U_CSA3to2 = Module(new CSA3to2(width = U_CSAnto2.io.out_sum.getWidth))
+  val U_CSA3to2 = Module(new CSA3to2(width = productSum.getWidth))
   U_CSA3to2.io.in_a := CSA3to2_in_a
   U_CSA3to2.io.in_b := CSA3to2_in_b
   U_CSA3to2.io.in_c := CSA3to2_in_c
@@ -689,7 +712,7 @@ class FloatFMA() extends Module{
   val fp_c_is_snan_f64 =  !io.fp_cIsFpCanonicalNAN & Ec_f64.andR & !fp_c_significand_f64.tail(1).head(1) & fp_c_significand_f64.tail(2).orR
   val fp_c_is_snan_f32 =  !io.fp_cIsFpCanonicalNAN & Ec_f32.andR & !fp_c_significand_f32.tail(1).head(1) & fp_c_significand_f32.tail(2).orR
   val fp_c_is_snan_f16 =  !io.fp_cIsFpCanonicalNAN & Ec_f16.andR & !fp_c_significand_f16.tail(1).head(1) & fp_c_significand_f16.tail(2).orR
-  
+
   val has_snan_f64 = fp_a_is_snan_f64 | fp_b_is_snan_f64 | fp_c_is_snan_f64
   val has_snan_f32 = fp_a_is_snan_f32 | fp_b_is_snan_f32 | fp_c_is_snan_f32
   val has_snan_f16 = fp_a_is_snan_f16 | fp_b_is_snan_f16 | fp_c_is_snan_f16

@@ -5,8 +5,9 @@ import chisel3.util._
 import scala.collection.mutable.ListBuffer
 import yunsuan.VfmaOpCode
 import yunsuan.util._
+import yunsuan.fpu.FloatMulComputeCarrier
 
-class VectorFloatFMA() extends Module{
+class VectorFloatFMA(behavior: Boolean = false, computeGrouped: Boolean = false) extends Module{
   val exponentWidth : Int = 11
   val significandWidth : Int = 53
   val floatWidth = exponentWidth + significandWidth
@@ -29,6 +30,8 @@ class VectorFloatFMA() extends Module{
     val fp_bIsFpCanonicalNAN = Input(Bool())
     val fp_cIsFpCanonicalNAN = Input(Bool())
   })
+  private val computeCarrier = if (behavior && computeGrouped) Some(Module(new FloatMulComputeCarrier(true))) else None
+  val simulationComputeCarrier: Option[RawModule] = computeCarrier
   val printfen: Boolean = false
   def shiftLeftWithMux(srcValue: UInt, shiftValue: UInt): UInt = {
     val vecLength  = shiftValue.getWidth + 1
@@ -443,33 +446,41 @@ class VectorFloatFMA() extends Module{
       Cat(Cat(fp_b_significand_f16_3,0.U(2.W),fp_b_significand_f16_2),0.U(5.W),Cat(fp_b_significand_f16_1,0.U(2.W),fp_b_significand_f16_0))
     )
   )
-  val U_BoothEncoder = Module(new BoothEncoderF64F32F16(width = significandWidth, is_addend_expand_1bit = true))
-  U_BoothEncoder.io.in_a := booth_in_a
-  U_BoothEncoder.io.in_b := booth_in_b
-  U_BoothEncoder.io.is_fp64 := is_fp64
-  U_BoothEncoder.io.is_fp32 := is_fp32
+  val (productSum, productCarry) = if (behavior) {
+    val exact = MultiplyBehavior.significands(booth_in_a, booth_in_b, is_fp64, is_fp32, vector = true)
+    computeCarrier.foreach(_.io.in := Cat(is_fp32, is_fp64, booth_in_b, booth_in_a))
+    val product = computeCarrier.map(_.io.out).getOrElse(exact)
+    (MultiplyBehavior.pipeline(product, fire, 1), 0.U(107.W))
+  } else {
+    val U_BoothEncoder = Module(new BoothEncoderF64F32F16(width = significandWidth, is_addend_expand_1bit = true))
+    U_BoothEncoder.io.in_a := booth_in_a
+    U_BoothEncoder.io.in_b := booth_in_b
+    U_BoothEncoder.io.is_fp64 := is_fp64
+    U_BoothEncoder.io.is_fp32 := is_fp32
 
-  val U_CSAnto2 = Module(new CSA_Nto2With3to2MainPipeline(U_BoothEncoder.io.out_pp.length,U_BoothEncoder.io.out_pp.head.getWidth,pipeLevel = 5))
-  U_CSAnto2.io.fire := fire
-  U_CSAnto2.io.in := U_BoothEncoder.io.out_pp
+    val U_CSAnto2 = Module(new CSA_Nto2With3to2MainPipeline(U_BoothEncoder.io.out_pp.length,U_BoothEncoder.io.out_pp.head.getWidth,pipeLevel = 5))
+    U_CSAnto2.io.fire := fire
+    U_CSAnto2.io.in := U_BoothEncoder.io.out_pp
+    (U_CSAnto2.io.out_sum, U_CSAnto2.io.out_car)
+  }
 
-  val CSA3to2_in_a = U_CSAnto2.io.out_sum
+  val CSA3to2_in_a = productSum
   val CSA3to2_in_b = Mux(
     is_fp64_reg0,
-    Cat(U_CSAnto2.io.out_car.head(106), is_sub_f64_reg0 & !rshift_guard_f64 & !rshift_round_f64 & !rshift_sticky_f64),
+    Cat(productCarry.head(106), is_sub_f64_reg0 & !rshift_guard_f64 & !rshift_round_f64 & !rshift_sticky_f64),
     Mux(
       is_fp32_reg0,
-      Cat(U_CSAnto2.io.out_car.head(48), RegEnable(is_sub_f32_1, fire) & !rshift_guard_f32_1 & !rshift_round_f32_1 & !rshift_sticky_f32_1,
-        U_CSAnto2.io.out_car(57,49),
-        U_CSAnto2.io.out_car(48,1), RegEnable(is_sub_f32_0, fire) & !rshift_guard_f32_0 & !rshift_round_f32_0 & !rshift_sticky_f32_0
+      Cat(productCarry.head(48), RegEnable(is_sub_f32_1, fire) & !rshift_guard_f32_1 & !rshift_round_f32_1 & !rshift_sticky_f32_1,
+        productCarry(57,49),
+        productCarry(48,1), RegEnable(is_sub_f32_0, fire) & !rshift_guard_f32_0 & !rshift_round_f32_0 & !rshift_sticky_f32_0
       ),
-      Cat(Cat(U_CSAnto2.io.out_car.head(22), RegEnable(is_sub_f16_3, fire) & !rshift_guard_f16_3 & !rshift_round_f16_3 & !rshift_sticky_f16_3,
-        U_CSAnto2.io.out_car(25+58,23+58),
-        U_CSAnto2.io.out_car(22+58,1+58), RegEnable(is_sub_f16_2, fire) & !rshift_guard_f16_2 & !rshift_round_f16_2 & !rshift_sticky_f16_2),
-        U_CSAnto2.io.out_car(57,49),
-        Cat(U_CSAnto2.io.out_car(48,27), RegEnable(is_sub_f16_1, fire) & !rshift_guard_f16_1 & !rshift_round_f16_1 & !rshift_sticky_f16_1,
-          U_CSAnto2.io.out_car(25,23),
-          U_CSAnto2.io.out_car(22,1), RegEnable(is_sub_f16_0, fire) & !rshift_guard_f16_0 & !rshift_round_f16_0 & !rshift_sticky_f16_0)
+      Cat(Cat(productCarry.head(22), RegEnable(is_sub_f16_3, fire) & !rshift_guard_f16_3 & !rshift_round_f16_3 & !rshift_sticky_f16_3,
+        productCarry(25+58,23+58),
+        productCarry(22+58,1+58), RegEnable(is_sub_f16_2, fire) & !rshift_guard_f16_2 & !rshift_round_f16_2 & !rshift_sticky_f16_2),
+        productCarry(57,49),
+        Cat(productCarry(48,27), RegEnable(is_sub_f16_1, fire) & !rshift_guard_f16_1 & !rshift_round_f16_1 & !rshift_sticky_f16_1,
+          productCarry(25,23),
+          productCarry(22,1), RegEnable(is_sub_f16_0, fire) & !rshift_guard_f16_0 & !rshift_round_f16_0 & !rshift_sticky_f16_0)
       )
     )
   )
@@ -486,7 +497,7 @@ class VectorFloatFMA() extends Module{
       )
     )
   )
-  val U_CSA3to2 = Module(new CSA3to2(width = U_CSAnto2.io.out_sum.getWidth))
+  val U_CSA3to2 = Module(new CSA3to2(width = productSum.getWidth))
   U_CSA3to2.io.in_a := CSA3to2_in_a
   U_CSA3to2.io.in_b := CSA3to2_in_b
   U_CSA3to2.io.in_c := CSA3to2_in_c
@@ -505,7 +516,7 @@ class VectorFloatFMA() extends Module{
   val fp_c_rshift_result_high_inv_add0_f16_1 = fp_c_rshiftValue_inv_f16_1_reg0.head(11+3)
   val fp_c_rshift_result_high_inv_add0_f16_2 = fp_c_rshiftValue_inv_f16_2_reg0.head(11+3)
   val fp_c_rshift_result_high_inv_add0_f16_3 = fp_c_rshiftValue_inv_f16_3_reg0.head(11+3)
- 
+
   val fp_c_rshift_result_high_inv_add1 = Mux(is_fp64_reg0,
     Cat(0.U(3.W),fp_c_rshiftValue_inv_f64_reg0.head(significandWidth+3)),
     Mux(
@@ -760,7 +771,7 @@ class VectorFloatFMA() extends Module{
   val lshift_adder_inv_f16_1    = Cat(Mux(adder_is_negative_reg1(1), ~lshift_adder_f16_1.head(11+4),lshift_adder_f16_1.head(11+4)),lshift_adder_f16_1.tail(11+4))
   val lshift_adder_inv_f16_2    = Cat(Mux(adder_is_negative_reg1(2), ~lshift_adder_f16_2.head(11+4),lshift_adder_f16_2.head(11+4)),lshift_adder_f16_2.tail(11+4))
   val lshift_adder_inv_f16_3    = Cat(Mux(adder_is_negative_reg1(3), ~lshift_adder_f16_3.head(11+4),lshift_adder_f16_3.head(11+4)),lshift_adder_f16_3.tail(11+4))
-  
+
   val is_fix_f64 = (tzd_adder_f64_reg1 + lzd_adder_inv_mask_f64_reg1) === adder_inv_f64.getWidth.U
   val is_fix_f32_0 = (tzd_adder_f32_0_reg1 + lzd_adder_inv_mask_f32_0_reg1) === adder_inv_f32_0.getWidth.U
   val is_fix_f32_1 = (tzd_adder_f32_1_reg1 + lzd_adder_inv_mask_f32_1_reg1) === adder_inv_f32_1.getWidth.U
@@ -784,7 +795,7 @@ class VectorFloatFMA() extends Module{
   val fraction_result_no_round_reg_d       = Mux(is_fp64_reg1, fraction_result_no_round_f64_reg_d,
     Mux(is_fp32_reg1, fraction_result_no_round_f32_reg_d, fraction_result_no_round_f16_reg_d))
   val fraction_result_no_round_reg         = RegEnable(fraction_result_no_round_reg_d, fire_reg1)
-  
+
   val fraction_result_no_round_f64_reg2    = fraction_result_no_round_reg(51,0)
   val fraction_result_no_round_f32_0_reg2  = fraction_result_no_round_reg(22,0)
   val fraction_result_no_round_f32_1_reg2  = fraction_result_no_round_reg(45,23)
@@ -792,7 +803,7 @@ class VectorFloatFMA() extends Module{
   val fraction_result_no_round_f16_1_reg2  = fraction_result_no_round_reg(19,10)
   val fraction_result_no_round_f16_2_reg2  = fraction_result_no_round_reg(29,20)
   val fraction_result_no_round_f16_3_reg2  = fraction_result_no_round_reg(39,30)
-  
+
   val fraction_result_round_f64   = fraction_result_no_round_f64_reg2 +& 1.U
   val fraction_result_round_f32_0 = fraction_result_no_round_f32_0_reg2 +& 1.U
   val fraction_result_round_f32_1 = fraction_result_no_round_f32_1_reg2 +& 1.U
@@ -888,7 +899,7 @@ class VectorFloatFMA() extends Module{
   val round_uf_f16_1   = Mux(adder_is_negative_f16_1_reg2, round_lshift_uf_f16_1_reg2 ^ !sticky_uf_f16_1_reg2, round_lshift_uf_f16_1_reg2)
   val round_uf_f16_2   = Mux(adder_is_negative_f16_2_reg2, round_lshift_uf_f16_2_reg2 ^ !sticky_uf_f16_2_reg2, round_lshift_uf_f16_2_reg2)
   val round_uf_f16_3   = Mux(adder_is_negative_f16_3_reg2, round_lshift_uf_f16_3_reg2 ^ !sticky_uf_f16_3_reg2, round_lshift_uf_f16_3_reg2)
-  
+
   val round_add1_f64 = Wire(UInt(1.W))
   round_add1_f64 := RNE_reg2 & (guard_f64 & (fraction_result_no_round_f64_reg2(0) | round_f64 | sticky_f64_reg2)) |
     RDN_reg2 & sign_result_temp_f64_reg2 & (guard_f64|round_f64|sticky_f64_reg2) |
@@ -966,21 +977,21 @@ class VectorFloatFMA() extends Module{
   val exponent_add_1_f16_1 = fraction_result_no_round_f16_1_reg2.andR & round_add1_f16_1.asBool
   val exponent_add_1_f16_2 = fraction_result_no_round_f16_2_reg2.andR & round_add1_f16_2.asBool
   val exponent_add_1_f16_3 = fraction_result_no_round_f16_3_reg2.andR & round_add1_f16_3.asBool
-  
-  
+
+
   // save 47bit regs
   val is_fix_f64_reg_d              = is_fix_f64
   val is_fix_f32_reg_d              = Cat(is_fix_f32_1, is_fix_f32_0)
   val is_fix_f16_reg_d              = Cat(is_fix_f16_3, is_fix_f16_2, is_fix_f16_1, is_fix_f16_0)
   val is_fix_reg_d                  = Mux(is_fp64_reg1, is_fix_f64_reg_d, Mux(is_fp32_reg1, is_fix_f32_reg_d, is_fix_f16_reg_d))
   val is_fix_reg2                   = RegEnable(is_fix_reg_d, fire_reg1)
-  
+
   val lshift_value_f64_reg_d        = lshift_value_f64_reg1
   val lshift_value_f32_reg_d        = Cat(lshift_value_f32_1_reg1, lshift_value_f32_0_reg1)
   val lshift_value_f16_reg_d        = Cat(lshift_value_f16_3_reg1, lshift_value_f16_2_reg1, lshift_value_f16_1_reg1, lshift_value_f16_0_reg1)
   val lshift_value_reg_d            = Mux(is_fp64_reg1, lshift_value_f64_reg_d, Mux(is_fp32_reg1, lshift_value_f32_reg_d, lshift_value_f16_reg_d))
   val lshift_value_reg2             = RegEnable(lshift_value_reg_d, fire_reg1)
-  
+
 
   val exponent_result_add_value_f64 = Mux(exponent_add_1_f64 | is_fix_reg2(0),
     E_greater_f64_reg2 - lshift_value_reg2(7,0) + 1.U,
@@ -1060,7 +1071,7 @@ class VectorFloatFMA() extends Module{
   val fraction_result_temp_f16_1  = Mux(round_add1_f16_1.asBool, fraction_result_round_f16_1.tail(1), fraction_result_no_round_f16_1_reg2)
   val fraction_result_temp_f16_2  = Mux(round_add1_f16_2.asBool, fraction_result_round_f16_2.tail(1), fraction_result_no_round_f16_2_reg2)
   val fraction_result_temp_f16_3  = Mux(round_add1_f16_3.asBool, fraction_result_round_f16_3.tail(1), fraction_result_no_round_f16_3_reg2)
-  
+
   val NV_f64,DZ_f64,OF_f64,UF_f64,NX_f64  = WireInit(false.B)
   val NV_f32_0,DZ_f32_0,OF_f32_0,UF_f32_0,NX_f32_0  = WireInit(false.B)
   val NV_f32_1,DZ_f32_1,OF_f32_1,UF_f32_1,NX_f32_1  = WireInit(false.B)
@@ -1082,7 +1093,7 @@ class VectorFloatFMA() extends Module{
   NX_f16_1 := guard_f16_1 | round_f16_1 | sticky_f16_1_reg2
   NX_f16_2 := guard_f16_2 | round_f16_2 | sticky_f16_2_reg2
   NX_f16_3 := guard_f16_3 | round_f16_3 | sticky_f16_3_reg2
-  
+
   UF_f64 := NX_f64 & exponent_is_min_f64 & ( !exponent_add_1_f64 | !(guard_f64 & round_add1_uf_f64))
   UF_f32_0 := NX_f32_0 & exponent_is_min_f32_0 & ( !exponent_add_1_f32_0 | !(guard_f32_0 & round_add1_uf_f32_0))
   UF_f32_1 := NX_f32_1 & exponent_is_min_f32_1 & ( !exponent_add_1_f32_1 | !(guard_f32_1 & round_add1_uf_f32_1))
@@ -1176,7 +1187,7 @@ class VectorFloatFMA() extends Module{
   val fp_c_is_nan_f16_1 = io.fp_cIsFpCanonicalNAN | Ec_f16_1.andR & fp_c_significand_f16_1.tail(1).orR
   val fp_c_is_nan_f16_2 = io.fp_cIsFpCanonicalNAN | Ec_f16_2.andR & fp_c_significand_f16_2.tail(1).orR
   val fp_c_is_nan_f16_3 = io.fp_cIsFpCanonicalNAN | Ec_f16_3.andR & fp_c_significand_f16_3.tail(1).orR
-  
+
   val fp_a_is_snan_f64   = !io.fp_aIsFpCanonicalNAN & Mux(io.res_widening & is_fp64,widen_Ea_f32_0.andR,Ea_f64.andR  ) & !fp_a_significand_f64.tail(1).head(1) & fp_a_significand_f64.tail(2).orR
   val fp_a_is_snan_f32_0 = !io.fp_aIsFpCanonicalNAN & Mux(io.res_widening & is_fp32,widen_Ea_f16_0.andR,Ea_f32_0.andR) & !fp_a_significand_f32_0.tail(1).head(1) & fp_a_significand_f32_0.tail(2).orR
   val fp_a_is_snan_f32_1 = !io.fp_aIsFpCanonicalNAN & Mux(io.res_widening & is_fp32,widen_Ea_f16_1.andR,Ea_f32_1.andR) & !fp_a_significand_f32_1.tail(1).head(1) & fp_a_significand_f32_1.tail(2).orR
@@ -1360,7 +1371,7 @@ class VectorFloatFMA() extends Module{
   }.otherwise{
     fp_result_f64 := normal_result_f64
   }
-  
+
 
 
   val has_nan_f32_0_reg2       = RegEnable(RegEnable(RegEnable(has_nan_f32_0, fire), fire_reg0), fire_reg1)
@@ -1585,13 +1596,13 @@ private[vector] class CSA3to2(width :Int) extends Module{
     val in_c   = Input(UInt(width.W))
     val out_sum = Output(UInt(width.W))
     val out_car = Output(UInt(width.W))
-    
+
   })
   io.out_sum := io.in_a ^ io.in_b ^ io.in_c
   io.out_car := Cat( ( (io.in_a & io.in_b) | (io.in_a & io.in_c) | (io.in_b & io.in_c) )(width-2,0),0.U)
-  
-  
-  
+
+
+
 }
 private[vector] class CSA4to2(width :Int) extends Module{
   val io = IO(new Bundle() {
@@ -1601,7 +1612,7 @@ private[vector] class CSA4to2(width :Int) extends Module{
     val in_d   = Input(UInt(width.W))
     val out_sum = Output(UInt(width.W))
     val out_car = Output(UInt(width.W))
-    
+
   })
   val cout_vec  = Wire(Vec(width,UInt(1.W)))
   val sum_vec   = Wire(Vec(width,UInt(1.W)))
@@ -1637,16 +1648,16 @@ private[vector] class CSA4to2(width :Int) extends Module{
 
   io.out_sum := sum_temp_vec.asUInt
   io.out_car := carry_temp_vec.asUInt
-  
-  
-  
+
+
+
 }
 
 private[vector] class BoothEncoderF64F32F16(
                              width :Int = 53,
                              is_addend_expand_1bit : Boolean = true
                            ) extends Module{
-  
+
   val addend_seq_width = if (is_addend_expand_1bit) 2*width+1 else 2*width
   val outNum  = width/2 + 1 
   val io = IO(new Bundle() {
@@ -1654,7 +1665,7 @@ private[vector] class BoothEncoderF64F32F16(
     val in_b   = Input(UInt(width.W))
     val is_fp64= Input(Bool())
     val is_fp32= Input(Bool())
-    
+
     val out_pp = Output(Vec(outNum,UInt(addend_seq_width.W)))
     val res_mul = Output(UInt((2*width).W))
   })
@@ -1861,20 +1872,20 @@ private[vector] class BoothEncoderF64F32F16(
     )
   )
 
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 }
 
@@ -1884,7 +1895,7 @@ private[vector] class CSA_Nto2With3to2MainPipeline(n :Int, width :Int, pipeLevel
     val in      = Input(Vec(n,UInt(width.W)))
     val out_sum = Output(UInt(width.W))
     val out_car = Output(UInt(width.W))
-    
+
   })
   val fire = io.fire
   val in = ListBuffer[UInt]()
@@ -1899,9 +1910,9 @@ private[vector] class CSA_Nto2With3to2MainPipeline(n :Int, width :Int, pipeLevel
   var is_piped = false
   while (CSA4to2Num!=0 || CSA3to2Num!=0){
     ceng = ceng + 1
-    
+
     if (ceng == pipeLevel) is_piped = true
-    
+
     in_next.remove(0,in_next.length)
     for (i <- 0 until CSA4to2Num) {
       val U_CSA4to2 = Module(new CSA4to2(width = width))
@@ -1936,7 +1947,7 @@ private[vector] class CSA_Nto2With3to2MainPipeline(n :Int, width :Int, pipeLevel
 
   io.out_sum := (if (pipeLevel>ceng) RegEnable(in_next(0), fire) else in_next(0))
   io.out_car := (if (pipeLevel>ceng) RegEnable(in_next(1), fire) else in_next(1))
-  
-  
-  
+
+
+
 }
