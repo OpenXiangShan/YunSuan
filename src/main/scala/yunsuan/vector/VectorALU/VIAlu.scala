@@ -84,12 +84,14 @@ class VIAlu extends VIAlu.Module {
 
   out.ex0.vd := ex0Vd
   out.ex0.narrowVd := misc.out.res.narrow
+  out.ex0.narrowVdHigh := misc.out.res.narrowUpper
   out.ex0.mask := adder.out.res.adcCmpMask
   out.ex0.vxsat := 0.U
   out.ex0.narrowVxsat := 0.U
 
   out.ex1.vd := Mux(isLat1MiscAtEx1, ex0VdReg, fixPoint.out.res.vd)
   out.ex1.narrowVd := fixPoint.out.res.narrowVd
+  out.ex1.narrowVdHigh := 0.U
   out.ex1.mask := 0.U.asTypeOf(out.ex1.mask)
   out.ex1.vxsat := fixPoint.out.res.vxsat
   out.ex1.narrowVxsat := fixPoint.out.res.narrowVxsat
@@ -149,6 +151,7 @@ object VIAlu {
   class OutData extends Bundle {
     val vd = UInt(dWidth.W)
     val narrowVd = UInt((dWidth / 2).W)
+    val narrowVdHigh = UInt((dWidth / 2).W)
     val mask = new MaskGroup
     val vxsat = MaskData()
     val narrowVxsat = NarrowMask()

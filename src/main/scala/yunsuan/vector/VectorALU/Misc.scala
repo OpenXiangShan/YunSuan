@@ -31,6 +31,7 @@ class Misc extends VIAlu.Module {
   private val widenVs2 = in.ctrl.widenVs2
   private val widen = in.ctrl.widen
   private val isNarrow = in.ctrl.isNarrow
+  private val isDblNarrow = in.ctrl.isDblNarrow
   private val isSigned = in.ctrl.isSigned
   private val isLeftShiftLogic = in.ctrl.isLeftShiftLogic
   private val isCtz = in.ctrl.isCtz
@@ -202,6 +203,13 @@ class Misc extends VIAlu.Module {
     (shifted, shiftData)
   }
 
+  def narrowUpper(sew: Int): UInt = {
+    val sourceSew = sew * 2
+    Cat(UIntSplit(vs1, sourceSew).map { element =>
+      rightShiftOneElement(element, vs1Widen(4, 0).pad(6), sourceSew)._1.tail(sew)
+    }.reverse)
+  }
+
   private val leftShift8  = leftShift(8)
   private val leftShift16 = leftShift(16)
   private val leftShift32 = leftShift(32)
@@ -260,6 +268,13 @@ class Misc extends VIAlu.Module {
     sel16 -> Cat(rightShift32(47, 32), rightShift32(15, 0)),
     sel32 -> rightShift64,
   ))
+
+
+  res.narrowUpper := Mux(isDblNarrow, Mux1H(Seq(
+    sel8  -> narrowUpper(8),
+    sel16 -> narrowUpper(16),
+    sel32 -> narrowUpper(32),
+  )), 0.U)
 
   res.scal := Mux1H(Seq(
     sel8  -> scalResultSel8.asUInt,
@@ -484,7 +499,7 @@ class Misc extends VIAlu.Module {
     sel16 -> leftShift32,
     sel32 -> leftShift64,
   ))
-  
+
   mid.signBitSel8  := signBitSel8.asUInt
   mid.signBitSel16 := signBitSel16.asUInt
   mid.signBitSel32 := signBit
@@ -549,6 +564,7 @@ object Misc {
     val widenVs2 = Bool()
     val widen = Bool()
     val isNarrow = Bool()
+    val isDblNarrow = Bool()
     val isSigned = Bool()
     val isLeftShiftLogic = Bool()
     val isCtz = Bool()
@@ -588,6 +604,7 @@ object Misc {
     val rev8 = WidthData()
 
     val narrow = NarrowData()
+    val narrowUpper = NarrowData()
     val pop = WidthData()
   }
 

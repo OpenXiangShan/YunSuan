@@ -1391,6 +1391,10 @@ object Opcodes {
     private val CLIPU = bb"1" ## UGN ## bb"00"
     private val CLIP  = bb"1" ## SGN ## bb"00"
 
+    // CSHIFT reserves sub-opcode bit 1 for double narrow
+    private val SRL_DBL = bb"0" ## UGN ## bb"11"
+    private val SRA_DBL = bb"0" ## SGN ## bb"11"
+
     private def redTree(op: BitPat, opClass: BitPat, mode: BitPat)(implicit name: SourceName): Seq[Opcode] =
       Seq((E8, "e8"), (E16, "e16"), (E32, "e32"), (E64, "e64")).map { case (sew, sewName) =>
         DvSvlS2vS1(op, opClass, mode, sew)(s"${name}_${sewName}")
@@ -1651,6 +1655,12 @@ object Opcodes {
     val vnsra_e8    = DvSvlS2vS1(SRA  , CSHIFT, S2WDV, E8)
     val vnsra_e16   = DvSvlS2vS1(SRA  , CSHIFT, S2WDV, E16)
     val vnsra_e32   = DvSvlS2vS1(SRA  , CSHIFT, S2WDV, E32)
+    val vnsrl_dbl_e8  = DvSvlS2vS1(SRL_DBL, CSHIFT, S2WDV, E8)
+    val vnsrl_dbl_e16 = DvSvlS2vS1(SRL_DBL, CSHIFT, S2WDV, E16)
+    val vnsrl_dbl_e32 = DvSvlS2vS1(SRL_DBL, CSHIFT, S2WDV, E32)
+    val vnsra_dbl_e8  = DvSvlS2vS1(SRA_DBL, CSHIFT, S2WDV, E8)
+    val vnsra_dbl_e16 = DvSvlS2vS1(SRA_DBL, CSHIFT, S2WDV, E16)
+    val vnsra_dbl_e32 = DvSvlS2vS1(SRA_DBL, CSHIFT, S2WDV, E32)
     val vnclipu_e8  = DvSvlS2vS1(CLIPU, CSHIFT, S2WDV, E8)  + VxsatWen + VxrmRen
     val vnclipu_e16 = DvSvlS2vS1(CLIPU, CSHIFT, S2WDV, E16) + VxsatWen + VxrmRen
     val vnclipu_e32 = DvSvlS2vS1(CLIPU, CSHIFT, S2WDV, E32) + VxsatWen + VxrmRen
@@ -1698,6 +1708,7 @@ object Opcodes {
     def isWidenVs2(implicit op: UInt): Bool = getDataType.isOneOf(S2VDW)
     def isWiden(implicit op: UInt): Bool = getDataType.isOneOf(S2VDW, S2WDW)
     def isNarrow(implicit op: UInt): Bool = getDataType.isOneOf(S2WDV)
+    def isDblNarrow(implicit op: UInt): Bool = getOpClass === CSHIFT && getOp.apply(1)
     def isSourceE8(implicit op: UInt): Bool = getDataWidth === E8
     def isSourceE16(implicit op: UInt): Bool = getDataWidth === E16
     def isSourceE32(implicit op: UInt): Bool = getDataWidth === E32
@@ -1818,7 +1829,7 @@ object Opcodes {
 
       def isRightShift(implicit op: UInt): Bool = Mux1H(Seq(
         (getOpClass === SHIFT  && getDataType === S2VDV) -> getOp.isOneOf(SRL, SRA),
-        (getOpClass === CSHIFT && getDataType === S2WDV) -> getOp.isOneOf(SRL, SRA),
+        (getOpClass === CSHIFT && getDataType === S2WDV) -> getOp.isOneOf(SRL, SRA, SRL_DBL, SRA_DBL),
         (getOpClass === CSHIFT && getDataType === S2WDV) -> getOp.isOneOf(CLIPU, CLIP),
       ))
 
