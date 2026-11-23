@@ -14,37 +14,51 @@ class FP32ToFloat8Format(
   maxFiniteExp: Int,
   maxFiniteFrac: Int,
   hasInfinity: Boolean,
-  canonicalNaN: Int
+  canonicalNaN: Int,
+  pipeline: Boolean = false
 ) extends Module {
   private val minNormalExp = 1 - bias
 
   val io = IO(new Bundle {
+    val fire = if (pipeline) Some(Input(Bool())) else None
     val src = Input(UInt(32.W))
     val rm = Input(UInt(3.W))
     val result = Output(UInt(8.W))
     val fflags = Output(UInt(5.W))
   })
 
-  val sign = io.src(31)
+  val signNext = io.src(31)
   val exp = io.src(30, 23)
   val frac = io.src(22, 0)
   val expIsZero = !exp.orR
   val expIsOnes = exp.andR
   val fracNotZero = frac.orR
-  val isZero = expIsZero && !fracNotZero
-  val isInf = expIsOnes && !fracNotZero
-  val isNaN = expIsOnes && fracNotZero
-  val isSNaN = isNaN && !frac(22)
+  val isZeroNext = expIsZero && !fracNotZero
+  val isInfNext = expIsOnes && !fracNotZero
+  val isNaNNext = expIsOnes && fracNotZero
+  val isSNaNNext = isNaNNext && !frac(22)
 
   val subnormalLzc = CLZ(frac)
   val normalizedSubnormal = (Cat(0.U(1.W), frac) << (subnormalLzc + 1.U))(23, 0)
-  val normalizedSig = Mux(expIsZero, normalizedSubnormal, Cat(1.U(1.W), frac))
-  val sourceExp = Wire(SInt(12.W))
-  sourceExp := Mux(
+  val normalizedSigNext = Mux(expIsZero, normalizedSubnormal, Cat(1.U(1.W), frac))
+  val sourceExpNext = Wire(SInt(12.W))
+  sourceExpNext := Mux(
     expIsZero,
     (-127).S(12.W) - Cat(0.U(7.W), subnormalLzc).asSInt,
     Cat(0.U(4.W), exp).asSInt - 127.S(12.W)
   )
+
+
+  // Optional real arithmetic boundary: prepared value and matching controls.
+  def stage[T <: Data](value: T): T = if (pipeline) RegEnable(value, io.fire.get) else value
+  val sign = stage(signNext)
+  val normalizedSig = stage(normalizedSigNext)
+  val sourceExp = stage(sourceExpNext)
+  val isZero = stage(isZeroNext)
+  val isInf = stage(isInfNext)
+  val isNaN = stage(isNaNNext)
+  val isSNaN = stage(isSNaNNext)
+  val stageRm = stage(io.rm)
 
   val useNormal = sourceExp >= minNormalExp.S(12.W)
   val normalRounder = Module(new RoundingUnit(fracWidth + 1))
@@ -52,7 +66,7 @@ class FP32ToFloat8Format(
   normalRounder.io.roundIn := normalizedSig(22 - fracWidth)
   normalRounder.io.stickyIn := normalizedSig(21 - fracWidth, 0).orR
   normalRounder.io.signIn := sign
-  normalRounder.io.rm := io.rm
+  normalRounder.io.rm := stageRm
 
   val normalRounded = normalRounder.io.in +& normalRounder.io.r_up.asUInt
   val normalCarry = normalRounded(fracWidth + 1)
@@ -77,7 +91,7 @@ class FP32ToFloat8Format(
   subRounder.io.roundIn := subWithRound(0)
   subRounder.io.stickyIn := subSticky
   subRounder.io.signIn := sign
-  subRounder.io.rm := io.rm
+  subRounder.io.rm := stageRm
 
   val subRounded = subRounder.io.in +& subRounder.io.r_up.asUInt
   val subRoundsToNormal = subRounded(fracWidth)
@@ -88,8 +102,8 @@ class FP32ToFloat8Format(
 
   val maxFinitePayload = sign ## maxFiniteExp.U(expWidth.W) ## maxFiniteFrac.U(fracWidth.W)
   val infinityPayload = sign ## ((1 << expWidth) - 1).U(expWidth.W) ## 0.U(fracWidth.W)
-  val toInfinity = io.rm === RNE || io.rm === RMM ||
-    (io.rm === RUP && !sign) || (io.rm === RDN && sign)
+  val toInfinity = stageRm === RNE || stageRm === RMM ||
+    (stageRm === RUP && !sign) || (stageRm === RDN && sign)
   val overflowPayload = if (hasInfinity) Mux(toInfinity, infinityPayload, maxFinitePayload) else maxFinitePayload
   val infinityResult = if (hasInfinity) infinityPayload else maxFinitePayload
 
@@ -117,33 +131,45 @@ class FP32ToFloat8Format(
   io.fflags := Cat(isSNaN, false.B, overflow, underflow, inexact)
 }
 
-class FP32ToInt8 extends Module {
+class FP32ToInt8(signed: Boolean = true, pipeline: Boolean = false) extends Module {
   val io = IO(new Bundle {
+    val fire = if (pipeline) Some(Input(Bool())) else None
     val src = Input(UInt(32.W))
     val rm = Input(UInt(3.W))
     val result = Output(UInt(8.W))
     val fflags = Output(UInt(5.W))
   })
 
-  val sign = io.src(31)
+  val signNext = io.src(31)
   val exp = io.src(30, 23)
   val frac = io.src(22, 0)
   val expIsZero = !exp.orR
   val expIsOnes = exp.andR
   val fracNotZero = frac.orR
-  val isZero = expIsZero && !fracNotZero
-  val isInf = expIsOnes && !fracNotZero
-  val isNaN = expIsOnes && fracNotZero
+  val isZeroNext = expIsZero && !fracNotZero
+  val isInfNext = expIsOnes && !fracNotZero
+  val isNaNNext = expIsOnes && fracNotZero
 
   val subnormalLzc = CLZ(frac)
   val normalizedSubnormal = (Cat(0.U(1.W), frac) << (subnormalLzc + 1.U))(23, 0)
-  val normalizedSig = Mux(expIsZero, normalizedSubnormal, Cat(1.U(1.W), frac))
-  val sourceExp = Wire(SInt(12.W))
-  sourceExp := Mux(
+  val normalizedSigNext = Mux(expIsZero, normalizedSubnormal, Cat(1.U(1.W), frac))
+  val sourceExpNext = Wire(SInt(12.W))
+  sourceExpNext := Mux(
     expIsZero,
     (-127).S(12.W) - Cat(0.U(7.W), subnormalLzc).asSInt,
     Cat(0.U(4.W), exp).asSInt - 127.S(12.W)
   )
+
+
+  // Optional real arithmetic boundary: prepared value and matching controls.
+  def stage[T <: Data](value: T): T = if (pipeline) RegEnable(value, io.fire.get) else value
+  val sign = stage(signNext)
+  val normalizedSig = stage(normalizedSigNext)
+  val sourceExp = stage(sourceExpNext)
+  val isZero = stage(isZeroNext)
+  val isInf = stage(isInfNext)
+  val isNaN = stage(isNaNNext)
+  val stageRm = stage(io.rm)
 
   val shiftSigned = 23.S(12.W) - sourceExp
   val shift = Mux(
@@ -157,20 +183,26 @@ class FP32ToInt8 extends Module {
   rounder.io.roundIn := withRound(0)
   rounder.io.stickyIn := sticky
   rounder.io.signIn := sign
-  rounder.io.rm := io.rm
+  rounder.io.rm := stageRm
 
   val roundedMagnitude = rounder.io.in +& rounder.io.r_up.asUInt
-  val magnitudeLimit = Mux(sign, 128.U, 127.U)
+  val magnitudeLimit = if (signed) Mux(sign, 128.U, 127.U) else 255.U
   val exponentOverflow = sourceExp > 7.S
+  // A negative fraction that rounds to zero is valid for unsigned conversion.
+  // A negative nonzero rounded integer saturates to zero and raises NV.
+  val negativeUnsigned = !signed.B && sign && roundedMagnitude.orR
   val finiteInvalid = !isZero && !isInf && !isNaN &&
-    (exponentOverflow || roundedMagnitude > magnitudeLimit)
+    (exponentOverflow || roundedMagnitude > magnitudeLimit || negativeUnsigned)
   val invalid = isInf || isNaN || finiteInvalid
   val signedResult = Mux(sign, (~roundedMagnitude(7, 0)).asUInt + 1.U, roundedMagnitude(7, 0))
+  val integerResult = if (signed) signedResult else roundedMagnitude(7, 0)
+  val invalidResult = if (signed) Mux(sign && !isNaN, "h80".U, "h7f".U)
+    else Mux(sign && !isNaN, 0.U(8.W), "hff".U)
 
   io.result := Mux(
     invalid,
-    Mux(sign && !isNaN, "h80".U, "h7f".U),
-    Mux(isZero, 0.U, signedResult)
+    invalidResult,
+    Mux(isZero, 0.U, integerResult)
   )
   io.fflags := Cat(invalid, false.B, false.B, false.B, !invalid && !isZero && rounder.io.inexact)
 }
@@ -185,9 +217,11 @@ class CVT_xx8 extends Module {
     val fflags = Output(UInt(5.W))
   })
 
-  val int8 = Module(new FP32ToInt8)
-  val e4m3 = Module(new FP32ToFloat8Format(4, 3, 7, 15, 6, hasInfinity = false, canonicalNaN = 0x7f))
-  val e5m2 = Module(new FP32ToFloat8Format(5, 2, 15, 30, 3, hasInfinity = true, canonicalNaN = 0x7e))
+  val int8 = Module(new FP32ToInt8(pipeline = true))
+  val e4m3 = Module(new FP32ToFloat8Format(4, 3, 7, 15, 6, hasInfinity = false, canonicalNaN = 0x7f, pipeline = true))
+  val e5m2 = Module(new FP32ToFloat8Format(5, 2, 15, 30, 3, hasInfinity = true, canonicalNaN = 0x7e, pipeline = true))
+  for (core <- Seq(int8.io.fire.get, e4m3.io.fire.get, e5m2.io.fire.get)) core := io.fire
+  val opType = RegEnable(io.opType, io.fire)
   int8.io.src := io.src
   int8.io.rm := io.rm
   e4m3.io.src := io.src
@@ -195,20 +229,17 @@ class CVT_xx8 extends Module {
   e5m2.io.src := io.src
   e5m2.io.rm := io.rm
 
-  val resultNext = MuxLookup(io.opType, 0.U(8.W))(Seq(
+  val resultNext = MuxLookup(opType, 0.U(8.W))(Seq(
     VfcvtType.vfncvtxx8_int8 -> int8.io.result,
     VfcvtType.vfncvtxx8_e4m3 -> e4m3.io.result,
     VfcvtType.vfncvtxx8_e5m2 -> e5m2.io.result
   ))
-  val fflagsNext = MuxLookup(io.opType, 0.U(5.W))(Seq(
+  val fflagsNext = MuxLookup(opType, 0.U(5.W))(Seq(
     VfcvtType.vfncvtxx8_int8 -> int8.io.fflags,
     VfcvtType.vfncvtxx8_e4m3 -> e4m3.io.fflags,
     VfcvtType.vfncvtxx8_e5m2 -> e5m2.io.fflags
   ))
   val fireReg = GatedValidRegNext(io.fire)
-  val resultReg = RegEnable(resultNext, 0.U(8.W), io.fire)
-  val fflagsReg = RegEnable(fflagsNext, 0.U(5.W), io.fire)
-
-  io.result := RegEnable(resultReg, 0.U(8.W), fireReg)
-  io.fflags := RegEnable(fflagsReg, 0.U(5.W), fireReg)
+  io.result := RegEnable(resultNext, 0.U(8.W), fireReg)
+  io.fflags := RegEnable(fflagsNext, 0.U(5.W), fireReg)
 }
