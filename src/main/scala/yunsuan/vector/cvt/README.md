@@ -32,6 +32,15 @@ core latency and its own input register boundary. No input-dependent latency.
 Low payloads occupy low bits of result. The core does not pack vector bytes,
 filter inactive-lane flags, generate a block scale or manage source dependencies.
 
+Host factories can read `GenericConvert.latency(params, pipeline)`,
+`BF16Convert.latency`, `NativeBF16Convert.latency` and `NativeFP32Convert.latency`
+before instantiating a module. Each companion also exposes `initiationInterval`;
+each instance exposes its selected `latency` and `initiationInterval`.
+`NativeConvertCapabilities` derives its timing from these entries. Latency counts
+clock captures including the edge accepting `fire`: BF16 is available immediately
+after that first edge; the default Generic and native FP32 results follow the
+second edge. Any host input/output register adds to the host-visible latency.
+
 Default encode/scaled paths register classification/normalization/exponent
 preparation before shift/round/result selection. Single-stage is selectable;
 choose against actual timing/area constraints. Public-library exploratory STA
@@ -50,7 +59,12 @@ from FP16(1/5/10). NativeBF16 handles exact widening and rounded narrowing.
 
 Legacy CVT_bf16/LowpConvert retain two-cycle compatibility. CVT_xx8/CVT_mxfp
 retain two cycles with preparation inside arithmetic. Existing callers need
-no latency change. New hosts can directly use the one-cycle BF16 entry.
+no latency change. `VCVT` selects `CVT_bf16` against CVT16/32/64 with a two-capture
+selector; `VectorCvt` also delays its width/format packing controls twice.
+Scalar `FPCVT` selects BF16 against CVT64 at the same second capture. Removing
+the legacy BF16 output register would misalign these existing consumers.
+New hosts consume `GenericConvert` and `NativeBF16Convert` directly and schedule
+their actual depths; they do not inherit legacy alignment registers.
 
 ## Optional NV payload pipeline
 

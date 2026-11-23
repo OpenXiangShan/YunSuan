@@ -10,6 +10,10 @@ class NativeBF16ConvertSpec extends AnyFlatSpec with ChiselScalatestTester {
 
   it should "return native BF16 results on the first capture with streaming control and reset" in {
     test(new NativeBF16Convert).withAnnotations(Seq(VerilatorBackendAnnotation)) { dut =>
+      assert(BF16Convert.latency == 1 && NativeBF16Convert.latency == 1 && dut.latency == 1)
+      assert(BF16Convert.initiationInterval == 1 && NativeBF16Convert.initiationInterval == 1 && dut.initiationInterval == 1)
+      assert(NativeConvertCapabilities.brainFloat.coreLatency == 1)
+      assert(NativeConvertCapabilities.brainFloat.initiationInterval == 1)
       dut.clock.setTimeout(0)
       dut.io.fire.poke(false.B); dut.io.src.poke(0.U); dut.io.narrow.poke(false.B); dut.io.rm.poke(0.U)
       dut.reset.poke(true.B); dut.clock.step(2); dut.reset.poke(false.B)

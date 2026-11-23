@@ -6,8 +6,14 @@ import yunsuan.vector.VectorConvert.util._
 import yunsuan.vector.VectorConvert.RoundingModle._
 import yunsuan.util._
 
+object CVT32 {
+  val latency: Int = 2
+  val initiationInterval: Int = 1
+}
 
 class CVT32(width: Int = 32) extends CVT(width){
+  val latency: Int = CVT32.latency
+  val initiationInterval: Int = CVT32.initiationInterval
   /** cycle0                                 |                              cycle1                  |   cycle2
    * fp2int   in(32) raw_in(33)  left,right  |  ShiftRightJam(25)           RoundingUnit(11)  adder |
    * int2fp   in(32) in_abs(32)  lzc         | in_shift  exp_raw            RoundingUnit(10)  adder |  -> result & fflags

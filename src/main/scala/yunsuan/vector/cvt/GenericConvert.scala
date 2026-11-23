@@ -22,6 +22,7 @@ class GenericConvertIO extends Bundle {
   * occupy the least significant bits. There is no host packing or ISA decode.
   */
 object GenericConvert {
+  val initiationInterval: Int = 1
   // Encoding and scaled reconstruction have long normalization/rounding paths.
   // Raw decode-only profiles use one output register with no alignment bubble.
   def hasPreparationStage(params: ConvertParams, pipeline: Boolean = true): Boolean =
@@ -34,6 +35,7 @@ class GenericConvert(val params: ConvertParams = ConvertParams(), pipeline: Bool
   val io = IO(new GenericConvertIO)
   val prepared = GenericConvert.hasPreparationStage(params, pipeline)
   val latency = GenericConvert.latency(params, pipeline)
+  val initiationInterval: Int = GenericConvert.initiationInterval
 
   private val formatLegal = params.orderedFormats.map(f => io.format === f.id.U).reduce(_ || _)
   private val directionLegal = (params.encode.B && !io.decode) || (params.decode.B && io.decode)

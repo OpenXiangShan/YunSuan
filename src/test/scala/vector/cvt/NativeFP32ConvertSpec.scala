@@ -11,6 +11,10 @@ class NativeFP32ConvertSpec extends AnyFlatSpec with ChiselScalatestTester {
 
   it should "preserve signedness rounding flags and two-cycle streaming latency" in {
     test(new NativeFP32Convert).withAnnotations(Seq(VerilatorBackendAnnotation)) { dut =>
+      assert(NativeFP32Convert.latency == 2 && dut.latency == 2)
+      assert(NativeFP32Convert.initiationInterval == 1 && dut.initiationInterval == 1)
+      assert(NativeConvertCapabilities.fp32Integer.coreLatency == 2)
+      assert(NativeConvertCapabilities.fp32Integer.initiationInterval == 1)
       dut.clock.setTimeout(0)
       dut.io.fire.poke(false.B)
       dut.io.src.poke(0.U)

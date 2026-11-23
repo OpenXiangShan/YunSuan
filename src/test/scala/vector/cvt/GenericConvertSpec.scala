@@ -61,6 +61,8 @@ class GenericConvertSpec extends AnyFlatSpec with ChiselScalatestTester {
     val expectedLatency = if (!pipeline || Set("raw_float_decode", "integer_decode").contains(profileName)) 1 else 2
     it should s"match independent numeric results with declared-cycle II1 behavior for $name" in {
       test(new GenericConvert(params, pipeline)).withAnnotations(Seq(VerilatorBackendAnnotation)) { dut =>
+        assert(GenericConvert.latency(params, pipeline) == expectedLatency && dut.latency == expectedLatency)
+        assert(GenericConvert.initiationInterval == 1 && dut.initiationInterval == 1)
         dut.clock.setTimeout(0)
         val pending = mutable.Map.empty[Int, LowpReference.Result]
         var cycle = 0

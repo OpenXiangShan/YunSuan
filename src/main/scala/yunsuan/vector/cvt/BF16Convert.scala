@@ -7,8 +7,16 @@ import yunsuan.vector.VectorConvert.CVT
 import yunsuan.vector.VectorConvert.RoundingModle._
 import yunsuan.vector.VectorConvert.util.RoundingUnit
 
+/** Clock captures from fire to result/fflags, including the accepting edge. */
+object BF16Convert {
+  val latency: Int = 1
+  val initiationInterval: Int = 1
+}
+
 class BF16Convert(width: Int = 64) extends CVT(width) {
   require(width >= 32, "CVT_bf16 needs at least 32 result bits")
+  val latency: Int = BF16Convert.latency
+  val initiationInterval: Int = BF16Convert.initiationInterval
 
   private def padResult(x: UInt, payloadWidth: Int, box: Bool): UInt = {
     require(width >= payloadWidth)

@@ -10,7 +10,14 @@ import yunsuan.vector.VectorConvert.CVT32
   * Other IEEE widths remain available through the legacy VectorCvt interface.
   * Hosts define their own provider selection and adaptation for those widths.
   */
+object NativeFP32Convert {
+  val latency: Int = CVT32.latency
+  val initiationInterval: Int = CVT32.initiationInterval
+}
+
 class NativeFP32Convert extends Module {
+  val latency: Int = NativeFP32Convert.latency
+  val initiationInterval: Int = NativeFP32Convert.initiationInterval
   val io = IO(new Bundle {
     val fire = Input(Bool())
     val src = Input(UInt(32.W))
@@ -38,7 +45,14 @@ class NativeFP32Convert extends Module {
   io.fflags := core.io.fflags
 }
 
+object NativeBF16Convert {
+  val latency: Int = BF16Convert.latency
+  val initiationInterval: Int = BF16Convert.initiationInterval
+}
+
 class NativeBF16Convert extends Module {
+  val latency: Int = NativeBF16Convert.latency
+  val initiationInterval: Int = NativeBF16Convert.initiationInterval
   val io = IO(new Bundle {
     val fire = Input(Bool())
     val src = Input(UInt(32.W))
@@ -71,8 +85,8 @@ object NativeConvertCapabilities {
   case class Family(name: String, formats: Set[String], provider: String,
     coreLatency: Int, initiationInterval: Int, standalone: Boolean)
   val fp32Integer = Family("fp32-integer", Set("FP32", "I32", "U32"),
-    "NativeFP32Convert / CVT32", 2, 1, true)
+    "NativeFP32Convert / CVT32", NativeFP32Convert.latency, NativeFP32Convert.initiationInterval, true)
   val brainFloat = Family("brain-float", Set("BF16", "FP32"),
-    "NativeBF16Convert / BF16Convert", 1, 1, true)
+    "NativeBF16Convert / BF16Convert", NativeBF16Convert.latency, NativeBF16Convert.initiationInterval, true)
   val all = Seq(fp32Integer, brainFloat)
 }
