@@ -245,8 +245,8 @@ class CVT32ModuleS0(width: Int = 32) extends Module {
   val decodeFloatSrcRec = Mux1H(float1HSrc,
     expSrcMap.zip(fpParam.fp16AndFp32Formats.map(fp => fp.expWidth)).map { case (exp, expWidth) =>
       VecInit(
-        exp.head(expWidth-1).andR && !exp(0),
-        exp.head(expWidth-2).andR && !exp(1) && exp(0)
+        exp(expWidth - 1, 1).andR && !exp(0),
+        exp(expWidth - 1, 2).andR && !exp(1) && exp(0)
       ).asUInt
     }
   )
