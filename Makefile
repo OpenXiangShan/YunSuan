@@ -1,20 +1,23 @@
 include Makefile.softfloat
 
+CHISEL_VERSION ?=
 TOP ?= SimTop
 BUILD_DIR = ./build
-TOP_V = $(BUILD_DIR)/$(TOP).v
+TOP_V = $(BUILD_DIR)/$(TOP).sv
 OPCODES_H = $(BUILD_DIR)/opcodes.h
 
 SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 
-$(TOP_V): $(SCALA_FILE) $(TEST_FILE)
-	mkdir -p $(@D)
-	mill YunSuan.test.runMain yunsuan.top.$(TOP) -td $(@D) --full-stacktrace --target verilog
+verilog: $(SCALA_FILE) $(TEST_FILE)
+	mkdir -p $(BUILD_DIR)
+	mill 'YunSuan[$(CHISEL_VERSION)].test.runMain' yunsuan.top.$(TOP) -td $(BUILD_DIR) --full-stacktrace --target verilog --split-verilog
+
+$(TOP_V): verilog
 
 $(OPCODES_H): $(SCALA_FILE)
 	mkdir -p $(@D)
-	mill -i YunSuan.runMain yunsuan.encoding.Opcode.OpcodeHeaderGen $(abspath $(OPCODES_H))
+	mill -i 'YunSuan[$(CHISEL_VERSION)].runMain' yunsuan.encoding.Opcode.OpcodeHeaderGen $(abspath $(OPCODES_H))
 
 .DEFUALT_GOAL = emu
 
@@ -83,4 +86,6 @@ idea:
 	mill -i mill.scalalib.GenIdea/idea
 
 test:
-	mill YunSuan.test.test
+	mill 'YunSuan[$(CHISEL_VERSION)].test.test'
+
+.PHONY: verilog clean-softfloat emu clean bsp idea test
