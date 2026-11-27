@@ -351,27 +351,27 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
   private val coeffWidth = fmtFP16.coeffFracBits + 2
   private val tFracBits = fmtFP16.tFracBits
   private val localTKeep = fmtFP16.tFracBits - fmtFP16.segmentBits
-  private val product1Width = coeffWidth + localTKeep
-  private val horner1Width = coeffWidth + fmtFP16.tFracBits + 1
-
-  // stage4 horner1 truncation: keep coeffWidth MSB bits to match stage2 multiplier
-  private val stage4Trunc = true
-  private val horner1Keep = if (stage4Trunc) coeffWidth else horner1Width
-  private val product2TruncWidth = horner1Keep + localTKeep
-  private val horner1Shift = horner1Width - horner1Keep
-
-  // product2 aligned back to full precision
-  private val product2Width = product2TruncWidth + horner1Shift
-  private val cAlignedWidth = coeffWidth + 2 * fmtFP16.tFracBits
-  private val sigScaledWidth = math.max(product2Width, cAlignedWidth) + 1
-
-  // BF16-specific widths for muxed paths (only used when hasBF16)
   private val coeffWidthBF16 = fmtBF16.coeffFracBits + 2
   private val tFracBitsBF16 = fmtBF16.tFracBits
-  private val localTKeepBF16 = fmtBF16.tFracBits - fmtBF16.segmentBits
-  private val horner1KeepBF16 = coeffWidthBF16
-  private val horner1WidthBF16 = coeffWidthBF16 + fmtBF16.tFracBits + 1
-  private val horner1ShiftBF16 = horner1WidthBF16 - horner1KeepBF16
+  private val localTKeepBF16 = tFracBitsBF16 - fmtBF16.segmentBits
+  private val formats = Seq(fmtFP16) ++ fmtBF16Opt.toSeq
+  private val productHiWidth = formats.map(f => f.coeffFracBits + 2 - f.segmentBits).max
+  private val roundFracBits = fmtFP16.fracWidth + 2 // fraction, guard, sticky
+  private val sigScaledWidth = 1 + roundFracBits
+
+  // The polynomial is monotone within each segment. Check its endpoints at
+  // elaboration before relying on the unrounded significand being in [1, 2).
+  for (fmt <- formats) {
+    val t = fmt.tFracBits
+    require(t > fmt.segmentBits && t > 1 && fmt.coeffFracBits > fmt.fracWidth)
+    val lastT = (BigInt(1) << (t - fmt.segmentBits)) - 1
+    val one = BigInt(1) << (fmt.coeffFracBits + t - 1)
+    require(fmt.coeffs.forall { case (a, b, c) =>
+      val h = (((BigInt(a) * lastT) >> t) + b) >> 1
+      val base = BigInt(c) << (t - 1)
+      a >= 0 && b >= 0 && base >= one && base + h * lastT < 2 * one
+    }, "VfExp2 coefficients require pre-round normalization")
+  }
 
   private val specialKindWidth = 3
   private def spNone = 0.U(specialKindWidth.W)
@@ -567,20 +567,10 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     val overflowSig = (BigInt(1) << (fracWidth + 1)).U
     val normalThreshold = (BigInt(1) << fracWidth).U
 
-    val normalizedSig = Wire(UInt((sigScaled.getWidth + 1).W))
-    val normalizedK = Wire(SInt(kWidth.W))
-    val maxK = ((BigInt(1) << (kWidth - 1)) - 1).S(kWidth.W)
-    normalizedSig := sigScaled
-    normalizedK := k
-    when(sigScaled >= (BigInt(2) << sigFracBits).U) {
-      normalizedSig := (sigScaled + 1.U) >> 1
-      normalizedK := Mux(k === maxK, k, k + 1.S(kWidth.W))
-    }
-
     val expCalcWidth = kWidth + 3
-    val normalExp = normalizedK.pad(expCalcWidth) + bias.S(expCalcWidth.W)
+    val normalExp = k.pad(expCalcWidth) + bias.S(expCalcWidth.W)
     val (normalRoundedRaw, normalRoundInexact) =
-      roundShiftRightPositiveConst(normalizedSig, normalShift, rm, fracWidth + 2)
+      roundShiftRightPositiveConst(sigScaled, normalShift, rm, fracWidth + 2)
     val normalCarry = normalRoundedRaw >= overflowSig
     val normalRounded =
       Mux(normalCarry, normalRoundedRaw >> 1, normalRoundedRaw)
@@ -593,11 +583,11 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     )
 
     val subShift =
-      sigFracBits.S(expCalcWidth.W) - (normalizedK.pad(
+      sigFracBits.S(expCalcWidth.W) - (k.pad(
         expCalcWidth
       ) + (bias - 1 + fracWidth).S(expCalcWidth.W))
     val (subRoundedRaw, subRoundInexact) =
-      roundShiftRightPositive(normalizedSig, subShift.asUInt, rm, fracWidth + 1)
+      roundShiftRightPositive(sigScaled, subShift.asUInt, rm, fracWidth + 1)
     val subCarry = subRoundedRaw >= normalThreshold
     val subZero = subRoundedRaw === 0.U
     val subResult = Mux(
@@ -638,45 +628,22 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
   ): (UInt, UInt) = {
     require(hasBF16)
     require(fmtFP16.width == 16 && fmtBF16.width == 16)
-    require(fmtFP16.sigFracBits >= fmtBF16.sigFracBits)
     require(fmtFP16.fracWidth > fmtBF16.fracWidth)
 
-    val commonSigFracBits = fmtFP16.sigFracBits
-    val bf16ScaleShift = fmtFP16.sigFracBits - fmtBF16.sigFracBits
+    val commonSigFracBits = roundFracBits
     val expCalcWidth = kWidth + 3
-    val maxK = ((BigInt(1) << (kWidth - 1)) - 1).S(kWidth.W)
-
-    val normalizedSig = Wire(UInt((sigScaled.getWidth + 1).W))
-    val normalizedK = Wire(SInt(kWidth.W))
-    normalizedSig := sigScaled
-    normalizedK := k
-    when(sigScaled >= (BigInt(2) << commonSigFracBits).U) {
-      val normalizeIncrement = Mux(
-        isBF16,
-        (BigInt(1) << bf16ScaleShift).U(sigScaled.getWidth.W),
-        1.U(sigScaled.getWidth.W)
-      )
-      val normalizedShifted =
-        extendUInt((sigScaled + normalizeIncrement) >> 1, sigScaled.getWidth)
-      val bf16Normalized = Cat(
-        normalizedShifted(sigScaled.getWidth - 1, bf16ScaleShift),
-        0.U(bf16ScaleShift.W)
-      )
-      normalizedSig := Mux(isBF16, bf16Normalized, normalizedShifted)
-      normalizedK := Mux(k === maxK, k, k + 1.S(kWidth.W))
-    }
 
     val selectedBias = Mux(
       isBF16,
       fmtBF16.bias.S(expCalcWidth.W),
       fmtFP16.bias.S(expCalcWidth.W)
     )
-    val normalExp = normalizedK.pad(expCalcWidth) + selectedBias
+    val normalExp = k.pad(expCalcWidth) + selectedBias
 
     val normalRoundWidth = fmtFP16.fracWidth + 2
     val normalFracDelta = fmtFP16.fracWidth - fmtBF16.fracWidth
     val (fp16Shifted, fp16Guard, fp16Sticky) = shiftRightConstGRS(
-      normalizedSig,
+      sigScaled,
       commonSigFracBits - fmtFP16.fracWidth,
       normalRoundWidth
     )
@@ -742,10 +709,10 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     )
     val subShift =
       commonSigFracBits.S(expCalcWidth.W) -
-        (normalizedK.pad(expCalcWidth) + selectedSubOffset)
+        (k.pad(expCalcWidth) + selectedSubOffset)
     val subRoundWidth = fmtFP16.fracWidth + 1
     val (subRoundedRaw, subRoundInexact) = roundShiftRightPositive(
-      normalizedSig,
+      sigScaled,
       subShift.asUInt,
       rm,
       subRoundWidth
@@ -870,12 +837,9 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
         (fracShiftThreshold - 1).U,
         fracShiftThreshold.U - exp
       )
-      val (posRounded, _) = roundShiftRightPositive(
-        sig,
-        rightShift,
-        RMM,
-        sig.getWidth
-      )
+      // Positive RMM increments exactly when the guard bit is set.
+      val qg = Cat(sig, 0.U(1.W)) >> rightShift
+      val posRounded = qg(qg.getWidth - 1, 1) + qg(0)
       fracQPos := ZeroExt(posRounded, fmt.tFracBits)
     }
 
@@ -1060,7 +1024,7 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
   val stage2LocalTNext = Wire(Vec(laneCount, UInt(localTKeep.W)))
   val stage2SegIdxNext = Wire(Vec(laneCount, UInt(fmtFP16.segmentBits.W)))
   val stage2CoeffBNext = Wire(Vec(laneCount, UInt(coeffWidth.W)))
-  val stage2ProductNext = Wire(Vec(laneCount, UInt(product1Width.W)))
+  val stage2ProductHiNext = Wire(Vec(laneCount, UInt(productHiWidth.W)))
 
   for (lane <- 0 until laneCount) {
     val locT = stage1LocalT(lane)
@@ -1081,7 +1045,10 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
       )
     } else coeffB_FP16Selected
     stage2CoeffBNext(lane) := selectedCoeffB
-    stage2ProductNext(lane) := stage1CoeffA(lane) * locT
+    val product = stage1CoeffA(lane) * locT
+    stage2ProductHiNext(lane) := (if (hasBF16)
+      Mux(isBF16_S1.get, product >> tFracBitsBF16, product >> tFracBits)
+    else product >> tFracBits)
   }
 
   val stage2SpecialKind = RegEnable(
@@ -1104,18 +1071,18 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     stage2CoeffBNext,
     fireS1
   )
-  val stage2Product = RegEnable(
-    stage2ProductNext,
+  val stage2ProductHi = RegEnable(
+    stage2ProductHiNext,
     fireS1
   )
 
-  // Stage 3: prod1 + (B << tFracBits), shift muxed for BF16
+  // floor((A*T + B*2^t)/2^(t+1)) = (floor(A*T/2^t) + B) >> 1.
   val stage3SpecialKindNext = Wire(Vec(laneCount, UInt(specialKindWidth.W)))
   val stage3HasFracNext = Wire(Vec(laneCount, Bool()))
   val stage3KNext = Wire(Vec(laneCount, SInt(kWidth.W)))
   val stage3LocalTNext = Wire(Vec(laneCount, UInt(localTKeep.W)))
   val stage3SegIdxNext = Wire(Vec(laneCount, UInt(fmtFP16.segmentBits.W)))
-  val stage3HornerNext = Wire(Vec(laneCount, UInt(horner1Width.W)))
+  val stage3HornerNext = Wire(Vec(laneCount, UInt(coeffWidth.W)))
 
   for (lane <- 0 until laneCount) {
     stage3SpecialKindNext(lane) := stage2SpecialKind(lane)
@@ -1123,8 +1090,7 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     stage3KNext(lane) := stage2K(lane)
     stage3LocalTNext(lane) := stage2LocalT(lane)
     stage3SegIdxNext(lane) := stage2SegIdx(lane)
-    val tFracShiftS3 = if (hasBF16) Mux(isBF16_S2.get, tFracBitsBF16.U, tFracBits.U) else tFracBits.U
-    stage3HornerNext(lane) := stage2Product(lane) +& (stage2CoeffB(lane) << tFracShiftS3)
+    stage3HornerNext(lane) := (stage2ProductHi(lane) +& stage2CoeffB(lane)) >> 1
   }
 
   val stage3SpecialKind = RegEnable(
@@ -1148,12 +1114,13 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     fireS2
   )
 
-  // Stage 4: horner1 truncation * localT, truncation muxed for BF16
+  // Stage 4: split H*T at the binary point of C. C has no bits below it.
   val stage4SpecialKindNext = Wire(Vec(laneCount, UInt(specialKindWidth.W)))
   val stage4HasFracNext = Wire(Vec(laneCount, Bool()))
   val stage4KNext = Wire(Vec(laneCount, SInt(kWidth.W)))
   val stage4CoeffCNext = Wire(Vec(laneCount, UInt(coeffWidth.W)))
-  val stage4ProductNext = Wire(Vec(laneCount, UInt(product2Width.W)))
+  val stage4ProductHiNext = Wire(Vec(laneCount, UInt((productHiWidth + 1).W)))
+  val stage4StickyNext = Wire(Vec(laneCount, Bool()))
 
   for (lane <- 0 until laneCount) {
     stage4SpecialKindNext(lane) := stage3SpecialKind(lane)
@@ -1172,23 +1139,16 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     } else coeffC_FP16Selected
     stage4CoeffCNext(lane) := selectedCoeffC
 
-    val horner1T = if (hasBF16) {
-      // FP16 truncation: horner1[39:18] (22 bits)
-      val horner1T_FP16 = stage3Horner(lane)(horner1Width - 1, horner1Width - horner1Keep)
-      // BF16 truncation: data in lower 31 bits of 40-bit reg; take [30:13] (18 bits), zero-ext to 22
-      val horner1T_BF16 = stage3Horner(lane)(horner1WidthBF16 - 1, horner1WidthBF16 - horner1KeepBF16)
-      Mux(
-        isBF16_S3.get,
-        Cat(0.U((horner1Keep - horner1KeepBF16).W), horner1T_BF16),
-        horner1T_FP16
-      )
+    val product = stage3Horner(lane) * stage3LocalT(lane)
+    val hi = product >> (tFracBits - 1)
+    val sticky = product(tFracBits - 2, 0).orR
+    if (hasBF16) {
+      stage4ProductHiNext(lane) := Mux(isBF16_S3.get, product >> (tFracBitsBF16 - 1), hi)
+      stage4StickyNext(lane) := Mux(isBF16_S3.get, product(tFracBitsBF16 - 2, 0).orR, sticky)
     } else {
-      stage3Horner(lane)(horner1Width - 1, horner1Width - horner1Keep)
+      stage4ProductHiNext(lane) := hi
+      stage4StickyNext(lane) := sticky
     }
-
-    val productTrunc = horner1T * stage3LocalT(lane)
-    val hornerShiftS4 = if (hasBF16) Mux(isBF16_S3.get, horner1ShiftBF16.U, horner1Shift.U) else horner1Shift.U
-    stage4ProductNext(lane) := productTrunc << hornerShiftS4
   }
 
   val stage4SpecialKind = RegEnable(
@@ -1203,12 +1163,14 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     stage4CoeffCNext,
     fireS3
   )
-  val stage4Product = RegEnable(
-    stage4ProductNext,
+  val stage4ProductHi = RegEnable(
+    stage4ProductHiNext,
     fireS3
   )
+  val stage4Sticky = RegEnable(stage4StickyNext, fireS3)
 
-  // Stage 5: product2 + C, aligned to the FP16 Q format for shared S6 rounding
+  // Stage 5: retain the native significand, guard and sticky. Subnormals
+  // only shift further right, so they need no additional product bits.
   val stage5SpecialKindNext = Wire(Vec(laneCount, UInt(specialKindWidth.W)))
   val stage5HasFracNext = Wire(Vec(laneCount, Bool()))
   val stage5KNext = Wire(Vec(laneCount, SInt(kWidth.W)))
@@ -1218,24 +1180,15 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     stage5SpecialKindNext(lane) := stage4SpecialKind(lane)
     stage5HasFracNext(lane) := stage4HasFrac(lane)
     stage5KNext(lane) := stage4K(lane)
-    val bf16ScaleShift = fmtFP16.sigFracBits - fmtBF16.sigFracBits
-    val productAlignedS5 =
-      if (hasBF16)
-        Mux(
-          isBF16_S4.get,
-          stage4Product(lane) << bf16ScaleShift,
-          stage4Product(lane)
-        )
-      else stage4Product(lane)
-    val coeffCAlignedS5 =
-      if (hasBF16)
-        Mux(
-          isBF16_S4.get,
-          stage4CoeffC(lane) << (2 * tFracBitsBF16 + bf16ScaleShift),
-          stage4CoeffC(lane) << (2 * tFracBits)
-        )
-      else stage4CoeffC(lane) << (2 * tFracBits)
-    stage5SigScaledNext(lane) := productAlignedS5 +& coeffCAlignedS5
+    val sum = stage4CoeffC(lane) + stage4ProductHi(lane)
+    def forRounding(fmt: VfExp2Format): UInt = {
+      val guardBit = fmt.coeffFracBits - fmt.fracWidth - 1
+      val tail = stage4Sticky(lane)
+      val sticky = if (guardBit == 0) tail else tail || sum(guardBit - 1, 0).orR
+      Cat(sum(fmt.coeffFracBits, guardBit), sticky) << (fmtFP16.fracWidth - fmt.fracWidth)
+    }
+    val native = forRounding(fmtFP16)
+    stage5SigScaledNext(lane) := (if (hasBF16) Mux(isBF16_S4.get, forRounding(fmtBF16), native) else native)
   }
 
   val stage5SpecialKind = RegEnable(
@@ -1279,7 +1232,7 @@ class VfExp2Pipe(fmtFP16: VfExp2Format, fmtBF16Opt: Option[VfExp2Format], laneCo
     } else {
       val (finiteResult, finiteFlags) = roundAndPackPositive(
         stage5SigScaled(lane),
-        fmtFP16.sigFracBits,
+        roundFracBits,
         fmtFP16.fracWidth,
         fmtFP16.expWidth,
         fmtFP16.bias,
