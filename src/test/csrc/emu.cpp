@@ -167,13 +167,13 @@ void Emulator::reset_ncycles(size_t cycle) {
     dut_ptr->clock = 0;
     dut_ptr->eval();
     #if VM_TRACE == 1
-      tfp->dump(cycles);
+      if (args.enable_waveform) tfp->dump(cycles);
     #endif
     cycles++;
     dut_ptr->clock = 1;
     dut_ptr->eval();
     #if VM_TRACE == 1
-      tfp->dump(cycles);
+      if (args.enable_waveform) tfp->dump(cycles);
     #endif
     cycles++;
   }
@@ -238,10 +238,8 @@ bool Emulator::execute() {
 
 inline char* Emulator::timestamp_filename(time_t t, char *buf) {
   char buf_time[64];
-  char cwd[128];
   strftime(buf_time, sizeof(buf_time), "%F@%T", localtime(&t));
-  getcwd(cwd, 64);
-  int len = snprintf(buf, 1024, "%s/build/%s", cwd, buf_time);
+  int len = snprintf(buf, 1024, "build/%s", buf_time);
   return buf + len;
 }
 
